@@ -84,6 +84,7 @@ Inductive module_product_step (m1 m2 : module) (r1 : m1.(m_in_event) → m2.(m_o
     module_product_step m1 m2 r1 r2 (σ1, σ2) None None (σ1', σ2)
 | ModuleStepLeft σ1 σ2 ι κs σ1' :
     m1.(m_step) σ1 ι κs σ1' →
+    (* TODO: Should this step be possible if κs is a call which could be handled by m2?*)
     module_product_step m1 m2 r1 r2 (σ1, σ2) (inl <$> ι) (inl <$> κs) (σ1', σ2)
 | ModuleStepRight σ1 σ2 ι κs σ2' :
     m2.(m_step) σ2 ι κs σ2' →
@@ -108,6 +109,15 @@ Proof.
   move => /= [σ1 σ2] κ [σi1 σi2] /= [Hinit1 Hinit2].
   have := (ref_step _ _ _ _ _ Hr1 _ _ _ Hinit1).
 Abort.
+
+(*
+  I am not sure if this will work out and how to best define the semantics of linking.
+  Maybe it is better to do something more closely based on RUSC where you have explicit call and
+  return states?
+  One would need to add something for atomic calls (necessary for calling the memory) but this could
+  maybe be handled by adding a special case for it.
+  Also in RUSC the notion of event seems to be shared by all modules, which we maybe do not want?
+*)
 
 (*
   Example:
