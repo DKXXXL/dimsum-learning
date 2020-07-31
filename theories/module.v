@@ -129,7 +129,26 @@ Inductive steps {A B} (R : A → option B → A → Prop) : A → list B → A �
 | steps_l ρ1 ρ2 ρ3 κ κs :
     R ρ1 κ ρ2 →
     steps R ρ2 κs ρ3 →
-    steps R ρ1 (if κ is Some κ' then κ' :: κs else κs) ρ3.
+    steps R ρ1 (option_list κ ++ κs) ρ3.
+
+Lemma steps_None {A B} ρ2 (R : A → option B → A → Prop) ρ1 ρ3 κs2:
+  R ρ1 None ρ2 →
+  steps R ρ2 κs2 ρ3 →
+  steps R ρ1 (κs2) ρ3.
+Proof. move => ??. by apply: (steps_l _ _ _ _ None). Qed.
+
+Lemma steps_Some {A B} ρ2 (R : A → option B → A → Prop) ρ1 ρ3 κ κs2:
+  R ρ1 (Some κ) ρ2 →
+  steps R ρ2 κs2 ρ3 →
+  steps R ρ1 (κ :: κs2) ρ3.
+Proof. move => ??. by apply: (steps_l _ _ _ _ (Some κ)). Qed.
+
+Lemma steps_trans {A B} (R : A → option B → A → Prop) ρ1 ρ2 ρ3 κs1 κs2:
+  steps R ρ1 κs1 ρ2 →
+  steps R ρ2 κs2 ρ3 →
+  steps R ρ1 (κs1 ++ κs2) ρ3.
+Proof. elim => // ?????????. rewrite -app_assoc. econstructor; eauto. Qed.
+
 
 Record event := {
   e_name: namespace;
@@ -150,7 +169,7 @@ Record module := {
 }.
 
 Inductive module_step (m : module) : m.(m_state) → option (thread_id * (event + event)) → m.(m_state) → Prop :=
-| MSStep σ1 tid e σ2:
+| MSStep e σ1 tid σ2:
     m.(m_step) σ1 tid e σ2 →
     module_step m σ1 ((λ e, (tid, inr e)) <$> e) σ2
 | MSIn σ1 tid e σ2:
@@ -159,6 +178,7 @@ Inductive module_step (m : module) : m.(m_state) → option (thread_id * (event 
     m.(m_is_blocked) σ1 tid →
      *)
     module_step m σ1 (Some (tid, inl e)) σ2.
+
 
 Definition can_step (m : module) (σ : m.(m_state)) (tid : thread_id) : Prop :=
   ∃ e σ2, m.(m_step) σ tid e σ2.
@@ -214,6 +234,33 @@ Proof.
     by have [|_ [σ3 Hstep3]] := (ref_step _ _ Hr2 _ _ Hstep2); eauto.
 Qed.
 
+Inductive module_product_in (m1 m2 : module) : m1.(m_state) * m2.(m_state) → thread_id → event → m1.(m_state) * m2.(m_state) → Prop :=
+| MpInL σ1 σ2 tid e σ1' : module_product_in m1 m2 (σ1, σ2) tid e (σ1', σ2)
+| MpInR σ1 σ2 tid e σ2' : module_product_in m1 m2 (σ1, σ2) tid e (σ1, σ2').
+Inductive module_product_step (m1 m2 : module) : m1.(m_state) * m2.(m_state) → thread_id → option event → m1.(m_state) * m2.(m_state) → Prop :=
+| MpStepL σ1 σ2 tid e σ1':
+    m1.(m_step) σ1 tid e σ1' →
+    module_product_step m1 m2 (σ1, σ2) tid e (σ1', σ2)
+| MpStepR σ1 σ2 tid e σ2':
+    m2.(m_step) σ2 tid e σ2' →
+    module_product_step m1 m2 (σ1, σ2) tid e (σ1, σ2')
+| MpStepCallLR σ1 σ2 tid e σ1' σ2':
+    m1.(m_step) σ1 tid (Some e) σ1' →
+    m2.(m_in) σ2 tid e σ2' →
+    module_product_step m1 m2 (σ1, σ2) tid None (σ1', σ2')
+| MpStepCallRL σ1 σ2 tid e σ1' σ2':
+    m2.(m_step) σ2 tid (Some e) σ2' →
+    m1.(m_in) σ1 tid e σ1' →
+    module_product_step m1 m2 (σ1, σ2) tid None (σ1', σ2')
+.
+
+Definition module_product (m1 m2 : module) : module := {|
+  m_state := m1.(m_state) * m2.(m_state);
+  m_in := module_product_in m1 m2;
+  m_initial := (m1.(m_initial), m2.(m_initial));
+  m_step := (module_product_step m1 m2);
+  m_is_blocked σ tid := m1.(m_is_blocked) σ.1 tid ∧ m2.(m_is_blocked) σ.2 tid;
+|}.
 
 (*** Proving refinement *)
 Lemma inv_implies_refines m1 m2 (inv : m1.(m_state) → m2.(m_state) → Prop):
@@ -223,7 +270,7 @@ Lemma inv_implies_refines m1 m2 (inv : m1.(m_state) → m2.(m_state) → Prop):
   (∀ σi1 σs1 σi2 e,
       inv σi1 σs1 → module_step m1 σi1 e σi2 →
       (∀ σs κ', κ' `prefix_of` (option_list e) → steps (module_step m2) σs1 κ' σs → safe_state m2 σs ) →
-      ∃ σs2, inv σi2 σs2 ∧ (module_step m2 σs1 e σs2 ∨ (e = None ∧ σs1 = σs2))) →
+      ∃ σs2, inv σi2 σs2 ∧ steps (module_step m2) σs1 (option_list e) σs2) →
   refines m1 m2.
 Proof.
   move => Hinvinit Hinvsafe Hinvstep.
@@ -232,10 +279,10 @@ Proof.
   - by eauto using steps_refl.
   - move => σi1 σi2 σi3 κ κs Hstep Hsteps IH σs1 Hinv Hspec.
     case: (Hinvstep _ _ _ _ Hinv Hstep).
-    { move => ???. apply: Hspec. etrans; first done. case_match; [apply prefix_cons|]; apply prefix_nil. }
-    move => σs2 [Hinv2 [Hsstep|[??]]]; subst; case: (IH _ Hinv2) => //.
-    + move => σs κ' Hprefix Hs. apply: Hspec. 2: by apply: steps_l. case_match => //. by apply prefix_cons.
-    + move => Hsafe [σs3 Hs]. split => //. eexists. by apply: steps_l.
+    { move => ???. apply: Hspec. etrans; first done. destruct κ; [apply prefix_cons|]; apply prefix_nil. }
+    move => σs2 [Hinv2 Hssteps]. case: (IH _ Hinv2) => //.
+    + move => σs κ' Hprefix Hs. apply: Hspec. 2: by apply: steps_trans. by apply prefix_app.
+    + move => Hsafe [σs3 Hs]. split => //. eexists. by apply: steps_trans.
 Qed.
 
 (*** Tests *)
@@ -245,8 +292,12 @@ Definition nat_event (n : nat) : event := {|
   e_type := nat;
   e_data := n;
 |}.
+
+(*   2
+  1 --- 2 (done)
+ *)
 Inductive mod1_step : bool → thread_id → option event → bool → Prop :=
-| T1False tid: mod1_step false tid (Some (nat_event 1)) true.
+| T1False tid: mod1_step false tid (Some (nat_event 2)) true.
 
 
 Definition mod1 : module := {|
@@ -257,10 +308,13 @@ Definition mod1 : module := {|
   m_is_blocked s _:= s = true;
 |}.
 
+(*         2
+  1 --- 2 --- 3 (done)
+ *)
 Inductive mod2_state := | S1 | S2 | S3.
 Inductive mod2_step : mod2_state → thread_id → option event → mod2_state → Prop :=
 | T2S1 tid: mod2_step S1 tid None S2
-| T2S2 tid: mod2_step S2 tid (Some (nat_event 1)) S3.
+| T2S2 tid: mod2_step S2 tid (Some (nat_event 2)) S3.
 Definition mod2 : module := {|
   m_state := mod2_state;
   m_initial := S1;
@@ -282,8 +336,8 @@ Proof.
   - move => [] ??; [right| right|left] => //; eexists _, _; constructor.
   - move => σi1 σs1 σi2 e ->. inversion_clear 1 => //. revert select (m_step mod2 _ _ _ _) => /=.
     destruct 1 => _; eexists _; split => //.
-    + by right.
-    + left. constructor. constructor.
+    + by left.
+    + apply: steps_Some; last by left. apply (MSStep _ (Some _)). constructor.
 Qed.
 
 Definition mod_loop : module := {|
@@ -300,7 +354,7 @@ Proof.
   - done.
   - move => ???. right. eexists _, tt. constructor.
   - move => ?????. inversion_clear 1 => //. revert select (m_step mod_loop _ _ _ _) => /=.
-    move => ->. eauto.
+    move => -> _. eexists _. split => //. left.
 Qed.
 
 
@@ -331,10 +385,10 @@ Proof.
   - move => [] ?[??]; try by [left]; right; eexists _, _; constructor.
   - move => σi1 σs1 σi2 e [-> ?]. inversion_clear 1 => //. revert select (m_step _ _ _ _ _) => /=.
     destruct 1 => Hsafe.
-    + (* 1 -> 2 *) eexists _. split => //. left. constructor. constructor.
+    + (* 1 -> 2 *) eexists _. split => //. apply: steps_Some; last by left. apply: (MSStep _ (Some _)). constructor.
     + (* 1 -> 3 *) exfalso.
       have [|||[?[? Hstep]]]:= (Hsafe S1S3 [(tid, inr (nat_event 2))] _ _ tid) => //.
-      { apply: (steps_l _ _ _ _ (Some (tid, inr (nat_event 2)))). 2: constructor. apply: (MSStep _ _ _ (Some (nat_event 2))). econstructor. }
+      { apply: steps_Some; last by left. apply: (MSStep _ (Some _)). econstructor. }
       inversion Hstep.
 Qed.
 
@@ -372,8 +426,8 @@ Proof.
   - move => [] ?[??]; try by [left]; right; eexists _, _; constructor.
   - move => σi1 σs1 σi2 e [? ->]. inversion_clear 1 => //. revert select (m_step _ _ _ _ _) => /=.
     destruct 1 => Hsafe.
-    + (* 1 -> 2 *) eexists _. split => //. left. constructor. constructor.
-    + (* 1 -> 3 *) eexists _. split => //. left. constructor. constructor.
+    + (* 1 -> 2 *) eexists _. split => //. apply: steps_Some; last by left. apply: (MSStep _ (Some _)). constructor.
+    + (* 1 -> 3 *) eexists _. split => //. apply: steps_Some; last by left. apply: (MSStep _ (Some _)). constructor.
     + (* 3 -> 4 *) exfalso.
       have [|||[?[? Hstep]]]:= (Hsafe S1S3 [] _ _ tid) => //.
       * apply prefix_nil.
@@ -414,15 +468,98 @@ Proof.
   - move => [] ?[??]; try by [left]; right; eexists _, _; constructor.
   - move => σi1 σs1 σi2 e [? ->]. inversion_clear 1 => //. revert select (m_step _ _ _ _ _) => /=.
     destruct 1 => Hsafe.
-    + (* 1 -> 2 *) eexists _. split => //. left. constructor. constructor.
+    + (* 1 -> 2 *) eexists _. split => //. apply: steps_Some; last by left. apply: (MSStep _ (Some _)). constructor.
     + (* 1 -> 3 *) exfalso.
       have [|||[?[? Hstep]]]:= (Hsafe S1S3 [(tid, inr (nat_event 2))] _ _ tid) => //.
-      { apply: (steps_l _ _ _ _ (Some (tid, inr (nat_event 2)))). 2: constructor. apply: (MSStep _ _ _ (Some (nat_event 2))). econstructor. }
+      { apply: steps_Some; last by left. apply: (MSStep _ (Some _)). econstructor. }
       inversion Hstep.
-    + (* 2 -> 4 *) eexists _. split => //. left. constructor.
+    + (* 2 -> 4 *) eexists _. split => //. apply: steps_Some; last by left. apply: (MSStep _ (Some _)).
       (* Not provable! *)
 Abort.
 
+
+Definition call_event (n : nat) : event := {|
+  e_name := nroot.@"call";
+  e_type := nat;
+  e_data := n;
+|}.
+
+(*
+     Call 1
+  1 -------- 2
+ *)
+
+Inductive call1_step : bool → thread_id → option event → bool → Prop :=
+| C1_1To2 tid: call1_step false tid (Some (call_event 1)) true.
+Definition mod_call1 : module := {|
+  m_state := bool;
+  m_initial := false;
+  m_in _ _ _ _:= False;
+  m_step := call1_step;
+  m_is_blocked s _:= s;
+|}.
+
+(*
+            -> Call n     1 + n
+  1 (done) ---------- 2 -------- 3
+ *)
+
+Inductive call2_state := | C2S1 | C2S2 (n : nat) | C2S3.
+Inductive call2_in : call2_state → thread_id → event → call2_state → Prop :=
+| C2In tid n: call2_in C2S1 tid (call_event n) (C2S2 n).
+Inductive call2_step : call2_state → thread_id → option event → call2_state → Prop :=
+| C2_2To3 tid n: call2_step (C2S2 n) tid (Some (nat_event (1 + n))) C2S3.
+Definition mod_call2 : module := {|
+  m_state := call2_state;
+  m_initial := C2S1;
+  m_in := call2_in;
+  m_step := call2_step;
+  m_is_blocked s _:= s = C2S1 ∨ s = C2S3;
+|}.
+
+Definition call_merge_inv (σ1 : bool * call2_state) (σ2 : bool) :=
+  match σ1.1, σ1.2 with
+  | false, C2S3 => False
+  | false, C2S2 _ => False
+  | _, _ => True
+  end ∧ True.
+Lemma test_refines_call_merge :
+  refines (module_product mod_call1 mod_call2) mod1.
+Proof.
+  apply: (inv_implies_refines (module_product mod_call1 mod_call2) mod1 call_merge_inv).
+  - done.
+  - rewrite /call_merge_inv/safe_state/=. move => [[] [|?|]] /=?[??]?; try naive_solver; right.
+    all: eexists _, _. apply: MpStepR. constructor.
+    apply: MpStepL. constructor.
+  - move => σi1 σs1 σi2 e ?. inversion_clear 1 => //.
+    (* revert select (m_step _ _ _ _ _) => /=. *)
+    (* destruct 1 => Hsafe. *)
+    (* + (* 1 -> 2 *) eexists _. split => //. left. constructor. constructor. *)
+    (* + (* 1 -> 3 *) exfalso. *)
+    (*   have [|||[?[? Hstep]]]:= (Hsafe S1S3 [(tid, inr (nat_event 2))] _ _ tid) => //. *)
+    (*   { apply: (steps_l _ _ _ _ (Some (tid, inr (nat_event 2)))). 2: constructor. apply: (MSStep _ _ _ (Some (nat_event 2))). econstructor. } *)
+    (*   inversion Hstep. *)
+    (* + (* 2 -> 4 *) eexists _. split => //. left. constructor. *)
+    (*   (* Not provable! *) *)
+Abort.
+
+Definition call_split_inv (σ1 : bool) (σ2 : bool * call2_state) :=
+  if σ1 then True else σ2 = (false, C2S1).
+Lemma test_refines_call_merge :
+  refines mod1 (module_product mod_call1 mod_call2).
+Proof.
+  apply: (inv_implies_refines mod1 (module_product mod_call1 mod_call2) call_split_inv).
+  - done.
+  - case => ???; try by left. right. eexists _, _. constructor.
+  - move => σi1 [σs1 σs2] σi2 e Hinv. inversion_clear 1 => //.
+    revert select (m_step _ _ _ _ _) => /=.
+    destruct 1 => Hsafe. rewrite Hinv.
+    exists (true, C2S3). split => //=.
+    apply: (steps_None (true, C2S2 1)). 2: apply: steps_Some. 3: by left.
+    + apply: (MSStep _ None). apply: MpStepCallLR. constructor. constructor.
+    + apply: (MSStep _ (Some _)). constructor. constructor.
+      Unshelve. done.
+Qed.
 End test.
 End version2.
 
