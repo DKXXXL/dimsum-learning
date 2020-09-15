@@ -326,7 +326,7 @@ Lemma inv_implies_refines m1 m2 (inv : m1.(m_state) → m2.(m_state) → Prop):
   (∀ σi σs, inv σi σs → m1.(m_is_good) σi) →
   (∀ σi1 σs1 σi2 e,
       inv σi1 σs1 → module_step m1 σi1 e σi2 →
-      (∀ σs κ', κ' `prefix_of` (option_list e) → steps (module_step m2) σs1 κ' σs → m2.(m_is_good) σs ) →
+      (∀ σs κ', κ' `prefix_of` (option_list e) → steps (module_step m2) σs1 κ' σs → m2.(m_is_good) σs) →
       ∃ σs2, inv σi2 σs2 ∧ steps (module_step m2) σs1 (option_list e) σs2) →
   refines m1 m2.
 Proof.
@@ -340,6 +340,34 @@ Proof.
     move => σs2 [Hinv2 Hssteps]. case: (IH _ Hinv2) => //.
     + move => σs κ' Hprefix Hs. apply: Hspec. 2: by apply: steps_trans. by apply prefix_app.
     + move => Hsafe [σs3 Hs]. split => //. eexists. by apply: steps_trans.
+Qed.
+
+Inductive wp (m1 m2 : module) : m1.(m_state) -> m2.(m_state) -> list (thread_id * (event + event)) -> Prop :=
+| Wp_step σi1 σs1 κs:
+    (∀ κ,
+      (∀ σs2 κ', κ' `prefix_of` (option_list κ) → steps (module_step m2) σs1 κ' σs2 → m2.(m_is_good) σs2) ->
+      m1.(m_is_good) σi1 ∧
+    (∀ σi2 κs', κs = option_list κ ++ κs' -> module_step m1 σi1 κ σi2 ->
+       ∃ σs2, steps (module_step m2) σs1 (option_list κ) σs2 ∧ wp m1 m2 σi2 σs2 κs')) ->
+    wp m1 m2 σi1 σs1 κs
+.
+
+Lemma wp_implies_refines m1 m2:
+  (∀ κ, wp m1 m2 m1.(m_initial) m2.(m_initial) κ) →
+  refines m1 m2.
+Proof.
+  move => Hwp. constructor => κ σi. move: m1.(m_initial) m2.(m_initial) {Hwp}(Hwp κ) => σi1 σs1 Hwp Hsteps.
+  elim: Hsteps σs1 Hwp => {σi1 κ σi}.
+  - move => σi1 σs1 Hwp Hsafe. split; eauto using steps_refl.
+    destruct Hwp as [??? Hwp]. move : (Hwp None) => [|] //= ?? Hprefix. apply Hsafe. etrans => //. apply prefix_nil.
+  - move => σi1 σi2 σi3 κ κs Hstep Hsteps IH σs1 Hwp Hsafe.
+    inversion Hwp as [??? Hwp2]; subst.
+    move : (Hwp2 κ) => [|] //=. { move => ???. apply Hsafe. by apply: prefix_app_r. }
+    move => ? {Hwp2}Hwp.
+    have [|σs2 [Hsteps2 {}Hwp]]:= (Hwp _ κs _ Hstep) => //.
+    have [|?[??]]:= (IH _ Hwp).
+    + move => σs κ' Hprefix Hs. apply: Hsafe. 2: by apply: steps_trans. by apply prefix_app.
+    + split => //. eexists. by apply: steps_trans.
 Qed.
 
 (*** Tests *)
@@ -493,6 +521,33 @@ Proof.
       have [||]:= (Hsafe S1S3 []) => //.
       * apply prefix_nil.
       * econstructor.
+Qed.
+
+Lemma test_refines_stuck2_wp :
+  refines mod_stuck2 mod_stuck1.
+Proof.
+  apply: wp_implies_refines => κ.
+  (* S2S1 *)
+  constructor => e1 Hsafe.
+  split => // σ2 κs' ?; subst. inversion_clear 1; subst => //.
+  revert select (m_step _ _ _ _ _). inversion_clear 1; subst => /=.
+  - (* S2S2 *)
+    eexists _. split. {
+      apply: steps_Some; last by left. apply: (MSStep _ (Some _)). constructor.
+    }
+    constructor => {}e1 {}Hsafe.
+    split => // {}σ2 κs'' ?; subst. inversion_clear 1; subst => //.
+    revert select (m_step _ _ _ _ _). inversion_clear 1; subst => /=.
+  - (* S2S3 *)
+    eexists _. split. {
+      apply: steps_Some; last by left. apply: (MSStep _ (Some _)). constructor.
+    }
+    constructor => {}e1 {}Hsafe.
+    split => // {}σ2 κs'' ?; subst. inversion_clear 1; subst => //.
+    revert select (m_step _ _ _ _ _). inversion_clear 1; subst => /=.
+    have []:= Hsafe S1S3 [] => //.
+    * apply prefix_nil.
+    * apply steps_refl.
 Qed.
 
 (*   1       3
