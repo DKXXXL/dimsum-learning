@@ -151,6 +151,40 @@ Lemma steps_trans {A B} (R : A → option B → A → Prop) ρ1 ρ2 ρ3 κs1 κs
 Proof. elim => // ?????????. rewrite -app_assoc. econstructor; eauto. Qed.
 
 
+
+
+(*
+
+            id
+A --------------------> B2
+     id       5     id
+A1 ------> G --> G' --> B2
+|
+|    id          5
+A1 ------> G ---------> B1
+|          |
+|----------|
+|
+|          5
+A2 -------------------> B1
+
+
+
+A2 refines (A1 + G)       -> value: 5
+B1 refines (G' + B2)      -> value: 5
+(G + G') refines identity -> value: id
+A1 refines A              -> value: id
+
+example: Would this abstraction also work for abstraction of linked list to mathematical list?
+Simple case: B2 calls functions on A1 to access data
+Complex case: B2 accesses data (e.g. pointer to singly linked list) from A1 directly
+
+*)
+
+
+
+
+
 Record event := {
   e_name: positive;
   e_type: Type;
@@ -189,8 +223,12 @@ Inductive module_step (m : module) : m.(m_state) → option (thread_id * (event 
 (* Definition safe_state (m : module) (σ : m.(m_state)) : Prop := *)
 (*   ∀ tid, m.(m_is_blocked) σ tid ∨ can_step m σ tid. *)
 
+Definition safe_trace (m : module) (σ : m.(m_state)) (κ : list (thread_id * (event + event))) :=
+  (∀ σs κ', κ' `prefix_of` κ → steps (module_step m) σ κ' σs → m.(m_is_good) σs).
+
 Definition safe (m : module) : Prop :=
-  ∀ κ σ', steps (module_step m) m.(m_initial) κ σ' → m.(m_is_good) σ'.
+  ∀ κ, safe_trace m m.(m_initial) κ.
+
 
 Record refines (mimpl mspec : module) := {
   (* ref_interface : *)
@@ -200,16 +238,18 @@ Record refines (mimpl mspec : module) := {
     (* ∃ σi, mimpl.(m_in) σ tid e σi; *)
   ref_step κ σi:
     steps (module_step mimpl) mimpl.(m_initial) κ σi →
-    (∀ σs κ', κ' `prefix_of` κ → steps (module_step mspec) mspec.(m_initial) κ' σs → mspec.(m_is_good) σs) →
+    safe_trace mspec mspec.(m_initial) κ →
     mimpl.(m_is_good) σi ∧ ∃ σs, steps (module_step mspec) mspec.(m_initial) κ σs;
 }.
+
+(* Suggestion by Youngju: forall target trace, exists source trace, such that traces are equal up to the point where source gives ub or target gives NB event *)
 
 Lemma refines_preserves_safe mspec mimpl:
   safe mspec →
   refines mimpl mspec →
   safe mimpl.
 Proof.
-  move => Hs Hr κ σ' Hstep.
+  move => Hs Hr κ σ' κ' Hpre Hstep.
   have [|]:= (ref_step _ _ Hr _ _ Hstep); by eauto.
 Qed.
 
@@ -326,7 +366,7 @@ Lemma inv_implies_refines m1 m2 (inv : m1.(m_state) → m2.(m_state) → Prop):
   (∀ σi σs, inv σi σs → m1.(m_is_good) σi) →
   (∀ σi1 σs1 σi2 e,
       inv σi1 σs1 → module_step m1 σi1 e σi2 →
-      (∀ σs κ', κ' `prefix_of` (option_list e) → steps (module_step m2) σs1 κ' σs → m2.(m_is_good) σs) →
+      safe_trace m2 σs1 (option_list e) →
       ∃ σs2, inv σi2 σs2 ∧ steps (module_step m2) σs1 (option_list e) σs2) →
   refines m1 m2.
 Proof.
@@ -342,33 +382,47 @@ Proof.
     + move => Hsafe [σs3 Hs]. split => //. eexists. by apply: steps_trans.
 Qed.
 
-Inductive wp (m1 m2 : module) : m1.(m_state) -> m2.(m_state) -> list (thread_id * (event + event)) -> Prop :=
-| Wp_step σi1 σs1 κs:
-    (∀ κ,
-      (∀ σs2 κ', κ' `prefix_of` (option_list κ) → steps (module_step m2) σs1 κ' σs2 → m2.(m_is_good) σs2) ->
-      m1.(m_is_good) σi1 ∧
-    (∀ σi2 κs', κs = option_list κ ++ κs' -> module_step m1 σi1 κ σi2 ->
-       ∃ σs2, steps (module_step m2) σs1 (option_list κ) σs2 ∧ wp m1 m2 σi2 σs2 κs')) ->
-    wp m1 m2 σi1 σs1 κs
+Inductive wp (m1 m2 : module) : nat → m1.(m_state) -> m2.(m_state) -> list (thread_id * (event + event)) -> Prop :=
+| Wp_step σi1 σs1 κs n:
+    (∀ κ, safe_trace m2 σs1 (option_list κ) → m1.(m_is_good) σi1 ∧
+    (∀ σi2 κs' n', κs = option_list κ ++ κs' -> n = S n' → module_step m1 σi1 κ σi2 ->
+       ∃ σs2, steps (module_step m2) σs1 (option_list κ) σs2 ∧ wp m1 m2 n' σi2 σs2 κs')) ->
+    wp m1 m2 n σi1 σs1 κs
 .
 
+Lemma forall_to_ex A B (P : A → B → Prop) (Q : B → Prop):
+ (∃ n : A, ∀ y : B, P n y → Q y) -> ∀ y : B, ((∀ n : A, P n y) → Q y).
+Proof. naive_solver. Qed.
+
 Lemma wp_implies_refines m1 m2:
-  (∀ κ, wp m1 m2 m1.(m_initial) m2.(m_initial) κ) →
+  (∀ κ n, wp m1 m2 n m1.(m_initial) m2.(m_initial) κ) →
   refines m1 m2.
 Proof.
-  move => Hwp. constructor => κ σi. move: m1.(m_initial) m2.(m_initial) {Hwp}(Hwp κ) => σi1 σs1 Hwp Hsteps.
-  elim: Hsteps σs1 Hwp => {σi1 κ σi}.
-  - move => σi1 σs1 Hwp Hsafe. split; eauto using steps_refl.
-    destruct Hwp as [??? Hwp]. move : (Hwp None) => [|] //= ?? Hprefix. apply Hsafe. etrans => //. apply prefix_nil.
-  - move => σi1 σi2 σi3 κ κs Hstep Hsteps IH σs1 Hwp Hsafe.
-    inversion Hwp as [??? Hwp2]; subst.
+  move => Hwp. constructor => κ σi. move: m1.(m_initial) m2.(m_initial) {Hwp}(Hwp κ) => σi1 σs1 Hwp Hsteps Hsafe.
+  move: σs1 Hwp Hsafe. apply: forall_to_ex.
+  elim: Hsteps => {σi1 κ σi}.
+  - move => σi1. exists 0 => σs1 Hwp Hsafe. split; eauto using steps_refl.
+    destruct Hwp as [???? Hwp].
+    move : (Hwp None) => [|] //= ?? Hprefix.
+    apply Hsafe. etrans => //. apply prefix_nil.
+  - move => σi1 σi2 σi3 κ κs Hstep Hsteps [n IH]. exists (S n) =>  σs1 Hwp Hsafe.
+    inversion Hwp as [???? Hwp2]; subst.
     move : (Hwp2 κ) => [|] //=. { move => ???. apply Hsafe. by apply: prefix_app_r. }
     move => ? {Hwp2}Hwp.
-    have [|σs2 [Hsteps2 {}Hwp]]:= (Hwp _ κs _ Hstep) => //.
+    have [||σs2 [Hsteps2 {}Hwp]]:= (Hwp _ κs n _ _ Hstep) => //.
     have [|?[??]]:= (IH _ Hwp).
     + move => σs κ' Hprefix Hs. apply: Hsafe. 2: by apply: steps_trans. by apply prefix_app.
     + split => //. eexists. by apply: steps_trans.
 Qed.
+
+Ltac inv_step :=
+  lazymatch goal with
+  | H : module_step ?m _ _ _ |- _ => inversion H; clear H; subst;
+    repeat lazymatch goal with
+    | H : m_step _ _ _ _ _  |- _ => inversion H; clear H
+    | H : m_in _ _ _ _ _  |- _ => inversion H; clear H
+    end; simplify_eq/=
+  end.
 
 (*** Tests *)
 Module test.
@@ -421,8 +475,7 @@ Proof.
   apply: (inv_implies_refines mod2 mod1 t2_to_t1_inv).
   - done.
   - done.
-  - move => σi1 σs1 σi2 e ->. inversion_clear 1 => //. revert select (m_step mod2 _ _ _ _) => /=.
-    destruct 1 => _; eexists _; split => //.
+  - move => σi1 σs1 σi2 e -> ? Hsafe. inv_step; eexists _; split => //.
     + by left.
     + apply: steps_Some; last by left. apply (MSStep _ (Some _)). constructor.
 Qed.
@@ -441,8 +494,17 @@ Proof.
   apply: (inv_implies_refines mod_loop m (λ _ _, True)).
   - done.
   - done.
-  - move => ?????. inversion_clear 1 => //. revert select (m_step mod_loop _ _ _ _) => /=.
-    move => -> _. eexists _. split => //. left.
+  - move => ???????. inv_step. eexists. split => //. left.
+Qed.
+
+Lemma test_refines2_wp m :
+  refines mod_loop m.
+Proof.
+  apply: wp_implies_refines => /=.
+  move => κ n. elim/lt_wf_ind: n => n Hloop.
+  constructor => κ' Hsafe. split => // [[]] κs' ????.
+  inv_step. eexists. split; [left|]. apply Hloop.
+  lia.
 Qed.
 
 
@@ -472,8 +534,7 @@ Proof.
   apply: (inv_implies_refines mod_stuck1 mod_stuck1 (λ σ1 σ2, σ1 = σ2 ∧ σ1 ≠ S1S3)).
   - done.
   - move => [] ?[??] => //.
-  - move => σi1 σs1 σi2 e [-> ?]. inversion_clear 1 => //. revert select (m_step _ _ _ _ _) => /=.
-    destruct 1 => Hsafe.
+  - move => σi1 σs1 σi2 e [-> ?] ? Hsafe. inv_step.
     + (* 1 -> 2 *) eexists _. split => //. apply: steps_Some; last by left. apply: (MSStep _ (Some _)). constructor.
     + (* 1 -> 3 *) exfalso.
       have [||]:= (Hsafe S1S3 [(tid, inr (nat_event 2))]) => //.
@@ -513,8 +574,7 @@ Proof.
   apply: (inv_implies_refines mod_stuck2 mod_stuck1 stuck2_inv).
   - done.
   - move => [] ?[??] => //.
-  - move => σi1 σs1 σi2 e [? ->]. inversion_clear 1 => //. revert select (m_step _ _ _ _ _) => /=.
-    destruct 1 => Hsafe.
+  - move => σi1 σs1 σi2 e [? ->] ? Hsafe. inv_step.
     + (* 1 -> 2 *) eexists _. split => //. apply: steps_Some; last by left. apply: (MSStep _ (Some _)). constructor.
     + (* 1 -> 3 *) eexists _. split => //. apply: steps_Some; last by left. apply: (MSStep _ (Some _)). constructor.
     + (* 3 -> 4 *) exfalso.
@@ -526,25 +586,22 @@ Qed.
 Lemma test_refines_stuck2_wp :
   refines mod_stuck2 mod_stuck1.
 Proof.
-  apply: wp_implies_refines => κ.
+  apply: wp_implies_refines => κ n.
   (* S2S1 *)
   constructor => e1 Hsafe.
-  split => // σ2 κs' ?; subst. inversion_clear 1; subst => //.
-  revert select (m_step _ _ _ _ _). inversion_clear 1; subst => /=.
+  split => // σ2 κs' ????. inv_step.
   - (* S2S2 *)
     eexists _. split. {
       apply: steps_Some; last by left. apply: (MSStep _ (Some _)). constructor.
     }
     constructor => {}e1 {}Hsafe.
-    split => // {}σ2 κs'' ?; subst. inversion_clear 1; subst => //.
-    revert select (m_step _ _ _ _ _). inversion_clear 1; subst => /=.
+    split => // {}σ2 κs'' ????; inv_step.
   - (* S2S3 *)
     eexists _. split. {
       apply: steps_Some; last by left. apply: (MSStep _ (Some _)). constructor.
     }
     constructor => {}e1 {}Hsafe.
-    split => // {}σ2 κs'' ?; subst. inversion_clear 1; subst => //.
-    revert select (m_step _ _ _ _ _). inversion_clear 1; subst => /=.
+    split => // {}σ2 κs'' ????. inv_step.
     have []:= Hsafe S1S3 [] => //.
     * apply prefix_nil.
     * apply steps_refl.
@@ -582,8 +639,7 @@ Proof.
   apply: (inv_implies_refines mod_stuck3 mod_stuck1 stuck3_inv).
   - done.
   - move => [] ?[??] => //.
-  - move => σi1 σs1 σi2 e [? ->]. inversion_clear 1 => //. revert select (m_step _ _ _ _ _) => /=.
-    destruct 1 => Hsafe.
+  - move => σi1 σs1 σi2 e [? ->] ? Hsafe. inv_step.
     + (* 1 -> 2 *) eexists _. split => //. apply: steps_Some; last by left. apply: (MSStep _ (Some _)). constructor.
     + (* 1 -> 3 *) exfalso.
       have [||]:= (Hsafe S1S3 [(tid, inr (nat_event 2))]) => //.
@@ -647,23 +703,16 @@ Proof.
   apply: (inv_implies_refines (module_without (module_product mod_call1 mod_call2) {[(call_event 0).(e_name)]}) mod1 call_merge_inv).
   - done.
   - done.
-    (* rewrite /call_merge_inv/=. move => [[] [|?|]] /=?[??]?; try naive_solver; right. *)
-    (* all: eexists _, _. *)
-    (* + apply: MpStepR; first by [constructor]. simpl. by case_bool_decide. *)
-    (* + apply: MpStepL; first by constructor. simpl. case_bool_decide => //. set_solver. *)
-  - move => σi1 σs1 σi2 e [??]. inversion_clear 1 => //; last set_solver.
-    revert select (m_step _ _ _ _ _) => /=.
-    destruct 1 as [??????? Hstep |??????? Hstep] => Hsafe.
+  - move => σi1 σs1 σi2 e [??] ? Hsafe. inv_step; try set_solver.
     + (* mod_call1 *)
-      inversion Hstep; subst; simpl in *. case_bool_decide; last set_solver. destruct_and!; simplify_eq => /=.
-      destruct σ2 => //.
+      destruct σ2 => //. case_bool_decide; [|set_solver]. destruct_and!; subst.
       revert select (call2_in _ _ _ _) => /=.
       move Heq: (call_event 1) => e'.
       destruct 1.
       have -> : n = 1. admit.
       exists false. split => //. apply steps_refl.
     + (* mod_call2 *)
-      inversion Hstep; subst; simpl in *. destruct σ1 => //. destruct_and!; simplify_eq => /=.
+      destruct σ1 => //. destruct_and!; simplify_eq/=.
       exists true. split => //.
       apply: steps_Some; last by left. apply: (MSStep _ (Some _)). constructor.
 Abort.
@@ -676,10 +725,7 @@ Proof.
   apply: (inv_implies_refines mod1 (module_without (module_product mod_call1 mod_call2) {[(call_event 0).(e_name)]}) call_split_inv).
   - done.
   - done.
-    (* case => ???; try by left. right. eexists _, _. constructor. *)
-  - move => σi1 [σs1 σs2] σi2 e Hinv. inversion_clear 1 => //.
-    revert select (m_step _ _ _ _ _) => /=.
-    destruct 1 => Hsafe. rewrite Hinv.
+  - move => σi1 [σs1 σs2] σi2 e Hinv ? Hsafe. inv_step.
     exists (true, C2S3). split => //=.
     apply: (steps_None (true, C2S2 1)). 2: apply: steps_Some. 3: by left.
     + apply: (MSStep _ None). apply: MpStepL. constructor. simpl. case_bool_decide => //. set_solver.
