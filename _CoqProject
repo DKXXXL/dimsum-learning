@@ -10,4 +10,5 @@
 -arg -w -arg -undeclared-scope
 
 theories/base.v
+theories/axioms.v
 theories/module.v
