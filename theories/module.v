@@ -1290,6 +1290,185 @@ Proof.
     + split => //. eexists. by apply: steps_trans.
 Qed.
 
+Inductive wp' {EV} (m1 m2 : module EV) : nat → m1.(m_state) -> list EV -> Prop :=
+| Wp_step' σi1 κs n:
+    (m1.(m_is_good) σi1 ∧
+     (∀ σi2 κ κs' n', κs = option_list κ ++ κs' -> n = S n' → m1.(m_step) σi1 κ σi2 ->
+        (* This is bullshit since *)
+        ∃ σs2, steps (m2.(m_step)) m2.(m_initial) κs σs2 ∧ wp' m1 m2 n' σi2 κs')) ->
+    wp' m1 m2 n σi1 κs
+.
+Lemma forall_to_ex2 A (P : A → Prop) (Q : Prop):
+ (∃ n : A, P n → Q) -> ((∀ n : A, P n) → Q).
+Proof. naive_solver. Qed.
+
+Lemma wp'_implies_refines {EV} (m1 m2 : module EV):
+  (∀ κ n, safe_trace m2 m2.(m_initial) κ → wp' m1 m2 n m1.(m_initial) κ) →
+  refines m1 m2.
+Proof.
+  move => Hwp.
+  constructor => κ σi.
+  move: m1.(m_initial) Hwp => σi1 Hwp Hsteps Hsafe.
+  have {Hsafe} {}Hwp:= (Hwp _ _ Hsafe).
+  move: Hwp. apply: forall_to_ex2.
+  elim: Hsteps => {σi1 κ σi}.
+  - move => σi1. exists 0 => Hwp. split; eauto using steps_refl.
+    destruct Hwp as [??? Hwp]. by destruct_and!.
+  - move => σi1 σi2 σi3 κ κs Hstep Hsteps [n IH]. exists (S n) => Hwp.
+    inversion_clear Hwp as [??? Hwp2]; subst.
+    move : Hwp2 => [? Hwp] //=.
+    have [||σs2 [Hsteps2 {}Hwp]]:= (Hwp _ _ κs n _ _ Hstep) => //.
+    have [?[??]]:= (IH Hwp).
+    split => //. naive_solver.
+Qed.
+
+Lemma refines_implies_wp' {EV} (m1 m2 : module EV):
+  refines m1 m2 →
+  (∀ κs n, safe_trace m2 m2.(m_initial) κs → wp' m1 m2 n m1.(m_initial) κs).
+Proof.
+  move => Hr κs n Hsafe.
+  (* have {}Hr:= ref_step _ _ Hr _ _ _ Hsafe. *)
+  have : (steps m1.(m_step) m1.(m_initial) [] m1.(m_initial)). { by left. }
+  have : (κs = [] ++ κs) by [].
+  move: {2 3}(m1.(m_initial)) => σi.
+  move: ([]) => κstart. move: {2 3}(κs) => κend.
+  elim/lt_wf_ind: n κstart κend σi.
+  move => n IH κstart κend σi Hκs Hstepi.
+  constructor.
+  have [|??]:= (ref_step _ _ Hr _ _ Hstepi). { move => ???. apply Hsafe. etrans => //. by eexists. }
+  split => // σi2 κ κs' n' ?? Hstep; subst.
+  have Hs1' : steps (m_step m1) (m_initial m1) (κstart ++ option_list κ') σi2. {
+    apply: steps_trans => //.
+    rewrite -(right_id_L [] (++) (option_list _)).
+    apply: steps_l => //. by left.
+  }
+  have [|?[? Hs]]:= (ref_step _ _ Hr _ _ Hs1'). admit.
+                                             have := Hr _ Hstepi.
+  => κ Hsafe.
+  have [|??]:= (ref_step _ _ Hr _ _ Hstepi). admit.
+  constructor.
+  constructor => κ σi.
+  move: m1.(m_initial) Hwp => σi1 Hwp Hsteps Hsafe.
+  have {Hsafe} {}Hwp:= (Hwp _ _ Hsafe).
+  move: Hwp. apply: forall_to_ex2.
+  elim: Hsteps => {σi1 κ σi}.
+  - move => σi1. exists 0 => Hwp. split; eauto using steps_refl.
+    destruct Hwp as [??? Hwp]. by destruct_and!.
+  - move => σi1 σi2 σi3 κ κs Hstep Hsteps [n IH]. exists (S n) => Hwp.
+    inversion_clear Hwp as [??? Hwp2]; subst.
+    move : Hwp2 => [? Hwp] //=.
+    have [||σs2 [Hsteps2 {}Hwp]]:= (Hwp _ _ κs n _ _ Hstep) => //.
+    have [?[??]]:= (IH Hwp).
+    split => //. naive_solver.
+Qed.
+(*     (* + move => σs κ' Hprefix Hs. apply: Hsafe. 2: apply: steps_trans. by apply prefix_app. *) *)
+(*     (* + split => //. eexists. by apply: steps_trans. *) *)
+(*   (* move => Hwp. constructor => κ σi. *) *)
+(*   (* move: m1.(m_initial) {Hwp}(Hwp κ) => σi1 Hwp /(steps_to_nsteps _ _ _ _)[n Hsteps] Hsafe. *) *)
+(*   (* elim/lt_wf_ind: n κ σi Hsteps {Hwp} (Hwp n) Hsafe. *) *)
+(*   (* move => n IH κ σi Hnsteps Hwp Hsafe. *) *)
+(*   (* inversion Hnsteps as [ |? ? ? ? ? ? Hstep Hnsteps']; simplify_eq. *) *)
+(*   (* - split; eauto using steps_refl. *) *)
+(*   (*   inversion_clear Hwp as [??? Hwp']. *) *)
+(*   (*   naive_solver. *) *)
+(*   (*   (* move : (Hwp' None) => [|] //=. *) *) *)
+(*   (* - have [κ[?[?[Heq [??]]]]]:= nsteps_inv_end _ _ _ _ _ _ _ Hstep Hnsteps'. *) *)
+(*   (*   rewrite Heq. rewrite Heq in Hwp Hsafe. *) *)
+(*   (*   inversion Hwp as [??? Hwp2]; subst. *) *)
+(*   (*   move : Hwp2 => [|? {}Hwp] //=. *) *)
+(*   (*   efeed pose proof Hwp. as [??]. *) *)
+(*   move => Hwp. constructor => κ σi. *)
+(*   move: m1.(m_initial) {Hwp}(Hwp κ) => σi1. *)
+(*   (* move: {2}(κ) => κend Hwp Hsteps Hsafe. *) *)
+(*   move => Hwp Hsteps Hsafe. *)
+(*   move: Hwp Hsafe. apply: forall_to_ex2. *)
+(*   elim: Hsteps => {σi1 κ σi}. *)
+(*   - move => σi1. exists 0 => Hwp Hsafe. split; eauto using steps_refl. *)
+(*     destruct Hwp as [??? Hwp]. *)
+(*     move : Hwp => [|] //=. *)
+(*   - move => σi1 σi2 σi3 κ κs Hstep Hsteps [n IH]. exists (S n) => Hwp Hsafe. *)
+(*     inversion_clear Hwp as [??? Hwp2]; subst. *)
+(*     move : Hwp2 => [|] //=. *)
+(*     move => ? Hwp. *)
+(*     have [||σs2 [Hsteps2 {}Hwp]]:= (Hwp _ _ κs n _ _ Hstep) => //. *)
+(*     have [|?[??]]:= (IH Hwp). *)
+(*     + move => σs κ' Hprefix Hs. apply: Hsafe. 2: apply: steps_trans. by apply prefix_app. *)
+(*     + split => //. eexists. by apply: steps_trans. *)
+
+(*     (* { move => ???. apply Hsafe. rewrite Heq. by apply: prefix_app_r. } *) *)
+
+(*   elim: Hsteps => {σi1 κ σi}. *)
+(*   - move => σi1. exists 0 => Hwp Hsafe. split; eauto using steps_refl. *)
+(*     destruct Hwp as [??? Hwp]. *)
+(*     move : (Hwp None) => [|] //= ?? Hprefix. *)
+(*     apply: Hsafe. etrans => //. by rewrite right_id. *)
+(*   - move => σi1 σi2 σi3 κ κs Hstep Hsteps [n IH]. exists (S n) => Hwp Hsafe. *)
+(*     inversion Hwp as [??? Hwp2]; subst. *)
+(*     move : (Hwp2 κ) => [|] //=. { move => ???. apply Hsafe. by apply: prefix_app_r. } *)
+(*     move => ? {Hwp2}Hwp. *)
+(*     have [||σs2 [Hsteps2 {}Hwp]]:= (Hwp _ κs n _ _ Hstep) => //. *)
+(*     have [|?[??]]:= (IH _ Hwp). *)
+(*     + move => σs κ' Hprefix Hs. apply: Hsafe. 2: by apply: steps_trans. by apply prefix_app. *)
+(*     + split => //. eexists. by apply: steps_trans. *)
+(* Qed. *)
+
+Lemma refines_implies_wp' {EV} (m1 m2 : module EV):
+  refines m1 m2 →
+  (∀ κs n, wp' m1 m2 n m1.(m_initial) m2.(m_initial) κs).
+Proof.
+  move => Hr κs n.
+  have : (steps m1.(m_step) m1.(m_initial) [] m1.(m_initial)). { by left. }
+  have : (κs = [] ++ κs) by [].
+  move: {2 3}(m1.(m_initial)) => σi. move: (m2.(m_initial)) => σs.
+  move: ([]) => κstart. move: {2 3}(κs) => κend.
+  elim/lt_wf_ind: n κstart κend σi σs.
+  move => n IH κstart κend σi σs Hκs Hstepi.
+  constructor => κ Hsafe.
+  have [|??]:= (ref_step _ _ Hr _ _ Hstepi). admit.
+  constructor.
+
+
+Lemma refines_implies_wp {EV} (m1 m2 : module EV):
+  refines m1 m2 →
+  (∀ κ n, wp m1 m2 n m1.(m_initial) m2.(m_initial) κ).
+Proof.
+  move => Hr κ n.
+  have : (steps m1.(m_step) m1.(m_initial) [] m1.(m_initial)). { by left. }
+  have : (steps m2.(m_step) m2.(m_initial) [] m2.(m_initial)). { by left. }
+  have : (κ = [] ++ κ) by [].
+  move: {2 3}(m1.(m_initial)) => σ1. move: {2 3}(m2.(m_initial)) => σ2.
+  move: ([]) => κstart. move: {2 3}(κ) => κend.
+  elim/lt_wf_ind: n κstart κend σ1 σ2.
+  move => n IH κstart κend σ1 σ2 Hκ Hs2 Hs1.
+  constructor => κ' Hsafe.
+  have [|??]:= (ref_step _ _ Hr _ _ Hs1). admit.
+  split => // σi2 κs' n' ?? Hstep. subst.
+  have Hs1' : steps (m_step m1) (m_initial m1) (κstart ++ option_list κ') σi2. {
+    apply: steps_trans => //.
+    rewrite -(right_id_L [] (++) (option_list _)).
+    apply: steps_l => //. by left.
+  }
+  have [|?[? Hs]]:= (ref_step _ _ Hr _ _ Hs1'). admit.
+  epose proof (IH n' _ _ κs' _ _ _ Hs Hs1') as Hwp. Unshelve. 2: lia. 2: by rewrite assoc.
+  inversion Hwp; clear Hwp; simplify_eq.
+
+  move => Hwp. constructor => κ σi. move: m1.(m_initial) m2.(m_initial) {Hwp}(Hwp κ) => σi1 σs1 Hwp Hsteps Hsafe.
+  move: σs1 Hwp Hsafe. apply: forall_to_ex.
+  elim: Hsteps => {σi1 κ σi}.
+  - move => σi1. exists 0 => σs1 Hwp Hsafe. split; eauto using steps_refl.
+    destruct Hwp as [???? Hwp].
+    move : (Hwp None) => [|] //= ?? Hprefix.
+    apply Hsafe. etrans => //. apply prefix_nil.
+  - move => σi1 σi2 σi3 κ κs Hstep Hsteps [n IH]. exists (S n) =>  σs1 Hwp Hsafe.
+    inversion Hwp as [???? Hwp2]; subst.
+    move : (Hwp2 κ) => [|] //=. { move => ???. apply Hsafe. by apply: prefix_app_r. }
+    move => ? {Hwp2}Hwp.
+    have [||σs2 [Hsteps2 {}Hwp]]:= (Hwp _ κs n _ _ Hstep) => //.
+    have [|?[??]]:= (IH _ Hwp).
+    + move => σs κ' Hprefix Hs. apply: Hsafe. 2: by apply: steps_trans. by apply prefix_app.
+    + split => //. eexists. by apply: steps_trans.
+Qed.
+
 Ltac inv_step :=
   repeat lazymatch goal with
   | H : m_step _ _ _ _  |- _ => inversion H; clear H
