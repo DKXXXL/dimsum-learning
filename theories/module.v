@@ -1076,6 +1076,33 @@ Inductive link_trace_related {EV1 EV2 EV3} (R : option EV1 → option EV2 → op
     R (Some κ1) (Some κ2) κ3 →
     link_trace_related R (κs1 ++ [κ1]) (κs2 ++ [κ2]) (κs3 ++ option_list κ3)
 .
+
+Lemma link_trace_related_create {EV1 EV2 EV3} (R : option EV1 → option EV2 → option EV3 → Prop) m1 m2 κs3 σ1 σ1':
+  steps (link m1 m2 R).(m_step) σ1 κs3 σ1' →
+  ∃ κs1 κs2, link_trace_related R κs1 κs2 κs3 ∧
+  steps m1.(m_step) σ1.1 κs1 σ1'.1 ∧
+  steps m2.(m_step) σ1.2 κs2 σ1'.2.
+Proof.
+  elim/steps_rev_ind; clear. { move => ?. exists [], []. split_and!; constructor. }
+  move => σ1 σ2 σ3 κ κs Hsteps [κs1 [κs2 [Hlink [Hκ1 Hκ2]]]] Hstep.
+  inversion Hstep; clear Hstep; simplify_eq.
+  - exists (κs1 ++ option_list e1), κs2.
+    split_and! => //; destruct e1; simplify_eq/= => //; rewrite ?right_id //. by constructor.
+    + apply: steps_trans => //. apply: steps_Some => //. left.
+    + rewrite -(right_id_L [] (++) κs1).
+      apply: steps_trans => //. apply: steps_None => //. left.
+  - exists κs1, (κs2 ++ option_list e2).
+    split_and! => //; destruct e2; simplify_eq/= => //; rewrite ?right_id //. by constructor.
+    + apply: steps_trans => //. apply: steps_Some => //. left.
+    + rewrite -(right_id_L [] (++) κs2).
+      apply: steps_trans => //. apply: steps_None => //. left.
+  - exists (κs1 ++ [e1]), (κs2 ++ [e2]).
+    split_and!.
+    + by apply LinkTraceRelBoth.
+    + apply: steps_trans => //. apply: steps_Some => //. left.
+    + apply: steps_trans => //. apply: steps_Some => //. left.
+Qed.
+
 Lemma link_trace_related_step {EV1 EV2 EV3} (R : option EV1 → option EV2 → option EV3 → Prop) m1 m2 κs1 κs2 κs3 σ1 σ1' σ2 σ2':
   link_trace_related R κs1 κs2 κs3 →
   steps m1.(m_step) σ1 κs1 σ1' →
@@ -1298,6 +1325,45 @@ Proof.
         have [|σs2' [Hsteps2 {}Hwp2]]:= Hwp2 _ n' _ H5 => //.
         naive_solver.
 Qed.
+(*   (* The following is a failed attempt at simplifying the previous proof. *) *)
+(*   move => HLEM [Hr1] [Hr2]. *)
+(*   constructor => κs σi Hsteps Hsafe. *)
+(*   have [κs1 [κs2 [Hrel [Hs1 Hs2]]]] := link_trace_related_create _ _ _ _ _ _ Hsteps. *)
+(*   have [[of2 Hfsteps]|Hnof2]:= HLEM κs2. *)
+(*   - have [|? [σs1 Hsteps1]]:= Hr1 _ _ Hs1. { *)
+(*       move => σs κ' Hpre Hsteps1. *)
+(*       have [? [κs3' [[??] [[??]?]]]]:= link_trace_related_inv_l _ _ _ _ _ Hpre Hrel; subst. *)
+(*       move: Hfsteps => /(steps_app_inv _ _ _)[σ2 [??]]. *)
+(*       have []:= Hsafe (σs, σ2) κs3' => //. *)
+(*       - by apply prefix_app_r. *)
+(*       - by apply: link_trace_related_step. *)
+(*     } *)
+(*     have [|? [σs2 ?]]:= Hr2 _ _ Hs2. { *)
+(*       move => σs κ' Hpre ?. *)
+(*       have [? [κs3' [[??] [[??]?]]]]:= link_trace_related_inv_r _ _ _ _ _ Hpre Hrel; subst. *)
+(*       move: Hsteps1 => /(steps_app_inv _ _ _)[σ2 [??]]. *)
+(*       have []:= Hsafe (σ2, σs) κs3' => //. *)
+(*       - by apply prefix_app_r. *)
+(*       - by apply: link_trace_related_step. *)
+(*     } *)
+(*     split => //. *)
+(*     eexists (σs1, σs2). *)
+(*     by apply: link_trace_related_step. *)
+(*   - have [|? [σs2 ?]]:= Hr2 _ _ Hs2; [|naive_solver]. *)
+(*     move => σs κ' [κend Hpre] ?. *)
+(*     subst. *)
+(*     have [?|[κ'' [κend' ?] ]]:= snoc_inv κend; subst. *)
+(*     { rewrite right_id in Hs1, Hnof2. naive_solver. } *)
+(*     have [||||_ [? Hs]]:= IH (length (κ' ++ κend')) _ (κ' ++ κend') => //. { *)
+(*       rewrite !app_length /=. lia. *)
+(*     } { *)
+(*       admit. *)
+(*     } { *)
+(*       admit. *)
+(*     } *)
+
+(*     (* TODO: need steps (m_step m1') (m_initial m1') ?? σ here *) *)
+(* Abort. *)
 
 (*** Proving refinement *)
 Lemma inv_implies_refines {EV} (m1 m2 : module EV) (inv : m1.(m_state) → m2.(m_state) → Prop):
