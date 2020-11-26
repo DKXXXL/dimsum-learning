@@ -801,6 +801,15 @@ Proof.
   apply: IH => //. lia.
 Qed.
 
+Lemma steps_option_list {A B} ρ2 (R : A → option B → A → Prop) ρ1 κ:
+  R ρ1 κ ρ2 →
+  steps R ρ1 (option_list κ) ρ2.
+Proof.
+  move => ?.
+  rewrite -(right_id_L [] (++) (option_list _)).
+    apply: steps_l => //. by left.
+Qed.
+
 Lemma steps_None {A B} ρ2 (R : A → option B → A → Prop) ρ1 ρ3 κs2:
   R ρ1 None ρ2 →
   steps R ρ2 κs2 ρ3 →
@@ -910,7 +919,6 @@ Definition safe_trace {EV} (m : module EV) (σ : m.(m_state)) (κ : list EV) : P
 Definition safe {EV} (m : module EV) : Prop :=
   (∀ κ, safe_trace m m.(m_initial) κ).
 
-
 Record refines {EV} (mimpl mspec : module EV) := {
   (* ref_interface : *)
   (*   mimpl.(m_interface) = mspec.(m_interface); *)
@@ -984,20 +992,20 @@ Definition module_product {EV1 EV2 EV3} (m1 : module EV1) (m2 : module EV2) (R :
 |}.
 
 
-Lemma product_step_inv {EV1 EV2 EV3} m1 m2 (R : option EV1 → option EV2 → option EV3 → Prop) σ1 κ σ2:
-  steps (module_product_step m1 m2 R) σ1 κ σ2 →
-  ∃ κ1 κ2, steps m1.(m_step) σ1.1 κ1 σ2.1 ∧ steps m2.(m_step) σ1.2 κ2 σ2.2 ∧
-     (∀ σ1' κ1', κ1' `prefix_of` κ1 → steps m1.(m_step) σ1.1 κ1 σ1' → ∃ κ' σ2',
-                    κ' `prefix_of` κ →
-                    steps (module_product_step m1 m2 R) σ1 κ' (σ1', σ2') ).
-Proof.
-  elim; clear. { move => [??]. exists [], []. split_and!; try by left. admit. }
-  move => [σ1 σ2] [σ1' σ2'] [σ1'' σ2''] κ κs Hmstep ?/= [κ1 [κ2 [Hstep1 [Hstep2 Hκ]]]].
-  inversion Hmstep; clear Hmstep; simplify_eq/=.
-  - exists (option_list e1 ++ κ1), κ2. split_and! => //. by apply: steps_l. admit.
-  - exists κ1, (option_list e2 ++ κ2). split_and! => //. by apply: steps_l. admit.
-  - exists (e1 :: κ1), (e2 :: κ2). split_and!; try by apply: steps_Some. admit.
-Admitted.
+(* Lemma product_step_inv {EV1 EV2 EV3} m1 m2 (R : option EV1 → option EV2 → option EV3 → Prop) σ1 κ σ2: *)
+(*   steps (module_product_step m1 m2 R) σ1 κ σ2 → *)
+(*   ∃ κ1 κ2, steps m1.(m_step) σ1.1 κ1 σ2.1 ∧ steps m2.(m_step) σ1.2 κ2 σ2.2 ∧ *)
+(*      (∀ σ1' κ1', κ1' `prefix_of` κ1 → steps m1.(m_step) σ1.1 κ1 σ1' → ∃ κ' σ2', *)
+(*                     κ' `prefix_of` κ → *)
+(*                     steps (module_product_step m1 m2 R) σ1 κ' (σ1', σ2') ). *)
+(* Proof. *)
+(*   elim; clear. { move => [??]. exists [], []. split_and!; try by left. admit. } *)
+(*   move => [σ1 σ2] [σ1' σ2'] [σ1'' σ2''] κ κs Hmstep ?/= [κ1 [κ2 [Hstep1 [Hstep2 Hκ]]]]. *)
+(*   inversion Hmstep; clear Hmstep; simplify_eq/=. *)
+(*   - exists (option_list e1 ++ κ1), κ2. split_and! => //. by apply: steps_l. admit. *)
+(*   - exists κ1, (option_list e2 ++ κ2). split_and! => //. by apply: steps_l. admit. *)
+(*   - exists (e1 :: κ1), (e2 :: κ2). split_and!; try by apply: steps_Some. admit. *)
+(* Admitted. *)
 Lemma product_empty_steps_l {EV1 EV2 EV3} m1 m2 σ1 σ1' σ2 (R : option EV1 → option EV2 → option EV3 → Prop) :
   steps (m_step m1) σ1 [] σ1' →
   steps (module_product_step m1 m2 R) (σ1, σ2) [] (σ1', σ2).
@@ -1207,7 +1215,7 @@ Proof.
       apply: steps_l. by econstructor.
       apply: (steps_trans _ _ _ _ []). by apply: product_empty_steps_l.
       by apply: product_empty_steps_r.
-Admitted.
+Abort.
 (*   (* have : (∀ κ' σi1, steps (module_step m1) (m_initial m1) κ' σi1 → *) *)
 (*   (*          safe_state m1 σi1 ∧ (∃ σs, steps (module_step m1') (m_initial m1') κ' σs)). { *) *)
 (*   (*   move => κ' σi1 {}Hsteps. apply ref_step => // σs κ'' Hpref Hsteps2. admit. *) *)
@@ -1292,181 +1300,344 @@ Qed.
 
 Inductive wp' {EV} (m1 m2 : module EV) : nat → m1.(m_state) -> list EV -> Prop :=
 | Wp_step' σi1 κs n:
-    (m1.(m_is_good) σi1 ∧
-     (∀ σi2 κ κs' n', κs = option_list κ ++ κs' -> n = S n' → m1.(m_step) σi1 κ σi2 ->
-        (* This is bullshit since *)
-        ∃ σs2, steps (m2.(m_step)) m2.(m_initial) κs σs2 ∧ wp' m1 m2 n' σi2 κs')) ->
+    (∀ κ, safe_trace m2 m2.(m_initial) (κs ++ option_list κ) → m1.(m_is_good) σi1 ∧
+     (∀ σi2 n', n = S n' → m1.(m_step) σi1 κ σi2 ->
+        ∃ σs2, steps (m2.(m_step)) m2.(m_initial) (κs ++ option_list κ) σs2 ∧
+               wp' m1 m2 n' σi2 (κs ++ option_list κ))) ->
     wp' m1 m2 n σi1 κs
 .
+
+Lemma wp'_weaken {EV} (m1 m2 : module EV) κs σ n n':
+  n' ≤ n →
+  wp' m1 m2 n σ κs →
+  wp' m1 m2 n' σ κs.
+Proof.
+  elim: n' n σ κs.
+  - move => ???? Hwp. constructor => κ Hsafe. split; [ | lia].
+    inversion Hwp as [??? Hwp']; simplify_eq.
+      by have []:= Hwp' κ Hsafe.
+  - move => n' IH [|n] σ κs ? Hwp. lia.
+    inversion Hwp as [??? Hwp']; simplify_eq.
+    constructor => κ Hsafe.
+    have [? {}Hwp]:= Hwp' κ Hsafe.
+    split => // σi2 ? [?] Hstep. subst.
+    have [||?[??]]:= Hwp σi2 n => //.
+    eexists _. split => //. apply: IH; [|done]. lia.
+Qed.
+
 Lemma forall_to_ex2 A (P : A → Prop) (Q : Prop):
  (∃ n : A, P n → Q) -> ((∀ n : A, P n) → Q).
 Proof. naive_solver. Qed.
 
 Lemma wp'_implies_refines {EV} (m1 m2 : module EV):
-  (∀ κ n, safe_trace m2 m2.(m_initial) κ → wp' m1 m2 n m1.(m_initial) κ) →
+  (∀ n, wp' m1 m2 n m1.(m_initial) []) →
   refines m1 m2.
 Proof.
   move => Hwp.
-  constructor => κ σi.
-  move: m1.(m_initial) Hwp => σi1 Hwp Hsteps Hsafe.
-  have {Hsafe} {}Hwp:= (Hwp _ _ Hsafe).
-  move: Hwp. apply: forall_to_ex2.
-  elim: Hsteps => {σi1 κ σi}.
-  - move => σi1. exists 0 => Hwp. split; eauto using steps_refl.
-    destruct Hwp as [??? Hwp]. by destruct_and!.
-  - move => σi1 σi2 σi3 κ κs Hstep Hsteps [n IH]. exists (S n) => Hwp.
+  constructor => κs σi.
+  move: m1.(m_initial) Hwp => σi1.
+  have : (steps m2.(m_step) m2.(m_initial) [] m2.(m_initial)). { by left. }
+  move: {2}m2.(m_initial) => σs1.
+  have : κs = [] ++ κs by [].
+  move: ([]) => κstart. move: {2 3}(κs) => κend.
+  move => Hκ Hs Hwp Hsteps Hsafe.
+  move: κstart Hwp σs1 Hs Hsafe Hκ. apply: forall_to_ex.
+  elim: Hsteps => {σi1 κend σi}.
+  - move => σi1. exists 0 => κstart Hwp σs Hsteps Hsafe Hκ.
+    rewrite right_id in Hκ; subst. split; eauto.
+    destruct Hwp as [??? Hwp].
+    move: (Hwp None) => [|] //=.
+    by rewrite right_id.
+  - move => σi1 σi2 σi3 κ κend Hstep Hsteps [n IH]. exists (S n) => κstart Hwp σs1 Hstepsi Hsafe Hκs.
     inversion_clear Hwp as [??? Hwp2]; subst.
-    move : Hwp2 => [? Hwp] //=.
-    have [||σs2 [Hsteps2 {}Hwp]]:= (Hwp _ _ κs n _ _ Hstep) => //.
-    have [?[??]]:= (IH Hwp).
+    move : (Hwp2 κ) => [|? Hwp] //=. { move => ???. apply Hsafe. etrans => //. rewrite assoc. by eexists. }
+    have [|σs2 [Hsteps2 {}Hwp]]:= (Hwp _ n _ Hstep) => //.
+    have [||?[??]]:= (IH _ Hwp _ Hsteps2) => //. by rewrite assoc.
     split => //. naive_solver.
 Qed.
 
 Lemma refines_implies_wp' {EV} (m1 m2 : module EV):
   refines m1 m2 →
-  (∀ κs n, safe_trace m2 m2.(m_initial) κs → wp' m1 m2 n m1.(m_initial) κs).
+  (∀ n, wp' m1 m2 n m1.(m_initial) []).
 Proof.
-  move => Hr κs n Hsafe.
+  move => Hr n.
   (* have {}Hr:= ref_step _ _ Hr _ _ _ Hsafe. *)
   have : (steps m1.(m_step) m1.(m_initial) [] m1.(m_initial)). { by left. }
-  have : (κs = [] ++ κs) by [].
+  (* have : (κs = [] ++ κs) by []. *)
+  (* move: {2 3}(m1.(m_initial)) => σi. *)
+  (* move: ([]) => κstart. *)
+  (* move: {2 3}(κs) => κend. *)
+  (* elim/lt_wf_ind: n κstart κend σi. *)
   move: {2 3}(m1.(m_initial)) => σi.
-  move: ([]) => κstart. move: {2 3}(κs) => κend.
-  elim/lt_wf_ind: n κstart κend σi.
-  move => n IH κstart κend σi Hκs Hstepi.
-  constructor.
-  have [|??]:= (ref_step _ _ Hr _ _ Hstepi). { move => ???. apply Hsafe. etrans => //. by eexists. }
-  split => // σi2 κ κs' n' ?? Hstep; subst.
-  have Hs1' : steps (m_step m1) (m_initial m1) (κstart ++ option_list κ') σi2. {
-    apply: steps_trans => //.
-    rewrite -(right_id_L [] (++) (option_list _)).
-    apply: steps_l => //. by left.
-  }
-  have [|?[? Hs]]:= (ref_step _ _ Hr _ _ Hs1'). admit.
-                                             have := Hr _ Hstepi.
-  => κ Hsafe.
-  have [|??]:= (ref_step _ _ Hr _ _ Hstepi). admit.
-  constructor.
-  constructor => κ σi.
-  move: m1.(m_initial) Hwp => σi1 Hwp Hsteps Hsafe.
-  have {Hsafe} {}Hwp:= (Hwp _ _ Hsafe).
-  move: Hwp. apply: forall_to_ex2.
-  elim: Hsteps => {σi1 κ σi}.
-  - move => σi1. exists 0 => Hwp. split; eauto using steps_refl.
-    destruct Hwp as [??? Hwp]. by destruct_and!.
-  - move => σi1 σi2 σi3 κ κs Hstep Hsteps [n IH]. exists (S n) => Hwp.
-    inversion_clear Hwp as [??? Hwp2]; subst.
-    move : Hwp2 => [? Hwp] //=.
-    have [||σs2 [Hsteps2 {}Hwp]]:= (Hwp _ _ κs n _ _ Hstep) => //.
-    have [?[??]]:= (IH Hwp).
-    split => //. naive_solver.
-Qed.
-(*     (* + move => σs κ' Hprefix Hs. apply: Hsafe. 2: apply: steps_trans. by apply prefix_app. *) *)
-(*     (* + split => //. eexists. by apply: steps_trans. *) *)
-(*   (* move => Hwp. constructor => κ σi. *) *)
-(*   (* move: m1.(m_initial) {Hwp}(Hwp κ) => σi1 Hwp /(steps_to_nsteps _ _ _ _)[n Hsteps] Hsafe. *) *)
-(*   (* elim/lt_wf_ind: n κ σi Hsteps {Hwp} (Hwp n) Hsafe. *) *)
-(*   (* move => n IH κ σi Hnsteps Hwp Hsafe. *) *)
-(*   (* inversion Hnsteps as [ |? ? ? ? ? ? Hstep Hnsteps']; simplify_eq. *) *)
-(*   (* - split; eauto using steps_refl. *) *)
-(*   (*   inversion_clear Hwp as [??? Hwp']. *) *)
-(*   (*   naive_solver. *) *)
-(*   (*   (* move : (Hwp' None) => [|] //=. *) *) *)
-(*   (* - have [κ[?[?[Heq [??]]]]]:= nsteps_inv_end _ _ _ _ _ _ _ Hstep Hnsteps'. *) *)
-(*   (*   rewrite Heq. rewrite Heq in Hwp Hsafe. *) *)
-(*   (*   inversion Hwp as [??? Hwp2]; subst. *) *)
-(*   (*   move : Hwp2 => [|? {}Hwp] //=. *) *)
-(*   (*   efeed pose proof Hwp. as [??]. *) *)
-(*   move => Hwp. constructor => κ σi. *)
-(*   move: m1.(m_initial) {Hwp}(Hwp κ) => σi1. *)
-(*   (* move: {2}(κ) => κend Hwp Hsteps Hsafe. *) *)
-(*   move => Hwp Hsteps Hsafe. *)
-(*   move: Hwp Hsafe. apply: forall_to_ex2. *)
-(*   elim: Hsteps => {σi1 κ σi}. *)
-(*   - move => σi1. exists 0 => Hwp Hsafe. split; eauto using steps_refl. *)
-(*     destruct Hwp as [??? Hwp]. *)
-(*     move : Hwp => [|] //=. *)
-(*   - move => σi1 σi2 σi3 κ κs Hstep Hsteps [n IH]. exists (S n) => Hwp Hsafe. *)
-(*     inversion_clear Hwp as [??? Hwp2]; subst. *)
-(*     move : Hwp2 => [|] //=. *)
-(*     move => ? Hwp. *)
-(*     have [||σs2 [Hsteps2 {}Hwp]]:= (Hwp _ _ κs n _ _ Hstep) => //. *)
-(*     have [|?[??]]:= (IH Hwp). *)
-(*     + move => σs κ' Hprefix Hs. apply: Hsafe. 2: apply: steps_trans. by apply prefix_app. *)
-(*     + split => //. eexists. by apply: steps_trans. *)
-
-(*     (* { move => ???. apply Hsafe. rewrite Heq. by apply: prefix_app_r. } *) *)
-
-(*   elim: Hsteps => {σi1 κ σi}. *)
-(*   - move => σi1. exists 0 => Hwp Hsafe. split; eauto using steps_refl. *)
-(*     destruct Hwp as [??? Hwp]. *)
-(*     move : (Hwp None) => [|] //= ?? Hprefix. *)
-(*     apply: Hsafe. etrans => //. by rewrite right_id. *)
-(*   - move => σi1 σi2 σi3 κ κs Hstep Hsteps [n IH]. exists (S n) => Hwp Hsafe. *)
-(*     inversion Hwp as [??? Hwp2]; subst. *)
-(*     move : (Hwp2 κ) => [|] //=. { move => ???. apply Hsafe. by apply: prefix_app_r. } *)
-(*     move => ? {Hwp2}Hwp. *)
-(*     have [||σs2 [Hsteps2 {}Hwp]]:= (Hwp _ κs n _ _ Hstep) => //. *)
-(*     have [|?[??]]:= (IH _ Hwp). *)
-(*     + move => σs κ' Hprefix Hs. apply: Hsafe. 2: by apply: steps_trans. by apply prefix_app. *)
-(*     + split => //. eexists. by apply: steps_trans. *)
-(* Qed. *)
-
-Lemma refines_implies_wp' {EV} (m1 m2 : module EV):
-  refines m1 m2 →
-  (∀ κs n, wp' m1 m2 n m1.(m_initial) m2.(m_initial) κs).
-Proof.
-  move => Hr κs n.
-  have : (steps m1.(m_step) m1.(m_initial) [] m1.(m_initial)). { by left. }
-  have : (κs = [] ++ κs) by [].
-  move: {2 3}(m1.(m_initial)) => σi. move: (m2.(m_initial)) => σs.
-  move: ([]) => κstart. move: {2 3}(κs) => κend.
-  elim/lt_wf_ind: n κstart κend σi σs.
-  move => n IH κstart κend σi σs Hκs Hstepi.
+  move: ([]) => κstart.
+  elim/lt_wf_ind: n κstart σi.
+  move => n IH κstart σi Hstepi.
   constructor => κ Hsafe.
-  have [|??]:= (ref_step _ _ Hr _ _ Hstepi). admit.
-  constructor.
-
-
-Lemma refines_implies_wp {EV} (m1 m2 : module EV):
-  refines m1 m2 →
-  (∀ κ n, wp m1 m2 n m1.(m_initial) m2.(m_initial) κ).
-Proof.
-  move => Hr κ n.
-  have : (steps m1.(m_step) m1.(m_initial) [] m1.(m_initial)). { by left. }
-  have : (steps m2.(m_step) m2.(m_initial) [] m2.(m_initial)). { by left. }
-  have : (κ = [] ++ κ) by [].
-  move: {2 3}(m1.(m_initial)) => σ1. move: {2 3}(m2.(m_initial)) => σ2.
-  move: ([]) => κstart. move: {2 3}(κ) => κend.
-  elim/lt_wf_ind: n κstart κend σ1 σ2.
-  move => n IH κstart κend σ1 σ2 Hκ Hs2 Hs1.
-  constructor => κ' Hsafe.
-  have [|??]:= (ref_step _ _ Hr _ _ Hs1). admit.
-  split => // σi2 κs' n' ?? Hstep. subst.
-  have Hs1' : steps (m_step m1) (m_initial m1) (κstart ++ option_list κ') σi2. {
+  have [|??]:= (ref_step _ _ Hr _ _ Hstepi). { move => ???. apply Hsafe. etrans => //. by eexists. }
+  split => // σi2 n' ? Hstep; subst.
+  have Hs1' : steps (m_step m1) (m_initial m1) (κstart ++ option_list κ) σi2. {
     apply: steps_trans => //.
     rewrite -(right_id_L [] (++) (option_list _)).
     apply: steps_l => //. by left.
   }
-  have [|?[? Hs]]:= (ref_step _ _ Hr _ _ Hs1'). admit.
-  epose proof (IH n' _ _ κs' _ _ _ Hs Hs1') as Hwp. Unshelve. 2: lia. 2: by rewrite assoc.
-  inversion Hwp; clear Hwp; simplify_eq.
+  have [|?[? Hs]]:= (ref_step _ _ Hr _ _ Hs1') => //.
+  eexists _. split => //.
+  apply: IH => //. lia.
+Qed.
 
-  move => Hwp. constructor => κ σi. move: m1.(m_initial) m2.(m_initial) {Hwp}(Hwp κ) => σi1 σs1 Hwp Hsteps Hsafe.
-  move: σs1 Hwp Hsafe. apply: forall_to_ex.
-  elim: Hsteps => {σi1 κ σi}.
-  - move => σi1. exists 0 => σs1 Hwp Hsafe. split; eauto using steps_refl.
-    destruct Hwp as [???? Hwp].
-    move : (Hwp None) => [|] //= ?? Hprefix.
-    apply Hsafe. etrans => //. apply prefix_nil.
-  - move => σi1 σi2 σi3 κ κs Hstep Hsteps [n IH]. exists (S n) =>  σs1 Hwp Hsafe.
-    inversion Hwp as [???? Hwp2]; subst.
-    move : (Hwp2 κ) => [|] //=. { move => ???. apply Hsafe. by apply: prefix_app_r. }
-    move => ? {Hwp2}Hwp.
-    have [||σs2 [Hsteps2 {}Hwp]]:= (Hwp _ κs n _ _ Hstep) => //.
-    have [|?[??]]:= (IH _ Hwp).
-    + move => σs κ' Hprefix Hs. apply: Hsafe. 2: by apply: steps_trans. by apply prefix_app.
-    + split => //. eexists. by apply: steps_trans.
+Lemma forall_to_ex3 A B C1 C2 P1 P2 (Q : C1 → C2 → Prop):
+ (∃ (n1 : A) (n2 : B), ∀ x1 x2,  P1 n1 x1 x2 → P2 n2 x1 x2 → Q x1 x2) -> (∀ (x1 : C1) (x2 : C2), (∀ n : A, P1 n x1 x2)  → (∀ n : B, P2 n x1 x2) → Q x1 x2).
+Proof. naive_solver. Qed.
+
+Inductive product_trace_related {EV1 EV2 EV3} (R : option EV1 → option EV2 → option EV3 → Prop) : list EV1 → list EV2 → list EV3 → Prop :=
+| ProdTraceRelNil:
+    product_trace_related R [] [] []
+| ProdTraceRelL κ1 κ1' κs1 κs2 κs3:
+    product_trace_related R κs1 κs2 κs3 →
+    R (Some κ1) None κ1' →
+    product_trace_related R (κs1 ++ [κ1]) κs2 (κs3 ++ option_list κ1')
+| ProdTraceRelR κ2 κ2' κs1 κs2 κs3:
+    product_trace_related R κs1 κs2 κs3 →
+    R None (Some κ2) κ2' →
+    product_trace_related R κs1 (κs2 ++ [κ2]) (κs3 ++ option_list κ2')
+| ProdTraceRelBoth κ1 κ2 κ3 κs1 κs2 κs3:
+    product_trace_related R κs1 κs2 κs3 →
+    R (Some κ1) (Some κ2) κ3 →
+    product_trace_related R (κs1 ++ [κ1]) (κs2 ++ [κ2]) (κs3 ++ option_list κ3)
+.
+Lemma product_trace_related_step {EV1 EV2 EV3} (R : option EV1 → option EV2 → option EV3 → Prop) m1 m2 κs1 κs2 κs3 σ1 σ1' σ2 σ2':
+  product_trace_related R κs1 κs2 κs3 →
+  steps m1.(m_step) σ1 κs1 σ1' →
+  steps m2.(m_step) σ2 κs2 σ2' →
+  steps (module_product m1 m2 R).(m_step) (σ1, σ2) κs3 (σ1', σ2').
+Proof.
+  move => Hrel.
+  elim: Hrel σ1' σ2'; clear.
+  - move => σ1' σ2' Hstep1 Hstep2.
+    apply: (steps_trans  _ _ _ _ [] []). by apply: product_empty_steps_l.
+      by apply: product_empty_steps_r.
+  - move => κ1 κ1' κs1 κs2 κs3 ? IH HR σ1' σ2' /(steps_app_inv _ _ _)[σ' [? /(steps_cons_inv _ _ _ _)[?[?[?[??]]]]]] ?.
+    apply: steps_trans. by apply IH.
+    apply: (steps_trans _ _ _ _ []). by apply: product_empty_steps_l.
+    rewrite -/option_list.
+    rewrite -(right_id_L [] (++) (option_list _)).
+    apply: steps_trans. { apply: steps_option_list. by apply: MpStepL. }
+    by apply: product_empty_steps_l.
+  - move => κ2 κ2' κs1 κs2 κs3 ? IH HR σ1' σ2' ? /(steps_app_inv _ _ _)[σ' [? /(steps_cons_inv _ _ _ _)[?[?[?[??]]]]]].
+    apply: steps_trans. by apply IH.
+    apply: (steps_trans _ _ _ _ []). by apply: product_empty_steps_r.
+    rewrite -/option_list.
+    rewrite -(right_id_L [] (++) (option_list _)).
+    apply: steps_trans. { apply: steps_option_list. by apply: MpStepR. }
+    by apply: product_empty_steps_r.
+  - move => κ1 κ2 κ3 κs1 κs2 κs3 ? IH HR σ1' σ2' /(steps_app_inv _ _ _)[σ' [? /(steps_cons_inv _ _ _ _)[?[?[?[??]]]]]] /(steps_app_inv _ _ _)[? [? /(steps_cons_inv _ _ _ _)[?[?[?[??]]]]]].
+    apply: steps_trans. by apply IH.
+    apply: (steps_trans _ _ _ _ []). by apply: product_empty_steps_r.
+    apply: (steps_trans _ _ _ _ []). by apply: product_empty_steps_l.
+    rewrite -/option_list.
+    rewrite -(right_id_L [] (++) (option_list _)).
+    apply: steps_trans. { apply: steps_option_list. by apply: MpStepBoth. }
+    apply: (steps_trans _ _ _ _ []). by apply: product_empty_steps_l.
+    by apply: product_empty_steps_r.
+Qed.
+
+Lemma snoc_inv {A} (l : list A):
+  l = [] ∨ ∃ x l', l = l' ++ [x].
+Proof.
+  destruct l as [|x l']. by left. right.
+  elim: l' x => //. move => x. by eexists _, [].
+  move => x ? IH x'. move: (IH x) => [x'' [l'' ->]].
+  eexists x'', _. by apply: app_comm_cons.
+Qed.
+
+Lemma product_trace_related_inv_l {EV1 EV2 EV3} (R : option EV1 → option EV2 → option EV3 → Prop) κs1 κs2 κs3 κs1':
+  κs1' `prefix_of` κs1 →
+  product_trace_related R κs1 κs2 κs3 →
+  ∃ κs2' κs3', κs2' `prefix_of` κs2 ∧ κs3' `prefix_of` κs3 ∧
+               product_trace_related R κs1' κs2' κs3'.
+Proof.
+  move => Hpre Hprod. elim: Hprod Hpre; clear.
+  - destruct κs1'; [ | by move => /(prefix_nil_not _ _)] => ?.
+    exists [], []. split_and! => //. constructor.
+  - move => κ1 κ1' κs1 κs2 κs3 Hprod IH HR [κend Hpre].
+    have [?|[κ [κend' ?]]]:= snoc_inv κend; subst.
+    + rewrite right_id in Hpre. subst.
+      eexists _, _. split_and! => //. by constructor.
+    + rewrite assoc in Hpre. move: Hpre => /(app_inj_tail _ _ _ _)[??]. subst.
+      have [|?[?[?[??]]]]:= IH. by apply prefix_app_r.
+      eexists _, _. split_and!; [done | |done..].
+      etrans => //. by apply prefix_app_r.
+  - move => κ1 κ1' κs1 κs2 κs3 Hprod IH HR ?.
+    have [|?[?[?[??]]]]:= IH => //.
+    eexists _, _. split_and!; [| |done..].
+    all: etrans => //.
+    all: by apply prefix_app_r.
+  - move => κ1 κ2 κ3 κs1 κs2 κs3 Hprod IH HR [κend Hpre].
+    have [?|[κ [κend' ?]]]:= snoc_inv κend; subst.
+    + rewrite right_id in Hpre. subst.
+      eexists _, _. split_and! => //. by constructor.
+    + rewrite assoc in Hpre. move: Hpre => /(app_inj_tail _ _ _ _)[??]. subst.
+      have [|?[?[?[??]]]]:= IH. by apply prefix_app_r.
+      eexists _, _. split_and!; [| |done..].
+      all: etrans => //.
+      all: by apply prefix_app_r.
+Qed.
+
+Lemma product_trace_related_inv_r {EV1 EV2 EV3} (R : option EV1 → option EV2 → option EV3 → Prop) κs1 κs2 κs3 κs2':
+  κs2' `prefix_of` κs2 →
+  product_trace_related R κs1 κs2 κs3 →
+  ∃ κs1' κs3', κs1' `prefix_of` κs1 ∧ κs3' `prefix_of` κs3 ∧
+               product_trace_related R κs1' κs2' κs3'.
+Proof.
+  move => Hpre Hprod. elim: Hprod Hpre; clear.
+  - destruct κs2'; [ | by move => /(prefix_nil_not _ _)] => ?.
+    exists [], []. split_and! => //. constructor.
+  - move => κ1 κ1' κs1 κs2 κs3 Hprod IH HR ?.
+    have [|?[?[?[??]]]]:= IH => //.
+    eexists _, _. split_and!; [| |done..].
+    all: etrans => //.
+    all: by apply prefix_app_r.
+  - move => κ1 κ1' κs1 κs2 κs3 Hprod IH HR [κend Hpre].
+    have [?|[κ [κend' ?]]]:= snoc_inv κend; subst.
+    + rewrite right_id in Hpre. subst.
+      eexists _, _. split_and! => //. by constructor.
+    + rewrite assoc in Hpre. move: Hpre => /(app_inj_tail _ _ _ _)[??]. subst.
+      have [|?[?[?[??]]]]:= IH. by apply prefix_app_r.
+      eexists _, _. split_and!; [done | |done..].
+      etrans => //. by apply prefix_app_r.
+  - move => κ1 κ2 κ3 κs1 κs2 κs3 Hprod IH HR [κend Hpre].
+    have [?|[κ [κend' ?]]]:= snoc_inv κend; subst.
+    + rewrite right_id in Hpre. subst.
+      eexists _, _. split_and! => //. by constructor.
+    + rewrite assoc in Hpre. move: Hpre => /(app_inj_tail _ _ _ _)[??]. subst.
+      have [|?[?[?[??]]]]:= IH. by apply prefix_app_r.
+      eexists _, _. split_and!; [| |done..].
+      all: etrans => //.
+      all: by apply prefix_app_r.
+Qed.
+
+Definition LEM (P : Prop) := P ∨ ¬ P.
+
+Lemma refines_horizontal {EV1 EV2 EV3} m1 m2 m1' m2' (R : option EV1 → option EV2 → option EV3 → Prop) :
+  (* TODO: it is also ok to get this for m1' *)
+  (∀ κs, LEM (∃ σf2, steps (m_step m2') (m_initial m2') κs σf2)) →
+  refines m1 m1' →
+  refines m2 m2' →
+  refines (module_product m1 m2 R) (module_product m1' m2' R).
+Proof.
+  move => HLEM /refines_implies_wp' Hr1 /refines_implies_wp' Hr2.
+  apply: wp'_implies_refines => n /=.
+  move: (Hr1 n) (Hr2 n).
+  have : (∃ σ, steps m1'.(m_step) m1'.(m_initial) [] σ). { eexists. by left. }
+  have : (∃ σ, steps m2'.(m_step) m2'.(m_initial) [] σ). { eexists. by left. }
+  move: (m1.(m_initial)) => σi1. move: (m2.(m_initial)) => σi2.
+  have := (ProdTraceRelNil R).
+  move: [] => κs1. move: [] => κs2. move: [] => κs3.
+  move: σi1 σi2 κs1 κs2 κs3.
+  (* apply forall_to_ex3. *)
+  elim/lt_wf_ind: n => n IH σi1 σi2 κs1 κs2 κs3 Hrel [σs2 Hs2] [σs1 Hs1] {}Hr1 {}Hr2.
+  constructor => κ Hsafe.
+  inversion Hr1 as [??? Hwp1]; simplify_eq.
+  inversion Hr2 as [??? Hwp2]; simplify_eq.
+  split.
+  - have [|? _] := Hwp1 None => /=. {
+      rewrite right_id.
+      move => σs κ' Hpre Hsteps.
+      have [? [κs3' [[??] [[??]?]]]]:= product_trace_related_inv_l _ _ _ _ _ Hpre Hrel; subst.
+      move: Hs2 => /(steps_app_inv _ _ _)[σ2 [??]].
+      have []:= Hsafe (σs, σ2) κs3' => //.
+      - apply prefix_app_r. by apply prefix_app_r.
+      - by apply: product_trace_related_step.
+    }
+    have [|? _] := Hwp2 None => /=. {
+      rewrite right_id.
+      move => σs κ' Hpre Hsteps.
+      have [? [κs3' [[??] [[??]?]]]]:= product_trace_related_inv_r _ _ _ _ _ Hpre Hrel; subst.
+      move: Hs1 => /(steps_app_inv _ _ _)[σ2 [??]].
+      have []:= Hsafe (σ2, σs) κs3' => //.
+      - apply prefix_app_r. by apply prefix_app_r.
+      - by apply: product_trace_related_step.
+    }
+    done.
+  - move => [σi1' σi2'] n' ? Hstep. subst.
+    inversion Hstep; clear Hstep; simplify_eq/=.
+    + have {}Hrel : product_trace_related R (κs1 ++ option_list e1) κs2 (κs3 ++ option_list κ). {
+        destruct e1; simplify_eq/=; [| by rewrite !right_id].
+        by apply ProdTraceRelL.
+      }
+      have {Hwp1 Hwp2}[|_ Hwp1] := Hwp1 e1. {
+        move => σs κ' Hpre Hsteps.
+        have [? [κs3' [[??] [[? Heq]?]]]]:= product_trace_related_inv_l _ _ _ _ _ Hpre Hrel; subst.
+        move: Hs2 => /(steps_app_inv _ _ _)[σ2 [??]].
+        have []:= Hsafe (σs, σ2) κs3' => //.
+        - rewrite Heq. by apply prefix_app_r.
+        - by apply: product_trace_related_step.
+      }
+      have [|σs1' [Hsteps {}Hwp1]]:= Hwp1 _ n' _ H3 => //.
+      exists (σs1', σs2).
+      split.
+      * by apply: product_trace_related_step.
+      * apply: IH => //; try by eexists. lia. apply: wp'_weaken; [| done]. lia.
+    + have {}Hrel : product_trace_related R κs1 (κs2 ++ option_list e2) (κs3 ++ option_list κ). {
+        destruct e2; simplify_eq/=; [| by rewrite !right_id].
+        by apply ProdTraceRelR.
+      }
+      have {Hwp1 Hwp2}[|_ Hwp] := Hwp2 e2. {
+        move => σs κ' Hpre Hsteps.
+        have [? [κs3' [[??] [[? Heq]?]]]]:= product_trace_related_inv_r _ _ _ _ _ Hpre Hrel; subst.
+        move: Hs1 => /(steps_app_inv _ _ _)[σ2 [??]].
+        have []:= Hsafe (σ2, σs) κs3' => //.
+        - rewrite Heq. by apply prefix_app_r.
+        - by apply: product_trace_related_step.
+      }
+      have [|σs' [Hsteps {}Hwp]]:= Hwp _ n' _ H3 => //.
+      exists (σs1, σs').
+      split.
+      * by apply: product_trace_related_step.
+      * apply: IH => //; try by eexists. lia. apply: wp'_weaken; [| done]. lia.
+    + move: Hrel => Hrelold.
+      have Hrel : product_trace_related R (κs1 ++ [e1]) (κs2 ++ [e2]) (κs3 ++ option_list κ). {
+        by apply ProdTraceRelBoth.
+      }
+      have [[of2 Hfsteps]|Hnof2]:= HLEM (κs2 ++ [e2]).
+      * have {Hwp1}[|_ Hwp1] := Hwp1 (Some e1). {
+          move => σs κ' Hpre Hsteps.
+          have [? [κs3' [[? Heq1] [[? Heq]?]]]]:= product_trace_related_inv_l _ _ _ _ _ Hpre Hrel; subst.
+          rewrite Heq1 in Hfsteps.
+          move: Hfsteps => /(steps_app_inv _ _ _)[σ2 [??]].
+          have []:= Hsafe (σs, σ2) κs3' => //.
+          - rewrite Heq. by apply prefix_app_r.
+          - by apply: product_trace_related_step.
+        }
+        have [|/=σs1' [Hsteps1 {}Hwp1]]:= Hwp1 _ n' _ H4 => //.
+        have {Hwp2}[|_ Hwp2] := Hwp2 (Some e2). {
+          move => σs κ' Hpre Hsteps.
+          have [? [κs3' [[? Heq1] [[? Heq]?]]]]:= product_trace_related_inv_r _ _ _ _ _ Hpre Hrel; subst.
+          rewrite Heq1 in Hsteps1.
+          move: Hsteps1 => /(steps_app_inv _ _ _)[σ2 [??]].
+          have []:= Hsafe (σ2,σs) κs3' => //.
+          - rewrite Heq. by apply prefix_app_r.
+          - by apply: product_trace_related_step.
+        }
+        have [|σs2' [Hsteps2 {}Hwp2]]:= Hwp2 _ n' _ H5 => //.
+        exists (σs1', σs2').
+        split.
+        -- by apply: product_trace_related_step.
+        -- apply: IH => //; try by eexists. lia.
+      * have {Hwp2}[|_ Hwp2] := Hwp2 (Some e2). {
+          move => σs κ' [κend Hpre] Hsteps.
+          have [?|[κ'' [κend' ?] ]]:= snoc_inv κend; subst.
+          { rewrite right_id in Hpre. subst. naive_solver. }
+          move: Hpre => /=. rewrite assoc. move => /(app_inj_tail _ _ _ _)[??]. subst.
+          have [|? [κs3' [[? Heq1] [[? Heq]?]]]]:= product_trace_related_inv_r _ _ _ _ κ' _ Hrelold; subst.
+          { by apply prefix_app_r. }
+          move: Hs1 => /(steps_app_inv _ _ _)[σ2 [??]].
+          have []:= Hsafe (σ2,σs) κs3' => //.
+          - apply prefix_app_r. by apply prefix_app_r.
+          - by apply: product_trace_related_step.
+        }
+        have [|σs2' [Hsteps2 {}Hwp2]]:= Hwp2 _ n' _ H5 => //.
+        naive_solver.
 Qed.
 
 Ltac inv_step :=
@@ -1494,8 +1665,39 @@ Ltac inv_step :=
      ----------
 
   First should refine the second?
-*)
+ *)
 
+(*
+  TODO: prove the following refinement for which wp is probably not enough
+
+            A     B
+           /- 2  --- 3
+  spec: 1 -
+           \- 2' --- 4
+            A     C
+
+                  B
+           A     /- 3
+  impl: 1 --- 2 -
+                 \- 4
+                 C
+
+*)
+(*
+  TODO: prove the following refinement for which wp is probably not enough
+
+   x := N;            x := N;          x := N;
+   y := alloc()       y := alloc()     y := N;
+   *y = 1;       -->  *y = 1;      --> *y := 1;
+   *x = 2;            *x = 2;          *x := 2;
+   return *y          return 1;        return 1;
+
+   Memory model:
+   - heap: Z -fin> Z
+   - alloc returns non-deterministically a free address
+   - store is UB for unallocated address
+
+*)
 Module test.
 
 (*   2
