@@ -2,6 +2,7 @@ Require Import refframe.base.
 Require Import stdpp.namespaces.
 Require Import stdpp.strings.
 Require Import stdpp.gmap.
+Require Import stdpp.binders.
 Require Import refframe.axioms.
 
 Module version1.
@@ -1468,7 +1469,7 @@ Ltac inv_step :=
    y := alloc()       y := alloc()     y := N;
    *y = 1;       -->  *y = 1;      --> *y := 1;
    *x = 2;            *x = 2;          *x := 2;
-   return *y          return 1;        return 1;
+   return *y;         return 1;        return 1;
 
    Memory model:
    - heap: Z -fin> Z
@@ -1804,6 +1805,280 @@ Proof.
   split => // σi2 n ? Hstep. subst.
   inv_step.
 Qed.
+
+(*
+   x := N;            x := N;          x := N;
+   y := alloc()       y := alloc()     y := N;
+   *y = 1;       -->  *y = 1;      --> *y := 1;
+   *x = 2;            *x = 2;          *x := 2;
+   return *y;         return 1;        return 1;
+ *)
+
+Inductive expr :=
+| VarE (b : string)
+| ConstE (v : nat)
+| AllocE
+| AllocConcreteE (e : expr)
+| LetE (b : string) (e1 e2 : expr)
+| Store (e1 e2 : expr)
+| Load (e : expr)
+| Event (e : expr).
+
+Fixpoint subst (e : expr) (s : string) (v : nat) : expr :=
+  match e with
+  | VarE b => (if bool_decide (b = s) then ConstE v else VarE b)
+  | ConstE _ | AllocE => e
+  | AllocConcreteE e => AllocConcreteE (subst e s v)
+  | LetE b e1 e2 => LetE b (subst e1 s v) (if bool_decide (b = s) then e2 else (subst e2 s v))
+  | Store e1 e2 => Store (subst e1 s v) (subst e2 s v)
+  | Load e => Load (subst e s v)
+  | Event e => Event (subst e s v)
+  end.
+
+Definition heap := gmap nat nat.
+Inductive expr_step : (heap * expr) -> option nat → (heap * expr) → Prop :=
+| AllocStep v h:
+    h !! v = None →
+    expr_step (h, AllocE) None (<[v := 0]>h, ConstE v)
+| AllocConcreteStep v h:
+    h !! v = None →
+    expr_step (h, AllocConcreteE (ConstE v)) None (<[v := 0]>h, ConstE v)
+| LetStepCtx h e1 e1' e2 h' κ b:
+    expr_step (h, e1) κ (h', e1') →
+    expr_step (h, LetE b e1 e2) None (h', LetE b e1' e2)
+| LetStepConst h e2 b v:
+    expr_step (h, LetE b (ConstE v) e2) None (h, subst e2 b v)
+| StoreStep h v1 v2 vold:
+    h !! v1 = Some vold →
+    expr_step (h, Store (ConstE v1) (ConstE v2)) None (<[v1 := v2]>h, ConstE 0)
+| LoadStep h v1 v:
+    h !! v1 = Some v →
+    expr_step (h, Load (ConstE v1)) None (h, ConstE v)
+| EventStep h v:
+    expr_step (h, Event (ConstE v)) (Some v) (h, ConstE v)
+.
+
+Definition expr_module (h : heap) (prog : expr) : module nat := {|
+  m_state := (heap * expr);
+  m_step := expr_step;
+  m_initial := (h, prog);
+  m_is_good '(h, e) :=
+    (∃ v, e = ConstE v) ∨ ∃ κ σ', expr_step (h, e) κ σ'
+|}.
+
+
+Definition prog1 (N : nat) : expr :=
+  LetE "x" (ConstE N) $
+  LetE "y" AllocE $
+  LetE "_" (Store (VarE "y") (ConstE 1)) $
+  LetE "_" (Store (VarE "x") (ConstE 2)) $
+  LetE "l" (Load (VarE "y")) $
+  Event (VarE "l").
+
+Definition prog2 (N : nat) : expr :=
+  LetE "x" (ConstE N) $
+  LetE "y" AllocE $
+  LetE "_" (Store (VarE "y") (ConstE 1)) $
+  LetE "_" (Store (VarE "x") (ConstE 2)) $
+  Event (ConstE 1).
+
+Definition prog3 (N : nat) : expr :=
+  LetE "x" (ConstE N) $
+  LetE "y" (ConstE N) $
+  LetE "_" (Store (VarE "y") (ConstE 1)) $
+  LetE "_" (Store (VarE "x") (ConstE 2)) $
+  Event (ConstE 1).
+
+Ltac inv_expr_step :=
+  lazymatch goal with
+  | H : expr_step _ _ _ |- _ => inversion H; clear H; simplify_eq/=; try easy
+  end.
+
+Lemma prog2_refined_prog1 h N :
+  refines (expr_module h (prog2 N)) (expr_module h (prog1 N)).
+Proof.
+  apply: wp_implies_refines => n.
+
+  constructor => ? _. split. { right. eauto using LetStepConst. }
+  move => //= ??? Hstep.
+  inv_expr_step.
+  eexists (_, _). split. { apply: steps_None. by apply LetStepConst. by left. }
+  simpl.
+
+  destruct (h !! N) eqn: HN.
+  - constructor => ? Hsafe.
+    efeed pose proof (Hsafe) as Hsafe. by apply prefix_nil. by left.
+    have {Hsafe}[[??]|[?[??]]]:= Hsafe => //.
+    inv_expr_step.
+    inv_expr_step.
+    split. { right. eauto using LetStepCtx, AllocStep. }
+    move => //= ??? Hstep.
+    inv_expr_step.
+    inv_expr_step.
+    eexists (_, _). split. { apply: steps_None; [ | by left]. apply: LetStepCtx. apply: AllocStep. done. }
+
+    destruct (decide (v0 = N)); simplify_eq.
+
+    constructor => ? _. split. { right. eauto using LetStepConst. }
+    move => //= ??? Hstep.
+    inv_expr_step.
+    eexists (_, _). split. { apply: steps_None; [ | by left ]. constructor. }
+
+    constructor => ? _.
+    split. { right. eexists _, _. apply: LetStepCtx. apply: StoreStep. apply lookup_insert. }
+    move => //= ??? Hstep.
+    inv_expr_step.
+    inv_expr_step.
+    eexists (_, _). split. {
+      apply: steps_None; [ | by left ].
+      apply: LetStepCtx.
+      by apply: StoreStep.
+    }
+
+    constructor => ? _. split. { right. eauto using LetStepConst. }
+    move => //= ??? Hstep.
+    inv_expr_step.
+    eexists (_, _). split. { apply: steps_None; [ | by left ]. constructor. }
+
+    constructor => ? _.
+    split. { right. eexists _, _. apply: LetStepCtx. apply: StoreStep. rewrite !lookup_insert_ne //. }
+    move => //= ??? Hstep.
+    inv_expr_step.
+    inv_expr_step.
+    eexists (_, _). split. {
+      apply: steps_None; [ | by left ].
+      apply: LetStepCtx.
+        by econstructor.
+    }
+
+    constructor => ? _. split. { right. eauto using LetStepConst. }
+    move => //= ??? Hstep.
+    inv_expr_step.
+    eexists (_, _). split. { apply: steps_None; [ | by left ]. constructor. }
+
+    constructor => ? _. split. { right. eauto using EventStep. }
+    move => //= ??? Hstep.
+    inv_expr_step.
+    eexists (_, _). split. {
+      apply: steps_None; [ | apply: steps_None; [ | apply: steps_Some; [ | by left] ] ].
+      - econstructor. econstructor. by rewrite lookup_insert_ne // lookup_insert.
+      - apply LetStepConst.
+      - simpl. econstructor.
+    }
+
+    constructor => ? _. split. { left. eauto. }
+    move => //= ??? Hstep.
+    inv_expr_step.
+
+  - constructor => ? Hsafe.
+    efeed pose proof (Hsafe) as Hsafe. by apply prefix_nil. {
+      apply: steps_None. {
+        econstructor.
+        apply: (AllocStep (fresh ({[N]} ∪ dom (gset _) h))).
+        pose proof (is_fresh ({[N]} ∪ dom (gset nat) h)).
+        apply/not_elem_of_dom. apply _.
+        set_solver.
+      }
+      apply: steps_None => /=. constructor.
+      apply: steps_None => /=. econstructor. econstructor. apply lookup_insert.
+      apply: steps_None => /=. constructor. simpl.
+        by left.
+    }
+    have {Hsafe}[[??]|[?[??]]]:= Hsafe => //.
+    inv_expr_step.
+    inv_expr_step.
+    revert select (_ !! _ = Some _) => Hlookup.
+    pose proof (is_fresh ({[N]} ∪ dom (gset nat) h)).
+    rewrite !lookup_insert_ne in Hlookup; try set_solver.
+    by rewrite Hlookup in HN.
+Qed.
+
+Lemma prog3_refined_prog2 h N :
+  refines (expr_module h (prog3 N)) (expr_module h (prog2 N)).
+Proof.
+  apply: wp_implies_refines => n.
+
+  constructor => ? _. split. { right. eauto using LetStepConst. }
+  move => //= ??? Hstep.
+  inv_expr_step.
+  eexists (_, _). split. { apply: steps_None. by apply LetStepConst. by left. }
+  simpl.
+
+  constructor => ? _. split. { right. eauto using LetStepConst. }
+  move => //= ??? Hstep.
+  inv_expr_step.
+  eexists (_, _). split. {
+    apply: steps_None. {
+      econstructor.
+      apply: (AllocStep (fresh ({[N]} ∪ dom (gset _) h))).
+      pose proof (is_fresh ({[N]} ∪ dom (gset nat) h)).
+      apply/not_elem_of_dom. apply _.
+      set_solver.
+    }
+    apply: steps_None. constructor.
+      by left.
+  }
+  simpl.
+
+  constructor => ? Hsafe.
+  efeed pose proof (Hsafe) as Hsafe. by apply prefix_nil. {
+    apply: steps_None => /=. econstructor. econstructor. apply lookup_insert.
+    apply: steps_None => /=. constructor. simpl.
+      by left.
+  }
+  have {Hsafe}[[??]|[?[??]]]:= Hsafe => //.
+  inv_expr_step.
+  inv_expr_step.
+  revert select (_ !! _ = Some _) => Hlookup.
+  pose proof (is_fresh ({[N]} ∪ dom (gset nat) h)).
+  rewrite !lookup_insert_ne in Hlookup; try set_solver.
+
+  split. { right. eexists _, _. apply: LetStepCtx. by apply: StoreStep. }
+  move => //= ??? Hstep.
+  inv_expr_step.
+  inv_expr_step.
+  eexists (_, _). split. {
+    apply: steps_None; [ | by left ].
+    apply: LetStepCtx.
+    apply: StoreStep.
+    apply lookup_insert.
+  }
+
+  constructor => ? _. split. { right. eauto using LetStepConst. }
+  move => //= ??? Hstep.
+  inv_expr_step.
+  eexists (_, _). split. { apply: steps_None; [ | by left ]. constructor. }
+
+  constructor => ? _.
+  split. { right. eexists _, _. apply: LetStepCtx. apply: StoreStep. apply lookup_insert. }
+  move => //= ??? Hstep.
+  inv_expr_step.
+  inv_expr_step.
+  eexists (_, _). split. {
+    apply: steps_None; [ | by left ].
+    apply: LetStepCtx.
+    econstructor.
+    rewrite !lookup_insert_ne; try set_solver.
+  }
+
+  constructor => ? _. split. { right. eauto using LetStepConst. }
+  move => //= ??? Hstep.
+  inv_expr_step.
+  eexists (_, _). split. { apply: steps_None; [ | by left ]. constructor. }
+
+  constructor => ? _. split. { right. eauto using EventStep. }
+  move => //= ??? Hstep.
+  inv_expr_step.
+  eexists (_, _). split. {
+    apply: steps_Some; [ | by left ].
+    by econstructor.
+  }
+
+  constructor => ? _. split. { left. eauto. }
+  move => //= ??? Hstep.
+  inv_expr_step.
+Qed.
+
 End test.
 End version3.
 
