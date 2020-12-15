@@ -1,6 +1,8 @@
 From Coq Require Export ssreflect.
 Require Export stdpp.prelude.
 
+Global Unset Program Cases.
+
 Definition LEM (P : Prop) := P ∨ ¬ P.
 
 Lemma snoc_inv {A} (l : list A):
