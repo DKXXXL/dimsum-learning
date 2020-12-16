@@ -2904,6 +2904,325 @@ Abort.
 
 End version4.
 
+Module version5.
+(* alternating automata version *)
+(*** trace *)
+(* Tried using the following with
+| OfStateAngelic σ A f:
+    m.(m_state_kind) σ = kind_angelic →
+    (∀ σ', m.(m_step) σ None σ' → ∃ x, trace_of_state m σ' (f x)) →
+    trace_of_state m σ (branch A f).
+but that did not work well (where do you learn anything about A or f)?*)
+(* Inductive trace (EV : Type) : Type := *)
+(* | ub | nb | vis (e : EV) (κ : trace EV) | branch (T : Type) (next : T → trace EV). *)
+Inductive trace (EV : Type) : Type :=
+| ub | nb | vis (e : EV) (κ : trace EV).
+Arguments ub {_}.
+Arguments nb {_}.
+Arguments vis {_}.
+
+Fixpoint trace_events {EV} (l : trace EV) : list EV :=
+  match l with
+  | nb | ub => []
+  | vis e l' => e :: trace_events l'
+  end.
+
+Fixpoint trace_is_ub {EV} (l : trace EV) : bool :=
+  match l with
+  | nb => false
+  | ub => true
+  | vis e l' => trace_is_ub l'
+  end.
+
+Fixpoint list_to_trace {EV} (is_ub : bool) (l : list EV) : trace EV :=
+  match l with
+  | [] => if is_ub then ub else nb
+  | e :: l' => vis e (list_to_trace is_ub l')
+  end.
+Definition nb_trace {EV} := list_to_trace (EV:=EV) false.
+Definition ub_trace {EV} := list_to_trace (EV:=EV) true.
+
+Definition option_trace {EV} (o : option EV) : trace EV :=
+  match o with
+  | Some e => vis e nb
+  | None => nb
+  end.
+
+Definition trace_app {EV} (κs1 κs2 : trace EV) : trace EV :=
+  list_to_trace (trace_is_ub κs1 || trace_is_ub κs2) (trace_events κs1 ++ trace_events κs2).
+Infix "+t+" := trace_app (right associativity, at level 60) : stdpp_scope.
+
+Definition trace_prefix {EV} (κs1 κs2 : trace EV) : Prop :=
+  ∃ κs', κs1 +t+ κs' = κs2.
+Infix "`trace_prefix_of`" := trace_prefix (at level 70) : stdpp_scope.
+
+Lemma list_to_trace_events {EV} u (l : list EV):
+  trace_events (list_to_trace u l) = l.
+Proof. elim: l => //=. { by destruct u. } by move => ?? ->. Qed.
+
+Lemma list_to_trace_ub {EV} u (l : list EV):
+  trace_is_ub (list_to_trace u l) = u.
+Proof. elim: l => //=. by destruct u. Qed.
+
+Lemma list_to_trace_id {EV} (κs : trace EV) :
+  list_to_trace (trace_is_ub κs) (trace_events κs) = κs.
+Proof. by elim: κs => //= ? ? ->. Qed.
+
+Lemma option_trace_events {EV} (e : option EV) :
+  trace_events (option_trace e) = option_list e.
+Proof. by destruct e. Qed.
+
+Lemma option_trace_ub {EV} (e : option EV) :
+  trace_is_ub (option_trace e) = false.
+Proof. by destruct e. Qed.
+
+Global Instance trace_app_assoc {EV} : Assoc (=) (trace_app (EV:=EV)).
+Proof.
+  move => ???. by rewrite /trace_app !list_to_trace_events !list_to_trace_ub (assoc (++)) orb_assoc.
+Qed.
+
+Global Instance trace_app_left_id {EV} : LeftId (=) nb (trace_app (EV:=EV)).
+Proof. move => ?. by rewrite /trace_app/= list_to_trace_id. Qed.
+
+Global Instance trace_app_right_id {EV} : RightId (=) nb (trace_app (EV:=EV)).
+Proof. move => ?. by rewrite /trace_app/= right_id_L orb_false_r list_to_trace_id. Qed.
+
+Lemma trace_app_vis {EV} (κs : trace EV) e:
+  vis e κs = (vis e nb) +t+ κs.
+Proof. by rewrite /trace_app/= list_to_trace_id. Qed.
+
+Lemma trace_app_events {EV} (κs1 κs2 : trace EV):
+  trace_events (κs1 +t+ κs2) = trace_events κs1 ++ trace_events κs2.
+Proof. by rewrite /trace_app list_to_trace_events. Qed.
+
+Lemma trace_app_ub {EV} (κs1 κs2 : trace EV):
+  trace_is_ub (κs1 +t+ κs2) = orb (trace_is_ub κs1) (trace_is_ub κs2).
+Proof. by rewrite /trace_app list_to_trace_ub. Qed.
+
+Global Instance trace_prefix_preorder EV: PreOrder (@trace_prefix EV).
+Proof.
+  split.
+  - move => ?. exists nb. by rewrite right_id_L.
+  - move => ??? [k1 <-] [k2 <-]. exists (k1 +t+ k2). by rewrite (assoc_L).
+Qed.
+Lemma trace_prefix_nb {EV} (l : trace EV) : nb `trace_prefix_of` l.
+Proof. exists l. by rewrite left_id. Qed.
+
+(*** module *)
+(* Inductive mod_state_kind : Type := *)
+(* | kind_visible | kind_demonic | kind_angelic. *)
+(* Global Instance mod_state_kind_eq_dec : EqDecision mod_state_kind. *)
+(* Proof. solve_decision. Qed. *)
+
+Record module (EV : Type) : Type := {
+  m_state : Type;
+  (* multiple initial states can be modeled by non-deterministically
+  branching from the initial state *)
+  m_initial : m_state;
+  (* m_state_kind : m_state → mod_state_kind; *)
+  m_step : m_state → option EV → propset m_state → Prop;
+
+  (* m_vis_det σ σ1 σ2 e1 e2: *)
+  (*   m_state_kind σ = kind_visible → *)
+  (*   m_step σ e1 σ1 → *)
+  (*   m_step σ e2 σ2 → *)
+  (*   σ1 = σ2 ∧ e1 = e2; *)
+  (* the following is problem for hiding *)
+  (* m_vis_exists σ: *)
+  (*   m_state_kind σ = kind_visible → *)
+  (*   ∃ σ' e, m_step σ (Some e) σ'; *)
+  (* sanity *)
+  (* m_non_vis_silent σ σ' e: *)
+  (*   m_state_kind σ ≠ kind_visible → *)
+  (*   m_step σ e σ' → *)
+  (*   e = None; *)
+}.
+Arguments m_state {_}.
+Arguments m_initial {_}.
+(* Arguments m_state_kind {_}. *)
+Arguments m_step {_}.
+
+(*** trace of module *)
+
+Section ind.
+(* Local Unset Elimination Schemes. *)
+
+Definition propset_union {A} (S : propset (propset A)) : propset A :=
+  {[ x | ∃ σ, σ ∈ S ∧ x ∈ σ ]}.
+Definition propset_intersection {A} (S : propset (propset A)) : propset A :=
+  {[ x | ∀ σ, σ ∈ S → x ∈ σ ]}.
+
+Inductive trace_of_state {EV} (m : module EV) : propset m.(m_state) → propset (trace EV) → Prop :=
+| OfStateNb S T:
+    T ≡ {[ nb ]} →
+    trace_of_state m S T
+| OfStateVis (S : propset m.(m_state)) σ e S' T T':
+    σ ∈ S →
+    m.(m_step) σ e S' →
+    ((∀ σ, σ ∈ S' → trace_of_state m {[σ]} T)) →
+    T' ≡ ((λ κs', option_trace e +t+ κs') <$> T) →
+    trace_of_state m S T'.
+End ind.
+
+Global Instance trace_of_state_Proper {EV} (m : module EV) : Proper ((=) ==> (≡) ==> (iff)) (trace_of_state m).
+Proof.
+  move => ? σ -> T1 T2 HT.
+  split => Hs; [move: T2 HT | move: T1 HT]; elim: Hs.
+  all: try by move => *; apply: OfStateNb; setoid_subst.
+  all: try by move => *; apply: OfStateVis; setoid_subst.
+Qed.
+  (* all: try by move => *; apply: OfStateDemonic; setoid_subst; naive_solver. *)
+(* Admitted. *)
+
+(* Lemma trace_of_state_ind {EV} (m : module EV) (F : m_state m → Prop) (P : m_state m → (trace EV → Prop) → Prop) : *)
+(*   (∀ (σ : m_state m) (T : trace EV → Prop), F σ → T nb → P σ T) *)
+(*   → (∀ (σ : m_state m) (e : option EV) (T : trace EV → Prop), *)
+(*         trace_step m (λ σ' : m_state m, trace_of_state m F σ' T ∧ P σ' T) σ e → P σ (λ κs : trace EV, ∃ κs' : trace EV, T κs' ∧ option_trace e +t+ κs' = κs)) *)
+(*   → ∀ (m0 : m_state m) (t : trace EV → Prop), trace_of_state m F m0 t → P m0 t. *)
+(* Proof. *)
+(*   fix FIX 5. move => Hnb Hstep ??. *)
+(*   case. *)
+(*   - by apply: Hnb. *)
+(*   - move => ??? Hs. eapply Hstep => //. *)
+(*     case: Hs => *; [ apply: StepVis | apply: StepDemonic | apply: StepAngelic] => //; naive_solver. *)
+(* Qed. *)
+Definition trace_of_program {EV} (m : module EV) := PropSet (trace_of_state m {[m.(m_initial)]}).
+
+Program Definition test_mod_1 : module unit := {|
+  m_state := unit;
+  m_initial := ();
+  (* m_state_kind _ := kind_visible; *)
+  m_step _ e σ := e = None ∧ σ = {[ tt ]};
+|}.
+(* Next Obligation. move => [] [] [] [|[]] //. Qed. *)
+(* Next Obligation. done. Qed. *)
+Lemma test_mod_1_traces:
+  trace_of_program test_mod_1 ≡ {[ x | x ≡ {[ nb ]} ]}.
+Proof.
+  move => κs.
+  split.
+  - rewrite !elem_of_PropSet => /=.
+    elim => //.
+    move => ? [] ? ? T ? ? [-> ->] /= ? IH ->.
+    rewrite (IH tt); set_solver.
+  - rewrite !elem_of_PropSet => ->. by apply OfStateNb.
+Qed.
+
+Program Definition test_mod_2 : module nat := {|
+  m_state := bool;
+  m_initial := false;
+  (* m_state_kind b := if b then kind_demonic else kind_visible; *)
+  m_step b1 e b2 := b1 = false ∧ e = Some 2 ∧ b2 = {[ true ]};
+|}.
+(* Next Obligation. move => []//[][]//; naive_solver. Qed. *)
+(* Next Obligation. move => [][]//; naive_solver. Qed. *)
+
+Lemma test_mod_2_traces:
+  trace_of_program test_mod_2 ≡ {[ x | x ≡ {[ nb ]} ]} ∪ {[ x | x ≡ {[ vis 2 nb ]} ]}.
+Proof.
+  move => κs.
+  split.
+  - rewrite !elem_of_PropSet.
+    inversion_clear 1; simplify_eq/=; destruct_and?; simplify_eq/=. naive_solver.
+    setoid_subst. right.
+    revert select (∀ σ, _) => Hs. have := Hs true ltac:(set_solver).
+    inversion_clear 1; simplify_eq; setoid_subst.
+    + set_solver.
+    + destruct σ; set_solver.
+  - rewrite !elem_of_PropSet => -[|] ->.
+    + by apply OfStateNb.
+    + apply: OfStateVis => //. move => ??. by apply OfStateNb.
+      set_unfold. move => ?. split. { move => ->. exists nb. naive_solver. }
+      by move => [? [-> ->]].
+Qed.
+
+Inductive test_mod3_state := | S3S1 | S3S2 (n : nat) | S3S3.
+Program Definition test_mod_3 (dem : bool) : module nat := {|
+  m_state := test_mod3_state;
+  m_initial := S3S1;
+  m_step b1 e b2 :=
+    (b1 = S3S1 ∧ e = None ∧ if dem then ∃ n, b2 = {[ S3S2 n ]} else b2 = {[ x | ∃ n, x = S3S2 n ]}) ∨
+    (∃ n, b1 = S3S2 n ∧ e = Some n ∧ b2 = {[ S3S3 ]})
+|}.
+(* Next Obligation. move => []//[][]//; naive_solver. Qed. *)
+(* Next Obligation. move => [][]//; naive_solver. Qed. *)
+
+Lemma test_mod_3_traces_demonic:
+  (* {{nb}, {nb, vis 0 nb}, ..., {nb, vis n nb}, ...}*)
+  trace_of_program (test_mod_3 true) ≡ {[ x | x ≡ {[ nb ]} ]} ∪ {[ x | ∃ n, x ≡ {[ vis n nb ]} ]}.
+Proof.
+  move => κs.
+  split.
+  - rewrite !elem_of_PropSet.
+    inversion_clear 1; simplify_eq/=; destruct_and?; simplify_eq/=. naive_solver.
+    setoid_subst.
+    destruct σ; try set_solver.
+    revert select (_ ∨ _) => -[[? [? [n ?]]]|]. 2: naive_solver. subst.
+    revert select (∀ σ, _) => Hs. have := Hs _ ltac:(set_solver).
+    inversion_clear 1; simplify_eq. { left. set_solver. }
+    right. clear Hs. exists n. setoid_subst.
+    have ?: σ = S3S2 n by set_solver. subst.
+    revert select (_ ∨ _) => -[|[n' [?[??]]]]; simplify_eq. 1: naive_solver.
+    revert select (∀ σ, _) => Hs. have := Hs _ ltac:(set_solver).
+    inversion_clear 1; simplify_eq; setoid_subst. 2: set_solver.
+    set_unfold => ?. split; naive_solver.
+  - rewrite !elem_of_PropSet => -[|] HS.
+    + by apply OfStateNb.
+    + move: HS => [n ->]. apply: OfStateVis => //. naive_solver.
+      instantiate (2:=n).
+      instantiate (1:={[ vis n nb]}).
+      2: { set_unfold. split; try naive_solver. move => ->. exists (vis n nb). naive_solver. }
+      set_unfold => ? ->.
+      apply: OfStateVis => //. naive_solver. move => ??. by apply OfStateNb.
+      set_unfold. split; try naive_solver. move => ->. by exists nb.
+Qed.
+
+Lemma test_mod_3_traces_angelic:
+  (* {{nb}, {nb, vis 0 nb, ..., vis n nb, ...} }*)
+  trace_of_program (test_mod_3 false) ≡ {[ x | x ≡ {[ nb ]} ]} ∪ {[ x | x ≡  {[ y | ∃ n, y = vis n nb ]} ]}.
+Proof.
+  move => κs.
+  split.
+  - rewrite !elem_of_PropSet.
+    inversion_clear 1; simplify_eq/=; destruct_and?; simplify_eq/=. naive_solver.
+    setoid_subst.
+    destruct σ; try set_solver.
+    revert select (_ ∨ _) => -[[? [? ?]]|]. 2: naive_solver. subst.
+    revert select (∀ σ, _) => Hs.
+
+    have [HT|?]: (T ≡ {[nb]}) ∨ ¬ (T ≡ {[nb]}). admit. {
+      left. rewrite HT. set_unfold. split; naive_solver.
+    }
+
+    right.
+    move => κs.
+    have [[n ->]| ?]: (∃ n, κs = vis n nb) ∨ ¬(∃ n, κs = vis n nb) by destruct κs as [| |? []]; naive_solver.
+    + have := Hs (S3S2 n) ltac:(set_solver).
+      inversion_clear 1; simplify_eq/= => //.
+      revert select (_ ∨ _) => -[|[n' [?[??]]]]; simplify_eq. 1: set_solver.
+      setoid_subst.
+      revert select (∀ σ, _) => {}Hs. have := Hs _ ltac:(set_solver).
+      inversion_clear 1; simplify_eq; setoid_subst. 2: set_solver.
+      set_unfold. split; naive_solver.
+    + have := Hs (S3S2 0) ltac:(set_solver).
+      inversion_clear 1; simplify_eq/= => //.
+      revert select (_ ∨ _) => -[|[n' [?[??]]]]; simplify_eq. 1: set_solver.
+      setoid_subst.
+      revert select (∀ σ, _) => {}Hs. have := Hs _ ltac:(set_solver).
+      inversion_clear 1; simplify_eq; setoid_subst. 2: set_solver.
+      set_unfold. split; naive_solver.
+  - rewrite !elem_of_PropSet => -[|] HS.
+    + by apply OfStateNb.
+    + move: HS => ->. apply: OfStateVis => //. naive_solver.
+      instantiate (1 := {[ y | ∃ n : nat, y = vis n nb ]}). 2: {
+        set_unfold. split; try naive_solver. move => [n ->]. exists (vis n nb). naive_solver.
+      }
+      move => σ [n ->]. apply: OfStateVis => //. naive_solver.
+      * move => []// ?. apply OfStateNb. done.
+      * set_unfold. split; try naive_solver. move => [n' ->]. exists (nb).
+        admit.
+Abort.
+End version5.
 (*
   Idea: have a judgment [m1 < m2 | m3] which desugars to
    ∀ m, m < m3 -> m1 + m < m2 + m
