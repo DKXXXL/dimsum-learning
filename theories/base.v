@@ -13,3 +13,5 @@ Proof.
   move => x ? IH x'. move: (IH x) => [x'' [l'' ->]].
   eexists x'', _. by apply: app_comm_cons.
 Qed.
+
+Record wrap A := Wrap { a : A }.
