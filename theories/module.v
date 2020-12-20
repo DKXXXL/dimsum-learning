@@ -6,6 +6,259 @@ Require Import stdpp.binders.
 Require Import stdpp.propset.
 Require Import refframe.axioms.
 
+Module version7.
+Record module (EV : Type) : Type := {
+  m_state : Type;
+  (* multiple initial states can be modeled by non-deterministically
+  branching from the initial state *)
+  m_initial : m_state;
+  m_step : m_state → option EV → m_state → Prop;
+  m_is_ub : m_state → Prop;
+}.
+Arguments m_state {_}.
+Arguments m_initial {_}.
+Arguments m_step {_}.
+Arguments m_is_ub {_}.
+
+Inductive event (EV : Type) : Type :=
+| Ub | Vis (e : EV).
+Arguments Ub {_}.
+Arguments Vis {_}.
+
+Inductive has_trace {EV} (m : module EV) : m.(m_state) → list (event EV) → m.(m_state) → Prop :=
+| TraceEnd σ:
+    has_trace m σ [] σ
+| TraceStep σ1 σ2 σ3 κ κs:
+    m.(m_step) σ1 κ σ2 →
+    has_trace m σ2 κs σ3 →
+    has_trace m σ1 (option_list (Vis <$> κ) ++ κs) σ3
+| TraceUb σ1 κs σ2:
+    m.(m_is_ub) σ1 →
+    has_trace m σ1 κs σ2
+.
+
+Lemma TraceStepNone {EV} κs (m : module EV) σ1 σ2 σ3 :
+  m.(m_step) σ1 None σ2 →
+  has_trace m σ2 κs σ3 →
+  has_trace m σ1 κs σ3.
+Proof. move => ??. by apply: (TraceStep _ _ _ _ None). Qed.
+
+Lemma TraceStepSome {EV} κs (m : module EV) σ1 σ2 σ3 κ :
+  m.(m_step) σ1 (Some κ) σ2 →
+  has_trace m σ2 κs σ3 →
+  has_trace m σ1 (Vis κ :: κs) σ3.
+Proof. move => ??. by apply: (TraceStep _ _ _ _ (Some _)). Qed.
+
+Lemma has_trace_trans {EV} κs1 κs2 (m : module EV) σ1 σ2 σ3 :
+  has_trace m σ1 κs1 σ2 →
+  has_trace m σ2 κs2 σ3 →
+  has_trace m σ1 (κs1 ++ κs2) σ3.
+Proof.
+  elim => //.
+  - move => ?????????. rewrite -app_assoc. econstructor; eauto.
+  - move => ?????. by apply: TraceUb.
+Qed.
+
+Lemma has_trace_ub_inv {EV} κs (m : module EV) σ1 σ2:
+  has_trace m σ1 (Ub :: κs) σ2 →
+  ∃ σ3, has_trace m σ1 [] σ3 ∧ m.(m_is_ub) σ3.
+Proof.
+  move Hκ: (Ub :: κs) => κ Hκs.
+  elim: Hκs Hκ => //.
+  - move => ??? [] //= ??? IH ?. have [//|?[??]]:= IH.
+    eexists _. split => //. by apply: TraceStepNone.
+  - move => ?????. eexists. split => //. by apply: TraceUb.
+Qed.
+
+Lemma has_trace_cons_inv {EV} κs κ (m : module EV) σ1 σ3:
+  has_trace m σ1 (Vis κ :: κs) σ3 →
+  ∃ σ2 σ2', has_trace m σ1 [] σ2 ∧ (m.(m_is_ub) σ2 ∨ m.(m_step) σ2 (Some κ) σ2' ∧ has_trace m σ2' (κs) σ3).
+Proof.
+  move Hs: (Vis κ :: κs) => s Hκs.
+  elim: Hκs Hs => //.
+  - move => ??? [] //=.
+    + move => ???? IH [] ??. subst. eexists _, _. split. by apply TraceEnd. right. naive_solver.
+    + move => ??? IH ?. have [//|?[?[??]]]:= IH. eexists _, _. split; [ | done]. by apply: TraceStepNone.
+  - move => ?????. eexists _, σ1. split; [ | by left]. by apply: TraceEnd.
+Qed.
+
+
+Record refines {EV} (mimpl mspec : module EV) := {
+  ref_subset κs σi: has_trace mimpl mimpl.(m_initial) κs σi → ∃ σs, has_trace mspec mspec.(m_initial) κs σs
+}.
+
+
+(*** properties of refines *)
+Definition safe {EV} (m : module EV) :=
+  ∀ κs σ, has_trace m m.(m_initial) κs σ → Ub ∉ κs.
+
+Lemma refines_preserves_safe EV (mspec mimpl : module EV):
+  safe mspec →
+  refines mimpl mspec →
+  safe mimpl.
+Proof.
+  move => Hs [Hr] κs σ Hκs.
+  have [??]:= (Hr _ _ Hκs).
+  by apply: Hs.
+Qed.
+
+Lemma refines_reflexive EV (m : module EV):
+  refines m m.
+Proof. constructor => // κ σi Hi; naive_solver. Qed.
+
+Lemma refines_vertical EV (m1 m2 m3 : module EV):
+  refines m1 m2 →
+  refines m2 m3 →
+  refines m1 m3.
+Proof. move => [Hr1] [Hr2]. constructor => /=. naive_solver. Qed.
+
+(*** link *)
+Inductive link_step {EV1 EV2 EV3} (m1 : module EV1) (m2 : module EV2) (R : option EV1 → option EV2 → option EV3 → Prop) :
+  m1.(m_state) * m2.(m_state) → option EV3 → m1.(m_state) * m2.(m_state) → Prop :=
+| LinkStepL σ1 σ2 e1 e' σ1':
+    m1.(m_step) σ1 e1 σ1' →
+    (* TODO: is there a better way to formulate this? E.g. assume
+    that there is no R None None Some in the theorem? *)
+    (if e1 is Some es1 then R e1 None e' else e' = None) →
+    link_step m1 m2 R (σ1, σ2) e' (σ1', σ2)
+| LinkStepR σ1 σ2 e2 e' σ2':
+    m2.(m_step) σ2 e2 σ2' →
+    (if e2 is Some es2 then R None e2 e' else e' = None) →
+    link_step m1 m2 R (σ1, σ2) e' (σ1, σ2')
+| LinkStepBoth σ1 σ2 e1 e2 e' σ1' σ2':
+    m1.(m_step) σ1 (Some e1) σ1' →
+    m2.(m_step) σ2 (Some e2) σ2' →
+    R (Some e1) (Some e2) e' →
+    link_step m1 m2 R (σ1, σ2) e' (σ1', σ2').
+
+Definition link {EV1 EV2 EV3} (m1 : module EV1) (m2 : module EV2) (R : option EV1 → option EV2 → option EV3 → Prop) : module EV3 := {|
+  m_state := m1.(m_state) * m2.(m_state);
+  m_initial := (m1.(m_initial), m2.(m_initial));
+  m_step := (link_step m1 m2 R);
+  m_is_ub σ := m1.(m_is_ub) σ.1 ∨ m2.(m_is_ub) σ.2;
+|}.
+
+
+Lemma link_empty_steps_l {EV1 EV2 EV3} m1 m2 σ1 σ1' σ2 (R : option EV1 → option EV2 → option EV3 → Prop) :
+  has_trace m1 σ1 [] σ1' →
+  has_trace (link m1 m2 R) (σ1, σ2) [] (σ1', σ2).
+Proof.
+  move Hκ: ([]) => κ Hsteps.
+  elim: Hsteps Hκ.
+  - move => ??. apply: TraceEnd.
+  - move => ??? [] //= ?????. apply: (TraceStepNone); [ | naive_solver]. by econstructor.
+  - move => ?????. apply: TraceUb. naive_solver.
+Qed.
+
+Lemma link_empty_steps_r {EV1 EV2 EV3} m1 m2 σ1 σ2' σ2 (R : option EV1 → option EV2 → option EV3 → Prop) :
+  has_trace m2 σ2 [] σ2' →
+  has_trace (link m1 m2 R) (σ1, σ2) [] (σ1, σ2').
+Proof.
+  move Hκ: ([]) => κ Hsteps.
+  elim: Hsteps Hκ.
+  - move => ??. apply: TraceEnd.
+  - move => ??? [] //= ?????. apply: (TraceStepNone); [ | naive_solver]. by econstructor.
+  - move => ?????. apply: TraceUb. naive_solver.
+Qed.
+
+Inductive link_trace_related {EV1 EV2 EV3} (R : option EV1 → option EV2 → option EV3 → Prop) : list (event EV1) → list (event EV2) → list (event EV3) → Prop :=
+| LinkTraceRelNil:
+    link_trace_related R [] [] []
+| LinkTraceRelUbL κs2 κs3:
+    link_trace_related R [Ub] κs2 κs3
+| LinkTraceRelUbR κs1 κs3:
+    link_trace_related R κs1 [Ub] κs3
+| LinkTraceRelL κ1 κ1' κs1 κs2 κs3:
+    link_trace_related R κs1 κs2 κs3 →
+    R (Some κ1) None κ1' →
+    link_trace_related R ([Vis κ1] ++ κs1) κs2 (option_list (Vis <$> κ1') ++ κs3)
+| LinkTraceRelR κ2 κ2' κs1 κs2 κs3:
+    link_trace_related R κs1 κs2 κs3 →
+    R None (Some κ2) κ2' →
+    link_trace_related R κs1 ([Vis κ2] ++ κs2) (option_list (Vis <$> κ2') ++ κs3)
+| LinkTraceRelBoth κ1 κ2 κ3 κs1 κs2 κs3:
+    link_trace_related R κs1 κs2 κs3 →
+    R (Some κ1) (Some κ2) κ3 →
+    link_trace_related R ([Vis κ1] ++ κs1) ([Vis κ2] ++ κs2) (option_list (Vis <$> κ3) ++ κs3)
+.
+
+Lemma link_trace_related_create {EV1 EV2 EV3} (R : option EV1 → option EV2 → option EV3 → Prop) m1 m2 κs3 σ1 σ1':
+  has_trace (link m1 m2 R) σ1 κs3 σ1' →
+  ∃ κs1 κs2 σ', link_trace_related R κs1 κs2 κs3 ∧
+  has_trace m1 σ1.1 κs1 σ'.1 ∧
+  has_trace m2 σ1.2 κs2 σ'.2.
+Proof.
+  elim; clear.
+  - move => σ. exists [], [], σ. split_and!; constructor.
+  - move => σ1 σ2 σ3 κ κs Hstep Hsteps [κs1 [κs2 [σ' [Hlink [Hκ1 Hκ2]]]]].
+    inversion Hstep; clear Hstep; simplify_eq.
+    + exists (option_list (Vis <$> e1) ++ κs1), κs2, σ'.
+      split_and! => //; destruct e1; simplify_eq/= => //; rewrite ?right_id //. by constructor.
+      * by apply: TraceStepSome.
+      * by apply: TraceStepNone.
+    + exists κs1, (option_list (Vis <$> e2) ++ κs2), σ'.
+      split_and! => //; destruct e2; simplify_eq/= => //; rewrite ?right_id //. by constructor.
+      * by apply: TraceStepSome.
+      * by apply: TraceStepNone.
+    + exists ([Vis e1] ++ κs1), ([Vis e2] ++ κs2), σ'.
+      split_and!.
+      * by apply LinkTraceRelBoth.
+      * by apply: TraceStepSome.
+      * by apply: TraceStepSome.
+  - move => σ1 κs σ2 /= [] Hub.
+    + eexists [Ub], [], (σ1.1, _) => /=. split_and!. by econstructor.
+      * by apply: TraceUb.
+      * by apply: TraceEnd.
+    + eexists [], [Ub], (_, σ1.2). split_and!. by econstructor.
+      * by apply: TraceEnd.
+      * by apply: TraceUb.
+Qed.
+
+Lemma link_trace_related_step {EV1 EV2 EV3} (R : option EV1 → option EV2 → option EV3 → Prop) m1 m2 κs1 κs2 κs3 σ1 σ1' σ2 σ2':
+  link_trace_related R κs1 κs2 κs3 →
+  has_trace m1 σ1 κs1 σ1' →
+  has_trace m2 σ2 κs2 σ2' →
+  has_trace (link m1 m2 R) (σ1, σ2) κs3 (σ1', σ2').
+Proof.
+  move => Hrel.
+  elim: Hrel σ1 σ2; clear.
+  - move => σ1 σ2 Hstep1 Hstep2. apply: (has_trace_trans [] []).
+    + by apply: link_empty_steps_l.
+    + by apply: link_empty_steps_r.
+  - move => ???? /has_trace_ub_inv[?[??]] ?. apply: (has_trace_trans []). by apply: link_empty_steps_l.
+    apply: TraceUb. by left.
+  - move => ????? /has_trace_ub_inv[?[??]]. apply: (has_trace_trans []). by apply: link_empty_steps_r.
+    apply: TraceUb. by right.
+  - move => κ1 κ1' κs1 κs2 κs3 ? IH HR σ1 σ2 /= /(has_trace_cons_inv _ _)[?[?[? Hor]]] ?.
+    apply: (has_trace_trans []). by apply: link_empty_steps_l.
+    have [?|[??]] := Hor. { apply: TraceUb. by left. }
+    apply: TraceStep; [ | by apply: IH].
+    by apply: LinkStepL.
+  - move => κ1 κ1' κs1 κs2 κs3 ? IH HR σ1 σ2 /= ? /(has_trace_cons_inv _ _)[?[?[? Hor]]].
+    apply: (has_trace_trans []). by apply: link_empty_steps_r.
+    have [?|[??]] := Hor. { apply: TraceUb. by right. }
+    apply: TraceStep; [ | by apply: IH].
+    by apply: LinkStepR.
+  - move => κ1 κ2 κ3 κs1 κs2 κs3 ? IH HR σ1 σ2 /= /(has_trace_cons_inv _ _)[?[?[? Hor1]]] /(has_trace_cons_inv _ _)[?[?[? Hor2]]].
+    apply: (has_trace_trans []). by apply: link_empty_steps_l.
+    apply: (has_trace_trans []). by apply: link_empty_steps_r.
+    have [?|[??]] := Hor1. { apply: TraceUb. by left. }
+    have [?|[??]] := Hor2. { apply: TraceUb. by right. }
+    apply: TraceStep; [ | by apply: IH].
+    by apply: LinkStepBoth.
+Qed.
+
+Lemma refines_horizontal {EV1 EV2 EV3} m1 m2 m1' m2' (R : option EV1 → option EV2 → option EV3 → Prop) :
+  refines m1 m1' →
+  refines m2 m2' →
+  refines (link m1 m2 R) (link m1' m2' R).
+Proof.
+  move => [Hr1] [Hr2]. constructor => κs σi /link_trace_related_create[? [? [[??] [? [/Hr1[??] /Hr2[??]]]]]].
+  eexists. by apply: link_trace_related_step.
+Qed.
+
+End version7.
+
 Module version1.
 Inductive steps {A B C} (R : A → option C → option B → A → Prop) : A → list (option C * option B) → A → Prop :=
 | steps_refl ρ :
@@ -3051,18 +3304,42 @@ Definition propset_union {A} (S : propset (propset A)) : propset A :=
   {[ x | ∃ σ, σ ∈ S ∧ x ∈ σ ]}.
 Definition propset_intersection {A} (S : propset (propset A)) : propset A :=
   {[ x | ∀ σ, σ ∈ S → x ∈ σ ]}.
+(* Inductive trace_of_state {EV} (m : module EV) : propset m.(m_state) → propset (trace EV) → Prop := *)
+(* | OfStateNb S T: *)
+(*     T ≡ {[ nb ]} → *)
+(*     trace_of_state m S T *)
+(* | OfStateVis (S : propset m.(m_state)) σ e S' (T : propset (trace EV)) T': *)
+(*     σ ∈ S → *)
+(*     m.(m_step) σ e S' → *)
+(*     (* (∀ σ', σ' ∈ S' → trace_of_state m {[σ']} T) → *) *)
+(*     (∀ σ', σ' ∈ S' → ∃ T'', T'' ⊆ T ∧ trace_of_state m {[σ']} T'') → *)
+(*     (* (trace_of_state m S' T) → *) *)
+(*     T' ≡ ((λ κs', option_trace e +t+ κs') <$> T) → *)
+(*     trace_of_state m S T' *)
+(* . *)
 Inductive trace_of_state {EV} (m : module EV) : propset m.(m_state) → propset (trace EV) → Prop :=
 | OfStateNb S T:
     T ≡ {[ nb ]} →
     trace_of_state m S T
-| OfStateVis (S : propset m.(m_state)) σ e S' (T : propset (trace EV)) T':
+| OfStateVis f (S : propset m.(m_state)) σ e S' (T : propset (trace EV)) T':
     σ ∈ S →
     m.(m_step) σ e S' →
     (* (∀ σ', σ' ∈ S' → trace_of_state m {[σ']} T) → *)
-    (∀ σ', σ' ∈ S' → ∃ T'', T'' ⊆ T ∧ trace_of_state m {[σ']} T'') →
+    (* (∀ σ', σ' ∈ S' → ∃ T'', T'' ⊆ T ∧ trace_of_state m {[σ']} T'') → *)
+    (* TODO: This currently breaks ub (if S' is empty all traces
+    should be allowed). Maybe move this into the ∀ σ', σ' ∈ S' → ...
+    such that one can only rely on it if S' is not empty? *)
+    T ≡ propset_union ({[ T'' | ∃ σ, σ ∈ S' ∧ T'' ≡ f σ ]}) →
+  (* T ≡ {[ x | ∃ σ, σ ∈ {[ T'' | ∃ σ, σ ∈ S' ∧ T'' ≡ f σ ]} ∧ x ∈ σ ]} → *)
+    (∀ σ', σ' ∈ S' → trace_of_state m {[σ']} (f σ')) →
+    (* (∀ σ', σ' ∈ S' → trace_union m σ' T) → *)
     (* (trace_of_state m S' T) → *)
     T' ≡ ((λ κs', option_trace e +t+ κs') <$> T) →
     trace_of_state m S T'
+(* with trace_union {EV} (m : module EV) : m.(m_state) → propset (trace EV) → Prop := *)
+(* | TUelem T σ' T': *)
+    (* trace_of_state m {[σ']} T' → T' ⊆ T → *)
+    (* trace_union m σ' T *)
 .
 (* Inductive trace_of_state {EV} (m : module EV) : propset m.(m_state) → propset (trace EV) → Prop := *)
 (* | OfStateNb S T: *)
@@ -3123,9 +3400,10 @@ Proof.
   split.
   - rewrite !elem_of_PropSet => /=.
     elim => //.
-    move => ? [] ? ? T ? ? [-> ->] /= IH ->.
-  (* rewrite IH. set_unfold. set_solver. *)
+    move => ? ? [] ? ? T ? ? [-> ->] /= -> ? IH ->.
     admit.
+  (* rewrite IH. set_unfold. set_solver. *)
+    (* admit. *)
   - rewrite !elem_of_PropSet => ->. by apply OfStateNb.
 (* Qed. *)
 Admitted.
@@ -3147,15 +3425,17 @@ Proof.
   - rewrite !elem_of_PropSet.
     inversion_clear 1; simplify_eq/=; destruct_and?; simplify_eq/=. naive_solver.
     setoid_subst. right.
-    revert select (trace_of_state _ _ _).
+    revert select (∀ σ, _) => Hs.
+    have := Hs _ ltac:(set_solver).
     inversion_clear 1; simplify_eq; setoid_subst.
-    + set_unfold. split; try naive_solver. move => ->. by exists nb.
+    + set_unfold. move => ?. split; [ naive_solver |].
+      move => ->. exists nb. split => //. naive_solver.
     + destruct σ; set_solver.
   - rewrite !elem_of_PropSet => -[|] ->.
     + by apply OfStateNb.
-    + apply: OfStateVis => //. by apply OfStateNb.
-      set_unfold. move => ?. split. { move => ->. exists nb. naive_solver. }
-      by move => [? [-> ->]].
+    + apply: (OfStateVis _ (λ _, {[nb]})) => //. move => ??. by apply OfStateNb.
+      set_unfold. move => ?. split. { move => ->. exists nb. split => //. exists {[nb]}. naive_solver. }
+      naive_solver.
 Qed.
 
 Inductive test_mod3_state := | S3S1 | S3S2 (n : nat) | S3S3.
@@ -3180,23 +3460,38 @@ Proof.
     setoid_subst.
     destruct σ; try set_solver.
     revert select (_ ∨ _) => -[[? [? [n ?]]]|]. 2: naive_solver. subst.
-    revert select (trace_of_state _ _ _).
-    inversion_clear 1; simplify_eq. { left. setoid_subst. set_unfold. split; try naive_solver. move => ->. by exists nb. }
+    revert select (∀ σ, _) => Hs.
+    have := Hs _ ltac:(set_solver).
+    inversion_clear 1; simplify_eq. {
+      left. set_unfold. move => ?. split.
+      - move => [Y [-> [? [[? [? ?]] ?]]]]. subst.
+        rewrite left_id_L. apply H. naive_solver.
+      - move => ->. exists nb. naive_solver.
+    }
     right. exists n. setoid_subst.
     have ?: σ = S3S2 n by set_solver. subst.
     revert select (_ ∨ _) => -[|[n' [?[??]]]]; simplify_eq. 1: naive_solver.
-    revert select (trace_of_state _ _ _).
+    revert select (∀ σ, _) => {}Hs.
+    have := Hs _ ltac:(set_solver).
     inversion_clear 1; simplify_eq; setoid_subst. 2: set_solver.
-    set_unfold => ?. split; try naive_solver. move => ->. exists (vis n' nb). split => //. by exists nb.
+    admit.
+    (* set_unfold => ?.  split; try naive_solver. move => ->. exists (vis n' nb). split => //. by exists nb. *)
   - rewrite !elem_of_PropSet => -[|] HS.
     + by apply OfStateNb.
-    + move: HS => [n ->]. apply: OfStateVis => //. naive_solver.
-      instantiate (2:=n).
-      instantiate (1:={[ vis n nb]}).
-      2: { set_unfold. split; try naive_solver. move => ->. exists (vis n nb). naive_solver. }
-      apply: OfStateVis => //. naive_solver. by apply OfStateNb.
-      set_unfold. split; try naive_solver. move => ->. by exists nb.
-Qed.
+    + move: HS => [n ->]. apply: (OfStateVis _ (λ _, {[vis n nb]})) => //.
+      naive_solver.
+      instantiate (1:=n).
+      2: { set_unfold.
+           admit.
+           (* split; try naive_solver. move => ->. exists (vis n nb). naive_solver. *)
+      }
+      move => [|n'|] => // ?.
+      have ->: n' = n by set_solver.
+      apply: (OfStateVis _ (λ _, {[nb]})) => //. naive_solver. move => ??. by apply OfStateNb.
+      admit.
+      (* set_unfold. split; try naive_solver. move => ->. by exists nb. *)
+(* Qed. *)
+Admitted.
 
 Lemma test_mod_3_traces_angelic:
   (* {{nb}, {nb, vis 0 nb, ..., vis n nb, ...} }*)
@@ -3207,20 +3502,72 @@ Proof.
   - rewrite !elem_of_PropSet.
     inversion_clear 1; simplify_eq/=; destruct_and?; simplify_eq/=. naive_solver.
     setoid_subst.
-    destruct σ; try set_solver.
+    have ?: σ = S3S1 by set_solver. subst.
     revert select (_ ∨ _) => -[[? [? ?]]|]. 2: naive_solver. subst.
-    revert select (trace_of_state _ _ _).
-    inversion_clear 1; simplify_eq/=; destruct_and?; simplify_eq/=. {
-      left. setoid_subst. set_unfold. split; try set_solver. move => ->. by exists nb.
-    }
-    right.
-    revert select (_ ∨ _) => -[|[n' [?[??]]]]; simplify_eq. 1: set_solver.
-    setoid_subst.
-    revert select (trace_of_state _ _ _).
-    inversion_clear 1; simplify_eq; setoid_subst. 2: set_solver.
-    set_unfold. split; try naive_solver.
-    move => [n ->]. exists (vis n nb). split => //. exists nb. split => //.
-    admit.
+
+
+    have Hf : ∀ n, f (S3S2 n) ≡ {[vis n nb]} ∨ f (S3S2 n) ≡ {[nb]}.
+    + move => n.
+      revert select (∀ σ, _) => Hs.
+      have := Hs (S3S2 n) ltac:(set_solver).
+      inversion_clear 1; simplify_eq/=; destruct_and?; simplify_eq/=. naive_solver.
+      left.
+      revert select (_ ∨ _) => -[|[n' [?[??]]]]; simplify_eq. 1: set_solver.
+      setoid_subst.
+      revert select (∀ σ, _) => {}Hs.
+      have := Hs _ ltac:(set_solver).
+      inversion_clear 1; simplify_eq; setoid_subst. 2: set_solver.
+      set_unfold. simplify_eq. split. naive_solver.
+      move => ?. subst. apply H4. exists nb. naive_solver.
+    + admit.
+
+
+    (* right. *)
+    (* move => κs. *)
+    (* have [[n ->]| ?]: (∃ n, κs = vis n nb) ∨ ¬(∃ n, κs = vis n nb) by destruct κs as [| |? []]; naive_solver. *)
+    (* + revert select (∀ σ, _) => Hs. *)
+    (*   have := Hs (S3S2 n) ltac:(set_solver). *)
+    (*   inversion_clear 1; simplify_eq/=; destruct_and?; simplify_eq/=. { *)
+    (*     admit. *)
+    (*   } *)
+    (*   revert select (_ ∨ _) => -[|[n' [?[??]]]]; simplify_eq. 1: set_solver. *)
+    (*   setoid_subst. *)
+    (*   revert select (∀ σ, _) => {}Hs. *)
+    (*   have := Hs _ ltac:(set_solver). *)
+    (*   inversion_clear 1; simplify_eq; setoid_subst. 2: set_solver. *)
+    (*   set_unfold. split. naive_solver. *)
+    (*   move => _. exists (vis n nb). *)
+    (*   split => //. exists ({[ vis n nb]}). split => //. *)
+    (*   exists (S3S2 n). split => //. naive_solver. *)
+    (*   move => t. rewrite H4. *)
+    (*   split; [ | naive_solver]. simplify_eq. *)
+    (*   move => ?. have ->: t = vis n nb by set_solver. *)
+    (*   exists nb. split => //. naive_solver. *)
+    (* + split. 2: naive_solver. *)
+    (*   set_unfold. *)
+    (*   move => [? [? [?[[?[[XX ?]?]]?]]]]. simplify_eq. *)
+    (*   have := H3 (S3S2 XX) ltac:(set_solver). *)
+    (*   inversion_clear 1; simplify_eq. admit. *)
+      (* 2:naive_solver. *)
+
+      (* move => ?. exfalso. *)
+      (* revert select (∀ σ, _) => {}Hs. *)
+      (* have := Hs (S3S2 0) ltac:(set_solver). *)
+      (* inversion_clear 1; simplify_eq/= => //. *)
+    (*   revert select (_ ∨ _) => -[|[n' [?[??]]]]; simplify_eq. 1: set_solver. *)
+
+    (* revert select (trace_of_state _ _ _). *)
+    (* inversion_clear 1; simplify_eq/=; destruct_and?; simplify_eq/=. { *)
+    (*   left. setoid_subst. set_unfold. split; try set_solver. move => ->. by exists nb. *)
+    (* } *)
+    (* right. *)
+    (* revert select (_ ∨ _) => -[|[n' [?[??]]]]; simplify_eq. 1: set_solver. *)
+    (* setoid_subst. *)
+    (* revert select (trace_of_state _ _ _). *)
+    (* inversion_clear 1; simplify_eq; setoid_subst. 2: set_solver. *)
+    (* set_unfold. split; try naive_solver. *)
+    (* move => [n ->]. exists (vis n nb). split => //. exists nb. split => //. *)
+    (* admit. *)
     (* right. *)
     (* move => κs. *)
     (* have [[n ->]| ?]: (∃ n, κs = vis n nb) ∨ ¬(∃ n, κs = vis n nb) by destruct κs as [| |? []]; naive_solver. *)
@@ -3240,10 +3587,20 @@ Proof.
     (*   set_unfold. split; naive_solver. *)
   - rewrite !elem_of_PropSet => -[|] HS.
     + by apply OfStateNb.
-    + move: HS => ->. apply: OfStateVis => //. naive_solver.
-      instantiate (1 := {[ y | ∃ n : nat, y = vis n nb ]}). 2: {
-        set_unfold. split; try naive_solver. move => [n ->]. exists (vis n nb). naive_solver.
+    + move: HS => ->. apply: (OfStateVis _ (λ σ : (m_state (test_mod_3 false)),
+       if σ is S3S2 n then {[ vis n nb ]} else ∅ )) => //. naive_solver.
+      2: { set_unfold => ?. split.
+           - move => [n ->]. exists (vis n nb). split => //. exists ({[ vis n nb ]}).
+             split => //. exists (S3S2 n). naive_solver.
+           - move => [? [-> [? [[? [[xx ->] ?]] ?]]]].
+             exists (xx). rewrite left_id. set_solver.
       }
+      move => ? [n ->].
+      apply: (OfStateVis _ (λ _, {[ nb ]})) => //. naive_solver.
+      move => ??. by apply OfStateNb.
+      set_unfold. split. 2: naive_solver.
+      move => ->. exists nb. split => //. exists ({[nb]}). naive_solver.
+      (* * move => []// ?. apply OfStateNb. done. *)
 
       (* apply: OfStateVis => //. naive_solver. *)
       (* * move => []// ?. apply OfStateNb. done. *)
@@ -3421,172 +3778,7 @@ Inductive trace_of_state {EV} (m : module EV) : m.(m_state) → trace EV → m.(
 (*     trace_union m S T *)
 (* . *)
 End ind.
-
-Global Instance trace_of_state_Proper {EV} (m : module EV) : Proper ((=) ==> (≡) ==> (iff)) (trace_of_state m).
-Proof.
-  move => ? σ -> T1 T2 HT.
-  split => Hs; [move: T2 HT | move: T1 HT]; elim: Hs.
-  all: try by move => *; apply: OfStateNb; setoid_subst.
-  all: try by move => *; apply: OfStateVis; setoid_subst.
-Qed.
-  (* all: try by move => *; apply: OfStateDemonic; setoid_subst; naive_solver. *)
-(* Admitted. *)
-
-(* Lemma trace_of_state_ind {EV} (m : module EV) (F : m_state m → Prop) (P : m_state m → (trace EV → Prop) → Prop) : *)
-(*   (∀ (σ : m_state m) (T : trace EV → Prop), F σ → T nb → P σ T) *)
-(*   → (∀ (σ : m_state m) (e : option EV) (T : trace EV → Prop), *)
-(*         trace_step m (λ σ' : m_state m, trace_of_state m F σ' T ∧ P σ' T) σ e → P σ (λ κs : trace EV, ∃ κs' : trace EV, T κs' ∧ option_trace e +t+ κs' = κs)) *)
-(*   → ∀ (m0 : m_state m) (t : trace EV → Prop), trace_of_state m F m0 t → P m0 t. *)
-(* Proof. *)
-(*   fix FIX 5. move => Hnb Hstep ??. *)
-(*   case. *)
-(*   - by apply: Hnb. *)
-(*   - move => ??? Hs. eapply Hstep => //. *)
-(*     case: Hs => *; [ apply: StepVis | apply: StepDemonic | apply: StepAngelic] => //; naive_solver. *)
-(* Qed. *)
-Definition trace_of_program {EV} (m : module EV) := PropSet (trace_of_state m {[m.(m_initial)]}).
-
-Program Definition test_mod_1 : module unit := {|
-  m_state := unit;
-  m_initial := ();
-  (* m_state_kind _ := kind_visible; *)
-  m_step _ e σ := e = None ∧ σ = {[ tt ]};
-|}.
-(* Next Obligation. move => [] [] [] [|[]] //. Qed. *)
-(* Next Obligation. done. Qed. *)
-Lemma test_mod_1_traces:
-  trace_of_program test_mod_1 ≡ {[ x | x ≡ {[ nb ]} ]}.
-Proof.
-  move => κs.
-  split.
-  - rewrite !elem_of_PropSet => /=.
-    elim => //.
-    move => ? [] ? ? T ? ? [-> ->] /= ? IH ->.
-    rewrite IH. set_unfold. set_solver.
-  - rewrite !elem_of_PropSet => ->. by apply OfStateNb.
-Qed.
-
-Program Definition test_mod_2 : module nat := {|
-  m_state := bool;
-  m_initial := false;
-  (* m_state_kind b := if b then kind_demonic else kind_visible; *)
-  m_step b1 e b2 := b1 = false ∧ e = Some 2 ∧ b2 = {[ true ]};
-|}.
-(* Next Obligation. move => []//[][]//; naive_solver. Qed. *)
-(* Next Obligation. move => [][]//; naive_solver. Qed. *)
-
-Lemma test_mod_2_traces:
-  trace_of_program test_mod_2 ≡ {[ x | x ≡ {[ nb ]} ]} ∪ {[ x | x ≡ {[ vis 2 nb ]} ]}.
-Proof.
-  move => κs.
-  split.
-  - rewrite !elem_of_PropSet.
-    inversion_clear 1; simplify_eq/=; destruct_and?; simplify_eq/=. naive_solver.
-    setoid_subst. right.
-    revert select (trace_of_state _ _ _).
-    inversion_clear 1; simplify_eq; setoid_subst.
-    + set_unfold. split; try naive_solver. move => ->. by exists nb.
-    + destruct σ; set_solver.
-  - rewrite !elem_of_PropSet => -[|] ->.
-    + by apply OfStateNb.
-    + apply: OfStateVis => //. by apply OfStateNb.
-      set_unfold. move => ?. split. { move => ->. exists nb. naive_solver. }
-      by move => [? [-> ->]].
-Qed.
-
-Inductive test_mod3_state := | S3S1 | S3S2 (n : nat) | S3S3.
-Program Definition test_mod_3 (dem : bool) : module nat := {|
-  m_state := test_mod3_state;
-  m_initial := S3S1;
-  m_step b1 e b2 :=
-    (b1 = S3S1 ∧ e = None ∧ if dem then ∃ n, b2 = {[ S3S2 n ]} else b2 = {[ x | ∃ n, x = S3S2 n ]}) ∨
-    (∃ n, b1 = S3S2 n ∧ e = Some n ∧ b2 = {[ S3S3 ]})
-|}.
-(* Next Obligation. move => []//[][]//; naive_solver. Qed. *)
-(* Next Obligation. move => [][]//; naive_solver. Qed. *)
-
-Lemma test_mod_3_traces_demonic:
-  (* {{nb}, {nb, vis 0 nb}, ..., {nb, vis n nb}, ...}*)
-  trace_of_program (test_mod_3 true) ≡ {[ x | x ≡ {[ nb ]} ]} ∪ {[ x | ∃ n, x ≡ {[ vis n nb ]} ]}.
-Proof.
-  move => κs.
-  split.
-  - rewrite !elem_of_PropSet.
-    inversion_clear 1; simplify_eq/=; destruct_and?; simplify_eq/=. naive_solver.
-    setoid_subst.
-    destruct σ; try set_solver.
-    revert select (_ ∨ _) => -[[? [? [n ?]]]|]. 2: naive_solver. subst.
-    revert select (trace_of_state _ _ _).
-    inversion_clear 1; simplify_eq. { left. setoid_subst. set_unfold. split; try naive_solver. move => ->. by exists nb. }
-    right. exists n. setoid_subst.
-    have ?: σ = S3S2 n by set_solver. subst.
-    revert select (_ ∨ _) => -[|[n' [?[??]]]]; simplify_eq. 1: naive_solver.
-    revert select (trace_of_state _ _ _).
-    inversion_clear 1; simplify_eq; setoid_subst. 2: set_solver.
-    set_unfold => ?. split; try naive_solver. move => ->. exists (vis n' nb). split => //. by exists nb.
-  - rewrite !elem_of_PropSet => -[|] HS.
-    + by apply OfStateNb.
-    + move: HS => [n ->]. apply: OfStateVis => //. naive_solver.
-      instantiate (2:=n).
-      instantiate (1:={[ vis n nb]}).
-      2: { set_unfold. split; try naive_solver. move => ->. exists (vis n nb). naive_solver. }
-      apply: OfStateVis => //. naive_solver. by apply OfStateNb.
-      set_unfold. split; try naive_solver. move => ->. by exists nb.
-Qed.
-
-Lemma test_mod_3_traces_angelic:
-  (* {{nb}, {nb, vis 0 nb, ..., vis n nb, ...} }*)
-  trace_of_program (test_mod_3 false) ≡ {[ x | x ≡ {[ nb ]} ]} ∪ {[ x | x ≡  {[ y | ∃ n, y = vis n nb ]} ]}.
-Proof.
-  move => κs.
-  split.
-  - rewrite !elem_of_PropSet.
-    inversion_clear 1; simplify_eq/=; destruct_and?; simplify_eq/=. naive_solver.
-    setoid_subst.
-    destruct σ; try set_solver.
-    revert select (_ ∨ _) => -[[? [? ?]]|]. 2: naive_solver. subst.
-    revert select (trace_of_state _ _ _).
-    inversion_clear 1; simplify_eq/=; destruct_and?; simplify_eq/=. {
-      left. setoid_subst. set_unfold. split; try set_solver. move => ->. by exists nb.
-    }
-    right.
-    revert select (_ ∨ _) => -[|[n' [?[??]]]]; simplify_eq. 1: set_solver.
-    setoid_subst.
-    revert select (trace_of_state _ _ _).
-    inversion_clear 1; simplify_eq; setoid_subst. 2: set_solver.
-    set_unfold. split; try naive_solver.
-    move => [n ->]. exists (vis n nb). split => //. exists nb. split => //.
-    admit.
-    (* right. *)
-    (* move => κs. *)
-    (* have [[n ->]| ?]: (∃ n, κs = vis n nb) ∨ ¬(∃ n, κs = vis n nb) by destruct κs as [| |? []]; naive_solver. *)
-    (* + have := Hs (S3S2 n) ltac:(set_solver). *)
-    (*   inversion_clear 1; simplify_eq/= => //. *)
-    (*   revert select (_ ∨ _) => -[|[n' [?[??]]]]; simplify_eq. 1: set_solver. *)
-    (*   setoid_subst. *)
-    (*   revert select (∀ σ, _) => {}Hs. have := Hs _ ltac:(set_solver). *)
-    (*   inversion_clear 1; simplify_eq; setoid_subst. 2: set_solver. *)
-    (*   set_unfold. split; naive_solver. *)
-    (* + have := Hs (S3S2 0) ltac:(set_solver). *)
-    (*   inversion_clear 1; simplify_eq/= => //. *)
-    (*   revert select (_ ∨ _) => -[|[n' [?[??]]]]; simplify_eq. 1: set_solver. *)
-    (*   setoid_subst. *)
-    (*   revert select (∀ σ, _) => {}Hs. have := Hs _ ltac:(set_solver). *)
-    (*   inversion_clear 1; simplify_eq; setoid_subst. 2: set_solver. *)
-    (*   set_unfold. split; naive_solver. *)
-  - rewrite !elem_of_PropSet => -[|] HS.
-    + by apply OfStateNb.
-    + move: HS => ->. apply: OfStateVis => //. naive_solver.
-      instantiate (1 := {[ y | ∃ n : nat, y = vis n nb ]}). 2: {
-        set_unfold. split; try naive_solver. move => [n ->]. exists (vis n nb). naive_solver.
-      }
-
-      (* apply: OfStateVis => //. naive_solver. *)
-      (* * move => []// ?. apply OfStateNb. done. *)
-      (* * set_unfold. split; try naive_solver. move => [n' ->]. exists (nb). *)
-      (*   admit. *)
-Abort.
-End version5.
+End version6.
 
 (*
   Idea: have a judgment [m1 < m2 | m3] which desugars to
