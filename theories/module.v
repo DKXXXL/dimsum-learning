@@ -37,13 +37,13 @@ Inductive has_trace {EV} (m : module EV) : m.(m_state) → list (event EV) → m
     has_trace m σ1 κs σ2
 .
 
-Lemma TraceStepNone {EV} κs (m : module EV) σ1 σ2 σ3 :
+Lemma TraceStepNone {EV} κs (m : module EV) σ2 σ1 σ3 :
   m.(m_step) σ1 None σ2 →
   has_trace m σ2 κs σ3 →
   has_trace m σ1 κs σ3.
 Proof. move => ??. by apply: (TraceStep _ _ _ _ None). Qed.
 
-Lemma TraceStepSome {EV} κs (m : module EV) σ1 σ2 σ3 κ :
+Lemma TraceStepSome {EV} κs (m : module EV) σ2 σ1 σ3 κ :
   m.(m_step) σ1 (Some κ) σ2 →
   has_trace m σ2 κs σ3 →
   has_trace m σ1 (Vis κ :: κs) σ3.
@@ -380,6 +380,401 @@ Proof.
   eexists _. split => //.
   apply: IH => //. lia.
 Qed.
+
+(*** Proving refinement *)
+Lemma inv_implies_refines {EV} (m1 m2 : module EV) (inv : m1.(m_state) → m2.(m_state) → Prop):
+  inv m1.(m_initial) m2.(m_initial) →
+  (∀ σi σs, inv σi σs → ¬ m1.(m_is_ub) σi) →
+  (∀ σi1 σs1 σi2 e,
+      inv σi1 σs1 → m1.(m_step) σi1 e σi2 →
+      ∃ σs2, has_trace m2 σs1 (option_list (Vis <$> e) ++ [Ub]) σs2 ∨ (inv σi2 σs2 ∧ has_trace m2 σs1 (option_list (Vis <$> e)) σs2)) →
+  refines m1 m2.
+Proof.
+  move => Hinvinit Hinvsafe Hinvstep.
+  constructor => // κs σi2. move: m1.(m_initial) m2.(m_initial) Hinvinit => σi1 σs1 Hinv Hsteps.
+  elim: Hsteps σs1 Hinv => {σi1 σi2 κs}.
+  - by eauto using TraceEnd.
+  - move => σi1 σi2 σi3 κ κs Hstep Hsteps IH σs1 Hinv.
+    case: (Hinvstep _ _ _ _ Hinv Hstep) => σs2 [/has_trace_app_inv [? [? /has_trace_ub_inv [σub [? ?]]]]|[Hinv2 ?]]. {
+      eexists σs2. apply: has_trace_trans => //. apply: (has_trace_trans []) => //. by apply: TraceUb.
+    }
+    case: (IH _ Hinv2) => ? ?.
+    eexists. by apply: has_trace_trans.
+  - move => ??? /Hinvsafe ? σs ?. exists σs. naive_solver.
+Qed.
+
+Inductive wp {EV} (m1 m2 : module EV) : nat → m1.(m_state) -> m2.(m_state) -> Prop :=
+| Wp_step σi1 σs1 n:
+    (* This is incomplete if the inital state is UB but that is pretty weird anyway.  *)
+    ¬ m1.(m_is_ub) σi1 ∧
+    (∀ σi2 κ n', n = S n' → m1.(m_step) σi1 κ σi2 -> ∃ σs2,
+      has_trace m2 σs1 (option_list (Vis <$> κ) ++ [Ub]) σs2 ∨
+      (has_trace m2 σs1 (option_list (Vis <$> κ)) σs2 ∧ wp m1 m2 n' σi2 σs2)) ->
+    wp m1 m2 n σi1 σs1
+.
+
+Lemma wp_implies_refines {EV} (m1 m2 : module EV):
+  (∀ n, wp m1 m2 n m1.(m_initial) m2.(m_initial)) →
+  refines m1 m2.
+Proof.
+  move => Hwp.
+  constructor => κs σi.
+  move: m1.(m_initial) Hwp => σi1.
+  move: m2.(m_initial) => σs1.
+  move => Hwp Hsteps.
+  move: σs1 Hwp. apply: forall_to_ex.
+  elim: Hsteps => {σi1 σi κs}.
+  - move => σi1. exists 0 => σs1 Hwp. eexists. by apply: TraceEnd.
+  - move => σi1 σi2 σi3 κ κs Hstep Hsteps [n IH]. exists (S n) => σs1 Hwp.
+    inversion_clear Hwp as [??? [? Hwp2]]; subst.
+    have [|σs2 [/has_trace_app_inv [? [? /has_trace_ub_inv [σub [? ?]]]]|[? {}Hwp]]]:= (Hwp2 _ _ n _ Hstep) => //. {
+      exists σub. apply: (has_trace_trans) => //. apply: (has_trace_trans []) => //. by apply: TraceUb.
+    }
+    have [σend ?]:= IH _ Hwp. eexists σend.
+    by apply: has_trace_trans.
+  - move => σ1 ???. exists 0 => ? Hwp.
+    inversion_clear Hwp. naive_solver.
+Qed.
+
+Ltac inv_step :=
+  repeat lazymatch goal with
+  | H : m_step _ _ _ _  |- _ => inversion H; clear H
+  end; simplify_eq/=.
+(*** Tests *)
+
+(*
+  TODO: prove the following refinement for which wp is probably not enough
+
+            A     B
+           /- 2  --- 3
+  spec: 1 -
+           \- 2' --- 4
+            A     C
+
+                  B
+           A     /- 3
+  impl: 1 --- 2 -
+                 \- 4
+                 C
+
+*)
+Module test.
+
+(*   2
+  1 --- 2 (done)
+ *)
+Inductive mod1_step : bool → option nat → bool → Prop :=
+| T1False: mod1_step false (Some 2) true.
+
+
+Definition mod1 : module nat := {|
+  m_state := bool;
+  m_initial := false;
+  m_step := mod1_step;
+  m_is_ub s:= False;
+|}.
+
+(*         2
+  1 --- 2 --- 3 (done)
+ *)
+Inductive mod2_state := | S1 | S2 | S3.
+Inductive mod2_step : mod2_state → option nat → mod2_state → Prop :=
+| T2S1: mod2_step S1 None S2
+| T2S2: mod2_step S2 (Some 2) S3.
+Definition mod2 : module nat := {|
+  m_state := mod2_state;
+  m_initial := S1;
+  m_step := mod2_step;
+  m_is_ub s:= False;
+|}.
+
+Definition t2_to_t1_inv (σ1 : mod2_state) (σ2 : bool) : Prop :=
+  σ2 = match σ1 with
+  | S1 | S2 => false
+  | _ => true
+  end.
+Lemma test_refines1 :
+  refines mod2 mod1.
+Proof.
+  apply: (inv_implies_refines mod2 mod1 t2_to_t1_inv).
+  - done.
+  - naive_solver.
+  - move => σi1 σs1 σi2 e -> ?. inv_step; eexists _; right; split => //.
+    + by apply: TraceEnd.
+    + apply: TraceStepSome; last by apply: TraceEnd. constructor.
+Qed.
+
+Definition mod_loop {A} : module A := {|
+  m_state := unit;
+  m_initial := tt;
+  m_step _ e _ := e = None;
+  m_is_ub s:= False;
+|}.
+Lemma test_refines2 {A} (m : module A) :
+  refines mod_loop m.
+Proof.
+  apply: (inv_implies_refines mod_loop m (λ _ _, True)).
+  - done.
+  - naive_solver.
+  - move => ??????. inv_step. eexists. right. split => //. apply: TraceEnd.
+Qed.
+
+Lemma test_refines2_wp {A} (m : module A) :
+  refines mod_loop m.
+Proof.
+  apply: wp_implies_refines => /=.
+  move => n. elim/lt_wf_ind: n => n Hloop.
+  constructor. split; first naive_solver. move => [] κ n' ??.
+  inv_step. eexists. right. split; [by apply: TraceEnd|]. apply Hloop.
+  lia.
+Qed.
+
+
+(*   1
+      /- 2 (done)
+  1 --
+      \- 3 (stuck)
+     2
+ *)
+
+Inductive stuck1_state := | S1S1 | S1S2 | S1S3.
+Inductive stuck1_step : stuck1_state → option nat → stuck1_state → Prop :=
+| S1_1To2: stuck1_step S1S1 (Some 1) S1S2
+| S1_1To3: stuck1_step S1S1 (Some 2) S1S3.
+Definition mod_stuck1 : module nat := {|
+  m_state := stuck1_state;
+  m_initial := S1S1;
+  m_step := stuck1_step;
+  m_is_ub s:= s = S1S3;
+|}.
+
+Lemma test_refines_stuck1 :
+  refines mod_stuck1 mod_stuck1.
+Proof.
+  apply: (inv_implies_refines mod_stuck1 mod_stuck1 (λ σ1 σ2, σ1 = σ2 ∧ σ1 ≠ S1S3)).
+  - done.
+  - move => [] ?[??] => //.
+  - move => σi1 σs1 σi2 e [-> ?] ?. inv_step.
+    + (* 1 -> 2 *) eexists _. right. split => //. apply: TraceStepSome; last by apply: TraceEnd. constructor.
+    + (* 1 -> 3 *)
+      eexists S1S1. left. apply: TraceStepSome; [constructor|]. by constructor.
+Qed.
+
+(*   1
+      /- 2 (done)
+  1 --
+      \- 3 ---- 4 (stuck)
+     2      3
+ *)
+
+Inductive stuck2_state := | S2S1 | S2S2 | S2S3 | S2S4.
+Inductive stuck2_step : stuck2_state → option nat → stuck2_state → Prop :=
+| S2_1To2: stuck2_step S2S1 (Some 1) S2S2
+| S2_1To3: stuck2_step S2S1 (Some 2) S2S3
+| S2_3To4: stuck2_step S2S3 (Some 3) S2S4.
+Definition mod_stuck2 : module nat := {|
+  m_state := stuck2_state;
+  m_initial := S2S1;
+  m_step := stuck2_step;
+  m_is_ub s:= s = S2S4;
+|}.
+
+Definition stuck2_inv (σ1 : stuck2_state) (σ2 : stuck1_state) :=
+  (* We could prove an even stronger invariant with also σ1 ≠ S2S3
+  since we don't need to reestablish it for a stuck source state. *)
+  σ1 ≠ S2S4 ∧
+  σ2 = match σ1 with | S2S1 => S1S1 | S2S2 => S1S2 | S2S3 => S1S3 | S2S4 => S1S1 end.
+
+Lemma test_refines_stuck2 :
+  refines mod_stuck2 mod_stuck1.
+Proof.
+  apply: (inv_implies_refines mod_stuck2 mod_stuck1 stuck2_inv).
+  - done.
+  - move => [] ?[??] => //.
+  - move => σi1 σs1 σi2 e [? ->] ?. inv_step.
+    + (* 1 -> 2 *) eexists _. right. split => //. apply: TraceStepSome; last by constructor. constructor.
+    + (* 1 -> 3 *) eexists _. right. split => //. apply: TraceStepSome; last by constructor. constructor.
+    + (* 3 -> 4 *) eexists S1S2. left. by apply: TraceUb.
+Qed.
+
+Lemma test_refines_stuck2_wp :
+  refines mod_stuck2 mod_stuck1.
+Proof.
+  apply: wp_implies_refines => n.
+  (* S2S1 *)
+  constructor.
+  split => // σ2 ????. inv_step.
+  - (* S2S2 *)
+    eexists _. right. split. {
+      apply: TraceStepSome; last by constructor. constructor.
+    }
+    constructor.
+    split => // {}σ2 ????; inv_step.
+  - (* S2S3 *)
+    eexists _. right. split. {
+      apply: TraceStepSome; last by constructor. constructor.
+    }
+    constructor.
+    split => // {}σ2 ????.
+    eexists S1S1. left. by apply: TraceUb.
+Qed.
+
+(*   1       3
+      /- 2 ---- 4 (done)
+  1 --
+      \- 3 (stuck)
+     2
+ *)
+
+Inductive stuck3_state := | S3S1 | S3S2 | S3S3 | S3S4.
+Inductive stuck3_step : stuck3_state → option nat → stuck3_state → Prop :=
+| S3_1To2: stuck3_step S3S1 (Some 1) S3S2
+| S3_1To3: stuck3_step S3S1 (Some 2) S3S3
+| S3_2To4: stuck3_step S3S2 (Some 3) S3S4.
+Definition mod_stuck3 : module nat := {|
+  m_state := stuck3_state;
+  m_initial := S3S1;
+  m_step := stuck3_step;
+  m_is_ub s:= s = S3S3;
+|}.
+
+Definition stuck3_inv (σ1 : stuck3_state) (σ2 : stuck1_state) :=
+  σ1 ≠ S3S3 ∧
+  σ2 = match σ1 with | S3S1 => S1S1 | S3S2 => S1S2 | S3S3 => S1S3 | S3S4 => S1S2 end.
+
+(* The following is not provable: *)
+Lemma test_refines_stuck3 :
+  refines mod_stuck3 mod_stuck1.
+Proof.
+  apply: (inv_implies_refines mod_stuck3 mod_stuck1 stuck3_inv).
+  - done.
+  - move => [] ?[??] => //.
+  - move => σi1 σs1 σi2 e [? ->] ?. inv_step.
+    + (* 1 -> 2 *) eexists _. right. split => //. apply: TraceStepSome; last by constructor. constructor.
+    + (* 1 -> 3 *)
+      eexists S1S1. left. apply: TraceStepSome; [ constructor|]. by apply: TraceUb.
+    + (* 2 -> 4 *) eexists _. right. split => //. apply: TraceStepSome; last by constructor.
+      (* Not provable! *)
+Abort.
+
+
+Record call_event : Type := {
+  call_nat : nat;
+}.
+(*
+     Call 1
+  1 -------- 2
+ *)
+
+Inductive call1_step : bool → option call_event → bool → Prop :=
+| C1_1To2: call1_step false (Some ({| call_nat := 1 |})) true.
+Definition mod_call1 : module call_event := {|
+  m_state := bool;
+  m_initial := false;
+  m_step := call1_step;
+  m_is_ub s := False;
+|}.
+
+(*
+            -> Call n     1 + n
+  1 (done) ---------- 2 -------- 3
+ *)
+
+Inductive call2_state := | C2S1 | C2S2 (n : nat) | C2S3.
+Inductive call2_step : call2_state → option (call_event + nat) → call2_state → Prop :=
+| C2_1To2 cn: call2_step C2S1 (Some (inl cn)) (C2S2 cn.(call_nat))
+| C2_2To3 n: call2_step (C2S2 n) (Some (inr (1 + n))) C2S3.
+Definition mod_call2 : module _ := {|
+  m_state := call2_state;
+  m_initial := C2S1;
+  m_step := call2_step;
+  m_is_ub s := False;
+|}.
+
+Inductive call_merge_rel : option call_event → option (call_event + nat) → option nat → Prop :=
+| CallMergeCall ev:
+    call_merge_rel (Some ev) (Some (inl ev)) None
+| CallMergeOut n:
+    call_merge_rel None (Some (inr n)) (Some n).
+
+Definition call_merge_inv (σ1 : bool * call2_state) (σ2 : bool) :=
+  match σ1.1, σ1.2 with
+  | false, C2S3 => False
+  | false, C2S2 _ => False
+  | _, C2S2 n => n = 1
+  | _, _ => True
+  end ∧ σ2 = if σ1.2 is C2S3 then true else false.
+Lemma test_refines_call_merge :
+  refines (link mod_call1 mod_call2 call_merge_rel) mod1.
+Proof.
+  apply: (inv_implies_refines (link mod_call1 mod_call2 call_merge_rel) mod1 call_merge_inv).
+  - done.
+  - naive_solver.
+  - move => σi1 σs1 σi2 e [??] ?.
+    inv_step; match goal with | H : call_merge_rel _ _ _ |- _ => inversion H; clear H end; simplify_eq/=.
+    + (* mod_call2 *)
+      destruct σ1 => //. simplify_eq/=.
+      exists true. right. split => //.
+      apply: TraceStepSome; last by constructor. constructor.
+    + (* mod_call1 *)
+      exists false. right. split => //. by constructor.
+Qed.
+
+Definition call_split_inv (σ1 : bool) (σ2 : bool * call2_state) :=
+  if σ1 then True else σ2 = (false, C2S1).
+Lemma test_refines_call_split :
+  refines mod1 (link mod_call1 mod_call2 call_merge_rel).
+Proof.
+  apply: (inv_implies_refines mod1 (link mod_call1 mod_call2 call_merge_rel) call_split_inv).
+  - done.
+  - naive_solver.
+  - move => σi1 [σs1 σs2] σi2 e Hinv ?. inv_step.
+    exists (true, C2S3). right. split => //=.
+    apply: (TraceStepNone _ (link mod_call1 mod_call2 _) (true, C2S2 1)). {
+      apply: LinkStepBoth. 3: constructor. all: constructor.
+    }
+    apply: TraceStepSome. 2: by constructor.
+    apply: LinkStepR. constructor => //. simpl. constructor.
+Qed.
+
+Lemma test_refines_call_merge_wp :
+  refines (link mod_call1 mod_call2 call_merge_rel) mod1.
+Proof.
+  apply: (wp_implies_refines) => n.
+  constructor. split; [naive_solver|] => σi1 n' ? ? Hstep. subst.
+  inv_step; match goal with | H : call_merge_rel _ _ _ |- _ => inversion H; clear H end; simplify_eq/=.
+  exists false.
+  right. split. by constructor.
+
+  constructor. split; [naive_solver|] => σi1 n' ? ? Hstep. subst.
+  inv_step; match goal with | H : call_merge_rel _ _ _ |- _ => inversion H; clear H end; simplify_eq/=.
+  exists true.
+  right. split. { apply: TraceStepSome; last by constructor. constructor. }
+
+  constructor. split; [naive_solver|] => σi1 n' ? ? Hstep. subst.
+  inv_step; match goal with | H : call_merge_rel _ _ _ |- _ => inversion H; clear H end; simplify_eq/=.
+Qed.
+
+Lemma test_refines_call_split_wp :
+  refines mod1 (link mod_call1 mod_call2 call_merge_rel).
+Proof.
+  apply: (wp_implies_refines) => n.
+  constructor. split; [naive_solver|] => σi1 n' ? ? Hstep. subst.
+  inv_step.
+  exists (true, C2S3). right.
+  split. {
+    apply: (TraceStepNone _ (link mod_call1 mod_call2 _) (true, C2S2 1)). {
+      apply: LinkStepBoth. 3: constructor. all: constructor.
+    }
+    apply: TraceStepSome. 2: by constructor.
+    apply: LinkStepR. constructor => //. simpl. constructor.
+  }
+
+  constructor. split; [naive_solver|] => σi1 n' ? ? Hstep. subst.
+  inv_step.
+Qed.
+
+End test.
 End version7.
 
 (*** Other versions *)
