@@ -49,6 +49,11 @@ Lemma TraceStepSome {EV} κs (m : module EV) σ2 σ1 σ3 κ :
   has_trace m σ1 (Vis κ :: κs) σ3.
 Proof. move => ??. by apply: (TraceStep _ _ _ _ (Some _)). Qed.
 
+Lemma TraceUbRefl {EV} (m : module EV) σ κs :
+  m.(m_is_ub) σ →
+  has_trace m σ κs σ.
+Proof. move => ?. by apply: TraceUb. Qed.
+
 Lemma has_trace_trans {EV} κs1 κs2 (m : module EV) σ1 σ2 σ3 :
   has_trace m σ1 κs1 σ2 →
   has_trace m σ2 κs2 σ3 →
