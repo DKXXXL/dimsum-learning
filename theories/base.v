@@ -15,3 +15,14 @@ Proof.
 Qed.
 
 Record wrap A := Wrap { a : A }.
+
+Ltac destruct_hyps :=
+  simplify_eq/=;
+  repeat (
+      lazymatch goal with
+      | H : (_ * _) |- _ => destruct H as [??]
+      | H : unit |- _ => destruct H
+      | H : ∃ x, _ |- _ => destruct H as [??]
+      | H : _ ∧ _ |- _ => destruct H as [??]
+      end; simplify_eq/=
+    ).

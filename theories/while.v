@@ -1,6 +1,7 @@
 Require Import refframe.base.
 Require Import stdpp.gmap.
 Require Import stdpp.strings.
+Require Import stdpp.propset.
 Require Import refframe.module.
 
 Import version7.
@@ -33,6 +34,7 @@ Record while_state : Type := {
   ws_call_stack : list (while_fnstate * bool * var_name);
   ws_fns : gmap string while_fndef;
 }.
+Global Instance while_state_inhabited : Inhabited while_state := populate {| ws_cur := WWaiting; ws_call_stack := []; ws_fns := ∅; |}.
 
 Inductive while_event : Type :=
 | WCallEvt (fn : string) (args: list Z) | WRetEvt (ret: Z)
@@ -111,7 +113,9 @@ Inductive while_step : while_state → option while_event → while_state → Pr
                 ws_call_stack := stack; ws_fns := fns; |}
 .
 
-Definition while_module (fns: gmap string while_fndef) : module while_event := {|
+Definition while_fns := gmap string while_fndef.
+
+Definition while_module (fns: while_fns) : module while_event := {|
   m_state := while_state;
   m_initial := {|
     ws_cur := WWaiting;
@@ -121,6 +125,155 @@ Definition while_module (fns: gmap string while_fndef) : module while_event := {
   m_step := while_step;
   m_is_ub σ := ¬ ∃ e σ', while_step σ e σ';
 |}.
+
+Definition while_link (fns1 fns2 : while_fns) : while_fns := fns1 ∪ fns2.
+
+Definition while_ctx_refines (fnsi fnss : while_fns) :=
+  ∀ C, refines (while_module (while_link fnsi C)) (while_module (while_link fnss C)).
+
+Definition while_link_mediator : link_mediator while_event while_event while_event := {|
+  lm_state := bool; (* in left? *)
+  lm_initial := true;
+  lm_step _ _ _ _ _:= True;
+|}.
+
+Definition while_link_inv (σ3 σ1 σ2: while_state) (σm : bool) : Prop :=
+ (σ3.(ws_fns) = σ1.(ws_fns) ∪ σ2.(ws_fns))
+ ∧ (
+   (σ3.(ws_cur) = WWaiting ∧ σ1.(ws_cur) = WWaiting ∧ σ2.(ws_cur) = WWaiting)
+ ∨ (∃ code, σ3.(ws_cur) = WInFn code ∧ ((σ1.(ws_cur) = WInFn code ∧ σ2.(ws_cur) = WWaiting) ∨ (σ1.(ws_cur) = WWaiting ∧ σ2.(ws_cur) = WInFn code)))
+).
+
+Lemma all_states_in_equiv_forall {A B} R a e (Φ : A → B → Prop) :
+  (∀ x, x ∈ a → ∃ y, y ∈ e ∧ R x y) →
+  (∀ y, y ∈ e → ∃ x, x ∈ a ∧ R x y) →
+  (∀ x y, x ∈ a → y ∈ e → R x y → Φ x y) →
+  all_states_in_equiv a e Φ.
+Proof. move => Hin. split => ?; naive_solver. Qed.
+
+Lemma all_states_in_equiv_forall_id {A B} a e (Φ : A → B → Prop) :
+  ((∃ x, x ∈ a) ↔ (∃ y, y ∈ e)) →
+  (∀ x y, x ∈ a → y ∈ e → Φ x y) →
+  all_states_in_equiv a e Φ.
+Proof. move => Hin. split => ?; naive_solver. Qed.
+
+Lemma all_states_in_remove_ub {A B} (Φ : A → B → Prop) P1 P2 (Q1 Q2 : Prop) `{!Inhabited B} :
+  (∀ x y, Q1 → Q2 → Φ x y) →
+  (Q1 → Q2) →
+  all_states_in P1 P2 Φ →
+  all_states_in (P1 ∪ {[ _ | Q1 ]}) (P2 ∪ {[ _ | Q2 ]}) Φ.
+Proof.
+  move => HΦ Hub Hin x [/Hin | Hub1]; [ set_solver|]. move: (Hub1) => /Hub ?.
+  eexists inhabitant. split; [ set_solver|]. apply: HΦ; set_solver.
+Qed.
+
+Lemma all_states_in_equiv_remove_ub {A B} (Φ : A → B → Prop) P1 P2 (Q1 Q2 : Prop) `{!Inhabited A} `{!Inhabited B} :
+  (∀ x y, Q1 → Q2 → Φ x y) →
+  (Q1 ↔ Q2) →
+  all_states_in_equiv P1 P2 Φ →
+  all_states_in_equiv (P1 ∪ {[ _ | Q1 ]}) (P2 ∪ {[ _ | Q2 ]}) Φ.
+Proof. move => HΦ Hub [? ?]. split; apply: all_states_in_remove_ub; naive_solver. Qed.
+
+Lemma all_states_in_equiv_ub {A B} (Φ : A → B → Prop) P1 P2 (Q1 Q2 : Prop) `{!Inhabited A} `{!Inhabited B} :
+  (∀ x y, Q1 → Q2 → Φ x y) →
+  Q1 → Q2 →
+  all_states_in_equiv (P1 ∪ {[ _ | Q1 ]}) (P2 ∪ {[ _ | Q2 ]}) Φ.
+Proof. move => HΦ Hub1 Hub2. split => ??; eexists inhabitant; set_solver. Qed.
+
+Lemma while_link_ok fns1 fns2:
+  refines_equiv (while_module (while_link fns1 fns2)) (link (while_module fns1) (while_module fns2) while_link_mediator).
+Proof.
+  apply (next_states_implies_refines_equiv (while_module _) (link (while_module _) (while_module _) while_link_mediator) (curry ∘ curry ∘ while_link_inv)). { split => //. left. done. }
+  move => [cur3 sk3 f3] [[[cur1 sk1 f1] [cur2 sk2 f2]] σm] /= [ /= -> [[-> [-> ->]]|[[env stmts] [-> [[-> ->]|[-> ->]]]]]].
+  - apply: all_states_in_equiv_remove_ub => /=.
+    1: naive_solver.
+    admit.
+    apply all_states_in_equiv_forall_id. admit.
+    move => [??] [??] [? [??]] [? [??]]; simplify_eq/=. right.
+    invert_all while_step.
+    admit.
+    admit.
+  - destruct stmts as [|[]].
+    + apply: all_states_in_equiv_ub; [naive_solver |..]; [|left]; move => [?[??]]; invert_all while_step.
+    + apply: all_states_in_equiv_remove_ub => /=.
+      1: naive_solver. {
+        split => [Hn |[Hn|Hn]]; [left|..]; contradict Hn; move: Hn => [?[??]]; invert_all while_step.
+        all: eexists _, _; by econstructor.
+      }
+      apply (all_states_in_equiv_forall (λ eσ1 eσ2, eσ1.1 = eσ2.1)). {
+        move => [??] [/=?[? ?]]. invert_all while_step. eexists (_, _). split => //.
+        eexists _. split => //=. by apply fmap_None. by apply: LinkStepL; [ econstructor|].
+      } {
+        move => [??] [/=?[? ?]]. invert_all @link_step; invert_all while_step; destruct_hyps.
+        eexists (_, _). split => //. eexists _. split => //=. by apply fmap_None. by econstructor.
+        admit.
+        admit.
+      }
+      move => [??] [??] [? [??]] [? [??]]; simplify_eq/= => ?. right.
+      invert_all @link_step; invert_all while_step.
+      split => //. right. split; naive_solver.
+      admit.
+      admit.
+    + apply: all_states_in_equiv_remove_ub => /=.
+      1: naive_solver. {
+        split => [Hn |[Hn|Hn]]; [left|..]; contradict Hn; move: Hn => [?[??]]; invert_all while_step.
+        all: eexists _, _; by econstructor.
+      }
+      apply all_states_in_equiv_forall_id. admit.
+      move => [??] [??] [? [??]] [? [??]]; simplify_eq/=. right.
+      invert_all while_step.
+      admit.
+    + apply: all_states_in_equiv_remove_ub => /=.
+      1: naive_solver. {
+        split => [Hn |[Hn|Hn]]; [left|..]; contradict Hn; move: Hn => [?[??]]; invert_all while_step.
+        all: admit.
+      }
+      apply all_states_in_equiv_forall_id. admit.
+      move => [??] [??] [? [??]] [? [??]]; simplify_eq/=. right.
+      invert_all while_step.
+      admit.
+      admit.
+    + apply: all_states_in_equiv_remove_ub => /=.
+      1: naive_solver. {
+        split => [Hn |[Hn|Hn]]; [left|..]; contradict Hn; move: Hn => [?[??]]; invert_all while_step.
+        all: eexists _, _; by econstructor.
+      }
+      apply all_states_in_equiv_forall_id. admit.
+      move => [??] [??] [? [??]] [? [??]]; simplify_eq/=. right.
+      invert_all while_step.
+      admit.
+    + apply: all_states_in_equiv_remove_ub => /=.
+      1: naive_solver. {
+        split => [Hn |[Hn|Hn]]; [left|..]; contradict Hn; move: Hn => [?[??]]; invert_all while_step.
+        all: eexists _, _; by econstructor.
+      }
+      apply all_states_in_equiv_forall_id. admit.
+      move => [??] [??] [? [??]] [? [??]]; simplify_eq/=. right.
+      invert_all while_step.
+      admit.
+    + apply: all_states_in_equiv_remove_ub => /=.
+      1: naive_solver. {
+        split => [Hn |[Hn|Hn]]; [left|..]; contradict Hn; move: Hn => [?[??]]; invert_all while_step.
+        all: admit.
+      }
+      apply all_states_in_equiv_forall_id. admit.
+      move => [??] [??] [? [??]] [? [??]]; simplify_eq/=. right.
+      invert_all while_step.
+      admit.
+      admit.
+  - admit.
+Admitted.
+
+Lemma refines_implies_while_ctx_refines fnsi fnss :
+  refines (while_module fnsi) (while_module fnss) →
+  while_ctx_refines fnsi fnss.
+Proof.
+  move => Href C.
+  apply: refines_vertical; [apply while_link_ok|].
+  apply: refines_vertical; [|apply while_link_ok].
+  apply: refines_horizontal; [|apply refines_reflexive].
+  apply: Href.
+Qed.
 
 
 Module test.
