@@ -131,17 +131,19 @@ Definition while_link (fns1 fns2 : while_fns) : while_fns := fns1 ∪ fns2.
 Definition while_ctx_refines (fnsi fnss : while_fns) :=
   ∀ C, refines (while_module (while_link fnsi C)) (while_module (while_link fnss C)).
 
+Inductive while_link_mediator_state : Type := | WMSWait | WMSLeft | WMSRight.
+Global Instance while_link_mediator_state_inhabited : Inhabited while_link_mediator_state := populate WMSWait.
 Definition while_link_mediator : link_mediator while_event while_event while_event := {|
-  lm_state := bool; (* in left? *)
-  lm_initial := true;
+  lm_state := while_link_mediator_state;
+  lm_initial := WMSWait;
   lm_step _ _ _ _ _:= True;
 |}.
 
-Definition while_link_inv (σ3 σ1 σ2: while_state) (σm : bool) : Prop :=
+Definition while_link_inv (σ3 σ1 σ2: while_state) (σm : while_link_mediator_state) : Prop :=
  (σ3.(ws_fns) = σ1.(ws_fns) ∪ σ2.(ws_fns))
  ∧ (
-   (σ3.(ws_cur) = WWaiting ∧ σ1.(ws_cur) = WWaiting ∧ σ2.(ws_cur) = WWaiting)
- ∨ (∃ code, σ3.(ws_cur) = WInFn code ∧ ((σ1.(ws_cur) = WInFn code ∧ σ2.(ws_cur) = WWaiting) ∨ (σ1.(ws_cur) = WWaiting ∧ σ2.(ws_cur) = WInFn code)))
+   (σ3.(ws_cur) = WWaiting ∧ σ1.(ws_cur) = WWaiting ∧ σ2.(ws_cur) = WWaiting ∧ σm = WMSWait)
+ ∨ (∃ code, σ3.(ws_cur) = WInFn code ∧ ((σ1.(ws_cur) = WInFn code ∧ σ2.(ws_cur) = WWaiting ∧ σm = WMSLeft) ∨ (σ1.(ws_cur) = WWaiting ∧ σ2.(ws_cur) = WInFn code ∧ σm = WMSRight)))
 ).
 
 Lemma all_states_in_equiv_forall {A B} R a e (Φ : A → B → Prop) :
@@ -184,7 +186,7 @@ Lemma while_link_ok fns1 fns2:
   refines_equiv (while_module (while_link fns1 fns2)) (link (while_module fns1) (while_module fns2) while_link_mediator).
 Proof.
   apply (next_states_implies_refines_equiv (while_module _) (link (while_module _) (while_module _) while_link_mediator) (curry ∘ curry ∘ while_link_inv)). { split => //. left. done. }
-  move => [cur3 sk3 f3] [[[cur1 sk1 f1] [cur2 sk2 f2]] σm] /= [ /= -> [[-> [-> ->]]|[[env stmts] [-> [[-> ->]|[-> ->]]]]]].
+  move => [cur3 sk3 f3] [[[cur1 sk1 f1] [cur2 sk2 f2]] σm] /=[ /= -> [?|[[env stmts] [? [?|?]]]]]; destruct_hyps.
   - apply: all_states_in_equiv_remove_ub => /=.
     1: naive_solver.
     admit.
