@@ -24,14 +24,20 @@ Record while_fndef : Type := {
   wf_body : list wstmt;
 }.
 Record while_fnstate : Type := {
+  wf_name : string;
   wf_env : gmap var_name Z;
   wf_stmts : list wstmt;
+}.
+Record while_stack_frame : Type := {
+  ws_fnstate : while_fnstate;
+  ws_internal : bool;
+  ws_ret_var : var_name;
 }.
 Inductive while_state_kind :=
 | WInFn (fn : while_fnstate) | WWaiting | WUb.
 Record while_state : Type := {
   ws_cur : while_state_kind;
-  ws_call_stack : list (while_fnstate * bool * var_name);
+  ws_call_stack : list while_stack_frame;
   ws_fns : gmap string while_fndef;
 }.
 Global Instance while_state_inhabited : Inhabited while_state := populate {| ws_cur := WWaiting; ws_call_stack := []; ws_fns := ∅; |}.
@@ -42,75 +48,95 @@ Inductive while_event : Type :=
 
 
 Inductive while_step : while_state → option while_event → while_state → Prop :=
-| WSAssignConst fns stack env S d c:
-  while_step {| ws_cur := WInFn ({| wf_env := env; wf_stmts := WAssignConst d c :: S|});
+| WSAssignConst fns stack env S d c cf:
+  while_step {| ws_cur := WInFn ({| wf_env := env; wf_stmts := WAssignConst d c :: S; wf_name := cf|});
                 ws_call_stack := stack; ws_fns := fns; |} None
-             {| ws_cur := WInFn ({| wf_env := <[d := c]>env; wf_stmts := S|});
+             {| ws_cur := WInFn ({| wf_env := <[d := c]>env; wf_stmts := S; wf_name := cf|});
                 ws_call_stack := stack; ws_fns := fns; |}
-| WSAssignOp fns stack env S d o v1 v2 res c1 c2:
+| WSAssignOp fns stack env S d o v1 v2 res c1 c2 cf:
     env !! v1 = Some c1 → env !! v2 = Some c2 →
     res = match o with | WAddOp => c1 + c2 | WEqOp => if bool_decide (c1 = c2) then 1 else 0 end%Z →
-  while_step {| ws_cur := WInFn ({| wf_env := env; wf_stmts := WAssignOp d o v1 v2 :: S|});
+  while_step {| ws_cur := WInFn ({| wf_env := env; wf_stmts := WAssignOp d o v1 v2 :: S; wf_name := cf|});
                 ws_call_stack := stack; ws_fns := fns; |} None
-             {| ws_cur := WInFn ({| wf_env := <[d := res]>env; wf_stmts := S|});
+             {| ws_cur := WInFn ({| wf_env := <[d := res]>env; wf_stmts := S; wf_name := cf|});
                 ws_call_stack := stack; ws_fns := fns; |}
-| WSIf fns stack env S S' v c thn:
+| WSIf fns stack env S S' v c thn cf:
     env !! v = Some c →
     S' = (if bool_decide (c = 0) then S else thn)%Z →
-  while_step {| ws_cur := WInFn ({| wf_env := env; wf_stmts := WIf v thn :: S|});
+  while_step {| ws_cur := WInFn ({| wf_env := env; wf_stmts := WIf v thn :: S; wf_name := cf|});
                 ws_call_stack := stack; ws_fns := fns; |} None
-             {| ws_cur := WInFn ({| wf_env := env; wf_stmts := S'|});
+             {| ws_cur := WInFn ({| wf_env := env; wf_stmts := S'; wf_name := cf|});
                 ws_call_stack := stack; ws_fns := fns; |}
-| WSWhile fns stack env S v b body:
-  while_step {| ws_cur := WInFn ({| wf_env := env; wf_stmts := WWhile b v body :: S|});
+| WSWhile fns stack env S v b body cf:
+  while_step {| ws_cur := WInFn ({| wf_env := env; wf_stmts := WWhile b v body :: S; wf_name := cf|});
                 ws_call_stack := stack; ws_fns := fns; |} None
-             {| ws_cur := WInFn ({| wf_env := env; wf_stmts := b ++ WIf v (body ++ (WWhile b v body :: S)) :: S|});
+             {| ws_cur := WInFn ({| wf_env := env; wf_stmts := b ++ WIf v (body ++ (WWhile b v body :: S)) :: S ; wf_name := cf|});
                 ws_call_stack := stack; ws_fns := fns; |}
-| WSCall fns stack env S retname fn fnname args argnames:
-  fns !! fnname = Some fn →
+| WSCall fns stack env S retname fnname args argnames e σ' cf:
+  (if fns !! fnname is Some fn then e = None else e = (Some (WExtCallEvt fnname args))) →
+  (if fns !! fnname is Some fn then
+     σ' = WInFn ({| wf_env := list_to_map (zip fn.(wf_args) args); wf_stmts := fn.(wf_body); wf_name := fnname|})
+     ∧ length args = length fn.(wf_args)
+   else
+     σ' = WWaiting
+  ) →
   Forall2 (λ n v, env !! n = Some v) argnames args →
-  while_step {| ws_cur := WInFn ({| wf_env := env; wf_stmts := WCall retname fnname argnames :: S|});
-                ws_call_stack := stack; ws_fns := fns; |} None
-             {| ws_cur := WInFn ({| wf_env := list_to_map (zip fn.(wf_args) args); wf_stmts := fn.(wf_body)|});
-                ws_call_stack := ({| wf_env := env; wf_stmts := S|}, true, retname) :: stack; ws_fns := fns; |}
-| WSReturn ret fns env retname stack d denv S:
+  while_step {| ws_cur := WInFn ({| wf_env := env; wf_stmts := WCall retname fnname argnames :: S; wf_name := cf|});
+                ws_call_stack := stack; ws_fns := fns; |} e
+             {| ws_cur := σ';
+                ws_call_stack := ({| ws_fnstate := {| wf_env := env; wf_stmts := S; wf_name := cf|};
+                                     ws_internal := bool_decide (is_Some (fns !! fnname));
+                                     ws_ret_var := retname|}) :: stack; ws_fns := fns; |}
+| WSReturn ret fns env retname stack e σ' stk' cf:
     env !! retname = Some ret →
-  while_step {| ws_cur := WInFn ({| wf_env := env; wf_stmts := [WReturn retname]|});
-                ws_call_stack := ({| wf_env := denv; wf_stmts := S|}, true, d)::stack; ws_fns := fns; |} None
-             {| ws_cur := WInFn ({| wf_env := <[d := ret]>denv; wf_stmts := S|});
-                ws_call_stack := stack; ws_fns := fns; |}
+    (if stack is {| ws_fnstate := fs; ws_internal := true; ws_ret_var := d|}::stack' then
+       σ' = WInFn ({| wf_env := <[d := ret]>fs.(wf_env); wf_stmts := fs.(wf_stmts); wf_name := fs.(wf_name)|})
+       ∧ stk' = stack'
+       ∧ e = None
+     else
+       σ' = WWaiting
+       ∧ stk' = stack
+       ∧ e = Some (WDoneEvt ret)
+    ) →
+  while_step {| ws_cur := WInFn ({| wf_env := env; wf_stmts := [WReturn retname]; wf_name := cf|});
+                ws_call_stack := stack; ws_fns := fns; |} e
+             {| ws_cur := σ'; ws_call_stack := stk'; ws_fns := fns; |}
 (* The following are for interaction with the environment: *)
-| WSRecvCall args fn fns stack def:
-  fns !! fn = Some def →
-  length def.(wf_args) = length args →
+| WSRecvCall args fn fns stack def σ':
+    fns !! fn = Some def →
+    (* It is important to accept all events *)
+  (if bool_decide (length def.(wf_args) = length args) then
+    σ' = WInFn ({| wf_env := list_to_map (zip def.(wf_args) args); wf_stmts := def.(wf_body); wf_name := fn|})
+  else
+    σ' = WUb) →
   while_step {| ws_cur := WWaiting;
                 ws_call_stack := stack; ws_fns := fns; |} (Some (WCallEvt fn args))
-             {| ws_cur := WInFn ({| wf_env := list_to_map (zip def.(wf_args) args); wf_stmts := def.(wf_body)|});
+             {| ws_cur := σ';
                 ws_call_stack := stack; ws_fns := fns; |}
 | WSRecvRet ret fns stack st:
-    st = match stack with
-         | ({| wf_env := denv; wf_stmts := stmts|}, false, d)::_ =>
-           WInFn ({| wf_env := <[d := ret]>denv; wf_stmts := stmts|})
-         | _ => WUb
-         end →
+    st = (if stack is {| ws_fnstate := fs; ws_internal := false; ws_ret_var := d|}::stack' then
+            WInFn ({| wf_env := <[d := ret]>fs.(wf_env); wf_stmts := fs.(wf_stmts); wf_name := fs.(wf_name)|})
+          else
+            WUb
+    ) →
   while_step {| ws_cur := WWaiting;
                 ws_call_stack := stack; ws_fns := fns; |} (Some (WRetEvt ret))
              {| ws_cur := st;
                 ws_call_stack := tail stack; ws_fns := fns; |}
-| WSExtCall fns stack env S retname fnname args argnames:
-  fns !! fnname = None →
-  Forall2 (λ n v, env !! n = Some v) argnames args →
-  while_step {| ws_cur := WInFn ({| wf_env := env; wf_stmts := WCall retname fnname argnames :: S|});
-                ws_call_stack := stack; ws_fns := fns; |} (Some (WExtCallEvt fnname args))
-             {| ws_cur := WWaiting;
-                ws_call_stack := ({| wf_env := env; wf_stmts := S|}, false, retname) :: stack; ws_fns := fns; |}
-| WSDone ret fns env retname stack:
-    env !! retname = Some ret →
-    match stack with | [] | (_, false, _) :: _ => True | _ => False end →
-  while_step {| ws_cur := WInFn ({| wf_env := env; wf_stmts := [WReturn retname]|});
-                ws_call_stack := stack; ws_fns := fns; |} (Some (WDoneEvt ret))
-             {| ws_cur := WWaiting;
-                ws_call_stack := stack; ws_fns := fns; |}
+(* | WSExtCall fns stack env S retname fnname args argnames: *)
+(*   fns !! fnname = None → *)
+(*   Forall2 (λ n v, env !! n = Some v) argnames args → *)
+(*   while_step {| ws_cur := WInFn ({| wf_env := env; wf_stmts := WCall retname fnname argnames :: S|}); *)
+(*                 ws_call_stack := stack; ws_fns := fns; |} (Some (WExtCallEvt fnname args)) *)
+(*              {| ws_cur := WWaiting; *)
+(*                 ws_call_stack := ({| wf_env := env; wf_stmts := S|}, false, retname) :: stack; ws_fns := fns; |} *)
+(* | WSDone ret fns env retname stack: *)
+(*     env !! retname = Some ret → *)
+(*     match stack with | [] | (_, false, _) :: _ => True | _ => False end → *)
+(*   while_step {| ws_cur := WInFn ({| wf_env := env; wf_stmts := [WReturn retname]|}); *)
+(*                 ws_call_stack := stack; ws_fns := fns; |} (Some (WDoneEvt ret)) *)
+(*              {| ws_cur := WWaiting; *)
+(*                 ws_call_stack := stack; ws_fns := fns; |} *)
 .
 
 Definition while_fns := gmap string while_fndef.
@@ -129,153 +155,480 @@ Definition while_module (fns: while_fns) : module while_event := {|
 Definition while_link (fns1 fns2 : while_fns) : while_fns := fns1 ∪ fns2.
 
 Definition while_ctx_refines (fnsi fnss : while_fns) :=
+  (* TODO: Should this maybe be: ∀ C, C ##ₘ fnss → C ##ₘ fnsi ∧ refines (while_module (while_link fnsi C)) (while_module (while_link fnss C)) ? Or fns and fnsi swapped? *)
   ∀ C, refines (while_module (while_link fnsi C)) (while_module (while_link fnss C)).
 
-Inductive while_link_mediator_state : Type := | WMSWait | WMSLeft | WMSRight.
-Global Instance while_link_mediator_state_inhabited : Inhabited while_link_mediator_state := populate WMSWait.
-Definition while_link_mediator : link_mediator while_event while_event while_event := {|
+Inductive while_link_mediator_state_kind : Type := | WMSWait | WMSSide (l : bool).
+Record while_link_mediator_state : Type := {
+  wlm_cur : while_link_mediator_state_kind;
+  wlm_stack : list (bool * bool);
+}.
+Global Instance while_link_mediator_state_inhabited : Inhabited while_link_mediator_state := populate {| wlm_cur := WMSWait; wlm_stack := inhabitant |}.
+Inductive while_link_mediator_step (fns1 fns2 : gset string) : while_link_mediator_state → option while_event → option while_event → option while_event → while_link_mediator_state → Prop :=
+| WLMCallLeftToOut fnname args stack:
+    fnname ∉ fns2 →
+    while_link_mediator_step fns1 fns2 {| wlm_cur := WMSSide true; wlm_stack := stack |}
+      (Some (WExtCallEvt fnname args)) None (Some (WExtCallEvt fnname args))
+      {| wlm_cur := WMSWait; wlm_stack := (true, false)::stack |}
+| WLMCallRightToOut fnname args stack:
+    fnname ∉ fns1 →
+    while_link_mediator_step fns1 fns2 {| wlm_cur := WMSSide false; wlm_stack := stack |}
+      None (Some (WExtCallEvt fnname args)) (Some (WExtCallEvt fnname args))
+      {| wlm_cur := WMSWait; wlm_stack := (false, false)::stack |}
+| WLMCallLeftToRight fnname args stack:
+    fnname ∈ fns2 →
+    while_link_mediator_step fns1 fns2 {| wlm_cur := WMSSide true; wlm_stack := stack |}
+      (Some (WExtCallEvt fnname args)) (Some (WCallEvt fnname args)) None
+      {| wlm_cur := WMSSide false; wlm_stack := (true, true)::stack |}
+| WLMCallRightToLeft fnname args stack:
+    fnname ∈ fns1 →
+    while_link_mediator_step fns1 fns2 {| wlm_cur := WMSSide false; wlm_stack := stack |}
+      (Some (WCallEvt fnname args)) (Some (WExtCallEvt fnname args)) None
+      {| wlm_cur := WMSSide true; wlm_stack := (false, true)::stack |}
+| WLMDoneLeftOut retval stack:
+    (if stack is (_, true)::_ then False else True) →
+    while_link_mediator_step fns1 fns2 {| wlm_cur := WMSSide true; wlm_stack := stack |}
+      (Some (WDoneEvt retval)) None (Some (WDoneEvt retval))
+      {| wlm_cur := WMSWait; wlm_stack := stack |}
+| WLMDoneRightOut retval stack:
+    (if stack is (_, true)::_ then False else True) →
+    while_link_mediator_step fns1 fns2 {| wlm_cur := WMSSide false; wlm_stack := stack |}
+      None (Some (WDoneEvt retval)) (Some (WDoneEvt retval))
+      {| wlm_cur := WMSWait; wlm_stack := stack |}
+| WLMDoneLeftToRight retval stack stack':
+    (if stack is (_, true)::s' then stack' = s' else False) →
+    while_link_mediator_step fns1 fns2 {| wlm_cur := WMSSide true; wlm_stack := stack |}
+      (Some (WDoneEvt retval)) (Some (WRetEvt retval)) None
+      {| wlm_cur := WMSSide false; wlm_stack := stack' |}
+| WLMDoneRightToLeft retval stack stack':
+    (if stack is (_, true)::s' then stack' = s' else False) →
+    while_link_mediator_step fns1 fns2 {| wlm_cur := WMSSide false; wlm_stack := stack |}
+      (Some (WRetEvt retval)) (Some (WDoneEvt retval)) None
+      {| wlm_cur := WMSSide true; wlm_stack := stack' |}
+| WLMRecvCallLeft fnname args stack:
+    fnname ∈ fns1 →
+    while_link_mediator_step fns1 fns2 {| wlm_cur := WMSWait; wlm_stack := stack |}
+      (Some (WCallEvt fnname args)) None (Some (WCallEvt fnname args))
+      {| wlm_cur := WMSSide true; wlm_stack := stack |}
+| WLMRecvCallRight fnname args stack:
+    fnname ∈ fns2 →
+    while_link_mediator_step fns1 fns2 {| wlm_cur := WMSWait; wlm_stack := stack |}
+      None (Some (WCallEvt fnname args)) (Some (WCallEvt fnname args))
+      {| wlm_cur := WMSSide false; wlm_stack := stack |}
+| WLMRecvRetLeft s retval stack:
+    s.1 = true →
+    while_link_mediator_step fns1 fns2 {| wlm_cur := WMSWait; wlm_stack := s::stack |}
+      (Some (WRetEvt retval)) None (Some (WRetEvt retval))
+      {| wlm_cur := WMSSide s.1; wlm_stack := stack |}
+| WLMRecvRetRight s retval stack:
+    s.1 = false →
+    while_link_mediator_step fns1 fns2 {| wlm_cur := WMSWait; wlm_stack := s::stack |}
+      None (Some (WRetEvt retval)) (Some (WRetEvt retval))
+      {| wlm_cur := WMSSide s.1; wlm_stack := stack |}
+.
+Definition while_link_mediator (fns1 fns2 : gset string) : link_mediator while_event while_event while_event := {|
   lm_state := while_link_mediator_state;
-  lm_initial := WMSWait;
-  lm_step _ _ _ _ _:= True;
+  lm_initial := {| wlm_cur := WMSWait ; wlm_stack := [] |};
+  lm_step := while_link_mediator_step fns1 fns2;
 |}.
 
-Definition while_link_inv (σ3 σ1 σ2: while_state) (σm : while_link_mediator_state) : Prop :=
- (σ3.(ws_fns) = σ1.(ws_fns) ∪ σ2.(ws_fns))
- ∧ (
-   (σ3.(ws_cur) = WWaiting ∧ σ1.(ws_cur) = WWaiting ∧ σ2.(ws_cur) = WWaiting ∧ σm = WMSWait)
- ∨ (∃ code, σ3.(ws_cur) = WInFn code ∧ ((σ1.(ws_cur) = WInFn code ∧ σ2.(ws_cur) = WWaiting ∧ σm = WMSLeft) ∨ (σ1.(ws_cur) = WWaiting ∧ σ2.(ws_cur) = WInFn code ∧ σm = WMSRight)))
-).
+Fixpoint while_link_proj_state_stack (has_stack : list bool) (stack : list while_stack_frame) : list while_stack_frame :=
+  match has_stack, stack with
+  | true::has_stack', s::stack' => s :: while_link_proj_state_stack has_stack' stack'
+  | false::has_stack', s::stack' => while_link_proj_state_stack has_stack' stack'
+  | _, _ => []
+  end.
 
-Lemma all_states_in_equiv_forall {A B} R a e (Φ : A → B → Prop) :
-  (∀ x, x ∈ a → ∃ y, y ∈ e ∧ R x y) →
-  (∀ y, y ∈ e → ∃ x, x ∈ a ∧ R x y) →
-  (∀ x y, x ∈ a → y ∈ e → R x y → Φ x y) →
-  all_states_in_equiv a e Φ.
-Proof. move => Hin. split => ?; naive_solver. Qed.
+Definition while_link_proj_state' (fns : while_fns) (σ : while_state) (is_cur : bool) (has_stack : list bool) : while_state := {|
+  ws_cur := if σ.(ws_cur) is WWaiting then WWaiting else if is_cur then σ.(ws_cur) else WWaiting;
+  ws_call_stack := while_link_proj_state_stack has_stack σ.(ws_call_stack);
+  ws_fns := fns;
+|}.
 
-Lemma all_states_in_equiv_forall_id {A B} a e (Φ : A → B → Prop) :
-  ((∃ x, x ∈ a) ↔ (∃ y, y ∈ e)) →
-  (∀ x y, x ∈ a → y ∈ e → Φ x y) →
-  all_states_in_equiv a e Φ.
-Proof. move => Hin. split => ?; naive_solver. Qed.
+Fixpoint while_link_proj_med_stack (has_stack : list bool) (stack : list while_stack_frame) : list (bool * bool) :=
+  match has_stack, stack with
+  | b::has_stack', s::stack' => (b, s.(ws_internal)) :: while_link_proj_med_stack has_stack' stack'
+  | _, _ => []
+  end.
+Definition while_link_proj_med' (σ3 : while_state) (is_cur : bool) (has_stack : list bool) : while_link_mediator_state := {|
+  wlm_cur := if σ3.(ws_cur) is WWaiting then WMSWait else WMSSide is_cur;
+  wlm_stack := while_link_proj_med_stack has_stack σ3.(ws_call_stack);
+|}.
 
-Lemma all_states_in_remove_ub {A B} (Φ : A → B → Prop) P1 P2 (Q1 Q2 : Prop) `{!Inhabited B} :
-  (∀ x y, Q1 → Q2 → Φ x y) →
-  (Q1 → Q2) →
-  all_states_in P1 P2 Φ →
-  all_states_in (P1 ∪ {[ _ | Q1 ]}) (P2 ∪ {[ _ | Q2 ]}) Φ.
+Definition while_link_inv' (fns1 fns2 : while_fns) (σ3 σ1 σ2: while_state) (σm : while_link_mediator_state) : Prop :=
+  ∃ cur_inl stack_inl,
+  length stack_inl = length σ3.(ws_call_stack) ∧
+  σ3.(ws_fns) = fns1 ∪ fns2 ∧
+  σ1 = while_link_proj_state' fns1 σ3 cur_inl stack_inl ∧
+  σ2 = while_link_proj_state' fns2 σ3 (negb cur_inl) (negb <$> stack_inl) ∧
+  σm = while_link_proj_med' σ3 cur_inl stack_inl
+ (* (σ3.(ws_fns) = σ1.(ws_fns) ∪ σ2.(ws_fns)) *)
+ (* ∧ ( *)
+ (*   (σ3.(ws_cur) = WWaiting ∧ σ1.(ws_cur) = WWaiting ∧ σ2.(ws_cur) = WWaiting ∧ σm = WMSWait) *)
+ (* ∨ (∃ code, σ3.(ws_cur) = WInFn code ∧ ((σ1.(ws_cur) = WInFn code ∧ σ2.(ws_cur) = WWaiting ∧ σm = WMSLeft) ∨ (σ1.(ws_cur) = WWaiting ∧ σ2.(ws_cur) = WInFn code ∧ σm = WMSRight))) *)
+.
+
+Lemma while_link_ok' fns1 fns2:
+  fns1 ##ₘ fns2 →
+  refines_equiv (while_module (while_link fns1 fns2)) (link (while_module fns1) (while_module fns2) (while_link_mediator (dom _ fns1) (dom _ fns2))).
 Proof.
-  move => HΦ Hub Hin x [/Hin | Hub1]; [ set_solver|]. move: (Hub1) => /Hub ?.
-  eexists inhabitant. split; [ set_solver|]. apply: HΦ; set_solver.
-Qed.
+  move => Hdisj.
+  have Hnotin1 : ∀ fn def, fns1 !! fn = Some def → fns2 !! fn = None. {
+    move: Hdisj => /map_disjoint_spec ? fn ??. destruct (fns2 !! fn) eqn: ? => //. naive_solver.
+  }
+  have Hnotin2 : ∀ fn def, fns2 !! fn = Some def → fns1 !! fn = None. {
+    move: Hdisj => /map_disjoint_spec ? fn ??. destruct (fns1 !! fn) eqn: ? => //. naive_solver.
+  }
+  apply (inv_implies_refines_equiv (while_module _) (link (while_module _) (while_module _) (while_link_mediator _ _)) (curry ∘ curry ∘ (while_link_inv' fns1 fns2))). { eexists true, []. split_and! => //. } {
+    move => [cur3 sk3 f3] [[? ?] ?] /= [cur_inl [stack_inl [/= ? [?[? [??]]]]]]. subst.
+    destruct cur3; simplify_eq/=.
+    + move => Hub.
+      eexists _. apply: TraceUbRefl => /=.
+      destruct cur_inl; [left | right]; contradict Hub.
+      all: move: Hub => [? [??]]; invert_all while_step; simplify_map_eq; try by eexists _, _; econstructor => //.
+      * destruct ((fns1 ∪ fns2) !! fnname) eqn: ?.
+        all: eexists _, _; econstructor => //; simplify_map_eq => //. split => //.
+        admit.
+      * destruct sk3 as [|[?[]?]?]; eexists _, _; econstructor => //.
+      * destruct ((fns1 ∪ fns2) !! fnname) eqn: ?.
+        all: eexists _, _; econstructor => //; simplify_map_eq => //. split => //.
+        admit.
+      * destruct sk3 as [|[?[]?]?]; eexists _, _; econstructor => //.
+    + move => Hx. contradict Hx. eexists _, _. by econstructor.
+    + move => ?. eexists (_, _, _). apply: TraceUb.
+      destruct cur_inl; [left|right] => /= -[?[??]]; invert_all while_step.
+  } {
+    move => [[? ?] ?] [cur3 sk3 f3] /= [cur_inl [stack_inl [/= ? [?[? [??]]]]]]. subst.
+    destruct cur3; simplify_eq/=.
+    + move => [|] Hub; eexists _; apply: TraceUbRefl => //=; contradict Hub; unfold while_link_proj_state' => /=; case_match; try by eexists _, _; econstructor.
+      all: move: Hub => [? [??]]; invert_all while_step; simplify_map_eq; try by eexists _, _; econstructor.
+      * destruct (fns1 !! fnname) eqn: ?; eexists _, _; econstructor => //; by simplify_map_eq.
+      * admit.
+      * destruct (fns2 !! fnname) eqn: ?; eexists _, _; econstructor => //; by simplify_map_eq.
+      * admit.
+    + move => [|] Hx; contradict Hx; eexists _, _; by econstructor.
+    + move => ?. eexists _. apply: TraceUb. move => /= -[?[??]]. invert_all while_step.
+  }
+  - move => [cur3 sk3 f3] [[? ?] ?] [? ? ?] ? /= [cur_inl [stack_inl [/= ? [?[? [??]]]]]] ?. subst.
+    destruct cur3; simplify_eq/=.
+    + invert_all while_step.
+      * right. set cur_inl' := cur_inl. destruct cur_inl.
+        all: eexists (_, _, _); split; [ | apply: TraceStepNone; [| by apply: TraceEnd] ; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq; by repeat econstructor].
+        all: eexists cur_inl', stack_inl; split_and! => //=; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq => //.
+      * right. set cur_inl' := cur_inl. destruct cur_inl.
+        all: eexists (_, _, _); split; [ | apply: TraceStepNone; [| by apply: TraceEnd] ; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq; by repeat econstructor].
+        all: eexists cur_inl', stack_inl; split_and! => //=; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq => //.
+      * right. set cur_inl' := cur_inl. destruct cur_inl.
+        all: eexists (_, _, _); split; [ | apply: TraceStepNone; [| by apply: TraceEnd] ; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq; by repeat econstructor].
+        all: eexists cur_inl', stack_inl; split_and! => //=; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq => //.
+      * right. set cur_inl' := cur_inl. destruct cur_inl.
+        all: eexists (_, _, _); split; [ | apply: TraceStepNone; [| by apply: TraceEnd] ; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq; by repeat econstructor].
+        all: eexists cur_inl', stack_inl; split_and! => //=; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq => //.
+      * (* Call *) case_match; destruct_and?; simplify_eq.
+        -- (* Call inside spec *)
+          right.
+          set old_cur_inl := cur_inl.
+          revert select ((_ ∪ _) !! _ = _) => /lookup_union_Some_raw [Hn1 |[? Hn2]]; [set cur_inl' :=true|set cur_inl' :=false]; destruct cur_inl.
+          all: eexists (_, _, _); split.
+          all: try ( apply: TraceStepNone; [ |by apply: TraceEnd]).
+          all: try by econstructor; [ by econstructor; simplify_map_eq|].
+          all: try (apply: LinkStepBoth; econstructor; simplify_map_eq => //; rewrite ?bool_decide_true ?elem_of_dom; naive_solver).
+          all: eexists cur_inl', (old_cur_inl :: stack_inl); split_and! => //=; try by f_equal.
+          all: rewrite /while_link_proj_state'/while_link_proj_med'/=; simplify_map_eq => //.
+          (* TODO: fix how the stack is computed: 1. remove duplicates in WMS stack 2. mark more stuff as internal *)
+          admit.
+          do 3 f_equal. admit.
+          do 3 f_equal. admit.
+          admit.
+        -- (* Call to outside *)
+          revert select ((_ ∪ _) !! _ = _) => /lookup_union_None[Hn1 Hn2].
+          right.
+          set cur_inl' := cur_inl. destruct cur_inl.
+          all: eexists (_, _, _); split.
+          all: try ( apply: TraceStepSome; [ |by apply: TraceEnd]).
+          all: try by econstructor; [by econstructor; simplify_map_eq|]; econstructor; by apply not_elem_of_dom.
+          all: eexists cur_inl', (cur_inl' :: stack_inl); split_and! => //.
+          all: try by simpl; f_equal.
+          all: rewrite /while_link_proj_state'/while_link_proj_med'/= ?Hn1 ?Hn2 //.
+      * (* Return *)
+        right.
+        set cur_inl' := cur_inl. destruct cur_inl;
+        destruct sk3 as [|[? [] ?]]; destruct_and?; simplify_eq; destruct stack_inl as [| new_cur_inl ] => //; simplify_eq/=.
 
-Lemma all_states_in_equiv_remove_ub {A B} (Φ : A → B → Prop) P1 P2 (Q1 Q2 : Prop) `{!Inhabited A} `{!Inhabited B} :
-  (∀ x y, Q1 → Q2 → Φ x y) →
-  (Q1 ↔ Q2) →
-  all_states_in_equiv P1 P2 Φ →
-  all_states_in_equiv (P1 ∪ {[ _ | Q1 ]}) (P2 ∪ {[ _ | Q2 ]}) Φ.
-Proof. move => HΦ Hub [? ?]. split; apply: all_states_in_remove_ub; naive_solver. Qed.
+        all: try (set new_cur_inl' := new_cur_inl; destruct new_cur_inl).
+        all: eexists (_, _, _); split.
+        all: try ( apply: TraceStepSome; [ |by apply: TraceEnd]).
+        all: try ( apply: TraceStepNone; [ |by apply: TraceEnd]).
+        all: try by econstructor; [by econstructor|]; by econstructor.
 
-Lemma all_states_in_equiv_ub {A B} (Φ : A → B → Prop) P1 P2 (Q1 Q2 : Prop) `{!Inhabited A} `{!Inhabited B} :
-  (∀ x y, Q1 → Q2 → Φ x y) →
-  Q1 → Q2 →
-  all_states_in_equiv (P1 ∪ {[ _ | Q1 ]}) (P2 ∪ {[ _ | Q2 ]}) Φ.
-Proof. move => HΦ Hub1 Hub2. split => ??; eexists inhabitant; set_solver. Qed.
+        eexists cur_inl', []. split_and! => //.
 
-Lemma while_link_ok fns1 fns2:
-  refines_equiv (while_module (while_link fns1 fns2)) (link (while_module fns1) (while_module fns2) while_link_mediator).
-Proof.
-  apply (next_states_implies_refines_equiv (while_module _) (link (while_module _) (while_module _) while_link_mediator) (curry ∘ curry ∘ while_link_inv)). { split => //. left. done. }
-  move => [cur3 sk3 f3] [[[cur1 sk1 f1] [cur2 sk2 f2]] σm] /=[ /= -> [?|[[env stmts] [? [?|?]]]]]; destruct_hyps.
-  - apply: all_states_in_equiv_remove_ub => /=.
-    1: naive_solver.
-    admit.
-    apply all_states_in_equiv_forall_id. admit.
-    move => [??] [??] [? [??]] [? [??]]; simplify_eq/=. right.
-    invert_all while_step.
-    admit.
-    admit.
-  - destruct stmts as [|[]].
-    + apply: all_states_in_equiv_ub; [naive_solver |..]; [|left]; move => [?[??]]; invert_all while_step.
-    + apply: all_states_in_equiv_remove_ub => /=.
-      1: naive_solver. {
-        split => [Hn |[Hn|Hn]]; [left|..]; contradict Hn; move: Hn => [?[??]]; invert_all while_step.
-        all: eexists _, _; by econstructor.
-      }
-      apply (all_states_in_equiv_forall (λ eσ1 eσ2, eσ1.1 = eσ2.1)). {
-        move => [??] [/=?[? ?]]. invert_all while_step. eexists (_, _). split => //.
-        eexists _. split => //=. by apply fmap_None. by apply: LinkStepL; [ econstructor|].
-      } {
-        move => [??] [/=?[? ?]]. invert_all @link_step; invert_all while_step; destruct_hyps.
-        eexists (_, _). split => //. eexists _. split => //=. by apply fmap_None. by econstructor.
+        eexists new_cur_inl', stack_inl. split_and! => //=.
+        rewrite /while_link_proj_state'/while_link_proj_med'/=; simplify_map_eq => //. admit.
+
+        2: {
+          apply: LinkStepBoth. econstructor. done. simpl. case_match. done. admit.
+          by apply: WSRecvRet. by econstructor.
+        }
+        simpl.
+
         admit.
         admit.
-      }
-      move => [??] [??] [? [??]] [? [??]]; simplify_eq/= => ?. right.
-      invert_all @link_step; invert_all while_step.
-      split => //. right. split; naive_solver.
-      admit.
-      admit.
-    + apply: all_states_in_equiv_remove_ub => /=.
-      1: naive_solver. {
-        split => [Hn |[Hn|Hn]]; [left|..]; contradict Hn; move: Hn => [?[??]]; invert_all while_step.
-        all: eexists _, _; by econstructor.
-      }
-      apply all_states_in_equiv_forall_id. admit.
-      move => [??] [??] [? [??]] [? [??]]; simplify_eq/=. right.
-      invert_all while_step.
-      admit.
-    + apply: all_states_in_equiv_remove_ub => /=.
-      1: naive_solver. {
-        split => [Hn |[Hn|Hn]]; [left|..]; contradict Hn; move: Hn => [?[??]]; invert_all while_step.
-        all: admit.
-      }
-      apply all_states_in_equiv_forall_id. admit.
-      move => [??] [??] [? [??]] [? [??]]; simplify_eq/=. right.
-      invert_all while_step.
-      admit.
-      admit.
-    + apply: all_states_in_equiv_remove_ub => /=.
-      1: naive_solver. {
-        split => [Hn |[Hn|Hn]]; [left|..]; contradict Hn; move: Hn => [?[??]]; invert_all while_step.
-        all: eexists _, _; by econstructor.
-      }
-      apply all_states_in_equiv_forall_id. admit.
-      move => [??] [??] [? [??]] [? [??]]; simplify_eq/=. right.
-      invert_all while_step.
-      admit.
-    + apply: all_states_in_equiv_remove_ub => /=.
-      1: naive_solver. {
-        split => [Hn |[Hn|Hn]]; [left|..]; contradict Hn; move: Hn => [?[??]]; invert_all while_step.
-        all: eexists _, _; by econstructor.
-      }
-      apply all_states_in_equiv_forall_id. admit.
-      move => [??] [??] [? [??]] [? [??]]; simplify_eq/=. right.
-      invert_all while_step.
-      admit.
-    + apply: all_states_in_equiv_remove_ub => /=.
-      1: naive_solver. {
-        split => [Hn |[Hn|Hn]]; [left|..]; contradict Hn; move: Hn => [?[??]]; invert_all while_step.
-        all: admit.
-      }
-      apply all_states_in_equiv_forall_id. admit.
-      move => [??] [??] [? [??]] [? [??]]; simplify_eq/=. right.
-      invert_all while_step.
-      admit.
-      admit.
-  - admit.
+        admit.
+        admit.
+        admit.
+        admit.
+        admit.
+        admit.
+        admit.
+        admit.
+        admit.
+    + invert_all while_step.
+      * (* Recv Call *)
+        right.
+        revert select ((_ ∪ _) !! _ = _) => /lookup_union_Some_raw [?|[??]]; [set cur_inl' :=true|set cur_inl' :=false].
+        all: case_bool_decide.
+        all: eexists (_, _, _); split.
+        all: try ( apply: TraceStepSome; [ |by apply: TraceEnd]).
+        all: try (econstructor; [econstructor;[done| first [ by rewrite bool_decide_true | by rewrite bool_decide_false] ]|]).
+        all: try (econstructor; apply elem_of_dom; naive_solver).
+        all: simplify_eq/=.
+        all: eexists cur_inl', stack_inl; split_and! => //.
+      * right. destruct sk3. admit.
+        destruct stack_inl as [|s stack_inl] => //; simplify_eq/=.
+        set s' := s. destruct s.
+        all: eexists (_, _, _); split.
+        all: try ( apply: (TraceStepSome); [ |by apply: TraceEnd]).
+        all: try by econstructor; [by apply: WSRecvRet|]; simpl; econstructor.
+        all: eexists s', stack_inl; split_and! => //.
+        all: rewrite /while_link_proj_state'/while_link_proj_med'/= //.
+        all: try by repeat case_match => //.
+    + invert_all while_step.
+  - move => [cur3 sk3 f3] [[? ?] ?] [[? ?] ?] ? /= [cur_inl [stack_inl [/= ? [?[? [??]]]]]] ?. subst.
+    destruct cur3; simplify_eq/=.
+    + set cur_inl' := cur_inl.
+      invert_all @link_step => //; invert_all while_step; destruct_and?; destruct cur_inl; simplify_eq/= => //.
+
+      all: try by invert_all while_link_mediator_step.
+      all: try by right; eexists _; split; [ | apply: TraceStepNone; [|apply: TraceEnd]; by econstructor];
+        eexists cur_inl', stack_inl; split_and! => //=; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq => //.
+
+      * case_match; simplify_eq/=; destruct_and?; simplify_eq/=; invert_all while_link_mediator_step.
+        all: right; eexists _; split.
+        all: try ( apply: TraceStepNone; [ | apply: TraceEnd ]).
+        all: try ( apply: TraceStepSome; [ | apply: TraceEnd ]).
+        all: try by econstructor => //; by simplify_map_eq.
+        admit.
+        2: {
+          econstructor; simplify_map_eq => //. case_match. admit. done.
+          case_match. admit. done.
+        }
+        admit.
+      * admit.
+      * admit.
+      * admit.
+      * admit.
+      * admit.
+      * admit.
+      * admit.
+      * admit.
+      * admit.
+      * admit.
+      * admit.
+    + admit.
+    + left. left. move => [? [? ?]]. invert_all while_step.
 Admitted.
 
+
+(* Definition while_link_proj_state (fns : while_fns) (σ : while_state) : while_state := {| *)
+(*   ws_cur := if σ.(ws_cur) is WInFn c then if fns !! c.(wf_name) is Some _ then WInFn c else WWaiting else σ.(ws_cur); *)
+(*   ws_call_stack := []; *)
+(*   ws_fns := fns; *)
+(* |}. *)
+
+(* Definition while_link_inv (fns1 fns2 : while_fns) (σ3 σ1 σ2: while_state) (σm : list while_link_mediator_state) : Prop := *)
+(*   (if σ3.(ws_cur) is WInFn c then is_Some (σ3.(ws_fns) !! c.(wf_name)) else True) ∧ *)
+(*   σ3.(ws_fns) = fns1 ∪ fns2 ∧ *)
+(*   σ1 = while_link_proj_state fns1 σ3 ∧ *)
+(*   σ2 = while_link_proj_state fns2 σ3 *)
+(*  (* (σ3.(ws_fns) = σ1.(ws_fns) ∪ σ2.(ws_fns)) *) *)
+(*  (* ∧ ( *) *)
+(*  (*   (σ3.(ws_cur) = WWaiting ∧ σ1.(ws_cur) = WWaiting ∧ σ2.(ws_cur) = WWaiting ∧ σm = WMSWait) *) *)
+(*  (* ∨ (∃ code, σ3.(ws_cur) = WInFn code ∧ ((σ1.(ws_cur) = WInFn code ∧ σ2.(ws_cur) = WWaiting ∧ σm = WMSLeft) ∨ (σ1.(ws_cur) = WWaiting ∧ σ2.(ws_cur) = WInFn code ∧ σm = WMSRight))) *) *)
+(* . *)
+
+(* Lemma all_states_in_equiv_forall {A B} R a e (Φ : A → B → Prop) : *)
+(*   (∀ x, x ∈ a → ∃ y, y ∈ e ∧ R x y) → *)
+(*   (∀ y, y ∈ e → ∃ x, x ∈ a ∧ R x y) → *)
+(*   (∀ x y, x ∈ a → y ∈ e → R x y → Φ x y) → *)
+(*   all_states_in_equiv a e Φ. *)
+(* Proof. move => Hin. split => ?; naive_solver. Qed. *)
+
+(* Lemma all_states_in_equiv_forall_id {A B} a e (Φ : A → B → Prop) : *)
+(*   ((∃ x, x ∈ a) ↔ (∃ y, y ∈ e)) → *)
+(*   (∀ x y, x ∈ a → y ∈ e → Φ x y) → *)
+(*   all_states_in_equiv a e Φ. *)
+(* Proof. move => Hin. split => ?; naive_solver. Qed. *)
+
+(* Lemma all_states_in_remove_ub {A B} (Φ : A → B → Prop) P1 P2 (Q1 Q2 : Prop) `{!Inhabited B} : *)
+(*   (∀ x y, Q1 → Q2 → Φ x y) → *)
+(*   (Q1 → Q2) → *)
+(*   all_states_in P1 P2 Φ → *)
+(*   all_states_in (P1 ∪ {[ _ | Q1 ]}) (P2 ∪ {[ _ | Q2 ]}) Φ. *)
+(* Proof. *)
+(*   move => HΦ Hub Hin x [/Hin | Hub1]; [ set_solver|]. move: (Hub1) => /Hub ?. *)
+(*   eexists inhabitant. split; [ set_solver|]. apply: HΦ; set_solver. *)
+(* Qed. *)
+
+(* Lemma all_states_in_equiv_remove_ub {A B} (Φ : A → B → Prop) P1 P2 (Q1 Q2 : Prop) `{!Inhabited A} `{!Inhabited B} : *)
+(*   (∀ x y, Q1 → Q2 → Φ x y) → *)
+(*   (Q1 ↔ Q2) → *)
+(*   all_states_in_equiv P1 P2 Φ → *)
+(*   all_states_in_equiv (P1 ∪ {[ _ | Q1 ]}) (P2 ∪ {[ _ | Q2 ]}) Φ. *)
+(* Proof. move => HΦ Hub [? ?]. split; apply: all_states_in_remove_ub; naive_solver. Qed. *)
+
+(* Lemma all_states_in_equiv_ub {A B} (Φ : A → B → Prop) P1 P2 (Q1 Q2 : Prop) `{!Inhabited A} `{!Inhabited B} : *)
+(*   (∀ x y, Q1 → Q2 → Φ x y) → *)
+(*   Q1 → Q2 → *)
+(*   all_states_in_equiv (P1 ∪ {[ _ | Q1 ]}) (P2 ∪ {[ _ | Q2 ]}) Φ. *)
+(* Proof. move => HΦ Hub1 Hub2. split => ??; eexists inhabitant; set_solver. Qed. *)
+
+(* Lemma while_link_ok fns1 fns2: *)
+(*   fns1 ##ₘ fns2 → *)
+(*   refines_equiv (while_module (while_link fns1 fns2)) (link (while_module fns1) (while_module fns2) while_link_mediator). *)
+(* Proof. *)
+(*   move => Hdisj. *)
+(*   have Hnotin1 : ∀ fn def, fns1 !! fn = Some def → fns2 !! fn = None. { *)
+(*     move: Hdisj => /map_disjoint_spec ? fn ??. destruct (fns2 !! fn) eqn: ? => //. naive_solver. *)
+(*   } *)
+(*   have Hnotin2 : ∀ fn def, fns2 !! fn = Some def → fns1 !! fn = None. { *)
+(*     move: Hdisj => /map_disjoint_spec ? fn ??. destruct (fns1 !! fn) eqn: ? => //. naive_solver. *)
+(*   } *)
+(*   apply (next_states_implies_refines_equiv (while_module _) (link (while_module _) (while_module _) while_link_mediator) (curry ∘ curry ∘ (while_link_inv fns1 fns2))). { split_and! => //. } *)
+(*   move => [cur3 sk3 f3] [[[cur1 sk1 f1] [cur2 sk2 f2]] σm] /=[/= Hin [? [-> ->]]]. subst. *)
+(*   destruct cur3. *)
+(*   - apply: all_states_in_equiv_remove_ub => /=. *)
+(*     1: naive_solver. { *)
+(*       split. *)
+(*       + move => Hub. *)
+(*         move: Hin => [? /lookup_union_Some [//|?|?]]; [left | right]; contradict Hub. *)
+(*         all: move: Hub => [? [??]]; invert_all while_step; simplify_map_eq; try by eexists _, _; econstructor => //. *)
+(*         * destruct ((fns1 ∪ fns2) !! fnname) eqn: ?. *)
+(*           all: eexists _, _; econstructor => //; simplify_map_eq => //. split => //. *)
+(*           admit. *)
+(*         * destruct sk3 as [|[?[]?]?]; eexists _, _; econstructor => //. *)
+(*         * destruct ((fns1 ∪ fns2) !! fnname) eqn: ?. *)
+(*           all: eexists _, _; econstructor => //; simplify_map_eq => //. split => //. *)
+(*           admit. *)
+(*         * destruct sk3 as [|[?[]?]?]; eexists _, _; econstructor => //. *)
+(*       + move => [|] Hub; contradict Hub; unfold while_link_proj_state => /=; case_match; try by eexists _, _; econstructor. *)
+(*         all: move: Hub => [? [??]]; invert_all while_step; simplify_map_eq; try by eexists _, _; econstructor. *)
+(*         * destruct (fns1 !! fnname) eqn: ?; eexists _, _; econstructor => //; by simplify_map_eq. *)
+(*         * destruct (fns2 !! fnname) eqn: ?; eexists _, _; econstructor => //; by simplify_map_eq. *)
+(*     } *)
+(*     apply: (all_states_in_equiv_forall_id). { *)
+(*       split. *)
+(*       - move => [[??] [?[??]]]. simplify_eq/=. *)
+(*         move: Hin => [? /lookup_union_Some [//|?|?]]. *)
+(*         all: unfold while_link_proj_state; simplify_map_eq. *)
+(*         all: invert_all while_step. *)
+(*         all: try by eexists (None, (_, _, _)); eexists None; split => //=;repeat econstructor. *)
+(*         admit. *)
+(*         admit. *)
+(*         admit. *)
+(*         admit. *)
+(*       - move => [[??] [?[??]]]. simplify_eq/=. *)
+(*         move: Hin => [? /lookup_union_Some [//|?|?]]. *)
+(*         all: unfold while_link_proj_state in *; simplify_map_eq. *)
+(*         all: invert_all @link_step => //; try case_match => //; destruct_and!; simplify_eq. *)
+(*         all: invert_all while_step. *)
+(*         all: try by eexists (None, _), None; split; [done|] => /=; econstructor. *)
+(*         * destruct ((fns1 ∪ fns2) !! fnname) eqn: ?. *)
+(*           all: eexists (_, _), _; split; [done|]; econstructor => //; simplify_map_eq => //. *)
+(*           split => //. admit. *)
+(*         * destruct sk3 as [|[?[]?]?]; eexists (_, _), _; (split; [done|]); by econstructor. *)
+(*         * destruct ((fns1 ∪ fns2) !! fnname) eqn: ?. *)
+(*           all: eexists (_, _), _; split; [done|]; econstructor => //; simplify_map_eq => //. *)
+(*           split => //. admit. *)
+(*         * destruct sk3 as [|[?[]?]?]; eexists (_, _), _; (split; [done|]); by econstructor. *)
+(*     } *)
+(*     (* apply: (all_states_in_equiv_forall (λ eσ1 eσ2, eσ1.1 = eσ2.1)). { *) *)
+(*     (*   move => [??] [? [<- /= ?]]. *) *)
+(*     (*   invert_all while_step; move: Hin => [? /lookup_union_Some [//|?|?]]. *) *)
+(*     (*   all: eexists (_, (_, _, _)); (split; [|done]); eexists None; split => //=. *) *)
+(*     (*   all: unfold while_link_proj_state; simplify_map_eq. *) *)
+(*     (*   all: try by repeat econstructor. *) *)
+(*     (*   all: try by apply: LinkStepL; unfold while_link_proj_state; simplify_map_eq. constructor. done. *) *)
+(*     (*   apply: LinkStepR. unfold while_link_proj_state; simplify_map_eq. constructor. done. *) *)
+(*     (*   ; [apply: LinkStepL | apply: LinkStepR ]. *) *)
+(*     (*   unfold while_link_proj_state; simplify_map_eq. *) *)
+
+
+(*     (*   admit. *) *)
+(*     (* } *) *)
+
+(*     move => [??] [??] [? [??]] [? [??]]; simplify_eq/=. right. *)
+(*     invert_all while_step. *)
+(*     + invert_all @link_step => //; case_match => //; destruct_and!; simplify_eq/=. *)
+(*       all: unfold while_link_proj_state in *; simpl in *; case_match; invert_all while_step. *)
+(*       all: split => //; right; split => //; unfold while_link_proj_state in *; simpl; simplify_map_eq => //. *)
+(*     + invert_all @link_step => //; case_match => //; destruct_and!; simplify_eq/=. *)
+(*       all: unfold while_link_proj_state in *; simpl in *; case_match; invert_all while_step. *)
+(*       all: split => //; right; split => //; unfold while_link_proj_state in *; simpl; simplify_map_eq => //. *)
+(*     + invert_all @link_step => //; case_match => //; destruct_and!; simplify_eq/=. *)
+(*       all: unfold while_link_proj_state in *; simpl in *; case_match; invert_all while_step. *)
+(*       all: split => //; right; split => //; unfold while_link_proj_state in *; simpl; simplify_map_eq => //. *)
+(*     + invert_all @link_step => //; case_match => //; destruct_and!; simplify_eq/=. *)
+(*       all: unfold while_link_proj_state in *; simpl in *; case_match; invert_all while_step. *)
+(*       all: split => //; right; split => //; unfold while_link_proj_state in *; simpl; simplify_map_eq => //. *)
+(*     + case_match; destruct_and?; simplify_eq. *)
+(*       * revert select ((_ ∪ _) !! _ = Some _) => Hcup. move: (Hcup) => /lookup_union_Some[//|?|?]. *)
+(*         -- invert_all @link_step => //; case_match => //; destruct_and!; simplify_eq/=. *)
+(*            all: unfold while_link_proj_state in *; simpl in *; case_match; invert_all while_step. *)
+(*            all: split => //; right; split => //; unfold while_link_proj_state in *; simpl; simplify_map_eq => //. *)
+(*            1: naive_solver. *)
+(*            split_and! => //. destruct_and!. simplify_eq. repeat f_equal. admit. admit. *)
+(*         -- invert_all @link_step => //; case_match => //; destruct_and!; simplify_eq/=. *)
+(*            all: unfold while_link_proj_state in *; simpl in *; case_match; invert_all while_step. *)
+(*            all: split => //; right; split => //; unfold while_link_proj_state in *; simpl; simplify_map_eq => //. *)
+(*            1: naive_solver. *)
+(*            split_and! => //. destruct_and!. simplify_eq. admit. *)
+(*       * revert select ((_ ∪ _) !! _ = _) => Hcup. move: (Hcup) => /lookup_union_None[??]. *)
+(*         invert_all @link_step => //; case_match => //; destruct_and!; simplify_eq/=. *)
+(*         all: unfold while_link_proj_state in *; simpl in *; case_match; invert_all while_step; simplify_map_eq. *)
+(*     + destruct_hyps. destruct sk3 as [|[?[]?] ?]; destruct_and!; simplify_eq/=. *)
+(*       * invert_all @link_step => //; case_match => //; destruct_and!; simplify_eq/=. *)
+(*         all: unfold while_link_proj_state in *; simpl in *; case_match; invert_all while_step; destruct_and! => //. *)
+(*       * invert_all @link_step => //; case_match => //; destruct_and!; simplify_eq/=. *)
+(*         all: unfold while_link_proj_state in *; simpl in *; case_match; invert_all while_step; destruct_and! => //. *)
+(*       * invert_all @link_step => //; case_match => //; destruct_and!; simplify_eq/=. *)
+(*         all: unfold while_link_proj_state in *; simpl in *; case_match; invert_all while_step; destruct_and! => //. *)
+(*   - apply: all_states_in_equiv_remove_ub => /=. 1: naive_solver. { *)
+(*       split. *)
+(*       + move => Hx. contradict Hx. eexists _, _. by econstructor. *)
+(*       + move => [|] Hx; contradict Hx; eexists _, _; by econstructor. *)
+(*     } *)
+(*     admit. *)
+(*   - apply: all_states_in_equiv_ub; [ naive_solver | |left]. *)
+(*     all: move => [? [? ?]]; invert_all while_step. *)
+(* Admitted. *)
+
+(* TODO: WHat goes wrong if fnsi has less functions than fnss? *)
 Lemma refines_implies_while_ctx_refines fnsi fnss :
+  (* TODO: Is the following necessary or does it follow from refines? *)
+  dom (gset string) fnsi = dom (gset string) fnss →
   refines (while_module fnsi) (while_module fnss) →
   while_ctx_refines fnsi fnss.
 Proof.
-  move => Href C.
-  apply: refines_vertical; [apply while_link_ok|].
-  apply: refines_vertical; [|apply while_link_ok].
+  move => Hdom Href C.
+  (* rewrite /while_link. -difference_union_L. *)
+  apply: refines_vertical; [apply (while_link_ok')|]. admit.
+  apply: refines_vertical; [|apply while_link_ok']. 2: admit.
+  rewrite Hdom.
   apply: refines_horizontal; [|apply refines_reflexive].
   apply: Href.
-Qed.
+Admitted.
+(* Qed. *)
 
 
 Module test.
@@ -338,13 +691,13 @@ Module test.
     constructor. split. { apply. eexists _, _. by apply: WSAssignOp. }
     move => ? ? ? ? ?. inv_step. simplify_map_eq. eexists _. right. split. { apply: TraceEnd. }
 
-    constructor. split. { apply. eexists _, _. by apply: WSDone. }
-    move => ? ? ? ? ?. inv_step. simplify_map_eq. eexists _. right. split. {
+    constructor. split. { apply. eexists _, _. by econstructor. }
+    move => ? ? ? ? ?. inv_step. destruct_and!. simplify_map_eq. eexists _. right. split. {
       apply: TraceStepNone. { by econstructor. }
       apply: TraceStepNone. { by econstructor. }
       apply: TraceStepNone. { by econstructor. }
       apply: TraceStepNone. { by econstructor. }
-      apply: TraceStepSome. { econstructor => //. simplify_map_eq. f_equal. lia. }
+      apply: TraceStepSome. { econstructor => //. split_and! => //. simplify_map_eq. do 2 f_equal. lia. }
       apply: TraceEnd.
     }
     apply: Hloop. lia.
@@ -376,8 +729,8 @@ Module test.
       constructor. split. { apply. eexists _, _. by apply: WSAssignOp. }
       move => ? ? ? ? ?. inv_step. simplify_map_eq. eexists _. right. split. { apply: TraceEnd. }
 
-      constructor. split. { apply. eexists _, _. by apply: WSDone. }
-      move => ? ? ? ? ?. inv_step. simplify_map_eq. eexists _. right. split. {
+      constructor. split. { apply. eexists _, _. by econstructor. }
+      move => ? ? ? ? ?. inv_step. destruct_and!. simplify_map_eq. eexists _. right. split. {
         apply: TraceStepNone. { by econstructor. }
         apply: TraceStepNone. { by econstructor. }
         apply: TraceStepSome. { econstructor => //. }
@@ -394,10 +747,10 @@ Module test.
     constructor. split. { apply. eexists _, _. apply: WSAssignConst. }
     move => ? ? ? ? ?. inv_step. eexists _. right. split. { apply: TraceEnd. }
 
-    constructor. split. { apply. eexists _, _. by apply: WSDone. }
-    move => ? ? ? ? ?. inv_step. simplify_map_eq. eexists _. right. split. {
+    constructor. split. { apply. eexists _, _. by econstructor. }
+    move => ? ? ? ? ?. inv_step. destruct_and!. simplify_map_eq. eexists _. right. split. {
       apply: TraceStepNone. { by econstructor. }
-      apply: TraceStepNone. { econstructor. done. repeat constructor. }
+      apply: TraceStepNone. { econstructor. done. 2: repeat constructor. done. }
       apply: TraceStepNone. { by econstructor. }
       apply: TraceStepNone. { by econstructor. }
       apply: TraceStepNone. { by econstructor. }
@@ -426,12 +779,12 @@ Module test.
       apply: TraceStepSome; [|by apply: TraceEnd]. constructor. by apply: lookup_insert. done.
     }
     simpl.
-    constructor. split. { apply. eexists _, _. econstructor; [done|]. constructor. }
-    move => ? ? ? ? ?. inv_step.
+    constructor. split. { apply. eexists _, _. econstructor. done. 2: by econstructor. done. }
+    move => ? ? ? ? ?. inv_step. case_match => //. simplify_eq.
     revert select (Forall2 _ _ _) => /Forall2_nil_inv_l ->.
     eexists _. right. split. {
       apply: TraceStepNone. { by econstructor. }
-      apply: TraceStepSome. { econstructor; [done|]. constructor. }
+      apply: TraceStepSome. { econstructor. done. 2: constructor. done. }
       apply: TraceEnd.
     }
 
@@ -448,8 +801,8 @@ Module test.
     constructor. split. { apply. eexists _, _. by econstructor. }
     move => ? ? ? ? ?. inv_step. eexists _. right. split. { apply: TraceEnd. }
 
-    constructor. split. { apply. eexists _, _. by apply: WSDone. }
-    move => ? ? ? ? ?. inv_step. simplify_map_eq. eexists _. right. split. {
+    constructor. split. { apply. eexists _, _. by econstructor. }
+    move => ? ? ? ? ?. inv_step. destruct_and!. simplify_map_eq. eexists _. right. split. {
       apply: TraceStepNone. { by econstructor. }
       apply: TraceStepSome. { econstructor => //. }
       apply: TraceEnd.

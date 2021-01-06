@@ -426,8 +426,9 @@ Qed.
 
 Lemma inv_implies_refines' {EV} (m1 m2 : module EV) (inv : m1.(m_state) → m2.(m_state) → Prop):
   inv m1.(m_initial) m2.(m_initial) →
-  (∀ σi σs, inv σi σs → m1.(m_is_ub) σi → m2.(m_is_ub) σs) →
+  (∀ σi σs, inv σi σs → m1.(m_is_ub) σi → ∃ σs2, has_trace m2 σs [Ub] σs2) →
   (∀ σi1 σs1 σi2 e, inv σi1 σs1 → m1.(m_step) σi1 e σi2 →
+      (m1.(m_is_ub) σi1 ∨ m2.(m_is_ub) σs1) ∨
       ∃ σs2, inv σi2 σs2 ∧ has_trace m2 σs1 (option_list (Vis <$> e)) σs2) →
   refines m1 m2.
 Proof.
@@ -437,23 +438,31 @@ Proof.
   elim: Hsteps σs1 Hinv => {σi1 σi2 κs}.
   - by eauto using TraceEnd.
   - move => σi1 σi2 σi3 κ κs Hstep Hsteps IH σs1 Hinv.
-    case: (Hinvstep _ _ _ _ Hinv Hstep) => σs2 [Hinv2 ?].
+    case: (Hinvstep _ _ _ _ Hinv Hstep) => [|[σs2 [Hinv2 ?]]]. {
+      case => Hub; [|eexists _; by apply: TraceUbRefl].
+      have [? /has_trace_ub_inv[σs2[??]]]:= Hinvsafe _ _ Hinv Hub.
+      eexists σs2. apply: (has_trace_trans []); [ done |]. by apply: TraceUb.
+    }
     case: (IH _ Hinv2) => ? ?.
     eexists. by apply: has_trace_trans.
-  - move => ??? /Hinvsafe ? σs ?. exists σs. apply: TraceUb. naive_solver.
+  - move => ??? /Hinvsafe Hs σs Hinv. have [? /has_trace_ub_inv[σs2[??]]]:= Hs _ Hinv.
+    eexists σs2. apply: (has_trace_trans []); [ done |]. by apply: TraceUb.
 Qed.
 
 (* This does not seem nice to work work. *)
 Lemma inv_implies_refines_equiv {EV} (m1 m2 : module EV) (inv : m1.(m_state) → m2.(m_state) → Prop):
   inv m1.(m_initial) m2.(m_initial) →
-  (∀ σi σs, inv σi σs → m1.(m_is_ub) σi ↔ m2.(m_is_ub) σs) →
+  (∀ σi σs, inv σi σs → m1.(m_is_ub) σi → ∃ σs2, has_trace m2 σs [Ub] σs2) →
+  (∀ σi σs, inv σs σi → m2.(m_is_ub) σi → ∃ σs2, has_trace m1 σs [Ub] σs2) →
   (∀ σi1 σs1 σi2 e, inv σi1 σs1 → m1.(m_step) σi1 e σi2 →
+      (m1.(m_is_ub) σi1 ∨ m2.(m_is_ub) σs1) ∨
       ∃ σs2, inv σi2 σs2 ∧ has_trace m2 σs1 (option_list (Vis <$> e)) σs2) →
   (∀ σi1 σs1 σs2 e, inv σi1 σs1 → m2.(m_step) σs1 e σs2 →
+      (m1.(m_is_ub) σi1 ∨ m2.(m_is_ub) σs1) ∨
       ∃ σi2, inv σi2 σs2 ∧ has_trace m1 σi1 (option_list (Vis <$> e)) σi2) →
   refines_equiv m1 m2.
 Proof.
-  move => Hinvinit Hinvsafe Hinvstep1 Hinvstep2.
+  move => Hinvinit Hinvsafe1 Hinvsafe2 Hinvstep1 Hinvstep2.
   split; [ apply: inv_implies_refines' => //; naive_solver |].
   apply: (inv_implies_refines' _ _ (flip inv)) => //=; naive_solver.
 Qed.
@@ -996,18 +1005,19 @@ Proof.
   apply: (inv_implies_refines_equiv (link mod_call1 mod_call2 (stateless_mediator _)) mod1 call_equiv_inv).
   - done.
   - naive_solver.
+  - naive_solver.
   - move => σi1 σs1 σi2 e ? ?.
     inv_step; match goal with | H : call_merge_rel _ _ _ |- _ => inversion H; clear H end; simplify_eq/=.
-    + exists true. destruct σ1, σs1 => //. simplify_eq. split => //.
+    + right. exists true. destruct σ1, σs1 => //. simplify_eq. split => //.
       apply: TraceStepSome; last by constructor. econstructor.
-    + destruct σs1 => //. eexists false. split => //. by apply: TraceEnd.
+    + destruct σs1 => //. right. eexists false. split => //. by apply: TraceEnd.
   - move => [[σi11 σi12] ?] σs1 σi2 e ? ?. inv_step.
     destruct σi11, σi12 => //; simplify_eq.
     (* TODO: it is quite bad that we have two subproofs here while with the other methods we only have 1 *)
-    + eexists (true, C2S3, tt). split => //.
+    + right. eexists (true, C2S3, tt). split => //.
       apply: TraceStepSome. 2: by constructor.
       apply: LinkStepR. constructor => //. simpl. constructor.
-    + eexists (true, C2S3, tt).  split => //.
+    + right. eexists (true, C2S3, tt).  split => //.
       apply: (TraceStepNone _ (link mod_call1 mod_call2 (stateless_mediator _)) (true, C2S2 1, tt)). {
         apply: LinkStepBoth. 3: constructor. all: constructor.
       }
