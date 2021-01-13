@@ -118,9 +118,11 @@ Proof.
   apply: has_trace_add_empty. by apply: has_trace_trans.
 Qed.
 
+Definition state_refines {EV} (mimpl mspec : module EV) (σi : mimpl.(m_state)) (σs : mspec.(m_state)) : Prop :=
+  ∀ κs σi2, has_trace mimpl σi κs σi2 → ∃ σs2, has_trace mspec σs κs σs2.
 
 Record refines {EV} (mimpl mspec : module EV) : Prop := {
-  ref_subset κs σi: has_trace mimpl mimpl.(m_initial) κs σi → ∃ σs, has_trace mspec mspec.(m_initial) κs σs
+  ref_subset: state_refines mimpl mspec mimpl.(m_initial) mspec.(m_initial)
 }.
 
 Definition refines_equiv {EV} (m1 m2 : module EV) : Prop := refines m1 m2 ∧ refines m2 m1.
@@ -148,7 +150,7 @@ Lemma refines_vertical EV (m1 m2 m3 : module EV):
   refines m1 m2 →
   refines m2 m3 →
   refines m1 m3.
-Proof. move => [Hr1] [Hr2]. constructor => /=. naive_solver. Qed.
+Proof. move => [Hr1] [Hr2]. constructor => /=. unfold state_refines in *. naive_solver. Qed.
 
 (*** link *)
 Record link_mediator EV1 EV2 EV3 := {
@@ -657,6 +659,15 @@ Tactic Notation "invert_all" constr(f) := invert_all_tac f.
 
 
 Ltac inv_step := invert_all @m_step.
+
+Definition module_empty {A} : module A := {|
+  m_state := unit;
+  m_initial := tt;
+  m_step _ _ _ := False;
+  m_is_ub s := False;
+|}.
+Global Instance module_empty_inst A : Empty (module A) := module_empty.
+
 (*** Tests *)
 
 (*
@@ -2095,7 +2106,8 @@ Proof.
 Qed.
 
 (*** link *)
-Inductive link_step {EV1 EV2 EV3} (m1 : module EV1) (m2 : module EV2) (R : option EV1 → option EV2 → option EV3 → Prop) :
+Inductive link_step {EV1 EV2 EV3} (m1 : module EV1) (m2 : module EV2)
+ (R : option EV1 → option EV2 → option EV3 → Prop) :
   m1.(m_state) * m2.(m_state) → option EV3 → m1.(m_state) * m2.(m_state) → Prop :=
 | LinkStepL σ1 σ2 e1 e' σ1':
     m1.(m_step) σ1 e1 σ1' →

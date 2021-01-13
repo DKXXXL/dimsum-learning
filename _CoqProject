@@ -13,3 +13,4 @@ theories/base.v
 theories/axioms.v
 theories/module.v
 theories/while.v
+theories/rec_lang.v
