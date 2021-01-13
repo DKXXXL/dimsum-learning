@@ -715,4 +715,4 @@ Module test.
     Unshelve.
     all: apply: inhabitant.
   Qed.
-End rec.
+End test.
