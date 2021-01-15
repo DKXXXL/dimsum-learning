@@ -5,40 +5,6 @@ Require Import refframe.module.
 
 Import version7.
 
-
-
-(*
-
-
-some C:
-
-high-level spec -> events: system calls
-   ^
-   |  refines
-   |
-assembly code   -> events: system calls
-
-*)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 (*** stuff to move *)
 Definition state_set_refines {EV} (mimpl mspec : module EV) (σi : mimpl.(m_state)) (σs : propset mspec.(m_state)) : Prop :=
   ∀ κs σi2, has_trace mimpl σi κs σi2 → ∃ σs1 σs2, σs1 ∈ σs ∧ has_trace mspec σs1 κs σs2.
@@ -63,13 +29,6 @@ Proof.
     have [σs3 [σs4 [Hin ?]]]:= IH _ Hinv2.
     have [σ1 [??]]:= Hsub _ Hin.
     eexists _, _. split => //. by apply: has_trace_trans.
-    (* case: (Hinvstep _ _ _ _ Hinv Hstep) => [|[σs2 [Hinv2 ?]]]. { *)
-    (*   case => Hub; [|eexists _; by apply: TraceUbRefl]. *)
-    (*   have [? /has_trace_ub_inv[σs2[??]]]:= Hinvsafe _ _ Hinv Hub. *)
-    (*   eexists σs2. apply: (has_trace_trans []); [ done |]. by apply: TraceUb. *)
-    (* } *)
-    (* case: (IH _ Hinv2) => ? ?. *)
-    (* eexists. by apply: has_trace_trans. *)
   - move => ??? /Hinvsafe Hs σs Hinv.
     have [? [? [? /has_trace_ub_inv[σs2[??]]]]]:= Hs _ Hinv.
     eexists _, _. split => //. apply: (has_trace_trans []); [ done |]. by apply: TraceUbRefl.
@@ -135,41 +94,6 @@ Proof.
     eexists _. split_and!; last reflexivity.
     by apply: state_set_refines_step.
 Qed.
-
-(* Lemma state_refines_ub {EV} (m1 m2 : module EV) σ1 σ2 : *)
-(*   state_refines m1 m2 σ1 σ2 → *)
-(*   m1.(m_is_ub) σ1 → ∃ σ2', has_trace m2 σ2 [] σ2' ∧ m2.(m_is_ub) σ2'. *)
-(* Proof. *)
-(*   move => Hs Hub. *)
-(*   have [|? /has_trace_ub_inv [?[??]]]:= Hs [Ub] σ1. { by apply: TraceUbRefl. } *)
-(*   naive_solver. *)
-(* Qed. *)
-
-(* Lemma state_refines_step_Some {EV} (m1 m2 : module EV) σ1 σ2 e σ1': *)
-(*   state_refines m1 m2 σ1 σ2 → *)
-(*   m1.(m_step) σ1 (Some e) σ1' → *)
-(*   ∃ σ2', has_trace m2 σ2 [Vis e] σ2' ∧ state_refines m1 m2 σ1' σ2'. *)
-(* Proof. *)
-(*   move => Hs Hub. *)
-(*   have [|? /(has_trace_cons_inv _ _)[?[?[? Hor]]]]:= Hs [Vis e] σ1'. { *)
-(*     apply: TraceStepSome; [| by apply:TraceEnd ]. done. *)
-(*   } *)
-(*   case: Hor => [?|[??]]. *)
-(*   - eexists _. split. { apply: (has_trace_trans []) => //. by apply: TraceUbRefl. } *)
-(*     admit. *)
-(*   - *)
-(*     (* eexists _. split. { apply: (has_trace_trans []) => //. apply: TraceStepSome. done. apply: TraceEnd. } *) *)
-(*     (* move => ???. eexists _. *) *)
-(* (* Qed. *) *)
-(* Abort. *)
-
-(* Lemma state_refines_step {EV} (m1 m2 : module EV) σ1 σ2 e σ1': *)
-(*   state_refines m1 m2 σ1 σ2 → *)
-(*   m1.(m_step) σ1 e σ1' → *)
-(*   ∃ σ2', has_trace m2 σ2 (option_list (Vis <$> e)) σ2' ∧ state_refines m1 m2 σ1' σ2'. *)
-(* Proof. *)
-(* Admitted. *)
-
 
 Module rec.
 Definition fn_name := string.
@@ -716,3 +640,139 @@ Module test.
     all: apply: inhabitant.
   Qed.
 End test.
+
+(*** Safety property stuff *)
+Definition example_code : rec_fns.
+Admitted.
+Definition example_code_spec : module rec_event.
+Admitted.
+
+(* TODO: should safety violation simply be UB? *)
+Definition safety_property EV := module (EV + ()).
+
+Definition example_safety_prop : safety_property rec_event := {|
+  m_state := bool;
+  m_initial := false;
+  m_step b e b' :=
+    if b is true then e = Some (inr ()) ∧ b' = false else
+      if e is Some (inl (CallEvt "dont_call_with_2" [2%Z])) then b' = true
+      else False;
+  m_is_ub b := False;
+|}.
+
+Inductive link_safety_prop_mediator {EV} : option EV → option (EV + ()) → option (EV + ()) → Prop :=
+| LSPLeft e1:
+    link_safety_prop_mediator (Some e1) (Some (inl e1)) (Some (inl e1))
+(* TODO: we probably don't want the following line*)
+| LSPIgnore e1:
+    link_safety_prop_mediator (Some e1) None (Some (inl e1))
+| LSPRight:
+    link_safety_prop_mediator None (Some (inr ())) (Some (inr ())).
+
+Definition link_safety_prop {EV} (m : module EV) (s : safety_property EV) :=
+  link m s (stateless_mediator link_safety_prop_mediator).
+
+Lemma link_safety_prop_refines {EV} (m1 m2 : module EV) s1 s2:
+  refines m1 m2 → refines s1 s2 → refines (link_safety_prop m1 s1) (link_safety_prop m2 s2).
+Proof. apply: refines_horizontal. Qed.
+
+Definition omap_module {EV1 EV2} (f : EV1 → option EV2) (m : module EV1) : module EV2 :=
+  link m ∅ (stateless_mediator (λ e1 (e2 : option unit) e3, ∃ κ, e1 = Some κ ∧ e3 = f κ)).
+
+Lemma omap_module_refines {EV1 EV2} (f : EV1 → option EV2) m1 m2:
+  refines m1 m2 → refines (omap_module f m1) (omap_module f m2).
+Proof. move => ?. apply: refines_horizontal => //. apply: refines_reflexive. Qed.
+
+Definition fmap_module {EV1 EV2} (f : EV1 → EV2) (m : module EV1) : module EV2 :=
+  link m ∅ (stateless_mediator (λ e1 (e2 : option unit) e3, ∃ κ, e1 = Some κ ∧ e3 = Some (f κ))).
+
+Lemma fmap_module_refines {EV1 EV2} (f : EV1 → EV2) m1 m2:
+  refines m1 m2 → refines (fmap_module f m1) (fmap_module f m2).
+Proof. move => ?. apply: refines_horizontal => //. apply: refines_reflexive. Qed.
+
+Definition is_safe {EV} (m : module (EV + ())) : Prop :=
+  refines (omap_module (λ e, if e is inr _ then Some () else None) m) ∅.
+
+Lemma is_safe_refines {EV} (m1 m2 : module (EV + ())):
+  refines m1 m2 → is_safe m2 → is_safe m1.
+Proof. move => ??. apply: refines_vertical => //. by apply: omap_module_refines. Qed.
+
+Lemma example_code_refines_spec :
+  refines (rec_module example_code) example_code_spec.
+Admitted.
+
+Lemma spec_is_safe:
+  is_safe (link_safety_prop example_code_spec example_safety_prop).
+Admitted.
+
+Lemma code_is_safe :
+  is_safe (link_safety_prop (rec_module example_code) example_safety_prop).
+Proof.
+  apply: is_safe_refines.
+  - apply: link_safety_prop_refines; [ | apply: refines_reflexive ].
+    apply: example_code_refines_spec.
+  - apply: spec_is_safe.
+Qed.
+
+Definition unreachable (self : fn_name) : fndef := {|
+  fd_args := [];
+  fd_body := Call self [];
+|}.
+
+Definition check_safety_prop (unreachable : fn_name) : fndef := {|
+  fd_args := ["n"];
+  fd_body :=
+    LetE "2" (Const 2) $
+         If "n" EqCmp "2" (
+           LetE "_" (Call "assert_failed" []) $
+           Call unreachable []) $
+         (Call "dont_call_with_2" ["n"])
+|}.
+
+Definition example_safety_prop_impl (f funreachable : fn_name) : rec_fns :=
+  <[funreachable := (unreachable funreachable)]>
+  {[f := check_safety_prop funreachable]}.
+
+Lemma example_safety_prop_impl_refines_safety_prop (f fu : fn_name) :
+  (* TODO: This does not yet make sense *)
+  refines (fmap_module inl (rec_module (example_safety_prop_impl f fu))) example_safety_prop.
+Proof.
+Admitted.
+
+Fixpoint rename_fn (f1 f2 : fn_name) (e : expr) :=
+  match e with
+  | Var v => Var v
+  | Const n => Const n
+  | BinOp v1 o v2 => BinOp v1 o v2
+  | If v1 c v2 e1 e2 => If v1 c v2 (rename_fn f1 f2 e1) (rename_fn f1 f2 e2)
+  | LetE v e1 e2 => LetE v (rename_fn f1 f2 e1) (rename_fn f1 f2 e2)
+  | Call f args => Call (if bool_decide (f = f1) then f2 else f) args
+  end.
+
+Fixpoint rename_fn_in_def (f1 f2 : fn_name) (fd : fndef) := {|
+  fd_args := fd.(fd_args);
+  fd_body := rename_fn f1 f2 fd.(fd_body);
+|}.
+
+Lemma implement_example_safety_prop (fns : rec_fns) f fu:
+  "assert_failed" ∉ dom (gset _) fns →
+  "dont_call_with_2" ∉ dom (gset _) fns →
+  f ∉ dom (gset _) fns →
+  fu ∉ dom (gset _) fns →
+  refines (fmap_module (λ e, if e is CallEvt "assert_failed" [] then inr () else inl e)
+       (rec_module (((rename_fn_in_def "dont_call_with_2" f) <$> fns) ∪ example_safety_prop_impl f fu)))
+    (link_safety_prop (rec_module fns) example_safety_prop).
+(* TODO: we either need to disallow the environment to call f and fu
+in the spec or we should add a notion of internal functions that
+cannot be called by the environment and add f and fu there *)
+(* TODO: idea: Does something like this allow using a tool that only
+can verify no-ub for closed programs (Something like current RefinedC)
+to verify arbitrary safety properties about open programs? I.e. give
+an implementation for the safety property, then use the tool to verify
+the original program linked with the safety property implementation,
+then show that this linked program is refined by the original program
+linked with the safety property (does this direction hold?).
+Simultaneously one can verify an implementation of the interface,
+assuming that the client fulfills the specification and link the
+implementations in the end and get that it is ub free. For giving the implementation, one needs
+an instruction that non-determinisitically chooses a return value. *)
