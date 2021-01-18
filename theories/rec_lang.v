@@ -214,7 +214,7 @@ Inductive step : state → option rec_event → state → Prop :=
 Definition rec_fns := gmap string fndef.
 
 Definition is_ub (σ : state) : Prop :=
-  ¬ (σ.(st_exp) = Finished ∨ ∃ e σ', step σ e σ').
+  ¬ ((σ.(st_exp) = Finished ∨ σ.(st_exp) = WaitingForCall) ∨ ∃ e σ', step σ e σ').
 
 Definition initial_state (fns: rec_fns) : state :=
   {|
@@ -404,18 +404,62 @@ Definition call_intro_mediator {EV} (is_init : EV → bool) : link_mediator EV E
       if b is false then True else if is_init <$> e1 is Some true then False else True;
 |}.
 
+(* Lemma no_behavior_no_step {EV} (m : module EV) σ: *)
+(*   (¬ ∃ e σ', m.(m_step) σ e σ') → ¬( m_is_ub m σ) → has_no_behavior m σ. *)
+(* Proof. move => ???? Htrace. inversion Htrace; simplify_eq/= => //; naive_solver. Qed. *)
+
+Lemma no_behavior_step {EV} (m : module EV) σ:
+  (∀ e σ', m.(m_step) σ e σ' → e = None ∧ has_no_behavior m σ') → ¬(m_is_ub m σ) → has_no_behavior m σ.
+Proof. move => Hstep ??? Htrace. inversion Htrace; simplify_eq/= => //. efeed pose proof Hstep => //. naive_solver. Qed.
+Inductive has_non_ub_trace {EV} (m : module EV) : m.(m_state) → list EV → m.(m_state) → Prop :=
+| NUBTraceEnd σ:
+    has_non_ub_trace m σ [] σ
+| NUBTraceStep σ1 σ2 σ3 κ κs:
+    m.(m_step) σ1 κ σ2 →
+    has_non_ub_trace m σ2 κs σ3 →
+    has_non_ub_trace m σ1 (option_list κ ++ κs) σ3
+.
+
+Lemma NUBTraceStepNone {EV} κs (m : module EV) σ2 σ1 σ3 :
+  m.(m_step) σ1 None σ2 →
+  has_non_ub_trace m σ2 κs σ3 →
+  has_non_ub_trace m σ1 κs σ3.
+Proof. move => ??. by apply: (NUBTraceStep _ _ _ _ None). Qed.
+
+Lemma NUBTraceStepSome {EV} κs (m : module EV) σ2 σ1 σ3 κ :
+  m.(m_step) σ1 (Some κ) σ2 →
+  has_non_ub_trace m σ2 κs σ3 →
+  has_non_ub_trace m σ1 (κ :: κs) σ3.
+Proof. move => ??. by apply: (NUBTraceStep _ _ _ _ (Some _)). Qed.
+
+Lemma has_non_ub_trace_trans {EV} κs1 κs2 (m : module EV) σ1 σ2 σ3 :
+  has_non_ub_trace m σ1 κs1 σ2 →
+  has_non_ub_trace m σ2 κs2 σ3 →
+  has_non_ub_trace m σ1 (κs1 ++ κs2) σ3.
+Proof.
+  elim => //.
+  move => ?????????. rewrite -app_assoc. econstructor; eauto.
+Qed.
+
+Lemma has_trace_add_empty {EV} κs1 (m : module EV) σ1 σ2 :
+  has_trace m σ1 (κs1 ++ []) σ2 →
+  has_trace m σ1 κs1 σ2.
+Proof. by rewrite -{2}[κs1](right_id_L [] (++)). Qed.
+
 Definition call_intro_inv {EV} (m : module EV) (i : call_module_info EV) (is_init : EV → bool) (σ1 : m.(m_state)) (σ2 : (call_module m i).(m_state)) (σ3 : (@module_empty Empty_set).(m_state)) (σm : (call_intro_mediator is_init).(lm_state)) : Prop :=
   match σ2.(cs_stack) with
   | [] => σ1 = m.(m_initial) ∧ σ2.(cs_waiting) = true ∧ σm = false
-  | [σ] => σ1 = σ ∧ if σm then True else σ = m.(m_initial)
+  | [σ] => σ1 = σ ∧ if σm then ∃ σ' e κs, m.(m_step) m.(m_initial) e σ' ∧ has_non_ub_trace m σ' κs σ else σ = m.(m_initial) ∧ σ2.(cs_waiting) = false
   | _ => False
   end.
 Lemma call_intro {EV} (m : module EV) (i : call_module_info EV) (is_init : EV → bool):
   (∀ e σ, m.(m_step) m.(m_initial) e σ → ∃ κ, e = Some κ ∧ is_init κ) → (* TODO: Is this necessary? *)
   ¬ m_is_ub m (m_initial m) →
+  (∀ σ1 e σ2, m.(m_step) σ1 (Some e) σ2 → i.(cmi_final) e → has_no_behavior m σ2) →
+  (∀ σ'' σ' σ e κs e', m.(m_step) m.(m_initial) e σ' → has_non_ub_trace m σ' κs σ → m.(m_step) σ (Some e') σ'' → ¬ is_init e') →
   refines_equiv m (link (call_module m i) ∅ (call_intro_mediator is_init)).
 Proof.
-  move => HSome Hnotub.
+  move => HSome Hnotub Hfinal Hnoinit.
   apply (inv_implies_refines_equiv _ (link _ _ _) (curry ∘ curry ∘ (call_intro_inv _ _ _))).
   - done.
   - rewrite /call_intro_inv. move => ? [[[[|?[|??]] ?] ?] ?] //= ? ?; destruct_and?; simplify_eq/= => //.
@@ -430,20 +474,58 @@ Proof.
         apply: TraceStep. { apply: LinkStepL. apply: CStep => //. done. }
         apply: TraceEnd.
       }
-      simpl. case_match => //. admit. admit.
+      simpl. case_match; [right | left]. { apply: Hfinal => //. naive_solver. }
+      split => //. eexists _, _, _. split_and! => //. by apply: NUBTraceEnd.
     + eexists (_, _, true). split. 2: {
         apply: has_trace_add_empty.
-        apply: TraceStep. { apply: LinkStepL. apply: CStep => //. admit. }
-        apply: TraceEnd.
+        apply: TraceStep; [|by apply: TraceEnd].
+        apply: LinkStepL. apply: CStep => //.
+        case_match; destruct_and?; simplify_eq.
+        - case_match => //. split_and! => //=.
+          revert select (∃ e, _) => -[? [?[?[??]]]].
+          case_match => //.
+          exfalso. apply: Hnoinit => //. naive_solver.
+        - have [?[??]]:= HSome _ _ Hstep. simplify_eq. by constructor.
       }
       simpl.
-      admit.
+      destruct (default false (cmi_final i <$> e)) eqn: Hf; [right | left].
+      { destruct e => //. apply: Hfinal => //. naive_solver. }
+      split => //. case_match; destruct_and?; simplify_eq.
+      * revert select (∃ e, _) => -[? [?[?[??]]]]. eexists _, _, _. split_and!; [done|..].
+        apply: has_non_ub_trace_trans => //. apply: NUBTraceStep => //. apply: NUBTraceEnd.
+      * have [?[??]]:= HSome _ _ Hstep; simplify_eq. eexists _, _, _. split_and! => //.
+        by apply: NUBTraceEnd.
   - rewrite {1}/call_intro_inv. move => ? [[[[|?[|??]] ?] ?] ?] //= ? e ??; right; destruct_and?; simplify_eq/=; invert_all @link_step => //; invert_all @call_step; destruct_and?; simplify_eq/=.
     + eexists _. split; [|by apply: TraceEnd]. by left.
-    + admit.
-    + admit.
-Admitted.
-
+    + have ?: e = e1 by destruct e1; naive_solver. simplify_eq.
+      eexists _. split. 2: { apply: has_trace_add_empty. apply: TraceStep => //. apply: TraceEnd. }
+      destruct (default false (cmi_final i <$> e1)) eqn: Hf. {
+        destruct e1 => //.
+        right. apply: no_behavior_step. 2: { move => [] //. }
+        move => ?? ?. inv_step. destruct_and!. simplify_eq. split => //.
+        apply: no_behavior_step. 2: { move => [] //. }
+        move => ???. inv_step.
+        revert select (m_step _ _ _ _) => Hstep.
+        have [?[??]]:= HSome _ _ Hstep. simplify_eq/=. destruct_and!. case_match; naive_solver.
+      }
+      left.
+      rewrite /call_intro_inv/=. split => //. case_match; destruct_and?; simplify_eq. {
+        case_match; destruct_and?; simplify_eq.
+        - revert select (∃ e, _) => -[? [?[?[??]]]]. eexists _,_, _. split_and!; [done|..].
+          apply: has_non_ub_trace_trans => //. apply: NUBTraceStep => //. apply: NUBTraceEnd.
+        - revert select (m_step _ _ _ _) => Hstep.
+          have [?[??]]:= HSome _ _ Hstep; simplify_eq. eexists _, _, _. split_and! => //.
+          by apply: NUBTraceEnd. }
+      case_match; [| naive_solver].
+      revert select (∃ e, _) => -[? [?[?[??]]]]. eexists _, _, _. split_and!; [done|..].
+      apply: has_non_ub_trace_trans => //. apply: NUBTraceStep => //. apply: NUBTraceEnd.
+    + eexists _. split; [|by apply: TraceEnd]. right. case_match; destruct_and?; simplify_eq/= => //.
+      apply: no_behavior_step.
+      * move => ? ??. exfalso. inv_step.
+        revert select (m_step _ _ _ _) => Hstep.
+        have [?[??]]:= HSome _ _ Hstep. simplify_eq/=. destruct_and!. by case_match.
+      * simpl. contradict Hnotub. naive_solver.
+Qed.
 (*** rec linking *)
 Definition rec_cmi : call_module_info rec_event := {|
   cmi_final e := if e is DoneEvt _ then true else false;
@@ -468,8 +550,17 @@ Lemma rec_refines_call fns:
 Proof.
   apply: call_intro.
   - move => ???. inv_step. naive_solver.
-  - apply. right. eexists _, _. constructor => //. admit.
-Admitted.
+  - apply. naive_solver.
+  - move => ? [] // ?? ? ?. inv_step.
+    apply: no_behavior_step.
+    + move => ???. inv_step.
+    + apply. naive_solver.
+  - move => σ'' σ' σ e κs e' Hstep Htrace.
+    have {Hstep} : σ'.(st_exp) ≠ WaitingForCall by inv_step; case_match.
+    elim: Htrace.
+    + move => ???. inv_step; naive_solver.
+    + move => ??????? IH ???. apply: IH => //. by inv_step.
+Qed.
 
 Lemma refines_implies_rec_ctx_refines fnsi fnss :
   dom (gset string) fnsi = dom (gset string) fnss →
@@ -565,7 +656,7 @@ Module test.
     destruct (decide (length nas = 1%nat)). 2: {
       eexists _. left. apply: TraceStepSome. { econstructor => //. apply: lookup_insert. }
       apply: TraceUbRefl => /=. case_bool_decide => //.
-      move => [?//|[? [??]]]. invert_all step.
+      move => [[?|?]//|[? [??]]]. invert_all step.
     }
     eexists _. right. split. {
       apply: TraceStepSome; [|by apply: TraceEnd].
@@ -604,7 +695,7 @@ Module test.
       apply: TraceEnd.
     }
 
-    constructor. split. { apply. by left. }
+    constructor. split. { apply. naive_solver. }
     move => ?????. inv_step.
     Unshelve.
     apply: inhabitant.
@@ -625,7 +716,7 @@ Module test.
     destruct (decide (length nas = 0%nat)). 2: {
       eexists _. left. apply: TraceStepSome. { econstructor => //. }
       apply: TraceUbRefl => /=. case_bool_decide => //.
-      move => [?//|[? [??]]]. invert_all step.
+      move => [[?|?]//|[? [??]]]. invert_all step.
     }
     eexists _. right. split. {
       apply: TraceStepSome; [|by apply: TraceEnd].
@@ -680,7 +771,7 @@ Module test.
       apply: TraceEnd.
     }
 
-    constructor. split. { apply. by left. }
+    constructor. split. { apply. naive_solver. }
     move => ?????. inv_step.
     Unshelve.
     all: apply: inhabitant.
