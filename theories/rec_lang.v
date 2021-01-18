@@ -397,6 +397,52 @@ Proof.
     (* invert_all @link_step. *)
 Admitted.
 
+Definition call_intro_mediator {EV} (is_init : EV → bool) : link_mediator EV Empty_set EV := {|
+  lm_state := bool;
+  lm_initial := false;
+  lm_step b e1 _ e2 b' := e1 = e2 ∧ b' = true ∧
+      if b is false then True else if is_init <$> e1 is Some true then False else True;
+|}.
+
+Definition call_intro_inv {EV} (m : module EV) (i : call_module_info EV) (is_init : EV → bool) (σ1 : m.(m_state)) (σ2 : (call_module m i).(m_state)) (σ3 : (@module_empty Empty_set).(m_state)) (σm : (call_intro_mediator is_init).(lm_state)) : Prop :=
+  match σ2.(cs_stack) with
+  | [] => σ1 = m.(m_initial) ∧ σ2.(cs_waiting) = true ∧ σm = false
+  | [σ] => σ1 = σ ∧ if σm then True else σ = m.(m_initial)
+  | _ => False
+  end.
+Lemma call_intro {EV} (m : module EV) (i : call_module_info EV) (is_init : EV → bool):
+  (∀ e σ, m.(m_step) m.(m_initial) e σ → ∃ κ, e = Some κ ∧ is_init κ) → (* TODO: Is this necessary? *)
+  ¬ m_is_ub m (m_initial m) →
+  refines_equiv m (link (call_module m i) ∅ (call_intro_mediator is_init)).
+Proof.
+  move => HSome Hnotub.
+  apply (inv_implies_refines_equiv _ (link _ _ _) (curry ∘ curry ∘ (call_intro_inv _ _ _))).
+  - done.
+  - rewrite /call_intro_inv. move => ? [[[[|?[|??]] ?] ?] ?] //= ? ?; destruct_and?; simplify_eq/= => //.
+    eexists _. apply: TraceUbRefl => /=. by left.
+  - rewrite /call_intro_inv. move => [[[[|?[|??]] ?] ?] ?] ? /= ? [?|?]//; destruct_and?. simplify_eq/=.
+    eexists _. by apply: TraceUbRefl.
+  - rewrite {1}/call_intro_inv. move => ? [[[[|?[|??]] ?] ?] ?] //= ? e ? Hstep; right; destruct_and?; simplify_eq/=.
+    + have [?[??]]:= HSome _ _ Hstep. simplify_eq.
+      eexists (_, _, _). split. 2: {
+        apply: TraceStepNone. { apply: LinkStepL. apply: CWaiting. done. }
+        apply: has_trace_add_empty.
+        apply: TraceStep. { apply: LinkStepL. apply: CStep => //. done. }
+        apply: TraceEnd.
+      }
+      simpl. case_match => //. admit. admit.
+    + eexists (_, _, true). split. 2: {
+        apply: has_trace_add_empty.
+        apply: TraceStep. { apply: LinkStepL. apply: CStep => //. admit. }
+        apply: TraceEnd.
+      }
+      simpl.
+      admit.
+  - rewrite {1}/call_intro_inv. move => ? [[[[|?[|??]] ?] ?] ?] //= ? e ??; right; destruct_and?; simplify_eq/=; invert_all @link_step => //; invert_all @call_step; destruct_and?; simplify_eq/=.
+    + eexists _. split; [|by apply: TraceEnd]. by left.
+    + admit.
+    + admit.
+Admitted.
 
 (*** rec linking *)
 Definition rec_cmi : call_module_info rec_event := {|
@@ -417,12 +463,12 @@ Proof.
   apply call_module_refines_link.
 Admitted.
 
-Definition rec_call_mediator : link_mediator rec_event Empty_set rec_event.
-Admitted.
-
 Lemma rec_refines_call fns:
-  refines_equiv (rec_module fns) (link (call_module (rec_module fns) rec_cmi) ∅ rec_call_mediator).
+  refines_equiv (rec_module fns) (link (call_module (rec_module fns) rec_cmi) ∅ (call_intro_mediator (λ e, if e is RecvCallEvt _ _ then true else false))).
 Proof.
+  apply: call_intro.
+  - move => ???. inv_step. naive_solver.
+  - apply. right. eexists _, _. constructor => //. admit.
 Admitted.
 
 Lemma refines_implies_rec_ctx_refines fnsi fnss :
@@ -762,6 +808,7 @@ Lemma implement_example_safety_prop (fns : rec_fns) f fu:
   refines (fmap_module (λ e, if e is CallEvt "assert_failed" [] then inr () else inl e)
        (rec_module (((rename_fn_in_def "dont_call_with_2" f) <$> fns) ∪ example_safety_prop_impl f fu)))
     (link_safety_prop (rec_module fns) example_safety_prop).
+Admitted.
 (* TODO: we either need to disallow the environment to call f and fu
 in the spec or we should add a notion of internal functions that
 cannot be called by the environment and add f and fu there *)

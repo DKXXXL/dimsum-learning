@@ -362,23 +362,23 @@ Proof.
     destruct cur3; simplify_eq/=.
     + invert_all while_step.
       * right. set cur_inl' := cur_inl. destruct cur_inl.
-        all: eexists (_, _, _); split; [ | apply: TraceStepNone; [| by apply: TraceEnd] ; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq; by repeat econstructor].
+        all: eexists (_, _, _); split; [ left | apply: TraceStepNone; [| by apply: TraceEnd] ; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq; by repeat econstructor].
         all: eexists cur_inl', stack_inl; split_and! => //=; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq => //.
       * right. set cur_inl' := cur_inl. destruct cur_inl.
-        all: eexists (_, _, _); split; [ | apply: TraceStepNone; [| by apply: TraceEnd] ; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq; by repeat econstructor].
+        all: eexists (_, _, _); split; [ left | apply: TraceStepNone; [| by apply: TraceEnd] ; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq; by repeat econstructor].
         all: eexists cur_inl', stack_inl; split_and! => //=; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq => //.
       * right. set cur_inl' := cur_inl. destruct cur_inl.
-        all: eexists (_, _, _); split; [ | apply: TraceStepNone; [| by apply: TraceEnd] ; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq; by repeat econstructor].
+        all: eexists (_, _, _); split; [ left | apply: TraceStepNone; [| by apply: TraceEnd] ; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq; by repeat econstructor].
         all: eexists cur_inl', stack_inl; split_and! => //=; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq => //.
       * right. set cur_inl' := cur_inl. destruct cur_inl.
-        all: eexists (_, _, _); split; [ | apply: TraceStepNone; [| by apply: TraceEnd] ; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq; by repeat econstructor].
+        all: eexists (_, _, _); split; [ left | apply: TraceStepNone; [| by apply: TraceEnd] ; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq; by repeat econstructor].
         all: eexists cur_inl', stack_inl; split_and! => //=; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq => //.
       * (* Call *) case_match; destruct_and?; simplify_eq.
         -- (* Call inside spec *)
           right.
           set old_cur_inl := cur_inl.
           revert select ((_ ∪ _) !! _ = _) => /lookup_union_Some_raw [Hn1 |[? Hn2]]; [set cur_inl' :=true|set cur_inl' :=false]; destruct cur_inl.
-          all: eexists (_, _, _); split.
+          all: eexists (_, _, _); split; [left |].
           all: try ( apply: TraceStepNone; [ |by apply: TraceEnd]).
           all: try by econstructor; [ by econstructor; simplify_map_eq|].
           all: try (apply: LinkStepBoth; econstructor; simplify_map_eq => //; rewrite ?bool_decide_true ?elem_of_dom; naive_solver).
@@ -389,7 +389,7 @@ Proof.
           revert select ((_ ∪ _) !! _ = _) => /lookup_union_None[Hn1 Hn2].
           right.
           set cur_inl' := cur_inl. destruct cur_inl.
-          all: eexists (_, _, _); split.
+          all: eexists (_, _, _); split; [left |].
           all: try ( apply: TraceStepSome; [ |by apply: TraceEnd]).
           all: try by econstructor; [by econstructor; simplify_map_eq|]; econstructor; by apply not_elem_of_dom.
           all: eexists cur_inl', (cur_inl' :: stack_inl); split_and! => //.
@@ -400,12 +400,12 @@ Proof.
         right.
         destruct sk3 as [|[? [] ?] sk3]; destruct_and?; simplify_eq; destruct stack_inl as [| new_cur_inl ] => //; simplify_eq/=.
         -- destruct cur_inl.
-           all: eexists (_, _, _); split.
+           all: eexists (_, _, _); split; [left |].
            all: try ( apply: TraceStepSome; [ |by apply: TraceEnd]).
            all: try by  econstructor; [by econstructor|]; by econstructor.
            all: eexists true, []; split_and! => //.
         -- set cur_inl' := cur_inl. set new_cur_inl' := new_cur_inl. destruct cur_inl, new_cur_inl.
-           all: eexists (_, _, _); split.
+           all: eexists (_, _, _); split; [left|].
            all: try ( apply: TraceStepNone; [ |by apply: TraceEnd]).
            all: try by econstructor; [by econstructor|]; by econstructor.
            all: try (apply: LinkStepBoth; try apply: WSRecvRet; try apply: WSReturn; move => //=).
@@ -417,7 +417,7 @@ Proof.
            pose proof (while_link_proj_state_stack_prev_false stack_inl sk3); by repeat case_match => //; simplify_eq.
            pose proof (while_link_proj_state_stack_prev_false (negb <$> stack_inl) sk3); by repeat case_match => //; simplify_eq.
         -- set cur_inl' := cur_inl. set new_cur_inl' := new_cur_inl. destruct cur_inl, new_cur_inl.
-           all: eexists (_, _, _); split.
+           all: eexists (_, _, _); split; [left |].
            all: try ( apply: TraceStepSome; [ |by apply: TraceEnd]).
            all: try by econstructor; [by econstructor|]; by econstructor.
            all: try by econstructor; [ econstructor; [done| simpl;
@@ -439,7 +439,7 @@ Proof.
         right.
         revert select ((_ ∪ _) !! _ = _) => /lookup_union_Some_raw [?|[??]]; [set cur_inl' :=true|set cur_inl' :=false].
         all: case_bool_decide.
-        all: eexists (_, _, _); split.
+        all: eexists (_, _, _); split; [left |].
         all: try ( apply: TraceStepSome; [ |by apply: TraceEnd]).
         all: try (econstructor; [econstructor;[done| first [ by rewrite bool_decide_true | by rewrite bool_decide_false] ]|]).
         all: try (econstructor; apply elem_of_dom; naive_solver).
@@ -451,7 +451,7 @@ Proof.
         all: try by apply: while_link_proj_med_stack_change_prev; [apply: Hwf3|..].
       * destruct sk3 as [| [? [] ?] sk3]. {
           destruct stack_inl => //.
-          right. eexists (_,_,_). split.
+          right. eexists (_,_,_). split; [left |].
           all: try ( apply: (TraceStepSome); [ |by apply: TraceEnd]).
           all: try by econstructor; [by apply: WSRecvRet|]; simpl; econstructor.
           by eexists true, [].
@@ -460,7 +460,7 @@ Proof.
         right.
         destruct stack_inl as [|s stack_inl] => //; simplify_eq/=.
         set s' := s. destruct s.
-        all: eexists (_, _, _); split.
+        all: eexists (_, _, _); split; [left |].
         all: try ( apply: (TraceStepSome); [ |by apply: TraceEnd]).
         all: try by econstructor; [by apply: WSRecvRet|]; simpl; econstructor.
         all: eexists s', stack_inl; split_and! => //.
@@ -475,17 +475,17 @@ Proof.
       * left. left. move => [? [? ?]]. invert_all while_step.
       * invert_all @link_step => //; invert_all while_step; destruct_and?; destruct cur_inl; simplify_eq/= => //.
         all: try by invert_all while_link_mediator_step.
-        all: try by right; eexists _; split; [ | apply: TraceStepNone; [|apply: TraceEnd]; by econstructor];
+        all: try by right; eexists _; split; [ left | apply: TraceStepNone; [|apply: TraceEnd]; by econstructor];
         eexists cur_inl', stack_inl; split_and! => //=; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq => //.
       * invert_all @link_step => //; invert_all while_step; destruct_and?; destruct cur_inl; simplify_eq/= => //.
         all: try by invert_all while_link_mediator_step.
-        all: try by right; eexists _; split; [ | apply: TraceStepNone; [|apply: TraceEnd]; by econstructor];
+        all: try by right; eexists _; split; [ left | apply: TraceStepNone; [|apply: TraceEnd]; by econstructor];
         eexists cur_inl', stack_inl; split_and! => //=; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq => //.
       * (* Call *)
         invert_all @link_step => //; invert_all while_step; destruct_and?; destruct cur_inl; simplify_eq/= => //;
           invert_all while_link_mediator_step.
         -- case_match; simplify_eq/=; destruct_and?; simplify_eq/=; invert_all while_link_mediator_step.
-           all: right; eexists _; split.
+           all: right; eexists _; split; [left |].
            all: try ( apply: TraceStepNone; [ | apply: TraceEnd ]).
            all: try ( apply: TraceStepSome; [ | apply: TraceEnd ]).
            all: try by econstructor => //; by simplify_map_eq.
@@ -496,7 +496,7 @@ Proof.
            eexists false, (cur_inl' :: stack_inl). split_and! => //=. by f_equal.
            all: unfold while_state_wf; naive_solver.
         -- case_match; simplify_eq/=; destruct_and?; simplify_eq/=; invert_all while_link_mediator_step.
-           all: right; eexists _; split.
+           all: right; eexists _; split; [left |].
            all: try ( apply: TraceStepNone; [ | apply: TraceEnd ]).
            all: try ( apply: TraceStepSome; [ | apply: TraceEnd ]).
            all: try by econstructor => //; by simplify_map_eq.
@@ -517,7 +517,7 @@ Proof.
              destruct_or?; destruct_and?; simplify_eq; try naive_solver.
              congruence.
            }
-           right; eexists _; split.
+           right; eexists _; split; [left |].
            all: try ( apply: TraceStepNone; [ | apply: TraceEnd ]).
            2: {
                econstructor => //; case_match; own_simplify_map_eq; try (exfalso; naive_solver); move => //;
@@ -538,7 +538,7 @@ Proof.
              destruct_or?; destruct_and?; simplify_eq; try naive_solver.
              congruence.
            }
-           right; eexists _; split.
+           right; eexists _; split; [left |].
            all: try ( apply: TraceStepNone; [ | apply: TraceEnd ]).
            2: {
                econstructor => //; case_match; own_simplify_map_eq; try (exfalso; naive_solver); move => //;
@@ -550,11 +550,11 @@ Proof.
         -- destruct (fns1 !! f) eqn:?; simplify_map_eq.
       * invert_all @link_step => //; invert_all while_step; destruct_and?; destruct cur_inl; simplify_eq/= => //.
         all: try by invert_all while_link_mediator_step.
-        all: try by right; eexists _; split; [ | apply: TraceStepNone; [|apply: TraceEnd]; by econstructor];
+        all: try by right; eexists _; split; [ left | apply: TraceStepNone; [|apply: TraceEnd]; by econstructor];
         eexists cur_inl', stack_inl; split_and! => //=; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq => //.
       * invert_all @link_step => //; invert_all while_step; destruct_and?; destruct cur_inl; simplify_eq/= => //.
         all: try by invert_all while_link_mediator_step.
-        all: try by right; eexists _; split; [ | apply: TraceStepNone; [|apply: TraceEnd]; by econstructor];
+        all: try by right; eexists _; split; [ left | apply: TraceStepNone; [|apply: TraceEnd]; by econstructor];
         eexists cur_inl', stack_inl; split_and! => //=; unfold while_link_proj_state' in *; simpl in *; simplify_map_eq => //.
       * invert_all @link_step => //; invert_all while_step; destruct_and?; destruct cur_inl; simplify_eq/= => //;
           invert_all while_link_mediator_step.
@@ -569,7 +569,7 @@ Proof.
       -- admit.
       -- destruct stack_inl, sk3 as [|[?[]?]?] => //. { unfold while_state_wf in *; naive_solver. }
          simplify_eq/=. right. rewrite andb_false_r.
-         eexists _. split.
+         eexists _. split; [left |].
          all: try ( apply: TraceStepSome; [ | apply: TraceEnd ]).
          all: try by econstructor.
          eexists true, (stack_inl). split_and! => //=.
@@ -577,7 +577,7 @@ Proof.
       -- admit.
       -- destruct stack_inl, sk3 as [|[?[]?]?] => //. { unfold while_state_wf in *; naive_solver. }
          simplify_eq/=. right. rewrite andb_false_r.
-         eexists _. split.
+         eexists _. split; [left |].
          all: try ( apply: TraceStepSome; [ | apply: TraceEnd ]).
          all: try by econstructor.
          eexists false, (stack_inl). split_and! => //=.
