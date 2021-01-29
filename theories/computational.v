@@ -3,8 +3,6 @@ Require Import stdpp.strings.
 Require Import stdpp.propset.
 Require Import refframe.module.
 
-Import version7.
-
 Class IoPartition EV IN OUT := {
   io_input : EV → IN;
   io_output : EV → OUT;

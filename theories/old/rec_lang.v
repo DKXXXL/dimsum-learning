@@ -3,8 +3,6 @@ Require Import stdpp.strings.
 Require Import stdpp.propset.
 Require Import refframe.module.
 
-Import version7.
-
 Module rec.
 Definition fn_name := string.
 Definition var_name := string.
@@ -753,7 +751,7 @@ Fixpoint rename_fn (f1 f2 : fn_name) (e : expr) :=
   | Call f args => Call (if bool_decide (f = f1) then f2 else f) args
   end.
 
-Fixpoint rename_fn_in_def (f1 f2 : fn_name) (fd : fndef) := {|
+Definition rename_fn_in_def (f1 f2 : fn_name) (fd : fndef) := {|
   fd_args := fd.(fd_args);
   fd_body := rename_fn f1 f2 fd.(fd_body);
 |}.
