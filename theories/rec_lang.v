@@ -5,96 +5,6 @@ Require Import refframe.module.
 
 Import version7.
 
-(*** stuff to move *)
-Definition state_set_refines {EV} (mimpl mspec : module EV) (σi : mimpl.(m_state)) (σs : propset mspec.(m_state)) : Prop :=
-  ∀ κs σi2, has_trace mimpl σi κs σi2 → ∃ σs1 σs2, σs1 ∈ σs ∧ has_trace mspec σs1 κs σs2.
-
-Lemma inv_set_implies_refines {EV} (m1 m2 : module EV) (inv : m1.(m_state) → propset m2.(m_state) → Prop):
-  inv m1.(m_initial) {[ m2.(m_initial) ]} →
-  (∀ σi σs, inv σi σs → ∃ σ, σ ∈ σs) →
-  (∀ σi σs, inv σi σs → m1.(m_is_ub) σi → ∃ σs1 σs2, σs1 ∈ σs ∧ has_trace m2 σs1 [Ub] σs2) →
-  (∀ σi1 σs1 σi2 e, inv σi1 σs1 → m1.(m_step) σi1 e σi2 →
-      ∃ σs2, inv σi2 σs2 ∧ σs2 ⊆ {[ σ2 | ∃ σ1, σ1 ∈ σs1 ∧ has_trace m2 σ1 (option_list (Vis <$> e)) σ2 ]}) →
-  refines m1 m2.
-Proof.
-  move => Hinvinit Hinvnonempty Hinvsafe Hinvstep.
-  constructor => // κs σi2.
-  move: m1.(m_initial) Hinvinit => σi1 Hinv Hsteps.
-  have : (∃ σs1 σs2, σs1 ∈ ({[m_initial m2]} : propset _) ∧ has_trace m2 σs1 κs σs2); last set_solver.
-  move: {[ m2.(m_initial) ]} Hinv => σs1 Hinv.
-  elim: Hsteps σs1 Hinv => {σi1 σi2 κs}.
-  - move => ? ? /Hinvnonempty [??].  eexists _, _. split => //. by apply: TraceEnd.
-  - move => σi1 σi2 σi3 κ κs Hstep Hsteps IH σs1 Hinv.
-    have [σs2 [Hinv2 Hsub]]:= Hinvstep _ _ _ _ Hinv Hstep.
-    have [σs3 [σs4 [Hin ?]]]:= IH _ Hinv2.
-    have [σ1 [??]]:= Hsub _ Hin.
-    eexists _, _. split => //. by apply: has_trace_trans.
-  - move => ??? /Hinvsafe Hs σs Hinv.
-    have [? [? [? /has_trace_ub_inv[σs2[??]]]]]:= Hs _ Hinv.
-    eexists _, _. split => //. apply: (has_trace_trans []); [ done |]. by apply: TraceUbRefl.
-Qed.
-
-Lemma state_set_refines_initial {EV} (m1 m2 : module EV):
-  refines m1 m2 →
-  state_set_refines m1 m2 (m_initial m1) {[m_initial m2]}.
-Proof. move => [Hr] ?? /Hr[??]. naive_solver. Qed.
-
-Lemma state_set_refines_step {EV} (m1 m2 : module EV) σi1 σs1 σi2 e:
-  state_set_refines m1 m2 σi1 σs1 →
-  m1.(m_step) σi1 e σi2 →
-  state_set_refines m1 m2 σi2 {[ σ2 | ∃ σ1, σ1 ∈ σs1 ∧ has_trace m2 σ1 (option_list (Vis <$> e)) σ2 ]}.
-Proof.
-  move => Hinv Hstep κs σi3 Hκs.
-  have [|? [? [? /has_trace_app_inv[?[??]]]]]:= Hinv (option_list (Vis <$> e) ++ κs) σi3.
-  { by apply: TraceStep. }
-  set_solver.
-Qed.
-
-Lemma state_set_refines_step_None {EV} (m1 m2 : module EV) σi1 σs1 σi2:
-  state_set_refines m1 m2 σi1 σs1 →
-  m1.(m_step) σi1 None σi2 →
-  state_set_refines m1 m2 σi2 σs1.
-Proof.
-  move => Hinv Hstep κs σi3 Hκs.
-  have [|? [? [? ?]]]:= Hinv κs σi3.
-  { by apply: TraceStepNone. }
-  set_solver.
-Qed.
-
-Lemma state_set_refines_non_empty {EV} (m1 m2 : module EV) σi σs:
-  state_set_refines m1 m2 σi σs → ∃ σ, σ ∈ σs.
-Proof.
-  move => Hs.
-  have [|?[?[??]]]:= Hs [] σi. by apply: TraceEnd.
-  naive_solver.
-Qed.
-
-Lemma state_set_refines_ub {EV} (m1 m2 : module EV) σi σs:
-  state_set_refines m1 m2 σi σs →
-  m1.(m_is_ub) σi →
-  ∃ σ σ', σ ∈ σs ∧ has_trace m2 σ [Ub] σ'.
-Proof. move => Hs Hub. apply: Hs. by apply: TraceUbRefl. Qed.
-
-Lemma refines_implies_inv_set {EV} (m1 m2 : module EV):
-  refines m1 m2 →
-  ∃ (inv : m1.(m_state) → propset m2.(m_state) → Prop),
-  inv m1.(m_initial) {[ m2.(m_initial) ]} ∧
-  (∀ σi σs, inv σi σs → ∃ σ, σ ∈ σs) ∧
-  (∀ σi σs, inv σi σs → m1.(m_is_ub) σi → ∃ σs1 σs2, σs1 ∈ σs ∧ has_trace m2 σs1 [Ub] σs2) ∧
-  (∀ σi1 σs1 σi2 e, inv σi1 σs1 → m1.(m_step) σi1 e σi2 →
-      ∃ σs2, inv σi2 σs2 ∧ σs2 ⊆ {[ σ2 | ∃ σ1, σ1 ∈ σs1 ∧ has_trace m2 σ1 (option_list (Vis <$> e)) σ2 ]}).
-Proof.
-  move => Href.
-  eexists (state_set_refines m1 m2).
-  split_and!.
-  - by apply: state_set_refines_initial.
-  - by apply: state_set_refines_non_empty.
-  - move => σi σs Hinv Hub. by apply: state_set_refines_ub.
-  - move => σi1 σs1 σi2 e Hinv Hstep.
-    eexists _. split_and!; last reflexivity.
-    by apply: state_set_refines_step.
-Qed.
-
 Module rec.
 Definition fn_name := string.
 Definition var_name := string.
@@ -281,12 +191,6 @@ Definition call_module_refines_inv {EV} (m1 m2 : module EV) (i : call_module_inf
   ∃ Ts, Forall2 (state_set_refines m1 m2) σ1.(cs_stack) Ts
     ∧ sσ2 ≡ {[ σ2 | σ1.(cs_waiting) = σ2.(cs_waiting) ∧ Forall2 elem_of σ2.(cs_stack) Ts ]}.
 
-  (* ∀ σ2, σ2 ∈ sσ2 → ( *)
-  (*         (* Forall2 elem_of σ2.(cs_stack) (PropSet <$> (state_refines m1 m2 <$> σ1.(cs_stack)))). *) *)
-
-  (* Forall2 (state_refines m1 m2) σ1.(cs_stack) σ2.(cs_stack) ∧ *)
-  (* σ1.(cs_waiting) = σ2.(cs_waiting)). *)
-
 Lemma call_empty_steps {EV} (m : module EV) i σ σ' w σs:
   has_trace m σ [] σ' →
   has_trace (call_module m i) {| cs_stack := σ :: σs; cs_waiting := w |} []
@@ -380,6 +284,11 @@ Qed.
 Definition call_module_link_inv {EV} (m1 m2 m3 : module EV) (i : call_module_info EV) (M : link_mediator EV EV EV) (σ1 : (call_module m1 i).(m_state)) (σ2 : (call_module m2 i).(m_state)) (σ3 : (call_module m3 i).(m_state)) (σm : M.(lm_state)) : Prop :=
   True.
 
+
+(* This should be nicely provable if we use the language interface
+from Iris, in particular at least ectx_lang since what we need about
+the language might be exactly the bind rule. If we have it, it should
+be fine to move ectxs between different modules. (similar to Simuliris) *)
 Lemma call_module_refines_link {EV} (m1 m2 m3 : module EV) (i : call_module_info EV) M :
   refines_equiv (call_module m1 i) (link (call_module m2 i) (call_module m3 i) M).
 Proof.
@@ -403,48 +312,6 @@ Definition call_intro_mediator {EV} (is_init : EV → bool) : link_mediator EV E
   lm_step b e1 _ e2 b' := e1 = e2 ∧ b' = true ∧
       if b is false then True else if is_init <$> e1 is Some true then False else True;
 |}.
-
-(* Lemma no_behavior_no_step {EV} (m : module EV) σ: *)
-(*   (¬ ∃ e σ', m.(m_step) σ e σ') → ¬( m_is_ub m σ) → has_no_behavior m σ. *)
-(* Proof. move => ???? Htrace. inversion Htrace; simplify_eq/= => //; naive_solver. Qed. *)
-
-Lemma no_behavior_step {EV} (m : module EV) σ:
-  (∀ e σ', m.(m_step) σ e σ' → e = None ∧ has_no_behavior m σ') → ¬(m_is_ub m σ) → has_no_behavior m σ.
-Proof. move => Hstep ??? Htrace. inversion Htrace; simplify_eq/= => //. efeed pose proof Hstep => //. naive_solver. Qed.
-Inductive has_non_ub_trace {EV} (m : module EV) : m.(m_state) → list EV → m.(m_state) → Prop :=
-| NUBTraceEnd σ:
-    has_non_ub_trace m σ [] σ
-| NUBTraceStep σ1 σ2 σ3 κ κs:
-    m.(m_step) σ1 κ σ2 →
-    has_non_ub_trace m σ2 κs σ3 →
-    has_non_ub_trace m σ1 (option_list κ ++ κs) σ3
-.
-
-Lemma NUBTraceStepNone {EV} κs (m : module EV) σ2 σ1 σ3 :
-  m.(m_step) σ1 None σ2 →
-  has_non_ub_trace m σ2 κs σ3 →
-  has_non_ub_trace m σ1 κs σ3.
-Proof. move => ??. by apply: (NUBTraceStep _ _ _ _ None). Qed.
-
-Lemma NUBTraceStepSome {EV} κs (m : module EV) σ2 σ1 σ3 κ :
-  m.(m_step) σ1 (Some κ) σ2 →
-  has_non_ub_trace m σ2 κs σ3 →
-  has_non_ub_trace m σ1 (κ :: κs) σ3.
-Proof. move => ??. by apply: (NUBTraceStep _ _ _ _ (Some _)). Qed.
-
-Lemma has_non_ub_trace_trans {EV} κs1 κs2 (m : module EV) σ1 σ2 σ3 :
-  has_non_ub_trace m σ1 κs1 σ2 →
-  has_non_ub_trace m σ2 κs2 σ3 →
-  has_non_ub_trace m σ1 (κs1 ++ κs2) σ3.
-Proof.
-  elim => //.
-  move => ?????????. rewrite -app_assoc. econstructor; eauto.
-Qed.
-
-Lemma has_trace_add_empty {EV} κs1 (m : module EV) σ1 σ2 :
-  has_trace m σ1 (κs1 ++ []) σ2 →
-  has_trace m σ1 κs1 σ2.
-Proof. by rewrite -{2}[κs1](right_id_L [] (++)). Qed.
 
 Definition call_intro_inv {EV} (m : module EV) (i : call_module_info EV) (is_init : EV → bool) (σ1 : m.(m_state)) (σ2 : (call_module m i).(m_state)) (σ3 : (@module_empty Empty_set).(m_state)) (σm : (call_intro_mediator is_init).(lm_state)) : Prop :=
   match σ2.(cs_stack) with
@@ -914,3 +781,4 @@ Simultaneously one can verify an implementation of the interface,
 assuming that the client fulfills the specification and link the
 implementations in the end and get that it is ub free. For giving the implementation, one needs
 an instruction that non-determinisitically chooses a return value. *)
+End rec.
