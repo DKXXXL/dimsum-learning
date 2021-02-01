@@ -347,6 +347,24 @@ Lemma has_non_ub_trace_add_empty {EV} κs1 (m : module EV) σ1 σ2 :
   has_non_ub_trace m σ1 κs1 σ2.
 Proof. by rewrite -{2}[κs1](right_id_L [] (++)). Qed.
 
+Lemma has_trace_to_non_ub_trace EV (m : module EV) σ1 κs σ2:
+  has_trace m σ1 κs σ2 →
+  ∃ κs' σ2', Vis <$> κs' `prefix_of` κs ∧ has_non_ub_trace m σ1 κs' σ2' ∧
+             ((Vis <$> κs' = κs ∧ σ2' = σ2) ∨ m.(m_is_ub) σ2').
+Proof.
+  elim.
+  - move => ?. eexists [], _. naive_solver constructor.
+  - move => ??? κ ??? [κs' [σ2' [?[??]]]]. eexists (option_list κ ++ κs'), σ2'.
+    split_and! => //.
+    + destruct κ => //. by apply: prefix_cons.
+    + by econstructor.
+    + destruct κ; naive_solver.
+  - move => ????. eexists [], _. split_and! => //=.
+    + by apply prefix_nil.
+    + by constructor.
+    + by right.
+Qed.
+
 (*** has_no_behavior *)
 Definition has_no_behavior {EV} (m : module EV) (σ : m.(m_state)) :=
   ∀ σ' κs, has_trace m σ κs σ' → κs = [].
@@ -776,6 +794,24 @@ Proof.
     by apply: has_trace_trans.
   - move => σ1 ???. exists 0 => ? Hwp.
     inversion_clear Hwp. naive_solver.
+Qed.
+
+Lemma refines_assume_non_ub {EV} (m1 m2 : module EV):
+  (∀ κs, LEM ((∃ κs' σ, κs' `prefix_of` κs ∧ has_trace m2 m2.(m_initial) κs' σ ∧ m2.(m_is_ub) σ))) →
+  (∀ κs σ1, has_trace m1 m1.(m_initial) κs σ1 →
+   (∀ κs', κs' `prefix_of` κs → ¬ ∃ σ2, has_trace m2 m2.(m_initial) (κs' ++ [Ub]) σ2 ) →
+   ∃ σ2, has_trace m2 m2.(m_initial) κs σ2) →
+  refines m1 m2.
+Proof.
+  move => HLEM Href.
+  constructor => κs σ1 Htrace.
+  have [[? [? [[? ->][??]]]]| HE]:= HLEM κs. 2: {
+    apply: Href => // ??. contradict HE.
+    move: HE => [? /has_trace_app_inv[? [? /has_trace_ub_inv[? [??]]]]].
+    eexists _, _. split_and!; [done | | done]. apply: has_trace_add_empty.
+    by apply: has_trace_trans.
+  }
+  eexists _. apply: has_trace_trans => //. by apply: TraceUbRefl.
 Qed.
 
 Ltac invert_all_tac f :=

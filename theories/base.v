@@ -17,6 +17,9 @@ Qed.
 
 Record wrap A := Wrap { a : A }.
 
+Definition Z_of_bool (b : bool) : Z :=
+  if b then 1 else 0.
+
 Ltac destruct_hyps :=
   simplify_eq/=;
   repeat (
