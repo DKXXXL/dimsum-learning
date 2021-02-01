@@ -77,7 +77,7 @@ Lemma wp_ext_call vs E Φ f:
 Proof.
   iIntros "Hfn HΦ".
   iApply wp_lift_head_step; auto.
-  iIntros (σ1 κ κs n) "(Hfctx & Hsctx)".
+  iIntros (σ1 κ κs n) "(#Hfctx & Hsctx)".
   iDestruct (fntbl_entry_lookup with "Hfctx Hfn") as %?.
   iMod "HΦ". iModIntro.
   iSplit; first by eauto using CallExternalStep.
@@ -90,7 +90,21 @@ Proof.
   dependent destruction Heq.
   iDestruct "HΦ" as (? ?) "HΦ".
   iMod (ghost_var_update_halves with "Hm Hm2") as "[Hm Hm2]".
-  iMod ("HΦ" with "Hm [%]") as "HΦ". admit.
+  iMod ("HΦ" with "Hm [%]") as "HΦ". {
+    have Hnub := H2 (κsstart ++ [CallEvt f vs]).
+    move => [??].
+    apply: Hnub. rewrite H0. apply: prefix_app. apply: prefix_cons. apply: prefix_nil.
+    eexists _.
+    rewrite fmap_app -app_assoc. by apply: has_trace_trans.
+  }
+  iModIntro.
+  iSplitL "Hm2". {
+    iSplit => //. iExists _, _. iFrame. iPureIntro. rewrite H0. rewrite cons_middle app_assoc.
+    split_and! => //. rewrite fmap_app. by apply: has_trace_trans.
+    move => ??. apply: H2. by rewrite H0 cons_middle app_assoc.
+  }
+  iSplit => //.
+
 Admitted.
 
 
