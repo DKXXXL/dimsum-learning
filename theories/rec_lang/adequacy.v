@@ -77,10 +77,9 @@ Proof.
   iMod (ghost_var_alloc (ModState mspec mspec.(m_initial))) as (γm) "[Hm1 Hm2]".
   iMod (Hwp _ γm κs' with "[Hm1] Hm2") as (stateI fork_post) "(Hσ&Hwp&Hend)". {
     iExists [], _. iFrame. iPureIntro. split_and! => //. { by constructor. }
-    contradict Hnoub => /=. move: Hnoub => /= [σ' /has_trace_app_inv[?[?/has_trace_ub_inv[?[??]]]]].
-    move: Hpre => [? ->]. eexists _.
-    apply: has_trace_trans; [done|]. apply: (has_trace_trans []); [done|].
-    by apply: TraceUbRefl.
+    contradict Hnoub => /=. move: Hpre => [? ->].
+    move: Hnoub => /= [σ' /has_trace_ub_app_inv[?[??]]].
+    eexists _. apply: has_trace_trans; [done|]. by apply: TraceUbRefl.
   }
   iModIntro. iExists NotStuck, stateI, (replicate (length es) (λ _, True%I)), fork_post.
   rewrite big_sepL2_replicate_r //. iFrame.
