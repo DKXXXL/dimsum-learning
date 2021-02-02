@@ -35,28 +35,30 @@ Inductive has_trace {EV} (m : module EV) : m.(m_state) → list (event EV) → m
     m.(m_is_ub) σ1 →
     has_trace m σ1 κs σ2
 .
+Notation " σ '~{' m , κ '}~>' σ' " := (has_trace m σ κ σ') (at level 40).
+Notation " σ '~{' m , κ '}~>' - " := (∃ σ', has_trace m σ κ σ') (at level 40).
 
 Lemma TraceStepNone {EV} κs (m : module EV) σ2 σ1 σ3 :
   m.(m_step) σ1 None σ2 →
-  has_trace m σ2 κs σ3 →
-  has_trace m σ1 κs σ3.
+  σ2 ~{ m, κs }~> σ3 →
+  σ1 ~{ m, κs }~> σ3.
 Proof. move => ??. by apply: (TraceStep _ _ _ _ None). Qed.
 
 Lemma TraceStepSome {EV} κs (m : module EV) σ2 σ1 σ3 κ :
   m.(m_step) σ1 (Some κ) σ2 →
-  has_trace m σ2 κs σ3 →
-  has_trace m σ1 (Vis κ :: κs) σ3.
+  σ2 ~{ m, κs }~> σ3 →
+  σ1 ~{ m, Vis κ :: κs }~> σ3.
 Proof. move => ??. by apply: (TraceStep _ _ _ _ (Some _)). Qed.
 
 Lemma TraceUbRefl {EV} (m : module EV) σ κs :
   m.(m_is_ub) σ →
-  has_trace m σ κs σ.
+  σ ~{ m, κs }~> σ.
 Proof. move => ?. by apply: TraceUb. Qed.
 
 Lemma has_trace_trans {EV} κs1 κs2 (m : module EV) σ1 σ2 σ3 :
-  has_trace m σ1 κs1 σ2 →
-  has_trace m σ2 κs2 σ3 →
-  has_trace m σ1 (κs1 ++ κs2) σ3.
+  σ1 ~{ m, κs1 }~> σ2 →
+  σ2 ~{ m, κs2 }~> σ3 →
+  σ1 ~{ m, κs1 ++ κs2 }~> σ3.
 Proof.
   elim => //.
   - move => ?????????. rewrite -app_assoc. econstructor; eauto.
@@ -64,13 +66,13 @@ Proof.
 Qed.
 
 Lemma has_trace_add_empty {EV} κs1 (m : module EV) σ1 σ2 :
-  has_trace m σ1 (κs1 ++ []) σ2 →
-  has_trace m σ1 κs1 σ2.
+  σ1 ~{ m, κs1 ++ [] }~> σ2 →
+  σ1 ~{ m, κs1 }~> σ2.
 Proof. by rewrite -{2}[κs1](right_id_L [] (++)). Qed.
 
 Lemma has_trace_ub_inv {EV} κs (m : module EV) σ1 σ2:
-  has_trace m σ1 (Ub :: κs) σ2 →
-  ∃ σ3, has_trace m σ1 [] σ3 ∧ m.(m_is_ub) σ3.
+  σ1 ~{m, Ub :: κs }~> σ2 →
+  ∃ σ3, σ1 ~{ m, [] }~> σ3 ∧ m.(m_is_ub) σ3.
 Proof.
   move Hκ: (Ub :: κs) => κ Hκs.
   elim: Hκs Hκ => //.
@@ -80,8 +82,8 @@ Proof.
 Qed.
 
 Lemma has_trace_cons_inv {EV} κs κ (m : module EV) σ1 σ3:
-  has_trace m σ1 (Vis κ :: κs) σ3 →
-  ∃ σ2 σ2', has_trace m σ1 [] σ2 ∧ (m.(m_is_ub) σ2 ∨ m.(m_step) σ2 (Some κ) σ2' ∧ has_trace m σ2' (κs) σ3).
+  σ1 ~{ m, Vis κ :: κs }~> σ3 →
+  ∃ σ2 σ2', σ1 ~{ m, [] }~> σ2 ∧ (m.(m_is_ub) σ2 ∨ m.(m_step) σ2 (Some κ) σ2' ∧ σ2' ~{ m, κs }~> σ3).
 Proof.
   move Hs: (Vis κ :: κs) => s Hκs.
   elim: Hκs Hs => //.
@@ -92,8 +94,8 @@ Proof.
 Qed.
 
 Lemma has_trace_app_inv {EV} κs1 κs2 (m : module EV) σ1 σ3:
-  has_trace m σ1 (κs1 ++ κs2) σ3 →
-  ∃ σ2, has_trace m σ1 κs1 σ2 ∧ has_trace m σ2 κs2 σ3.
+  σ1 ~{ m, κs1 ++ κs2 }~> σ3 →
+  ∃ σ2, σ1 ~{ m, κs1 }~> σ2 ∧ σ2 ~{ m, κs2 }~> σ3.
 Proof.
   elim: κs1 σ1 => /=. { move => ?. eexists. split => //. apply: TraceEnd. }
   move => [|?] ? IH ?.
@@ -109,8 +111,8 @@ Proof.
 Qed.
 
 Lemma has_trace_ub_app_inv {EV} κs (m : module EV) σ1 σ2:
-  has_trace m σ1 (κs ++ [Ub]) σ2 →
-  ∃ σ3, has_trace m σ1 κs σ3 ∧ m.(m_is_ub) σ3.
+  σ1 ~{ m, κs ++ [Ub] }~> σ2 →
+  ∃ σ3, σ1 ~{ m, κs }~> σ3 ∧ m.(m_is_ub) σ3.
 Proof.
   move => /has_trace_app_inv[? [? /has_trace_ub_inv [σ [??]]]].
   eexists σ. split; [ | done].
@@ -118,38 +120,37 @@ Proof.
 Qed.
 
 Definition state_refines {EV} (mimpl mspec : module EV) (σi : mimpl.(m_state)) (σs : mspec.(m_state)) : Prop :=
-  ∀ κs σi2, has_trace mimpl σi κs σi2 → ∃ σs2, has_trace mspec σs κs σs2.
+  ∀ κs, σi ~{ mimpl, κs }~> - → σs ~{ mspec, κs }~> -.
 
 Record refines {EV} (mimpl mspec : module EV) : Prop := {
   ref_subset: state_refines mimpl mspec mimpl.(m_initial) mspec.(m_initial)
 }.
 
-Definition refines_equiv {EV} (m1 m2 : module EV) : Prop := refines m1 m2 ∧ refines m2 m1.
+Global Instance sqsubseteq_refines EV : SqSubsetEq (module EV) := refines.
+
+Lemma refines_explicit {EV} (mi ms : module EV) κs σi:
+  mi ⊑ ms → mi.(m_initial) ~{ mi, κs }~> σi → ms.(m_initial) ~{ ms, κs }~> -.
+Proof. move => [?]. naive_solver. Qed.
+
+Definition refines_equiv {EV} (m1 m2 : module EV) : Prop := m1 ⊑ m2 ∧ m2 ⊑ m1.
 
 
 (*** properties of refines *)
-Definition safe {EV} (m : module EV) :=
-  ∀ κs σ, has_trace m m.(m_initial) κs σ → Ub ∉ κs.
+Definition safe {EV} (m : module EV) (P : list (event EV) → Prop) :=
+  ∀ κs, m.(m_initial) ~{ m, κs }~> - → P κs.
 
-Lemma refines_preserves_safe EV (mspec mimpl : module EV):
-  safe mspec →
-  refines mimpl mspec →
-  safe mimpl.
+Lemma refines_preserves_safe EV (mspec mimpl : module EV) P:
+  safe mspec P →
+  mimpl ⊑ mspec →
+  safe mimpl P.
+Proof. move => Hs [Hr] κs Hκs. apply: Hs. by apply: Hr. Qed.
+
+Global Instance refines_preorder EV : PreOrder (@refines EV).
 Proof.
-  move => Hs [Hr] κs σ Hκs.
-  have [??]:= (Hr _ _ Hκs).
-  by apply: Hs.
+  constructor.
+  - constructor => // κ Hi; naive_solver.
+  - move => ??? [Hr1] [Hr2]. constructor => /=. unfold state_refines in *. naive_solver.
 Qed.
-
-Lemma refines_reflexive EV (m : module EV):
-  refines m m.
-Proof. constructor => // κ σi Hi; naive_solver. Qed.
-
-Lemma refines_vertical EV (m1 m2 m3 : module EV):
-  refines m1 m2 →
-  refines m2 m3 →
-  refines m1 m3.
-Proof. move => [Hr1] [Hr2]. constructor => /=. unfold state_refines in *. naive_solver. Qed.
 
 (*** link *)
 Record link_mediator EV1 EV2 EV3 := {
@@ -194,8 +195,8 @@ Definition link {EV1 EV2 EV3} (m1 : module EV1) (m2 : module EV2) (M : link_medi
 
 
 Lemma link_empty_steps_l {EV1 EV2 EV3} m1 m2 (M : link_mediator EV1 EV2 EV3) σ1 σ1' σ2 σm  :
-  has_trace m1 σ1 [] σ1' →
-  has_trace (link m1 m2 M) (σ1, σ2, σm) [] (σ1', σ2, σm).
+  σ1 ~{ m1, [] }~> σ1' →
+  (σ1, σ2, σm) ~{ link m1 m2 M, [] }~> (σ1', σ2, σm).
 Proof.
   move Hκ: ([]) => κ Hsteps.
   elim: Hsteps Hκ.
@@ -205,8 +206,8 @@ Proof.
 Qed.
 
 Lemma link_empty_steps_r {EV1 EV2 EV3} m1 m2 (M : link_mediator EV1 EV2 EV3) σ1 σ2' σ2 σm :
-  has_trace m2 σ2 [] σ2' →
-  has_trace (link m1 m2 M) (σ1, σ2, σm) [] (σ1, σ2', σm).
+  σ2 ~{ m2, [] }~> σ2' →
+  (σ1, σ2, σm) ~{ link m1 m2 M, [] }~> (σ1, σ2', σm).
 Proof.
   move Hκ: ([]) => κ Hsteps.
   elim: Hsteps Hκ.
@@ -237,10 +238,10 @@ Inductive link_trace_related {EV1 EV2 EV3} (M : link_mediator EV1 EV2 EV3) : M.(
 .
 
 Lemma link_trace_related_create {EV1 EV2 EV3} (M : link_mediator EV1 EV2 EV3) m1 m2 κs3 σ1 σ1':
-  has_trace (link m1 m2 M) σ1 κs3 σ1' →
+  σ1 ~{ link m1 m2 M, κs3 }~> σ1' →
   ∃ κs1 κs2 σ' σm', link_trace_related M σ1.2 κs1 κs2 κs3 σm' ∧
-  has_trace m1 σ1.1.1 κs1 σ'.1 ∧
-  has_trace m2 σ1.1.2 κs2 σ'.2.
+  σ1.1.1 ~{ m1, κs1 }~> σ'.1 ∧
+  σ1.1.2 ~{ m2, κs2 }~> σ'.2.
 Proof.
   elim; clear.
   - move => [σ ?]. eexists [], [], σ, _. split_and!; constructor.
@@ -270,9 +271,9 @@ Qed.
 
 Lemma link_trace_related_step {EV1 EV2 EV3} (M : link_mediator EV1 EV2 EV3) m1 m2 κs1 κs2 κs3 σ1 σ1' σ2 σ2' σm σm':
   link_trace_related M σm κs1 κs2 κs3 σm' →
-  has_trace m1 σ1 κs1 σ1' →
-  has_trace m2 σ2 κs2 σ2' →
-  has_trace (link m1 m2 M) (σ1, σ2, σm) κs3 (σ1', σ2', σm').
+  σ1 ~{ m1, κs1 }~> σ1' →
+  σ2 ~{ m2, κs2 }~> σ2' →
+  (σ1, σ2, σm) ~{ link m1 m2 M, κs3 }~> (σ1', σ2', σm').
 Proof.
   move => Hrel.
   elim: Hrel σ1 σ2; clear.
@@ -303,11 +304,12 @@ Proof.
 Qed.
 
 Lemma refines_horizontal {EV1 EV2 EV3} m1 m2 m1' m2' (M : link_mediator EV1 EV2 EV3) :
-  refines m1 m1' →
-  refines m2 m2' →
-  refines (link m1 m2 M) (link m1' m2' M).
+  m1 ⊑ m1' →
+  m2 ⊑ m2' →
+  link m1 m2 M ⊑ link m1' m2' M.
 Proof.
-  move => [Hr1] [Hr2]. constructor => κs σi /link_trace_related_create [?[? [? [? [?[/Hr1[??] /Hr2[??]]]]]]].
+  move => Hr1 Hr2.
+  constructor => κs [ ?/link_trace_related_create [?[? [? [? [?[/(refines_explicit _ m1') [//|??] /(refines_explicit _ m2') [//|??]]]]]]]].
   eexists. by apply: link_trace_related_step.
 Qed.
 
@@ -320,36 +322,38 @@ Inductive has_non_ub_trace {EV} (m : module EV) : m.(m_state) → list EV → m.
     has_non_ub_trace m σ2 κs σ3 →
     has_non_ub_trace m σ1 (option_list κ ++ κs) σ3
 .
+Notation " σ '~{' m , κ '}~>ₙ' σ' " := (has_non_ub_trace m σ κ σ') (at level 40).
+Notation " σ '~{' m , κ '}~>ₙ' - " := (∃ σ', has_non_ub_trace m σ κ σ') (at level 40).
 
 Lemma NUBTraceStepNone {EV} κs (m : module EV) σ2 σ1 σ3 :
   m.(m_step) σ1 None σ2 →
-  has_non_ub_trace m σ2 κs σ3 →
-  has_non_ub_trace m σ1 κs σ3.
+  σ2 ~{ m, κs }~>ₙ σ3 →
+  σ1 ~{ m, κs }~>ₙ σ3.
 Proof. move => ??. by apply: (NUBTraceStep _ _ _ _ None). Qed.
 
 Lemma NUBTraceStepSome {EV} κs (m : module EV) σ2 σ1 σ3 κ :
   m.(m_step) σ1 (Some κ) σ2 →
-  has_non_ub_trace m σ2 κs σ3 →
-  has_non_ub_trace m σ1 (κ :: κs) σ3.
+  σ2 ~{ m, κs }~>ₙ σ3 →
+  σ1 ~{ m, κ :: κs }~>ₙ σ3.
 Proof. move => ??. by apply: (NUBTraceStep _ _ _ _ (Some _)). Qed.
 
 Lemma has_non_ub_trace_trans {EV} κs1 κs2 (m : module EV) σ1 σ2 σ3 :
-  has_non_ub_trace m σ1 κs1 σ2 →
-  has_non_ub_trace m σ2 κs2 σ3 →
-  has_non_ub_trace m σ1 (κs1 ++ κs2) σ3.
+  σ1 ~{ m, κs1 }~>ₙ σ2 →
+  σ2 ~{ m, κs2 }~>ₙ σ3 →
+  σ1 ~{ m, κs1 ++ κs2 }~>ₙ σ3.
 Proof.
   elim => //.
   move => ?????????. rewrite -app_assoc. econstructor; eauto.
 Qed.
 
 Lemma has_non_ub_trace_add_empty {EV} κs1 (m : module EV) σ1 σ2 :
-  has_non_ub_trace m σ1 (κs1 ++ []) σ2 →
-  has_non_ub_trace m σ1 κs1 σ2.
+  σ1 ~{ m, κs1 ++ [] }~>ₙ σ2 →
+  σ1 ~{ m, κs1 }~>ₙ σ2.
 Proof. by rewrite -{2}[κs1](right_id_L [] (++)). Qed.
 
 Lemma has_trace_to_non_ub_trace EV (m : module EV) σ1 κs σ2:
-  has_trace m σ1 κs σ2 →
-  ∃ κs' σ2', Vis <$> κs' `prefix_of` κs ∧ has_non_ub_trace m σ1 κs' σ2' ∧
+  σ1 ~{ m, κs }~> σ2 →
+  ∃ κs' σ2', Vis <$> κs' `prefix_of` κs ∧ σ1 ~{ m, κs' }~>ₙ σ2' ∧
              ((Vis <$> κs' = κs ∧ σ2' = σ2) ∨ m.(m_is_ub) σ2').
 Proof.
   elim.
@@ -367,7 +371,7 @@ Qed.
 
 (*** has_no_behavior *)
 Definition has_no_behavior {EV} (m : module EV) (σ : m.(m_state)) :=
-  ∀ σ' κs, has_trace m σ κs σ' → κs = [].
+  ∀ σ' κs, σ ~{ m, κs }~> σ' → κs = [].
 
 Lemma no_behavior_step {EV} (m : module EV) σ:
   (∀ e σ', m.(m_step) σ e σ' → e = None ∧ has_no_behavior m σ') → ¬(m_is_ub m σ) → has_no_behavior m σ.
@@ -375,20 +379,20 @@ Proof. move => Hstep ??? Htrace. inversion Htrace; simplify_eq/= => //. efeed po
 
 (*** state_set *)
 Definition state_set_refines {EV} (mimpl mspec : module EV) (σi : mimpl.(m_state)) (σs : propset mspec.(m_state)) : Prop :=
-  ∀ κs σi2, has_trace mimpl σi κs σi2 → ∃ σs1 σs2, σs1 ∈ σs ∧ has_trace mspec σs1 κs σs2.
+  ∀ κs σi2, σi ~{ mimpl, κs }~> σi2 → ∃ σs1, σs1 ∈ σs ∧ σs1 ~{ mspec, κs }~> -.
 
 Lemma inv_set_implies_refines {EV} (m1 m2 : module EV) (inv : m1.(m_state) → propset m2.(m_state) → Prop):
   inv m1.(m_initial) {[ m2.(m_initial) ]} →
   (∀ σi σs, inv σi σs → ∃ σ, σ ∈ σs) →
-  (∀ σi σs, inv σi σs → m1.(m_is_ub) σi → ∃ σs1 σs2, σs1 ∈ σs ∧ has_trace m2 σs1 [Ub] σs2) →
+  (∀ σi σs, inv σi σs → m1.(m_is_ub) σi → ∃ σs1, σs1 ∈ σs ∧ σs1 ~{ m2, [Ub] }~> -) →
   (∀ σi1 σs1 σi2 e, inv σi1 σs1 → m1.(m_step) σi1 e σi2 →
-      ∃ σs2, inv σi2 σs2 ∧ σs2 ⊆ {[ σ2 | ∃ σ1, σ1 ∈ σs1 ∧ has_trace m2 σ1 (option_list (Vis <$> e)) σ2 ]}) →
-  refines m1 m2.
+      ∃ σs2, inv σi2 σs2 ∧ σs2 ⊆ {[ σ2 | ∃ σ1, σ1 ∈ σs1 ∧ σ1 ~{ m2, option_list (Vis <$> e) }~> σ2 ]}) →
+  m1 ⊑ m2.
 Proof.
   move => Hinvinit Hinvnonempty Hinvsafe Hinvstep.
-  constructor => // κs σi2.
+  constructor => // κs [σi2].
   move: m1.(m_initial) Hinvinit => σi1 Hinv Hsteps.
-  have : (∃ σs1 σs2, σs1 ∈ ({[m_initial m2]} : propset _) ∧ has_trace m2 σs1 κs σs2); last set_solver.
+  have : (∃ σs1 σs2, σs1 ∈ ({[m_initial m2]} : propset _) ∧ σs1 ~{ m2, κs }~> σs2); last set_solver.
   move: {[ m2.(m_initial) ]} Hinv => σs1 Hinv.
   elim: Hsteps σs1 Hinv => {σi1 σi2 κs}.
   - move => ? ? /Hinvnonempty [??].  eexists _, _. split => //. by apply: TraceEnd.
@@ -403,14 +407,14 @@ Proof.
 Qed.
 
 Lemma state_set_refines_initial {EV} (m1 m2 : module EV):
-  refines m1 m2 →
+  m1 ⊑ m2 →
   state_set_refines m1 m2 (m_initial m1) {[m_initial m2]}.
-Proof. move => [Hr] ?? /Hr[??]. naive_solver. Qed.
+Proof. move => Hr ?? /(refines_explicit _ m2)[//|??]. naive_solver. Qed.
 
 Lemma state_set_refines_step {EV} (m1 m2 : module EV) σi1 σs1 σi2 e:
   state_set_refines m1 m2 σi1 σs1 →
   m1.(m_step) σi1 e σi2 →
-  state_set_refines m1 m2 σi2 {[ σ2 | ∃ σ1, σ1 ∈ σs1 ∧ has_trace m2 σ1 (option_list (Vis <$> e)) σ2 ]}.
+  state_set_refines m1 m2 σi2 {[ σ2 | ∃ σ1, σ1 ∈ σs1 ∧ σ1 ~{ m2, option_list (Vis <$> e) }~> σ2 ]}.
 Proof.
   move => Hinv Hstep κs σi3 Hκs.
   have [|? [? [? /has_trace_app_inv[?[??]]]]]:= Hinv (option_list (Vis <$> e) ++ κs) σi3.
@@ -440,7 +444,7 @@ Qed.
 Lemma state_set_refines_ub {EV} (m1 m2 : module EV) σi σs:
   state_set_refines m1 m2 σi σs →
   m1.(m_is_ub) σi →
-  ∃ σ σ', σ ∈ σs ∧ has_trace m2 σ [Ub] σ'.
+  ∃ σ, σ ∈ σs ∧ σ ~{ m2, [Ub] }~> -.
 Proof. move => Hs Hub. apply: Hs. by apply: TraceUbRefl. Qed.
 
 Lemma refines_implies_inv_set {EV} (m1 m2 : module EV):
@@ -448,9 +452,9 @@ Lemma refines_implies_inv_set {EV} (m1 m2 : module EV):
   ∃ (inv : m1.(m_state) → propset m2.(m_state) → Prop),
   inv m1.(m_initial) {[ m2.(m_initial) ]} ∧
   (∀ σi σs, inv σi σs → ∃ σ, σ ∈ σs) ∧
-  (∀ σi σs, inv σi σs → m1.(m_is_ub) σi → ∃ σs1 σs2, σs1 ∈ σs ∧ has_trace m2 σs1 [Ub] σs2) ∧
+  (∀ σi σs, inv σi σs → m1.(m_is_ub) σi → ∃ σs1, σs1 ∈ σs ∧ σs1 ~{ m2, [Ub] }~> -) ∧
   (∀ σi1 σs1 σi2 e, inv σi1 σs1 → m1.(m_step) σi1 e σi2 →
-      ∃ σs2, inv σi2 σs2 ∧ σs2 ⊆ {[ σ2 | ∃ σ1, σ1 ∈ σs1 ∧ has_trace m2 σ1 (option_list (Vis <$> e)) σ2 ]}).
+      ∃ σs2, inv σi2 σs2 ∧ σs2 ⊆ {[ σ2 | ∃ σ1, σ1 ∈ σs1 ∧ σ1 ~{ m2, option_list (Vis <$> e) }~> σ2 ]}).
 Proof.
   move => Href.
   eexists (state_set_refines m1 m2).
@@ -466,10 +470,10 @@ Qed.
 (*** wp': equivalent definition of refines *)
 Inductive wp' {EV} (m1 m2 : module EV) : nat → m1.(m_state) -> list (event EV) -> Prop :=
 | Wp_step' σi1 κs n:
-     (∃ σs2, has_trace m2 m2.(m_initial) κs σs2 ∧ m2.(m_is_ub) σs2) ∨
+     (∃ σs2, m2.(m_initial) ~{ m2, κs }~> σs2 ∧ m2.(m_is_ub) σs2) ∨
        ¬ m1.(m_is_ub) σi1 ∧
        (∀ σi2 κ n', n = S n' → m1.(m_step) σi1 κ σi2 ->
-         ∃ σs2, has_trace m2 m2.(m_initial) (κs ++ option_list (Vis <$> κ)) σs2 ∧
+         ∃ σs2, m2.(m_initial) ~{ m2, κs ++ option_list (Vis <$> κ) }~> σs2 ∧
                wp' m1 m2 n' σi2 (κs ++ option_list (Vis <$> κ))) ->
     wp' m1 m2 n σi1 κs
 .
@@ -498,10 +502,10 @@ Proof. naive_solver. Qed.
 
 Lemma wp'_implies_refines {EV} (m1 m2 : module EV):
   (∀ n, wp' m1 m2 n m1.(m_initial) []) →
-  refines m1 m2.
+  m1 ⊑ m2.
 Proof.
   move => Hwp.
-  constructor => κs σi.
+  constructor => κs [σi].
   move: m1.(m_initial) Hwp => σi1.
   have : (has_trace m2 m2.(m_initial) [] m2.(m_initial)). { by apply: TraceEnd. }
   move: {2}m2.(m_initial) => σs1.
@@ -528,20 +532,20 @@ Qed.
 
 Lemma refines_implies_wp' {EV} (m1 m2 : module EV):
   (∀ σ, LEM (m1.(m_is_ub) σ)) →
-  refines m1 m2 →
+  m1 ⊑ m2 →
   (∀ n, wp' m1 m2 n m1.(m_initial) []).
 Proof.
-  move => Hdec [Hr] n.
+  move => Hdec Hr n.
   have : (has_trace m1 m1.(m_initial) [] m1.(m_initial)). { by apply: TraceEnd. }
   move: {2 3}(m1.(m_initial)) => σi.
   move: ([]) => κstart.
   elim/lt_wf_ind: n κstart σi.
   move => n IH κstart σi Hstepi.
   constructor.
-  have [??]:= (Hr _ _ Hstepi).
+  have [??]:= (refines_explicit _ _ _ _ Hr Hstepi).
   have [?|?] := Hdec σi. {
     left.
-    have /Hr[? /has_trace_ub_app_inv ? //]: has_trace m1 (m_initial m1) (κstart ++ [Ub]) σi.
+    have /(refines_explicit _ _ _ _ Hr)[? /has_trace_ub_app_inv ? //]: has_trace m1 (m_initial m1) (κstart ++ [Ub]) σi.
     apply: has_trace_trans => //. by apply: TraceUb.
   }
   right. split => // σi2 κ n' ? Hstep; subst.
@@ -550,7 +554,7 @@ Proof.
     rewrite -(right_id_L [] (++) (option_list _)).
     apply: TraceStep => //. by apply: TraceEnd.
   }
-  move: (Hs1') => /Hr[??].
+  move: (Hs1') => /(refines_explicit _ _ _ _ Hr)[??].
   eexists _. split => //.
   apply: IH => //. lia.
 Qed.
@@ -561,11 +565,11 @@ Lemma inv_implies_refines {EV} (m1 m2 : module EV) (inv : m1.(m_state) → m2.(m
   (∀ σi σs, inv σi σs → ¬ m1.(m_is_ub) σi) →
   (∀ σi1 σs1 σi2 e,
       inv σi1 σs1 → m1.(m_step) σi1 e σi2 →
-      ∃ σs2, has_trace m2 σs1 (option_list (Vis <$> e) ++ [Ub]) σs2 ∨ (inv σi2 σs2 ∧ has_trace m2 σs1 (option_list (Vis <$> e)) σs2)) →
-  refines m1 m2.
+      ∃ σs2, σs1 ~{ m2, option_list (Vis <$> e) ++ [Ub] }~> σs2 ∨ (inv σi2 σs2 ∧ σs1 ~{ m2, option_list (Vis <$> e) }~> σs2)) →
+  m1 ⊑ m2.
 Proof.
   move => Hinvinit Hinvsafe Hinvstep.
-  constructor => // κs σi2. move: m1.(m_initial) m2.(m_initial) Hinvinit => σi1 σs1 Hinv Hsteps.
+  constructor => // κs [σi2]. move: m1.(m_initial) m2.(m_initial) Hinvinit => σi1 σs1 Hinv Hsteps.
   elim: Hsteps σs1 Hinv => {σi1 σi2 κs}.
   - by eauto using TraceEnd.
   - move => σi1 σi2 σi3 κ κs Hstep Hsteps IH σs1 Hinv.
@@ -579,14 +583,14 @@ Qed.
 
 Lemma inv_implies_refines' {EV} (m1 m2 : module EV) (inv : m1.(m_state) → m2.(m_state) → Prop):
   inv m1.(m_initial) m2.(m_initial) →
-  (∀ σi σs, inv σi σs → m1.(m_is_ub) σi → ∃ σs2, has_trace m2 σs [Ub] σs2) →
+  (∀ σi σs, inv σi σs → m1.(m_is_ub) σi → ∃ σs2, σs ~{ m2, [Ub] }~> σs2) →
   (∀ σi1 σs1 σi2 e, inv σi1 σs1 → m1.(m_step) σi1 e σi2 →
       (m1.(m_is_ub) σi1 ∨ m2.(m_is_ub) σs1) ∨
-      ∃ σs2, (inv σi2 σs2 ∨ has_no_behavior m1 σi2) ∧ has_trace m2 σs1 (option_list (Vis <$> e)) σs2) →
-  refines m1 m2.
+      ∃ σs2, (inv σi2 σs2 ∨ has_no_behavior m1 σi2) ∧ σs1 ~{ m2, option_list (Vis <$> e) }~> σs2) →
+  m1 ⊑ m2.
 Proof.
   move => Hinvinit Hinvsafe Hinvstep.
-  constructor => // κs σi2.
+  constructor => // κs [σi2].
   move: m1.(m_initial) m2.(m_initial) Hinvinit => σi1 σs1 Hinv Hsteps.
   elim: Hsteps σs1 Hinv => {σi1 σi2 κs}.
   - by eauto using TraceEnd.
@@ -610,14 +614,14 @@ Qed.
 (* This does not seem nice to work work. *)
 Lemma inv_implies_refines_equiv {EV} (m1 m2 : module EV) (inv : m1.(m_state) → m2.(m_state) → Prop):
   inv m1.(m_initial) m2.(m_initial) →
-  (∀ σi σs, inv σi σs → m1.(m_is_ub) σi → ∃ σs2, has_trace m2 σs [Ub] σs2) →
-  (∀ σi σs, inv σs σi → m2.(m_is_ub) σi → ∃ σs2, has_trace m1 σs [Ub] σs2) →
+  (∀ σi σs, inv σi σs → m1.(m_is_ub) σi → ∃ σs2, σs ~{ m2, [Ub] }~> σs2) →
+  (∀ σi σs, inv σs σi → m2.(m_is_ub) σi → ∃ σs2, σs ~{ m1, [Ub] }~> σs2) →
   (∀ σi1 σs1 σi2 e, inv σi1 σs1 → m1.(m_step) σi1 e σi2 →
       (m1.(m_is_ub) σi1 ∨ m2.(m_is_ub) σs1) ∨
-      ∃ σs2, (inv σi2 σs2 ∨ has_no_behavior m1 σi2) ∧ has_trace m2 σs1 (option_list (Vis <$> e)) σs2) →
+      ∃ σs2, (inv σi2 σs2 ∨ has_no_behavior m1 σi2) ∧ σs1 ~{ m2, option_list (Vis <$> e) }~> σs2) →
   (∀ σi1 σs1 σs2 e, inv σi1 σs1 → m2.(m_step) σs1 e σs2 →
       (m1.(m_is_ub) σi1 ∨ m2.(m_is_ub) σs1) ∨
-      ∃ σi2, (inv σi2 σs2 ∨ has_no_behavior m2 σs2) ∧ has_trace m1 σi1 (option_list (Vis <$> e)) σi2) →
+      ∃ σi2, (inv σi2 σs2 ∨ has_no_behavior m2 σs2) ∧ σi1 ~{ m1, option_list (Vis <$> e) }~> σi2) →
   refines_equiv m1 m2.
 Proof.
   move => Hinvinit Hinvsafe1 Hinvsafe2 Hinvstep1 Hinvstep2.
@@ -665,7 +669,7 @@ Definition next_states {EV} (m : module EV) (σ : m.(m_state)) : propset (option
   {[ eσ | ∃ e, Vis <$> e = eσ.1 ∧ m.(m_step) σ e eσ.2 ]} ∪ {[ eσ | m.(m_is_ub) σ ]}.
 
 Lemma in_next_states_has_trace {EV} (m : module EV) e σ1 σ2 :
-  (e, σ2) ∈ next_states m σ1 → has_trace m σ1 (option_list e) σ2.
+  (e, σ2) ∈ next_states m σ1 → σ1 ~{ m, option_list e }~> σ2.
 Proof.
   move => [[? /= [<- ?]]| ?].
   - apply: has_trace_add_empty. apply: TraceStep => //. by apply: TraceEnd.
@@ -725,10 +729,10 @@ Lemma next_states_implies_refines {EV} (m1 m2 : module EV) (inv : m1.(m_state) �
   inv m1.(m_initial) m2.(m_initial) →
   (∀ σi σs, inv σi σs → all_states_in (next_states m1 σi) (next_states m2 σs) (λ eσi2 eσs2,
       m2.(m_is_ub) σs ∨ (eσi2.1 = eσs2.1 ∧ (m2.(m_is_ub) eσs2.2 ∨ inv eσi2.2 eσs2.2)) )) →
-  refines m1 m2.
+  m1 ⊑ m2.
 Proof.
   move => Hinvinit Hinvstep.
-  constructor => // κs σi2.
+  constructor => // κs [σi2].
   move: m1.(m_initial) m2.(m_initial) Hinvinit => σi1 σs1 Hinv Hsteps.
   elim: Hsteps σs1 Hinv => {σi1 σi2 κs}.
   - by eauto using TraceEnd.
@@ -768,17 +772,17 @@ Inductive wp {EV} (m1 m2 : module EV) : nat → m1.(m_state) -> m2.(m_state) -> 
     (* This is incomplete if the inital state is UB but that is pretty weird anyway.  *)
     ¬ m1.(m_is_ub) σi1 ∧
     (∀ σi2 κ n', n = S n' → m1.(m_step) σi1 κ σi2 -> ∃ σs2,
-      has_trace m2 σs1 (option_list (Vis <$> κ) ++ [Ub]) σs2 ∨
-      (has_trace m2 σs1 (option_list (Vis <$> κ)) σs2 ∧ wp m1 m2 n' σi2 σs2)) ->
+      σs1 ~{ m2, option_list (Vis <$> κ) ++ [Ub] }~> σs2 ∨
+      (σs1 ~{ m2, option_list (Vis <$> κ) }~> σs2 ∧ wp m1 m2 n' σi2 σs2)) ->
     wp m1 m2 n σi1 σs1
 .
 
 Lemma wp_implies_refines {EV} (m1 m2 : module EV):
   (∀ n, wp m1 m2 n m1.(m_initial) m2.(m_initial)) →
-  refines m1 m2.
+  m1 ⊑ m2.
 Proof.
   move => Hwp.
-  constructor => κs σi.
+  constructor => κs [σi].
   move: m1.(m_initial) Hwp => σi1.
   move: m2.(m_initial) => σs1.
   move => Hwp Hsteps.
@@ -794,24 +798,6 @@ Proof.
     by apply: has_trace_trans.
   - move => σ1 ???. exists 0 => ? Hwp.
     inversion_clear Hwp. naive_solver.
-Qed.
-
-Lemma refines_assume_non_ub {EV} (m1 m2 : module EV):
-  (∀ κs, LEM ((∃ κs' σ, κs' `prefix_of` κs ∧ has_trace m2 m2.(m_initial) κs' σ ∧ m2.(m_is_ub) σ))) →
-  (∀ κs σ1, has_trace m1 m1.(m_initial) κs σ1 →
-   (∀ κs', κs' `prefix_of` κs → ¬ ∃ σ2, has_trace m2 m2.(m_initial) (κs' ++ [Ub]) σ2 ) →
-   ∃ σ2, has_trace m2 m2.(m_initial) κs σ2) →
-  refines m1 m2.
-Proof.
-  move => HLEM Href.
-  constructor => κs σ1 Htrace.
-  have [[? [? [[? ->][??]]]]| HE]:= HLEM κs. 2: {
-    apply: Href => // ??. contradict HE.
-    move: HE => [? /has_trace_app_inv[? [? /has_trace_ub_inv[? [??]]]]].
-    eexists _, _. split_and!; [done | | done]. apply: has_trace_add_empty.
-    by apply: has_trace_trans.
-  }
-  eexists _. apply: has_trace_trans => //. by apply: TraceUbRefl.
 Qed.
 
 Ltac invert_all_tac f :=
@@ -896,7 +882,7 @@ Definition t2_to_t1_inv (σ1 : mod2_state) (σ2 : bool) : Prop :=
   | _ => true
   end.
 Lemma test_refines1 :
-  refines mod2 mod1.
+  mod2 ⊑ mod1.
 Proof.
   apply: (inv_implies_refines mod2 mod1 t2_to_t1_inv).
   - done.
@@ -913,7 +899,7 @@ Definition mod_loop {A} : module A := {|
   m_is_ub s:= False;
 |}.
 Lemma test_refines2 {A} (m : module A) :
-  refines mod_loop m.
+  mod_loop ⊑ m.
 Proof.
   apply: (inv_implies_refines mod_loop m (λ _ _, True)).
   - done.
@@ -922,7 +908,7 @@ Proof.
 Qed.
 
 Lemma test_refines2_wp {A} (m : module A) :
-  refines mod_loop m.
+  mod_loop ⊑ m.
 Proof.
   apply: wp_implies_refines => /=.
   move => n. elim/lt_wf_ind: n => n Hloop.
@@ -951,7 +937,7 @@ Definition mod_stuck1 : module nat := {|
 |}.
 
 Lemma test_refines_stuck1 :
-  refines mod_stuck1 mod_stuck1.
+  mod_stuck1 ⊑ mod_stuck1.
 Proof.
   apply: (inv_implies_refines mod_stuck1 mod_stuck1 (λ σ1 σ2, σ1 = σ2 ∧ σ1 ≠ S1S3)).
   - done.
@@ -988,7 +974,7 @@ Definition stuck2_inv (σ1 : stuck2_state) (σ2 : stuck1_state) :=
   σ2 = match σ1 with | S2S1 => S1S1 | S2S2 => S1S2 | S2S3 => S1S3 | S2S4 => S1S1 end.
 
 Lemma test_refines_stuck2 :
-  refines mod_stuck2 mod_stuck1.
+  mod_stuck2 ⊑ mod_stuck1.
 Proof.
   apply: (inv_implies_refines mod_stuck2 mod_stuck1 stuck2_inv).
   - done.
@@ -1000,7 +986,7 @@ Proof.
 Qed.
 
 Lemma test_refines_stuck2_wp :
-  refines mod_stuck2 mod_stuck1.
+  mod_stuck2 ⊑ mod_stuck1.
 Proof.
   apply: wp_implies_refines => n.
   (* S2S1 *)
@@ -1046,7 +1032,7 @@ Definition stuck3_inv (σ1 : stuck3_state) (σ2 : stuck1_state) :=
 
 (* The following is not provable: *)
 Lemma test_refines_stuck3 :
-  refines mod_stuck3 mod_stuck1.
+  mod_stuck3 ⊑ mod_stuck1.
 Proof.
   apply: (inv_implies_refines mod_stuck3 mod_stuck1 stuck3_inv).
   - done.
@@ -1107,7 +1093,7 @@ Definition call_merge_inv (σ1 : bool * call2_state * unit) (σ2 : bool) :=
   | _, _ => True
   end ∧ σ2 = if σ1.1.2 is C2S3 then true else false.
 Lemma test_refines_call_merge :
-  refines (link mod_call1 mod_call2 (stateless_mediator call_merge_rel)) mod1.
+  link mod_call1 mod_call2 (stateless_mediator call_merge_rel) ⊑ mod1.
 Proof.
   apply: (inv_implies_refines (link mod_call1 mod_call2 (stateless_mediator _)) mod1 call_merge_inv).
   - done.
@@ -1125,7 +1111,7 @@ Qed.
 Definition call_split_inv (σ1 : bool) (σ2 : bool * call2_state * unit) :=
   if σ1 then True else σ2 = (false, C2S1, tt).
 Lemma test_refines_call_split :
-  refines mod1 (link mod_call1 mod_call2 (stateless_mediator call_merge_rel)).
+  mod1 ⊑ link mod_call1 mod_call2 (stateless_mediator call_merge_rel).
 Proof.
   apply: (inv_implies_refines mod1 (link mod_call1 mod_call2 (stateless_mediator call_merge_rel)) call_split_inv).
   - done.
@@ -1140,7 +1126,7 @@ Proof.
 Qed.
 
 Lemma test_refines_call_merge_wp :
-  refines (link mod_call1 mod_call2 (stateless_mediator call_merge_rel)) mod1.
+  link mod_call1 mod_call2 (stateless_mediator call_merge_rel) ⊑ mod1.
 Proof.
   apply: (wp_implies_refines) => n.
   constructor. split; [naive_solver|] => σi1 n' ? ? Hstep. subst.
@@ -1158,7 +1144,7 @@ Proof.
 Qed.
 
 Lemma test_refines_call_split_wp :
-  refines mod1 (link mod_call1 mod_call2 (stateless_mediator call_merge_rel)).
+  mod1 ⊑ link mod_call1 mod_call2 (stateless_mediator call_merge_rel).
 Proof.
   apply: (wp_implies_refines) => n.
   constructor. split; [naive_solver|] => σi1 n' ? ? Hstep. subst.

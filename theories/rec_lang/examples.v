@@ -64,8 +64,8 @@ Qed.
 End examples.
 
 Lemma test_main_adequate :
-  (∀ κs, LEM ((∃ κs' σ, κs' `prefix_of` κs ∧ has_trace test_module test_module.(m_initial) κs' σ ∧ test_module.(m_is_ub) σ))) →
-  refines (iris_module rec_lang ([test_main], {| st_fns := ∅ |})) test_module.
+  (∀ κs, LEM (test_module.(m_initial) ~{ test_module, κs }~> -)) →
+  iris_module rec_lang ([test_main], {| st_fns := ∅ |}) ⊑ test_module.
 Proof.
   move => HLEM.
   set Σ : gFunctors := #[reclangΣ].
@@ -74,3 +74,5 @@ Proof.
   iApply wp_mono. by iIntros (?) "_".
   iApply wp_test_main => //. by iApply (fntbl_entry_intro with "Hfn").
 Qed.
+
+(* Print Assumptions test_main_adequate. *)

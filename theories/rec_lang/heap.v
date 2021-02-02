@@ -39,9 +39,9 @@ Definition own_module {Σ} EV `{!ghost_varG Σ (mod_state EV)} (γ : gname) (m :
   ghost_var γ (1/2) (ModState m σ).
 Definition WPspec {Σ} EV `{!ghost_varG Σ (mod_state EV)} `{!invG Σ} (γ : gname) (κs : list EV) (E : coPset) (Φ : iProp Σ) : iProp Σ :=
   |={E, ∅}=> ▷ ∃ m σ, own_module EV γ m σ ∗
-   ∃ σ', ⌜has_trace m σ (Vis <$> κs) σ'⌝ ∗ (
+   ∃ σ', ⌜σ ~{ m, Vis <$> κs }~> σ'⌝ ∗ (
          own_module EV γ m σ' -∗
-        ⌜¬ ∃ σub, has_trace m σ ((Vis <$> κs) ++ [Ub]) σub⌝ -∗
+        ⌜¬ σ ~{m, (Vis <$> κs) ++ [Ub] }~> -⌝ -∗
         |={∅, E}=> Φ).
 
 
@@ -57,9 +57,9 @@ Section definitions.
   Definition spec_ctx (κsrest : list EV) : iProp Σ :=
     ∃ κsstart σscur,
       ⌜module_full_trace = κsstart ++ κsrest⌝ ∗
-      ⌜has_trace module_spec module_spec.(m_initial) (Vis <$> κsstart) σscur⌝ ∗
+      ⌜module_spec.(m_initial) ~{ module_spec, Vis <$> κsstart }~> σscur⌝ ∗
       (* obtained by classical reasoning before switching to Iris *)
-      ⌜∀ κs, κs `prefix_of` module_full_trace → ¬ ∃ σub, has_trace module_spec module_spec.(m_initial) ((Vis <$>  κs) ++ [Ub]) σub⌝ ∗
+      ⌜¬ module_spec.(m_initial) ~{ module_spec, (Vis <$> module_full_trace) ++ [Ub] }~> -⌝ ∗
       own_module EV module_spec_name module_spec σscur.
 
 End definitions.

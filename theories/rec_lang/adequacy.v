@@ -42,7 +42,7 @@ Proof. move => Hev [*]. subst. by apply: Hev. Qed.
 
 Lemma has_non_ub_trace_nsteps Λ i σ1 κs σ2:
   single_event_prim_step Λ →
-  has_non_ub_trace (iris_module Λ i) σ1 κs σ2 ↔ ∃ n, nsteps n σ1 κs σ2.
+  σ1 ~{ iris_module Λ i, κs }~>ₙ σ2 ↔ ∃ n, nsteps n σ1 κs σ2.
 Proof.
   move => Hev.
   split.
@@ -55,7 +55,7 @@ Proof.
 Qed.
 
 Theorem module_adequacy Σ Λ mspec `{!invPreG Σ} `{!modulePreG Λ.(observation) Σ} es σ1:
-  (∀ κs, LEM ((∃ κs' σ, κs' `prefix_of` κs ∧ has_trace mspec mspec.(m_initial) κs' σ ∧ mspec.(m_is_ub) σ))) →
+  (∀ κs, LEM (mspec.(m_initial) ~{ mspec, κs }~> -)) →
   single_event_prim_step Λ →
   (∀ `{Hinv : !invG Σ} γm κsfull,
        let _ : moduleG Λ.(observation) Σ := ModuleG Λ.(observation) Σ mspec _ γm κsfull in
@@ -67,17 +67,20 @@ Theorem module_adequacy Σ Λ mspec `{!invPreG Σ} `{!modulePreG Λ.(observation
        stateI σ1 κsfull 0 ∗
        ([∗ list] e ∈ es, WP e @ ⊤ {{ _, True }}) ∗
        (∀ σ2 n, stateI σ2 [] n ={⊤,∅}=∗ spec_ctx [])) →
-  refines (iris_module Λ (es, σ1)) mspec.
+  iris_module Λ (es, σ1) ⊑ mspec.
 Proof.
   move => HLEM Hev /= Hwp.
-  apply: refines_assume_non_ub => // κsfull σ2 Htrace Hnoub.
-  move: Htrace => /has_trace_to_non_ub_trace[κs' [[??] [? [Htrace Hor]]]].
+  constructor => κsfull [σ2 Htrace]. case: (HLEM κsfull) => // Hnoub.
+  move: Htrace => /has_trace_to_non_ub_trace[κs' [[??] [Hpre [Htrace Hor]]]].
   move: Htrace => /has_non_ub_trace_nsteps[//|?] /=.
   apply: wp_strong_adequacy => ?.
   iMod (ghost_var_alloc (ModState mspec mspec.(m_initial))) as (γm) "[Hm1 Hm2]".
   iMod (Hwp _ γm κs' with "[Hm1] Hm2") as (stateI fork_post) "(Hσ&Hwp&Hend)". {
     iExists [], _. iFrame. iPureIntro. split_and! => //. { by constructor. }
-    move => ? /= [? Hκs']. subst. apply: Hnoub. etrans. 2: done. eexists _. by rewrite fmap_app.
+    contradict Hnoub => /=. move: Hnoub => /= [σ' /has_trace_app_inv[?[?/has_trace_ub_inv[?[??]]]]].
+    move: Hpre => [? ->]. eexists _.
+    apply: has_trace_trans; [done|]. apply: (has_trace_trans []); [done|].
+    by apply: TraceUbRefl.
   }
   iModIntro. iExists NotStuck, stateI, (replicate (length es) (λ _, True%I)), fork_post.
   rewrite big_sepL2_replicate_r //. iFrame.
@@ -90,12 +93,12 @@ Qed.
 
 
 Lemma reclang_adequacy Σ `{!reclangPreG Σ} mspec (mains : list lang.expr) (fns : gmap fn_name fndef):
-  (∀ κs, LEM ((∃ κs' σ, κs' `prefix_of` κs ∧ has_trace mspec mspec.(m_initial) κs' σ ∧ mspec.(m_is_ub) σ))) →
+  (∀ κs, LEM (mspec.(m_initial) ~{ mspec, κs }~> -)) →
   (∀ {HrecG : reclangG Σ},
     ⊢ @own_module _ rec_event (module_ghostvarG) module_spec_name mspec mspec.(m_initial) -∗
       fntbl fns
       ={⊤}=∗ [∗ list] main ∈ mains, WP main {{ _, True }}) →
-  refines (iris_module rec_lang (mains, {| st_fns := fns |})) mspec.
+ iris_module rec_lang (mains, {| st_fns := fns |}) ⊑ mspec.
 Proof.
   move => HLEM Hwp. apply: module_adequacy; [done| | ]. {
     apply: single_event_head_prim_step.

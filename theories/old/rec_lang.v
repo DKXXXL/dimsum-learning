@@ -142,7 +142,7 @@ Definition rec_module (fns: rec_fns) : module rec_event := {|
 Definition rec_link (fns1 fns2 : rec_fns) : rec_fns := fns1 ∪ fns2.
 
 Definition ctx_refines (fnsi fnss : rec_fns) :=
-  ∀ C, refines (rec_module (rec_link fnsi C)) (rec_module (rec_link fnss C)).
+  ∀ C, rec_module (rec_link fnsi C) ⊑ rec_module (rec_link fnss C).
 
 Definition ctx_equiv (fnsi fnss : rec_fns) :=
   ctx_refines fnsi fnss ∧ ctx_refines fnss fnsi.
@@ -190,8 +190,8 @@ Definition call_module_refines_inv {EV} (m1 m2 : module EV) (i : call_module_inf
     ∧ sσ2 ≡ {[ σ2 | σ1.(cs_waiting) = σ2.(cs_waiting) ∧ Forall2 elem_of σ2.(cs_stack) Ts ]}.
 
 Lemma call_empty_steps {EV} (m : module EV) i σ σ' w σs:
-  has_trace m σ [] σ' →
-  has_trace (call_module m i) {| cs_stack := σ :: σs; cs_waiting := w |} []
+  σ ~{ m, [] }~> σ' →
+  {| cs_stack := σ :: σs; cs_waiting := w |} ~{ call_module m i, [] }~>
             {| cs_stack := σ' :: σs; cs_waiting := w |}.
 Proof.
   move Hκ: ([]) => κ Hsteps.
@@ -212,8 +212,8 @@ Proof.
 Qed.
 
 Lemma call_module_refines {EV} (m1 m2 : module EV) (i : call_module_info EV) :
-  refines m1 m2 →
-  refines (call_module m1 i) (call_module m2 i).
+  m1 ⊑ m2 →
+  call_module m1 i ⊑ call_module m2 i.
 Proof.
   move => Href.
   apply (inv_set_implies_refines _ _ (call_module_refines_inv _ _ _)).
@@ -223,11 +223,11 @@ Proof.
   - move => [??] ? [Ts [/state_set_refines_exists_Forall2 [??] Hσs]].
     eexists (Build_call_state _ _ _ _). by rewrite {}Hσs.
   - move => [csi wi] σs /= [Ts [Hall Hσs]] Hub. destruct csi => //; simplify_eq/=.
-    move: Hall => /(Forall2_cons_inv_l _ _ _)[? [? [ /state_set_refines_ub [//|σ1 [σ1' [? Hub2]]] [/state_set_refines_exists_Forall2[??] ?]]]] /=. subst.
+    move: Hall => /(Forall2_cons_inv_l _ _ _)[? [? [ /state_set_refines_ub [//|σ1 [? [? Hub2]]] [/state_set_refines_exists_Forall2[??] ?]]]] /=. subst.
     move: Hub2 => /has_trace_ub_inv[? [??]].
-    eexists (Build_call_state _ _ _ _), _. rewrite {}Hσs. split.
+    eexists (Build_call_state _ _ _ _). rewrite {}Hσs. split.
     { split => //. by constructor. }
-    apply: (has_trace_trans []); [ by apply: call_empty_steps|].
+    eexists _. apply: (has_trace_trans []); [ by apply: call_empty_steps|].
     by apply: TraceUbRefl.
   - move => [csi wi] σs [csi2 wi2] e [Ts [Hall Hσs]] /= Hstep.
     invert_all @call_step.
@@ -321,7 +321,7 @@ Lemma call_intro {EV} (m : module EV) (i : call_module_info EV) (is_init : EV �
   (∀ e σ, m.(m_step) m.(m_initial) e σ → ∃ κ, e = Some κ ∧ is_init κ) → (* TODO: Is this necessary? *)
   ¬ m_is_ub m (m_initial m) →
   (∀ σ1 e σ2, m.(m_step) σ1 (Some e) σ2 → i.(cmi_final) e → has_no_behavior m σ2) →
-  (∀ σ'' σ' σ e κs e', m.(m_step) m.(m_initial) e σ' → has_non_ub_trace m σ' κs σ → m.(m_step) σ (Some e') σ'' → ¬ is_init e') →
+  (∀ σ'' σ' σ e κs e', m.(m_step) m.(m_initial) e σ' → σ' ~{ m, κs }~>ₙ σ → m.(m_step) σ (Some e') σ'' → ¬ is_init e') →
   refines_equiv m (link (call_module m i) ∅ (call_intro_mediator is_init)).
 Proof.
   move => HSome Hnotub Hfinal Hnoinit.
@@ -429,22 +429,22 @@ Qed.
 
 Lemma refines_implies_rec_ctx_refines fnsi fnss :
   dom (gset string) fnsi = dom (gset string) fnss →
-  refines (rec_module fnsi) (rec_module fnss) →
+  rec_module fnsi ⊑ rec_module fnss →
   ctx_refines fnsi fnss.
 Proof.
   move => Hdom Href C.
   rewrite /rec_link map_difference_union_r (map_difference_union_r fnss).
-  apply: refines_vertical. { apply rec_refines_call. }
-  apply: refines_vertical. 2: { apply rec_refines_call. }
-  apply: refines_horizontal. 2: { apply refines_reflexive. }
+  etrans. { apply rec_refines_call. }
+  etrans. 2: { apply rec_refines_call. }
+  apply: refines_horizontal. 2: { reflexivity. }
 
-  apply: refines_vertical. { apply rec_link_ok. apply: map_disjoint_difference_r'. }
-  apply: refines_vertical. 2: { apply rec_link_ok. apply: map_disjoint_difference_r'. }
+  etrans. { apply rec_link_ok. apply: map_disjoint_difference_r'. }
+  etrans. 2: { apply rec_link_ok. apply: map_disjoint_difference_r'. }
   rewrite !dom_difference_L !Hdom.
   apply: refines_horizontal.
   - apply: call_module_refines. apply: Href.
   - rewrite (map_difference_eq_dom_L _ _ _ Hdom).
-    apply refines_reflexive.
+    reflexivity.
 Qed.
 
 Lemma refines_equiv_implies_rec_ctx_equiv fnsi fnss :
@@ -513,7 +513,7 @@ Module test.
   |}.
 
   Lemma add1_refines_cumbersome add1_name :
-    refines (rec_module {[ add1_name := add1 ]}) (rec_module {[ add1_name := add1_cumbersome ]}).
+    rec_module {[ add1_name := add1 ]} ⊑ rec_module {[ add1_name := add1_cumbersome ]}.
   Proof.
     apply: wp_implies_refines => n.
     constructor. split. { apply. right. eexists _, _. econstructor => //. by apply: lookup_insert. }
@@ -567,13 +567,13 @@ Module test.
   Qed.
 
   Lemma ret2_refines_call :
-    refines (rec_module (<[ "add1" := add1]> {["ret2" := ret2 ]})) (rec_module (<[ "add1" := add1]> {["ret2" := ret2_call ]})).
+    rec_module (<[ "add1" := add1]> {["ret2" := ret2 ]}) ⊑ rec_module (<[ "add1" := add1]> {["ret2" := ret2_call ]}).
   Proof.
     apply: wp_implies_refines => n.
   Admitted.
 
   Lemma const_prop_post_refines_pre  :
-    refines (rec_module {[ "cp" := const_prop_post ]}) (rec_module {[ "cp" := const_prop_pre ]}).
+    rec_module {[ "cp" := const_prop_post ]} ⊑ rec_module {[ "cp" := const_prop_pre ]}.
   Proof.
     apply: wp_implies_refines => n.
     constructor. split. { apply. right. eexists _, _. econstructor => //. by apply: lookup_insert. }
@@ -682,25 +682,25 @@ Definition omap_module {EV1 EV2} (f : EV1 → option EV2) (m : module EV1) : mod
   link m ∅ (stateless_mediator (λ e1 (e2 : option unit) e3, ∃ κ, e1 = Some κ ∧ e3 = f κ)).
 
 Lemma omap_module_refines {EV1 EV2} (f : EV1 → option EV2) m1 m2:
-  refines m1 m2 → refines (omap_module f m1) (omap_module f m2).
-Proof. move => ?. apply: refines_horizontal => //. apply: refines_reflexive. Qed.
+  m1 ⊑ m2 → omap_module f m1 ⊑ (omap_module f m2).
+Proof. move => ?. apply: refines_horizontal => //. Qed.
 
 Definition fmap_module {EV1 EV2} (f : EV1 → EV2) (m : module EV1) : module EV2 :=
   link m ∅ (stateless_mediator (λ e1 (e2 : option unit) e3, ∃ κ, e1 = Some κ ∧ e3 = Some (f κ))).
 
 Lemma fmap_module_refines {EV1 EV2} (f : EV1 → EV2) m1 m2:
-  refines m1 m2 → refines (fmap_module f m1) (fmap_module f m2).
-Proof. move => ?. apply: refines_horizontal => //. apply: refines_reflexive. Qed.
+  m1 ⊑ m2 → fmap_module f m1 ⊑ (fmap_module f m2).
+Proof. move => ?. apply: refines_horizontal => //. Qed.
 
 Definition is_safe {EV} (m : module (EV + ())) : Prop :=
-  refines (omap_module (λ e, if e is inr _ then Some () else None) m) ∅.
+  omap_module (λ e, if e is inr _ then Some () else None) m ⊑ ∅.
 
 Lemma is_safe_refines {EV} (m1 m2 : module (EV + ())):
-  refines m1 m2 → is_safe m2 → is_safe m1.
-Proof. move => ??. apply: refines_vertical => //. by apply: omap_module_refines. Qed.
+  m1 ⊑ m2 → is_safe m2 → is_safe m1.
+Proof. unfold is_safe. move => ??. etrans; [|done]. by apply: omap_module_refines. Qed.
 
 Lemma example_code_refines_spec :
-  refines (rec_module example_code) example_code_spec.
+  rec_module example_code ⊑ example_code_spec.
 Admitted.
 
 Lemma spec_is_safe:
@@ -711,7 +711,7 @@ Lemma code_is_safe :
   is_safe (link_safety_prop (rec_module example_code) example_safety_prop).
 Proof.
   apply: is_safe_refines.
-  - apply: link_safety_prop_refines; [ | apply: refines_reflexive ].
+  - apply: link_safety_prop_refines; [ | reflexivity ].
     apply: example_code_refines_spec.
   - apply: spec_is_safe.
 Qed.
@@ -737,7 +737,7 @@ Definition example_safety_prop_impl (f funreachable : fn_name) : rec_fns :=
 
 Lemma example_safety_prop_impl_refines_safety_prop (f fu : fn_name) :
   (* TODO: This does not yet make sense *)
-  refines (fmap_module inl (rec_module (example_safety_prop_impl f fu))) example_safety_prop.
+  fmap_module inl (rec_module (example_safety_prop_impl f fu)) ⊑ example_safety_prop.
 Proof.
 Admitted.
 
@@ -761,8 +761,9 @@ Lemma implement_example_safety_prop (fns : rec_fns) f fu:
   "dont_call_with_2" ∉ dom (gset _) fns →
   f ∉ dom (gset _) fns →
   fu ∉ dom (gset _) fns →
-  refines (fmap_module (λ e, if e is CallEvt "assert_failed" [] then inr () else inl e)
-       (rec_module (((rename_fn_in_def "dont_call_with_2" f) <$> fns) ∪ example_safety_prop_impl f fu)))
+  fmap_module (λ e, if e is CallEvt "assert_failed" [] then inr () else inl e)
+       (rec_module (((rename_fn_in_def "dont_call_with_2" f) <$> fns) ∪ example_safety_prop_impl f fu))
+       ⊑
     (link_safety_prop (rec_module fns) example_safety_prop).
 Admitted.
 (* TODO: we either need to disallow the environment to call f and fu

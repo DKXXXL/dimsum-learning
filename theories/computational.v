@@ -79,7 +79,7 @@ Definition test_cm : (computational_module call_event call_event_in call_event_o
 |}.
 
 Goal ∀ n, ∃ σ,
-      has_trace test_cm (Some TCMInit) [Vis (CRecvCallEvt "test" [n]); Vis (CCallEvt "id" [n]); Vis (CRecvRetEvt n); Vis (CDoneEvt n)] σ.
+      Some TCMInit ~{ test_cm, [Vis (CRecvCallEvt "test" [n]); Vis (CCallEvt "id" [n]); Vis (CRecvRetEvt n); Vis (CDoneEvt n)] }~> σ.
 Proof.
   move => ?. eexists _.
   apply: TraceStepSome. done.

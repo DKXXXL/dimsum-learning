@@ -84,24 +84,23 @@ Proof.
   iIntros "!# /=" (e2 σ2 efs Hst). invert_all lang.step.
 
   iDestruct "HΦ" as (??) "[Hm HΦ]".
-  iDestruct "Hsctx" as (?????) "Hm2".
+  iDestruct "Hsctx" as (κsstart σscur Hfull Htrace Hnub) "Hm2".
   iDestruct (ghost_var_agree with "Hm Hm2") as %Heq.
   Require Import Coq.Program.Equality.
   dependent destruction Heq.
   iDestruct "HΦ" as (? ?) "HΦ".
   iMod (ghost_var_update_halves with "Hm Hm2") as "[Hm Hm2]".
   iMod ("HΦ" with "Hm [%]") as "HΦ". {
-    have Hnub := H2 (κsstart ++ [CallEvt f vs]).
-    move => [??].
-    apply: Hnub. rewrite H0. apply: prefix_app. apply: prefix_cons. apply: prefix_nil.
-    eexists _.
-    rewrite fmap_app -app_assoc. by apply: has_trace_trans.
+    contradict Hnub. move: Hnub => [? /(has_trace_cons_inv _ _) [? [? [? Hor]]]].
+    rewrite Hfull fmap_app fmap_cons /= -app_assoc.
+    eexists _. apply: has_trace_trans => //=. apply: (has_trace_trans []) => //.
+    case: Hor => [?|[? /has_trace_ub_inv [?[??]]]]. { by apply: TraceUbRefl. }
+    apply: TraceStepSome; [done|]. apply: (has_trace_trans []) => //. by apply: TraceUb.
   }
   iModIntro.
   iSplitL "Hm2". {
-    iSplit => //. iExists _, _. iFrame. iPureIntro. rewrite H0. rewrite cons_middle app_assoc.
+    iSplit => //. iExists _, _. iFrame. iPureIntro. rewrite {1}Hfull. rewrite cons_middle app_assoc.
     split_and! => //. rewrite fmap_app. by apply: has_trace_trans.
-    move => ??. apply: H2. by rewrite H0 cons_middle app_assoc.
   }
   iSplit => //.
 
