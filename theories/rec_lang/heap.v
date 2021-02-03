@@ -1,3 +1,4 @@
+Require Import Coq.Program.Equality.
 From iris.proofmode Require Import tactics.
 From iris.program_logic Require Export weakestpre.
 From stdpp Require Import coPset.
@@ -35,15 +36,18 @@ Definition moduleΣ EV : gFunctors :=
 Instance subG_modulePreG {Σ} EV : subG (moduleΣ EV) Σ → modulePreG EV Σ.
 Proof. solve_inG. Qed.
 
-Definition own_module {Σ} EV `{!ghost_varG Σ (mod_state EV)} (γ : gname) (m : module EV) (σ : m.(m_state)) :=
+Definition own_module {Σ EV} `{!ghost_varG Σ (mod_state EV)} (γ : gname) (m : module EV) (σ : m.(m_state)) :=
   ghost_var γ (1/2) (ModState m σ).
-Definition WPspec {Σ} EV `{!ghost_varG Σ (mod_state EV)} `{!invG Σ} (γ : gname) (κs : list EV) (E : coPset) (Φ : iProp Σ) : iProp Σ :=
-  |={E, ∅}=> ▷ ∃ m σ, own_module EV γ m σ ∗
-   ∃ σ', ⌜σ ~{ m, Vis <$> κs }~> σ'⌝ ∗ (
-         own_module EV γ m σ' -∗
-        ⌜¬ σ ~{m, (Vis <$> κs) ++ [Ub] }~> -⌝ -∗
-        |={∅, E}=> Φ).
-
+Definition NoUb {Σ EV} `{!ghost_varG Σ (mod_state EV)} `{!invG Σ} (γ : gname) (E : coPset) (Φ : iProp Σ) : iProp Σ :=
+  |={E, ∅}=> ((|={∅, E}=> Φ) ∨ ∃ m σ, own_module γ m σ ∗
+     (own_module γ m σ -∗ ⌜¬ σ ~{m, [Ub] }~> -⌝ -∗ |={∅, E}=> Φ)).
+Fixpoint WPspec {Σ EV} `{!ghost_varG Σ (mod_state EV)} `{!invG Σ} (γ : gname) (κs : list EV) (E : coPset) (Φ : iProp Σ) {struct κs} : iProp Σ :=
+  match κs with
+  | [] => NoUb γ E Φ
+  | κ::κs' => NoUb γ E (|={E, ∅}=> ∃ m σ σ', ⌜σ ~{ m, [Vis κ] }~> σ'⌝ ∗ own_module γ m σ ∗  (
+                  own_module γ m σ' -∗ |={∅, E}=> WPspec γ κs' E Φ))
+  end.
+Arguments WPspec : simpl never.
 
 Class heapG Σ := HeapG {
   heap_fntbl_inG :> inG Σ (fntblUR);
@@ -51,8 +55,80 @@ Class heapG Σ := HeapG {
   heap_module :> moduleG rec_event Σ;
 }.
 
+Section WPspec.
+  Context `{!ghost_varG Σ (mod_state EV)} `{!invG Σ}.
+
+  Global Instance frommodal_noub γ E P : FromModal modality_id (NoUb γ E P) (NoUb γ E P) P.
+  Proof.
+    rewrite /FromModal. iIntros "HP /=".
+    iMod (fupd_intro_mask' _ ∅) as "HE". set_solver.
+    iModIntro. iLeft. iMod "HE". by iFrame.
+  Qed.
+
+  Global Instance elim_modal_noub_noub p γ E P Q :
+    ElimModal True p false (NoUb γ E P) P (NoUb γ E Q) (NoUb γ E Q).
+  Proof.
+    rewrite /ElimModal bi.intuitionistically_if_elim /=.
+    iIntros (_) "[Hnub HP]".
+    iMod "Hnub" as "[Hnub|Hnub]".
+    (* TODO: for proving this, NoUb needs to be a fixpoint. *)
+  Admitted.
+
+  Lemma noub_use γ E m σ :
+    own_module γ m σ -∗
+    NoUb γ E (⌜¬ σ ~{m, [Ub] }~> -⌝ ∗ own_module γ m σ).
+  Proof.
+    iIntros "Hm".
+    iMod (fupd_intro_mask' _ ∅) as "HE". set_solver.
+    iModIntro. iRight. iExists _, _. iFrame.
+    iIntros "Hm" (?). iMod "HE". iModIntro. by iFrame.
+  Qed.
+
+  Lemma wpspec_noub γ E Φ κs:
+    NoUb γ E (WPspec γ κs E Φ) -∗
+    WPspec γ κs E Φ.
+  Proof. iIntros "Hnub". by destruct κs; rewrite /WPspec/=-/WPspec; iMod "Hnub". Qed.
+
+  Global Instance elim_modal_noub_wpspec p γ E P Q κs:
+    ElimModal True p false (NoUb γ E P) P (WPspec γ κs E Q) (WPspec γ κs E Q).
+  Proof.
+    rewrite /ElimModal bi.intuitionistically_if_elim /=.
+    iIntros (_) "[Hnub HP]".
+    iApply wpspec_noub. iMod "Hnub". iModIntro. by iApply "HP".
+  Qed.
+
+  Lemma wpspec_nil' γ E Φ:
+    NoUb γ E Φ -∗ WPspec (EV:=EV) γ [] E Φ.
+  Proof. done. Qed.
+
+  Lemma wpspec_nil γ E Φ:
+    Φ -∗ WPspec (EV:=EV) γ [] E Φ.
+  Proof. iIntros "Φ". iApply wpspec_nil'. by iModIntro. Qed.
+
+  Lemma wpspec_nil_inv γ E Φ:
+    WPspec (EV:=EV) γ [] E Φ -∗ NoUb γ E Φ.
+  Proof. done. Qed.
+
+  Lemma wpspec_cons (κ : EV) κs γ E Φ m σ σ':
+    σ ~{ m, [Vis κ] }~> σ' →
+    own_module γ m σ -∗
+    (own_module γ m σ' -∗ WPspec γ κs E Φ) -∗
+    WPspec γ (κ::κs) E Φ.
+  Proof.
+    iIntros (?) "Hm HΦ". rewrite /WPspec/=-/WPspec. iModIntro.
+    iMod (fupd_intro_mask' _ ∅) as "HE". set_solver. iModIntro.
+    iExists _, _, _. iFrame. iSplit => //.
+    iIntros "Hm". iMod "HE". iModIntro. by iApply "HΦ".
+  Qed.
+
+  Lemma wpspec_bind (κ : EV) κs γ E Φ:
+    WPspec γ [κ] E (WPspec γ κs E Φ) -∗
+    WPspec γ (κ::κs) E Φ.
+  Proof. Admitted.
+End WPspec.
+
 Section definitions.
-  Context `{!moduleG EV Σ}.
+  Context `{!moduleG EV Σ} `{!invG Σ}.
 
   Definition spec_ctx (κsrest : list EV) : iProp Σ :=
     ∃ κsstart σscur,
@@ -60,8 +136,47 @@ Section definitions.
       ⌜module_spec.(m_initial) ~{ module_spec, Vis <$> κsstart }~> σscur⌝ ∗
       (* obtained by classical reasoning before switching to Iris *)
       ⌜¬ module_spec.(m_initial) ~{ module_spec, (Vis <$> module_full_trace) ++ [Ub] }~> -⌝ ∗
-      own_module EV module_spec_name module_spec σscur.
+      own_module module_spec_name module_spec σscur.
 
+  Lemma noub_elim κs P E:
+    spec_ctx κs -∗
+    NoUb module_spec_name E P ={E}=∗
+    spec_ctx κs ∗ P.
+  Proof.
+    iIntros "Hsctx Hnub".
+    iMod "Hnub" as "[>$|HP]" => //.
+    iDestruct "HP" as (m σ) "[Hm HP]".
+    iDestruct "Hsctx" as (κsstart σscur Hfull Hinit Hnub) "Hm2".
+    iDestruct (ghost_var_agree with "Hm Hm2") as %Heq.
+    dependent destruction Heq. (* THIS USES AXIOM K! *)
+    iMod ("HP" with "Hm [%]"). {
+      contradict Hnub. move: Hnub => [? /has_trace_ub_inv[?[??]]].
+      rewrite Hfull fmap_app /= -app_assoc.
+      eexists _. apply: has_trace_trans => //=. apply: (has_trace_trans []) => //.
+      by apply: TraceUbRefl.
+    }
+    iModIntro. iFrame. iExists _, _. by iFrame.
+  Qed.
+
+
+  Lemma wpspec_cons_inv_ctx κ κs κs' Φ E:
+    spec_ctx (κ::κs) -∗
+    WPspec module_spec_name (κ :: κs') E Φ ={E}=∗
+    spec_ctx κs ∗ WPspec module_spec_name κs' E Φ.
+  Proof.
+    rewrite /WPspec/=-/WPspec.
+    iIntros "Hsctx Hspec".
+    iMod (noub_elim with "Hsctx Hspec") as "[Hsctx Hspec]".
+    iDestruct "Hsctx" as (κsstart σscur Hfull Hinit Hnub) "Hm".
+    iMod "Hspec" as (m σ σ' Hstep) "[Hm2 HΦ]".
+    iDestruct (ghost_var_agree with "Hm Hm2") as %Heq.
+    dependent destruction Heq. (* THIS USES AXIOM K! *)
+    iMod (ghost_var_update_halves with "Hm Hm2") as "[Hm Hm2]".
+    iMod ("HΦ" with "Hm") as "$".
+    iModIntro. iExists _, _. iFrame.
+    iPureIntro. rewrite {1}Hfull. rewrite cons_middle app_assoc.
+    split_and! => //. rewrite fmap_app. by apply: has_trace_trans.
+  Qed.
 End definitions.
 
 Definition to_fntbl : gmap fn_name fndef → fntblUR :=

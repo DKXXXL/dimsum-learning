@@ -72,40 +72,35 @@ Qed.
 
 Lemma wp_ext_call vs E Φ f:
   fntbl_entry f None -∗
-  WPspec rec_event module_spec_name [CallEvt f vs] E (∀ v, WPspec rec_event module_spec_name [RecvRetEvt v] E (Φ v))  -∗
+  WPspec module_spec_name [CallEvt f vs] E (∀ v, WPspec module_spec_name [RecvRetEvt v] E (Φ v))  -∗
   WP Call f (Val <$> vs) @ E {{ Φ }}.
 Proof.
   iIntros "Hfn HΦ".
   iApply wp_lift_head_step; auto.
   iIntros (σ1 κ κs n) "(#Hfctx & Hsctx)".
   iDestruct (fntbl_entry_lookup with "Hfctx Hfn") as %?.
-  iMod "HΦ". iModIntro.
+  iMod (fupd_intro_mask' _ ∅) as "HE". set_solver. iModIntro.
   iSplit; first by eauto using CallExternalStep.
   iIntros "!# /=" (e2 σ2 efs Hst). invert_all lang.step.
+  iMod "HE" as "$".
+  iMod (wpspec_cons_inv_ctx with "Hsctx HΦ") as "[Hsctx HΦ]".
+  iDestruct (wpspec_nil_inv with "HΦ") as "HΦ".
+  iMod (noub_elim with "Hsctx HΦ") as "[$ HΦ]".
+  iModIntro. iSplit => //.
+  iClear "Hfctx". clear.
 
-  iDestruct "HΦ" as (??) "[Hm HΦ]".
-  iDestruct "Hsctx" as (κsstart σscur Hfull Htrace Hnub) "Hm2".
-  iDestruct (ghost_var_agree with "Hm Hm2") as %Heq.
-  Require Import Coq.Program.Equality.
-  dependent destruction Heq.
-  iDestruct "HΦ" as (? ?) "HΦ".
-  iMod (ghost_var_update_halves with "Hm Hm2") as "[Hm Hm2]".
-  iMod ("HΦ" with "Hm [%]") as "HΦ". {
-    contradict Hnub. move: Hnub => [? /(has_trace_cons_inv _ _) [? [? [? Hor]]]].
-    rewrite Hfull fmap_app fmap_cons /= -app_assoc.
-    eexists _. apply: has_trace_trans => //=. apply: (has_trace_trans []) => //.
-    case: Hor => [?|[? /has_trace_ub_inv [?[??]]]]. { by apply: TraceUbRefl. }
-    apply: TraceStepSome; [done|]. apply: (has_trace_trans []) => //. by apply: TraceUb.
-  }
-  iModIntro.
-  iSplitL "Hm2". {
-    iSplit => //. iExists _, _. iFrame. iPureIntro. rewrite {1}Hfull. rewrite cons_middle app_assoc.
-    split_and! => //. rewrite fmap_app. by apply: has_trace_trans.
-  }
-  iSplit => //.
-
-Admitted.
-
-
+  iApply wp_lift_head_step; auto.
+  iIntros (σ1 κ κs n) "(#Hfctx & Hsctx)".
+  iMod (fupd_intro_mask' _ ∅) as "HE". set_solver. iModIntro.
+  iSplit; first by eauto using RecvReturnStep.
+  iIntros "!# /=" (e2 σ2 efs Hst). invert_all lang.step.
+  iMod "HE" as "$".
+  iMod (wpspec_cons_inv_ctx with "Hsctx HΦ") as "[Hsctx HΦ]".
+  iDestruct (wpspec_nil_inv with "HΦ") as "HΦ".
+  iMod (noub_elim with "Hsctx HΦ") as "[$ HΦ]".
+  iModIntro. iSplit => //. iApply (wp_value with "HΦ"). done.
+  Unshelve.
+  apply: inhabitant.
+Qed.
 
 End lifting.

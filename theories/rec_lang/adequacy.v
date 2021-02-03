@@ -60,7 +60,7 @@ Theorem module_adequacy Σ Λ mspec `{!invPreG Σ} `{!modulePreG Λ.(observation
   (∀ `{Hinv : !invG Σ} γm κsfull,
        let _ : moduleG Λ.(observation) Σ := ModuleG Λ.(observation) Σ mspec _ γm κsfull in
      ⊢ spec_ctx κsfull -∗
-       own_module Λ.(observation) module_spec_name mspec mspec.(m_initial) ={⊤}=∗
+       own_module module_spec_name mspec mspec.(m_initial) ={⊤}=∗
        ∃ (stateI : state Λ → list (observation Λ) → nat → iProp Σ)
          (fork_post : val Λ → iProp Σ),
        let _ : irisG Λ Σ := IrisG _ _ Hinv stateI fork_post in

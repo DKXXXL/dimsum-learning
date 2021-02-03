@@ -25,7 +25,7 @@ Definition test_main : lang.expr :=
 
 Lemma wp_test_main :
   fntbl_entry "extfn" None -∗
-  own_module rec_event module_spec_name test_module TSInit -∗
+  own_module module_spec_name test_module TSInit -∗
   WP test_main {{ v, ⌜v = 1⌝ }}.
 Proof.
   iIntros "#Hextfn Hm".
@@ -37,29 +37,37 @@ Proof.
   wp_bind (Call _ _).
   iApply (wp_ext_call [_]) => //.
 
-  iExists test_module.
-  iMod (fupd_intro_mask' _ ∅) as "HE" => //. do 2 iModIntro.
-  iExists _. iFrame "Hm".
-  iExists _. iSplit. { iPureIntro. apply: TraceStepSome. econstructor. constructor. }
-  iIntros "Hm" (_). iMod "HE" as %_.
-  iIntros "!>" (v).
-
-  iExists test_module.
-  iMod (fupd_intro_mask' _ ∅) as "HE" => //. do 2 iModIntro.
-  iExists _. iFrame "Hm".
-  iExists _. iSplit. { iPureIntro. apply: TraceStepSome. econstructor. constructor. }
-  iIntros "Hm" (Hub). iMod "HE" as %_.
-  case_bool_decide; subst. 2: {
-    contradict Hub. eexists _. apply: TraceStepSome. econstructor.
-    econstructor. by case_bool_decide.
-  }
-  iIntros "!>".
+  iApply (wpspec_cons with "Hm"). { apply: TraceStepSome; [|apply:TraceEnd]. econstructor. }
+  iIntros "Hm". iApply wpspec_nil. iIntros (v).
+  iApply (wpspec_cons with "Hm"). { apply: TraceStepSome; [|apply:TraceEnd]. econstructor. }
+  iIntros "Hm". iMod (noub_use with "Hm") as (Hub) "Hm".
+  iApply wpspec_nil.
+  case_bool_decide; subst. 2: { contradict Hub. eexists _. by apply: TraceUbRefl. }
 
   iApply wp_let => /=. iModIntro.
   iApply wp_binop. iPureIntro. by case_bool_decide.
-  Unshelve.
-  apply: TSInit.
 Qed.
+
+Definition test_concurrent : lang.expr :=
+  Call "extfn" [ Val 1 ].
+
+Inductive test_concurrent_step : nat → option rec_event → nat → Prop :=
+| TCSCall n:
+  test_concurrent_step n (Some $ CallEvt "extfn" [ValNum 1]) (S n)
+| TSSRet n v:
+  test_concurrent_step (S n) (Some $ RecvRetEvt v) n.
+Definition test_concurrent_module : module rec_event := {|
+  m_state := nat;
+  m_initial := 0;
+  m_step := test_concurrent_step;
+  m_is_ub σ := False;
+|}.
+(*   own_module module_spec_name test_module TSInit -∗ *)
+
+(* Lemma wp_test_concurrent : *)
+(*   fntbl_entry "extfn" None -∗ *)
+(*   WP test_concurrent {{ v, True }}. *)
+(* Proof. *)
 
 End examples.
 
