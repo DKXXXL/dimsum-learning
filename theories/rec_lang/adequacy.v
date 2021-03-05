@@ -17,9 +17,8 @@ Definition reclangΣ : gFunctors :=
 Instance subG_reclangPreG {Σ} : subG reclangΣ Σ → reclangPreG Σ.
 Proof. solve_inG. Qed.
 
-Definition iris_module (Λ : language) (initial : cfg Λ) : module (Λ.(observation)) := {|
+Definition iris_module (Λ : language) : module (Λ.(observation)) := {|
   m_state := cfg Λ;
-  m_initial := initial;
   m_step σ e σ' := step σ (option_list e) σ';
   m_is_ub σ := ∃ e, e ∈ σ.1 ∧ stuck e σ.2;
 |}.
@@ -40,9 +39,9 @@ Lemma single_event_step Λ κs σ σ' :
   step (Λ:=Λ) σ κs σ' → κs = option_list (head κs).
 Proof. move => Hev [*]. subst. by apply: Hev. Qed.
 
-Lemma has_non_ub_trace_nsteps Λ i σ1 κs σ2:
+Lemma has_non_ub_trace_nsteps Λ σ1 κs σ2:
   single_event_prim_step Λ →
-  σ1 ~{ iris_module Λ i, κs }~>ₙ σ2 ↔ ∃ n, nsteps n σ1 κs σ2.
+  σ1 ~{ iris_module Λ, κs }~>ₙ σ2 ↔ ∃ n, nsteps n σ1 κs σ2.
 Proof.
   move => Hev.
   split.
@@ -54,27 +53,27 @@ Proof.
     apply: NUBTraceStep => //=. by erewrite <-(single_event_step _ κ).
 Qed.
 
-Theorem module_adequacy Σ Λ mspec `{!invPreG Σ} `{!modulePreG Λ.(observation) Σ} es σ1:
-  (∀ κs, LEM (mspec.(m_initial) ~{ mspec, κs }~> -)) →
+Theorem module_adequacy Σ Λ (mspec : mod_state _) `{!invPreG Σ} `{!modulePreG Λ.(observation) Σ} es σ1:
+  (∀ κs, LEM (mspec.(ms_state) ~{ mspec, κs }~> -)) →
   single_event_prim_step Λ →
   (∀ `{Hinv : !invG Σ} γm κsfull,
        let _ : moduleG Λ.(observation) Σ := ModuleG Λ.(observation) Σ mspec _ γm κsfull in
      ⊢ spec_ctx κsfull -∗
-       own_module module_spec_name mspec mspec.(m_initial) ={⊤}=∗
+       own_module module_spec_name mspec mspec.(ms_state) ={⊤}=∗
        ∃ (stateI : state Λ → list (observation Λ) → nat → iProp Σ)
          (fork_post : val Λ → iProp Σ),
        let _ : irisG Λ Σ := IrisG _ _ Hinv stateI fork_post in
        stateI σ1 κsfull 0 ∗
        ([∗ list] e ∈ es, WP e @ ⊤ {{ _, True }}) ∗
        (∀ σ2 n, stateI σ2 [] n ={⊤,∅}=∗ spec_ctx [])) →
-  iris_module Λ (es, σ1) ⊑ mspec.
+  MS (iris_module Λ) (es, σ1) ⊑ mspec.
 Proof.
   move => HLEM Hev /= Hwp.
   constructor => κsfull [σ2 Htrace]. case: (HLEM κsfull) => // Hnoub.
   move: Htrace => /has_trace_to_non_ub_trace[κs' [[??] [Hpre [Htrace Hor]]]].
   move: Htrace => /has_non_ub_trace_nsteps[//|?] /=.
   apply: wp_strong_adequacy => ?.
-  iMod (ghost_var_alloc (ModState mspec mspec.(m_initial))) as (γm) "[Hm1 Hm2]".
+  iMod (ghost_var_alloc (MS mspec mspec.(ms_state))) as (γm) "[Hm1 Hm2]".
   iMod (Hwp _ γm κs' with "[Hm1] Hm2") as (stateI fork_post) "(Hσ&Hwp&Hend)". {
     iExists [], _. iFrame. iPureIntro. split_and! => //. { by constructor. }
     contradict Hnoub => /=. move: Hpre => [? ->].
@@ -91,13 +90,13 @@ Qed.
 
 
 
-Lemma reclang_adequacy Σ `{!reclangPreG Σ} mspec (mains : list lang.expr) (fns : gmap fn_name fndef):
-  (∀ κs, LEM (mspec.(m_initial) ~{ mspec, κs }~> -)) →
+Lemma reclang_adequacy Σ `{!reclangPreG Σ} (mspec : mod_state _) (mains : list lang.expr) (fns : gmap fn_name fndef):
+  (∀ κs, LEM (mspec.(ms_state) ~{ mspec, κs }~> -)) →
   (∀ {HrecG : reclangG Σ},
-    ⊢ @own_module _ rec_event (module_ghostvarG) module_spec_name mspec mspec.(m_initial) -∗
+    ⊢ @own_module _ rec_event (module_ghostvarG) module_spec_name mspec mspec.(ms_state) -∗
       fntbl fns
       ={⊤}=∗ [∗ list] main ∈ mains, WP main {{ _, True }}) →
- iris_module rec_lang (mains, {| st_fns := fns |}) ⊑ mspec.
+ MS (iris_module rec_lang) (mains, {| st_fns := fns |}) ⊑ mspec.
 Proof.
   move => HLEM Hwp. apply: module_adequacy; [done| | ]. {
     apply: single_event_head_prim_step.

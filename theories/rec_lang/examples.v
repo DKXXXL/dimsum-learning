@@ -13,7 +13,6 @@ Inductive test_step : test_state → option rec_event → test_state → Prop :=
   test_step (TSCall n) (Some $ RecvRetEvt v) (if bool_decide (v = n) then TSFinal else TSUb).
 Definition test_module : module rec_event := {|
   m_state := test_state;
-  m_initial := TSInit;
   m_step := test_step;
   m_is_ub σ := σ = TSUb;
 |}.
@@ -58,7 +57,6 @@ Inductive test_concurrent_step : nat → option rec_event → nat → Prop :=
   test_concurrent_step (S n) (Some $ RecvRetEvt v) n.
 Definition test_concurrent_module : module rec_event := {|
   m_state := nat;
-  m_initial := 0;
   m_step := test_concurrent_step;
   m_is_ub σ := False;
 |}.
@@ -72,8 +70,8 @@ Definition test_concurrent_module : module rec_event := {|
 End examples.
 
 Lemma test_main_adequate :
-  (∀ κs, LEM (test_module.(m_initial) ~{ test_module, κs }~> -)) →
-  iris_module rec_lang ([test_main], {| st_fns := ∅ |}) ⊑ test_module.
+  (∀ κs, LEM (TSInit ~{ test_module, κs }~> -)) →
+  MS (iris_module rec_lang) ([test_main], {| st_fns := ∅ |}) ⊑ MS test_module TSInit.
 Proof.
   move => HLEM.
   set Σ : gFunctors := #[reclangΣ].

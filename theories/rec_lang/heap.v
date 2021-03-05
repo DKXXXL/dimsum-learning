@@ -11,16 +11,8 @@ Require Import refframe.rec_lang.lang.
 Definition fntblUR : cmra :=
   agreeR (gmapO fn_name fndefO).
 
-Record mod_state EV := ModState {
-  ms_module : module EV;
-  ms_state : ms_module.(m_state);
-}.
-Arguments ModState {_}.
-Arguments ms_module {_}.
-Arguments ms_state {_}.
-
 Class moduleG EV Σ := ModuleG {
-  module_spec : module EV;
+  module_spec : mod_state EV;
   module_ghostvarG :> ghost_varG Σ (mod_state EV);
   module_spec_name : gname;
   module_full_trace : list EV;
@@ -37,7 +29,7 @@ Instance subG_modulePreG {Σ} EV : subG (moduleΣ EV) Σ → modulePreG EV Σ.
 Proof. solve_inG. Qed.
 
 Definition own_module {Σ EV} `{!ghost_varG Σ (mod_state EV)} (γ : gname) (m : module EV) (σ : m.(m_state)) :=
-  ghost_var γ (1/2) (ModState m σ).
+  ghost_var γ (1/2) (MS m σ).
 Definition NoUb {Σ EV} `{!ghost_varG Σ (mod_state EV)} `{!invG Σ} (γ : gname) (E : coPset) (Φ : iProp Σ) : iProp Σ :=
   |={E, ∅}=> ((|={∅, E}=> Φ) ∨ ∃ m σ, own_module γ m σ ∗
      (own_module γ m σ -∗ ⌜¬ σ ~{m, [Ub] }~> -⌝ -∗ |={∅, E}=> Φ)).
@@ -133,9 +125,9 @@ Section definitions.
   Definition spec_ctx (κsrest : list EV) : iProp Σ :=
     ∃ κsstart σscur,
       ⌜module_full_trace = κsstart ++ κsrest⌝ ∗
-      ⌜module_spec.(m_initial) ~{ module_spec, Vis <$> κsstart }~> σscur⌝ ∗
+      ⌜module_spec.(ms_state) ~{ module_spec, Vis <$> κsstart }~> σscur⌝ ∗
       (* obtained by classical reasoning before switching to Iris *)
-      ⌜¬ module_spec.(m_initial) ~{ module_spec, (Vis <$> module_full_trace) ++ [Ub] }~> -⌝ ∗
+      ⌜¬ module_spec.(ms_state) ~{ module_spec, (Vis <$> module_full_trace) ++ [Ub] }~> -⌝ ∗
       own_module module_spec_name module_spec σscur.
 
   Lemma noub_elim κs P E:

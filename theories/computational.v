@@ -10,15 +10,12 @@ Class IoPartition EV IN OUT := {
 
 Record computational_module EV IN OUT `{!IoPartition EV IN OUT} := {
   cm_state : Type;
-  cm_initial : cm_state;
   cm_next : cm_state → IN → option (option (OUT * cm_state));
 }.
 Arguments cm_state {_ _ _ _}.
-Arguments cm_initial {_ _ _ _}.
 Arguments cm_next {_ _ _ _}.
 Definition cm_to_module {EV IN OUT} `{!IoPartition EV IN OUT} (cm : computational_module EV IN OUT) : module EV := {|
   m_state := option cm.(cm_state);
-  m_initial := Some cm.(cm_initial);
   m_step σ e σ' := if σ is Some σm then if e is Some κ then
                      match cm.(cm_next) σm (io_input κ) with
                      | None => False
@@ -60,7 +57,6 @@ Inductive test_cm_state : Type :=
 | TCMInit | TCMRecvd (n : Z) | TCMWait (n : Z) | TCMRet (n : Z).
 Definition test_cm : (computational_module call_event call_event_in call_event_out)  := {|
   cm_state := test_cm_state;
-  cm_initial := TCMInit;
   cm_next σ i :=
     match σ, i with
     | TCMInit, InRecvCallEvt "test" [n] =>

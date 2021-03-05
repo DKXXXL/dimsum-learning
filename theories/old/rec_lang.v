@@ -132,9 +132,8 @@ Definition initial_state (fns: rec_fns) : state :=
     st_env := ∅;
   |}.
 
-Definition rec_module (fns: rec_fns) : module rec_event := {|
+Definition rec_module : module rec_event := {|
   m_state := state;
-  m_initial := initial_state fns;
   m_step := step;
   m_is_ub := is_ub;
 |}.
@@ -142,7 +141,7 @@ Definition rec_module (fns: rec_fns) : module rec_event := {|
 Definition rec_link (fns1 fns2 : rec_fns) : rec_fns := fns1 ∪ fns2.
 
 Definition ctx_refines (fnsi fnss : rec_fns) :=
-  ∀ C, rec_module (rec_link fnsi C) ⊑ rec_module (rec_link fnss C).
+  ∀ C, MS rec_module (initial_state (rec_link fnsi C)) ⊑ MS rec_module (initial_state (rec_link fnss C)).
 
 Definition ctx_equiv (fnsi fnss : rec_fns) :=
   ctx_refines fnsi fnss ∧ ctx_refines fnss fnsi.
@@ -167,7 +166,7 @@ Record call_state {EV} (m : module EV) := {
 Arguments cs_stack {_ _}.
 Arguments cs_waiting {_ _}.
 
-Inductive call_step {EV} (m : module EV) (i : call_module_info EV) : (call_state m) → option EV → (call_state m) → Prop :=
+Inductive call_step {EV} (m : mod_state EV) (i : call_module_info EV) : (call_state m) → option EV → (call_state m) → Prop :=
 | CStep σ σs σ' e w cs:
     m.(m_step) σ e σ' →
     cs = (if default false (i.(cmi_final) <$> e) then [] else [σ']) ++ σs →
@@ -175,21 +174,23 @@ Inductive call_step {EV} (m : module EV) (i : call_module_info EV) : (call_state
               e {| cs_stack := cs; cs_waiting := default w (i.(cmi_waiting) <$> e) |}
 | CWaiting σs:
     call_step m i {| cs_stack := σs; cs_waiting := true |}
-              None {| cs_stack := m.(m_initial) :: σs; cs_waiting := false |}
+              None {| cs_stack := m.(ms_state) :: σs; cs_waiting := false |}
 .
 
-Definition call_module {EV} (m : module EV) (i : call_module_info EV) : module EV := {|
+Definition call_module_init {EV} (m : module EV) : call_state m :=
+  {| cs_stack := []; cs_waiting := true |}.
+
+Definition call_module {EV} (m : mod_state EV) (i : call_module_info EV) : module EV := {|
   m_state := call_state m;
-  m_initial := {| cs_stack := []; cs_waiting := true |};
   m_step := call_step m i;
   m_is_ub σ := default False (m.(m_is_ub) <$> head σ.(cs_stack));
 |}.
 
-Definition call_module_refines_inv {EV} (m1 m2 : module EV) (i : call_module_info EV) (σ1 : (call_module m1 i).(m_state)) (sσ2 : propset (call_module m2 i).(m_state)) : Prop :=
+Definition call_module_refines_inv {EV} (m1 m2 : mod_state EV) (i : call_module_info EV) (σ1 : (call_module m1 i).(m_state)) (sσ2 : propset (call_module m2 i).(m_state)) : Prop :=
   ∃ Ts, Forall2 (state_set_refines m1 m2) σ1.(cs_stack) Ts
     ∧ sσ2 ≡ {[ σ2 | σ1.(cs_waiting) = σ2.(cs_waiting) ∧ Forall2 elem_of σ2.(cs_stack) Ts ]}.
 
-Lemma call_empty_steps {EV} (m : module EV) i σ σ' w σs:
+Lemma call_empty_steps {EV} (m : mod_state EV) i σ σ' w σs:
   σ ~{ m, [] }~> σ' →
   {| cs_stack := σ :: σs; cs_waiting := w |} ~{ call_module m i, [] }~>
             {| cs_stack := σ' :: σs; cs_waiting := w |}.
@@ -211,14 +212,14 @@ Proof.
   eexists. by constructor.
 Qed.
 
-Lemma call_module_refines {EV} (m1 m2 : module EV) (i : call_module_info EV) :
+Lemma call_module_refines {EV} (m1 m2 : mod_state EV) (i : call_module_info EV) :
   m1 ⊑ m2 →
-  call_module m1 i ⊑ call_module m2 i.
+  MS (call_module m1 i) (call_module_init m1) ⊑ MS (call_module m2 i) (call_module_init m2).
 Proof.
   move => Href.
-  apply (inv_set_implies_refines _ _ (call_module_refines_inv _ _ _)).
+  apply (inv_set_implies_refines (MS (call_module m1 i) _) (MS (call_module m2 i) _) (call_module_refines_inv _ _ _)).
   - eexists []. split_and!; [ by constructor |].
-    set_unfold; move => [??] /=. split; first naive_solver.
+    set_unfold; move => [??] /=. rewrite /call_module_init. split; first naive_solver.
     move => [-> Hall]. inversion Hall. naive_solver.
   - move => [??] ? [Ts [/state_set_refines_exists_Forall2 [??] Hσs]].
     eexists (Build_call_state _ _ _ _). by rewrite {}Hσs.
@@ -279,7 +280,7 @@ Proof.
       (* split => //. constructor => //. by apply: ref_subset. *)
 Qed.
 
-Definition call_module_link_inv {EV} (m1 m2 m3 : module EV) (i : call_module_info EV) (M : link_mediator EV EV EV) (σ1 : (call_module m1 i).(m_state)) (σ2 : (call_module m2 i).(m_state)) (σ3 : (call_module m3 i).(m_state)) (σm : M.(lm_state)) : Prop :=
+Definition call_module_link_inv {EV} (m1 m2 m3 : mod_state EV) (i : call_module_info EV) (M : link_mediator EV EV EV) (σ1 : (call_module m1 i).(m_state)) (σ2 : (call_module m2 i).(m_state)) (σ3 : (call_module m3 i).(m_state)) (σm : M.(lm_state)) : Prop :=
   True.
 
 
@@ -287,10 +288,10 @@ Definition call_module_link_inv {EV} (m1 m2 m3 : module EV) (i : call_module_inf
 from Iris, in particular at least ectx_lang since what we need about
 the language might be exactly the bind rule. If we have it, it should
 be fine to move ectxs between different modules. (similar to Simuliris) *)
-Lemma call_module_refines_link {EV} (m1 m2 m3 : module EV) (i : call_module_info EV) M :
-  refines_equiv (call_module m1 i) (link (call_module m2 i) (call_module m3 i) M).
+Lemma call_module_refines_link {EV} (m1 m2 m3 : mod_state EV) (i : call_module_info EV) M :
+  refines_equiv (MS (call_module m1 i) (call_module_init m1)) (MS (link (call_module m2 i) (call_module m3 i) M) (call_module_init m2, call_module_init m3, M.(lm_initial))).
 Proof.
-  apply (inv_implies_refines_equiv _ (link _ _ _) (curry ∘ curry ∘ (call_module_link_inv _ _ _ _ _))).
+  apply (inv_implies_refines_equiv (MS (call_module m1 i) _) (MS (link (call_module m2 i) (call_module m3 i) M) _) (curry ∘ curry ∘ (call_module_link_inv _ _ _ _ _))).
   - done.
   - admit.
   - admit.
@@ -311,21 +312,21 @@ Definition call_intro_mediator {EV} (is_init : EV → bool) : link_mediator EV E
       if b is false then True else if is_init <$> e1 is Some true then False else True;
 |}.
 
-Definition call_intro_inv {EV} (m : module EV) (i : call_module_info EV) (is_init : EV → bool) (σ1 : m.(m_state)) (σ2 : (call_module m i).(m_state)) (σ3 : (@module_empty Empty_set).(m_state)) (σm : (call_intro_mediator is_init).(lm_state)) : Prop :=
+Definition call_intro_inv {EV} (m : mod_state EV) (i : call_module_info EV) (is_init : EV → bool) (σ1 : m.(m_state)) (σ2 : (call_module m i).(m_state)) (σ3 : (@module_empty Empty_set).(m_state)) (σm : (call_intro_mediator is_init).(lm_state)) : Prop :=
   match σ2.(cs_stack) with
-  | [] => σ1 = m.(m_initial) ∧ σ2.(cs_waiting) = true ∧ σm = false
-  | [σ] => σ1 = σ ∧ if σm then ∃ σ' e κs, m.(m_step) m.(m_initial) e σ' ∧ has_non_ub_trace m σ' κs σ else σ = m.(m_initial) ∧ σ2.(cs_waiting) = false
+  | [] => σ1 = m.(ms_state) ∧ σ2.(cs_waiting) = true ∧ σm = false
+  | [σ] => σ1 = σ ∧ if σm then ∃ σ' e κs, m.(m_step) m.(ms_state) e σ' ∧ has_non_ub_trace m σ' κs σ else σ = m.(ms_state) ∧ σ2.(cs_waiting) = false
   | _ => False
   end.
-Lemma call_intro {EV} (m : module EV) (i : call_module_info EV) (is_init : EV → bool):
-  (∀ e σ, m.(m_step) m.(m_initial) e σ → ∃ κ, e = Some κ ∧ is_init κ) → (* TODO: Is this necessary? *)
-  ¬ m_is_ub m (m_initial m) →
+Lemma call_intro {EV} (m : mod_state EV) (i : call_module_info EV) (is_init : EV → bool):
+  (∀ e σ, m.(m_step) m.(ms_state) e σ → ∃ κ, e = Some κ ∧ is_init κ) → (* TODO: Is this necessary? *)
+  ¬ m_is_ub m (ms_state m) →
   (∀ σ1 e σ2, m.(m_step) σ1 (Some e) σ2 → i.(cmi_final) e → has_no_behavior m σ2) →
-  (∀ σ'' σ' σ e κs e', m.(m_step) m.(m_initial) e σ' → σ' ~{ m, κs }~>ₙ σ → m.(m_step) σ (Some e') σ'' → ¬ is_init e') →
-  refines_equiv m (link (call_module m i) ∅ (call_intro_mediator is_init)).
+  (∀ σ'' σ' σ e κs e', m.(m_step) m.(ms_state) e σ' → σ' ~{ m, κs }~>ₙ σ → m.(m_step) σ (Some e') σ'' → ¬ is_init e') →
+  refines_equiv m (MS (link (call_module m i) ∅ (call_intro_mediator is_init)) (call_module_init m, tt, false)).
 Proof.
   move => HSome Hnotub Hfinal Hnoinit.
-  apply (inv_implies_refines_equiv _ (link _ _ _) (curry ∘ curry ∘ (call_intro_inv _ _ _))).
+  apply (inv_implies_refines_equiv _ (MS (link _ _ _) _) (curry ∘ curry ∘ (call_intro_inv _ _ _))).
   - done.
   - rewrite /call_intro_inv. move => ? [[[[|?[|??]] ?] ?] ?] //= ? ?; destruct_and?; simplify_eq/= => //.
     eexists _. apply: TraceUbRefl => /=. by left.
@@ -402,16 +403,16 @@ Admitted.
 
 Lemma rec_link_ok fns1 fns2:
   fns1 ##ₘ fns2 →
-  refines_equiv (call_module (rec_module (rec_link fns1 fns2)) rec_cmi)
-          (link (call_module (rec_module fns1) rec_cmi) (call_module (rec_module fns2) rec_cmi)
-                (rec_link_mediator (dom _ fns1) (dom _ fns2))).
+  refines_equiv (MS (call_module (MS rec_module (initial_state (rec_link fns1 fns2))) rec_cmi) (call_module_init rec_module))
+          (MS (link (call_module (MS rec_module (initial_state fns1)) rec_cmi) (call_module (MS rec_module (initial_state fns2)) rec_cmi)
+                (rec_link_mediator (dom _ fns1) (dom _ fns2))) (call_module_init rec_module, call_module_init rec_module, (rec_link_mediator (dom _ fns1) (dom _ fns2)).(lm_initial))).
 Proof.
   move => ?.
   apply call_module_refines_link.
 Admitted.
 
 Lemma rec_refines_call fns:
-  refines_equiv (rec_module fns) (link (call_module (rec_module fns) rec_cmi) ∅ (call_intro_mediator (λ e, if e is RecvCallEvt _ _ then true else false))).
+  refines_equiv (MS rec_module (initial_state fns)) (MS (link (call_module (MS rec_module (initial_state fns)) rec_cmi) ∅ (call_intro_mediator (λ e, if e is RecvCallEvt _ _ then true else false))) (call_module_init rec_module, tt, false)).
 Proof.
   apply: call_intro.
   - move => ???. inv_step. naive_solver.
@@ -429,13 +430,13 @@ Qed.
 
 Lemma refines_implies_rec_ctx_refines fnsi fnss :
   dom (gset string) fnsi = dom (gset string) fnss →
-  rec_module fnsi ⊑ rec_module fnss →
+  MS rec_module (initial_state fnsi) ⊑ MS rec_module (initial_state fnss) →
   ctx_refines fnsi fnss.
 Proof.
   move => Hdom Href C.
   rewrite /rec_link map_difference_union_r (map_difference_union_r fnss).
   etrans. { apply rec_refines_call. }
-  etrans. 2: { apply rec_refines_call. }
+  etrans. 2: { apply rec_refines_call. } simpl.
   apply: refines_horizontal. 2: { reflexivity. }
 
   etrans. { apply rec_link_ok. apply: map_disjoint_difference_r'. }
@@ -449,13 +450,13 @@ Qed.
 
 Lemma refines_equiv_implies_rec_ctx_equiv fnsi fnss :
   dom (gset string) fnsi = dom (gset string) fnss →
-  refines_equiv (rec_module fnsi) (rec_module fnss) →
+  refines_equiv (MS rec_module (initial_state fnsi)) (MS rec_module (initial_state fnss)) →
   ctx_equiv fnsi fnss.
 Proof. move => ? [??]. split; by apply refines_implies_rec_ctx_refines. Qed.
 
 Lemma refines_equiv_equiv_rec_ctx_equiv fnsi fnss :
   dom (gset string) fnsi = dom (gset string) fnss →
-  refines_equiv (rec_module fnsi) (rec_module fnss) ↔
+  refines_equiv (MS rec_module (initial_state fnsi)) (MS rec_module (initial_state fnss)) ↔
   ctx_equiv fnsi fnss.
 Proof.
   move => ?. split; [by apply: refines_equiv_implies_rec_ctx_equiv|].
@@ -513,7 +514,7 @@ Module test.
   |}.
 
   Lemma add1_refines_cumbersome add1_name :
-    rec_module {[ add1_name := add1 ]} ⊑ rec_module {[ add1_name := add1_cumbersome ]}.
+    MS rec_module (initial_state {[ add1_name := add1 ]}) ⊑ MS rec_module (initial_state {[ add1_name := add1_cumbersome ]}).
   Proof.
     apply: wp_implies_refines => n.
     constructor. split. { apply. right. eexists _, _. econstructor => //. by apply: lookup_insert. }
@@ -567,13 +568,13 @@ Module test.
   Qed.
 
   Lemma ret2_refines_call :
-    rec_module (<[ "add1" := add1]> {["ret2" := ret2 ]}) ⊑ rec_module (<[ "add1" := add1]> {["ret2" := ret2_call ]}).
+    MS rec_module (initial_state $ <[ "add1" := add1]> {["ret2" := ret2 ]}) ⊑ MS rec_module (initial_state $ <[ "add1" := add1]> {["ret2" := ret2_call ]}).
   Proof.
     apply: wp_implies_refines => n.
   Admitted.
 
   Lemma const_prop_post_refines_pre  :
-    rec_module {[ "cp" := const_prop_post ]} ⊑ rec_module {[ "cp" := const_prop_pre ]}.
+    MS rec_module (initial_state {[ "cp" := const_prop_post ]}) ⊑ MS rec_module (initial_state {[ "cp" := const_prop_pre ]}).
   Proof.
     apply: wp_implies_refines => n.
     constructor. split. { apply. right. eexists _, _. econstructor => //. by apply: lookup_insert. }
@@ -644,6 +645,7 @@ Module test.
 End test.
 
 (*** Safety property stuff *)
+(*
 Definition example_code : rec_fns.
 Admitted.
 Definition example_code_spec : module rec_event.
@@ -654,7 +656,7 @@ Definition safety_property EV := module (EV + ()).
 
 Definition example_safety_prop : safety_property rec_event := {|
   m_state := bool;
-  m_initial := false;
+  (* m_initial := false; *)
   m_step b e b' :=
     if b is true then e = Some (inr ()) ∧ b' = false else
       if e is Some (inl (CallEvt "dont_call_with_2" [2%Z])) then b' = true
@@ -780,4 +782,5 @@ Simultaneously one can verify an implementation of the interface,
 assuming that the client fulfills the specification and link the
 implementations in the end and get that it is ub free. For giving the implementation, one needs
 an instruction that non-determinisitically chooses a return value. *)
+*)
 End rec.
