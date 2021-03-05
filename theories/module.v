@@ -50,6 +50,13 @@ Lemma TraceStepSome {EV} κs (m : module EV) σ2 σ1 σ3 κ :
   σ1 ~{ m, Vis κ :: κs }~> σ3.
 Proof. move => ??. by apply: (TraceStep _ _ _ _ (Some _)). Qed.
 
+Lemma TraceStep' {EV} κs κs' (m : module EV) σ2 σ1 σ3 κ :
+  m.(m_step) σ1 κ σ2 →
+  κs = option_list (Vis <$> κ) ++ κs' →
+  σ2 ~{ m, κs' }~> σ3 →
+  σ1 ~{ m, κs }~> σ3.
+Proof. move => ? -> ?. by apply: TraceStep. Qed.
+
 Lemma TraceUbRefl {EV} (m : module EV) σ κs :
   m.(m_is_ub) σ →
   σ ~{ m, κs }~> σ.
