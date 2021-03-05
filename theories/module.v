@@ -4,7 +4,6 @@ Require Import stdpp.strings.
 Require Import stdpp.gmap.
 Require Import stdpp.binders.
 Require Import stdpp.propset.
-Require Import refframe.axioms.
 
 Record module (EV : Type) : Type := {
   m_state : Type;
