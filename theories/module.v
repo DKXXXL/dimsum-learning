@@ -976,7 +976,7 @@ Proof.
   - move => ???? /Hinvnonempty [??]. eexists _. split => //. by apply: TraceEnd.
   - move => σi1 σi2 σi3 κ κs Hstep Hsteps IH σs1 Hinv.
     have := Hinvstep _ _ _ _ Hinv Hstep.
-    (* TODO: continue here *)
+    (* TODO: continue here. The lemma statement is probably wrong *)
 
     have [σs2 [Hinv2 Hsub]]:= Hinvstep _ _ _ _ Hinv Hstep.
     have [σs3 [σs4 [Hin ?]]]:= IH _ Hinv2.
