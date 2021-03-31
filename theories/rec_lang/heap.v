@@ -32,12 +32,11 @@ Definition own_module {Σ EV} `{!ghost_varG Σ (mod_state EV)} (γ : gname) (m :
   ghost_var γ (1/2) (MS m σ).
 Definition NoUb {Σ EV} `{!ghost_varG Σ (mod_state EV)} `{!invG Σ} (γ : gname) (E : coPset) (Φ : iProp Σ) : iProp Σ :=
   |={E, ∅}=> ((|={∅, E}=> Φ) ∨ ∃ m σ, own_module γ m σ ∗
-     (own_module γ m σ -∗ ⌜¬ σ ~{m, [Ub] }~> -⌝ -∗ |={∅, E}=> Φ)).
+     (own_module γ m σ -∗ ⌜¬ σ ~{m, [] }~> (λ _, False)⌝ -∗ |={∅, E}=> Φ)).
 Fixpoint WPspec {Σ EV} `{!ghost_varG Σ (mod_state EV)} `{!invG Σ} (γ : gname) (κs : list EV) (E : coPset) (Φ : iProp Σ) {struct κs} : iProp Σ :=
   match κs with
   | [] => NoUb γ E Φ
-  | κ::κs' => NoUb γ E (|={E, ∅}=> ∃ m σ σ', ⌜σ ~{ m, [Vis κ] }~> σ'⌝ ∗ own_module γ m σ ∗  (
-                  own_module γ m σ' -∗ |={∅, E}=> WPspec γ κs' E Φ))
+  | κ::κs' => NoUb γ E (|={E, ∅}=> ∃ m σ σ', ⌜σ ~{ m, [Vis κ] }~> (σ' =.)⌝ ∗ own_module γ m σ ∗  ( own_module γ m σ' -∗ |={∅, E}=> WPspec γ κs' E Φ))
   end.
 Arguments WPspec : simpl never.
 
@@ -68,7 +67,7 @@ Section WPspec.
 
   Lemma noub_use γ E m σ :
     own_module γ m σ -∗
-    NoUb γ E (⌜¬ σ ~{m, [Ub] }~> -⌝ ∗ own_module γ m σ).
+    NoUb γ E (⌜¬ σ ~{m, [] }~> (λ _, False)⌝ ∗ own_module γ m σ).
   Proof.
     iIntros "Hm".
     iMod (fupd_intro_mask' _ ∅) as "HE". set_solver.
@@ -101,16 +100,20 @@ Section WPspec.
     WPspec (EV:=EV) γ [] E Φ -∗ NoUb γ E Φ.
   Proof. done. Qed.
 
-  Lemma wpspec_cons (κ : EV) κs γ E Φ m σ σ':
-    σ ~{ m, [Vis κ] }~> σ' →
+  Lemma wpspec_cons (κ : EV) m Pσ κs γ E Φ σ:
+    σ ~{ m, [Vis κ] }~> Pσ →
     own_module γ m σ -∗
-    (own_module γ m σ' -∗ WPspec γ κs E Φ) -∗
+    (∀ σ', ⌜Pσ σ'⌝ -∗ own_module γ m σ' -∗ WPspec γ κs E Φ) -∗
     WPspec γ (κ::κs) E Φ.
   Proof.
-    iIntros (?) "Hm HΦ". rewrite /WPspec/=-/WPspec. iModIntro.
-    iMod (fupd_intro_mask' _ ∅) as "HE". set_solver. iModIntro.
+    iIntros ([?[? Hor]]%has_trace_inv) "Hm HΦ". rewrite /WPspec/=-/WPspec.
+    iModIntro. iMod (fupd_intro_mask' _ ∅) as "HE". set_solver. iModIntro.
     iExists _, _, _. iFrame. iSplit => //.
-    iIntros "Hm". iMod "HE". iModIntro. by iApply "HΦ".
+    iIntros "Hm". iMod "HE". iModIntro.
+    destruct Hor.
+    - iApply wpspec_noub. iMod (noub_use with "Hm") as (Hx) "?".
+      contradict Hx. by apply: TraceUb.
+    - by iApply "HΦ".
   Qed.
 
   Lemma wpspec_bind (κ : EV) κs γ E Φ:
@@ -125,9 +128,9 @@ Section definitions.
   Definition spec_ctx (κsrest : list EV) : iProp Σ :=
     ∃ κsstart σscur,
       ⌜module_full_trace = κsstart ++ κsrest⌝ ∗
-      ⌜module_spec.(ms_state) ~{ module_spec, Vis <$> κsstart }~> σscur⌝ ∗
+      ⌜module_spec.(ms_state) ~{ module_spec, Vis <$> κsstart }~> (σscur =.)⌝ ∗
       (* obtained by classical reasoning before switching to Iris *)
-      ⌜¬ module_spec.(ms_state) ~{ module_spec, (Vis <$> module_full_trace) ++ [Ub] }~> -⌝ ∗
+      ⌜¬ module_spec.(ms_state) ~{ module_spec, (Vis <$> module_full_trace) }~> (λ _, False)⌝ ∗
       own_module module_spec_name module_spec σscur.
 
   Lemma noub_elim κs P E:
@@ -142,10 +145,10 @@ Section definitions.
     iDestruct (ghost_var_agree with "Hm Hm2") as %Heq.
     dependent destruction Heq. (* THIS USES AXIOM K! *)
     iMod ("HP" with "Hm [%]"). {
-      contradict Hnub. move: Hnub => [? /has_trace_ub_inv[?[??]]].
-      rewrite Hfull fmap_app /= -app_assoc.
-      eexists _. apply: has_trace_trans => //=. apply: (has_trace_trans []) => //.
-      by apply: TraceUbRefl.
+      contradict Hnub.
+      rewrite Hfull fmap_app.
+      apply: has_trace_trans; [done|] => ? <-.
+      by apply: (has_trace_trans []).
     }
     iModIntro. iFrame. iExists _, _. by iFrame.
   Qed.
@@ -160,14 +163,15 @@ Section definitions.
     iIntros "Hsctx Hspec".
     iMod (noub_elim with "Hsctx Hspec") as "[Hsctx Hspec]".
     iDestruct "Hsctx" as (κsstart σscur Hfull Hinit Hnub) "Hm".
-    iMod "Hspec" as (m σ σ' Hstep) "[Hm2 HΦ]".
+    iMod "Hspec" as (m σ Pσ' Hstep) "[Hm2 HΦ]".
     iDestruct (ghost_var_agree with "Hm Hm2") as %Heq.
     dependent destruction Heq. (* THIS USES AXIOM K! *)
     iMod (ghost_var_update_halves with "Hm Hm2") as "[Hm Hm2]".
     iMod ("HΦ" with "Hm") as "$".
     iModIntro. iExists _, _. iFrame.
     iPureIntro. rewrite {1}Hfull. rewrite cons_middle app_assoc.
-    split_and! => //. rewrite fmap_app. by apply: has_trace_trans.
+    split_and! => //. rewrite fmap_app.
+    apply: has_trace_trans; [done|] => ? <-. done.
   Qed.
 End definitions.
 

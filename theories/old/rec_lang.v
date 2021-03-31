@@ -188,29 +188,127 @@ Definition call_module {EV} (m : mod_state EV) (i : call_module_info EV) : modul
 
 Definition call_module_refines_inv {EV} (m1 m2 : mod_state EV) (i : call_module_info EV) (σ1 : (call_module m1 i).(m_state)) (sσ2 : propset (call_module m2 i).(m_state)) : Prop :=
   ∃ Ts, Forall2 (state_set_refines m1 m2) σ1.(cs_stack) Ts
-    ∧ sσ2 ≡ {[ σ2 | σ1.(cs_waiting) = σ2.(cs_waiting) ∧ Forall2 elem_of σ2.(cs_stack) Ts ]}.
+    ∧ {[ σ2 | σ1.(cs_waiting) = σ2.(cs_waiting) ∧ Forall2 elem_of σ2.(cs_stack) Ts ]} ⊆ sσ2.
 
-Lemma call_empty_steps {EV} (m : mod_state EV) i σ σ' w σs:
-  σ ~{ m, [] }~> σ' →
-  {| cs_stack := σ :: σs; cs_waiting := w |} ~{ call_module m i, [] }~>
-            {| cs_stack := σ' :: σs; cs_waiting := w |}.
+Lemma call_empty_steps {EV} (m : mod_state EV) i σ Pσ' w σs:
+  σ ~{ m, [] }~> Pσ' →
+  {| cs_stack := σ :: σs; cs_waiting := w |} ~{ call_module m i, [] }~> (λ σ', ∃ σh,
+     σ'.(cs_waiting) = w ∧ tail σ'.(cs_stack) = σs ∧ head σ'.(cs_stack) = Some σh ∧ Pσ' σh).
 Proof.
   move Hκ: ([]) => κ Hsteps.
   elim: Hsteps Hκ.
-  - move => ?. by econstructor.
+  - move => ????. apply: TraceEnd. naive_solver.
   - move => σ1 σ2 σ3 [?|] κs //= ?? IH ?. subst.
     apply: TraceStepNone; [ | by apply: IH]. by apply: CStep.
   - move => ?????. by apply: TraceUb => /=.
 Qed.
+
+Lemma power_mono' {EV} (m : module EV) σ1 σ2 κs (Pσ : _ → Prop):
+  σ1 ~{ power_module m, κs }~> (λ σ, ∀ σ', σ ⊆ σ' → Pσ σ') →
+  σ1 ⊆ σ2 →
+  σ2 ~{ power_module m, κs }~> Pσ.
+Proof.
+  remember (λ σ : m_state (power_module m), ∀ σ' : m_state (power_module m), σ ⊆ σ' → Pσ σ') as Pσ'.
+  move => HT. elim: HT σ2 HeqPσ'.
+  - move => ??????. subst. apply: TraceEnd. naive_solver.
+  - move => ??????? IH ???. subst.
+    have [?[??]]:= power_step_mono _ _ _ _ _ ltac:(done) ltac:(done).
+    apply: TraceStep; [done|]. by apply: IH.
+  - move => ???????. apply: TraceUb. simplify_eq/=. set_solver.
+Qed.
+
+
+Lemma power_nil_2 {EV} (m : module EV) σs Pσ:
+  (∃ σs', σs' ⊆ (power_reach m σs []) ∧ (m_is_ub (power_module m) σs' ∨ Pσ σs')) →
+  σs ~{ power_module m, [] }~> Pσ.
+Proof.
+Admitted.
+
+Lemma call_empty_steps' {EV} (m : mod_state EV) (i : call_module_info EV) σm Pm Pσ:
+  σm ~{power_module m, [] }~> Pm →
+  (∀ σ, σ ∈ Pσ → ∃ oh, head (cs_stack σ) = Some oh ∧ oh ∈ σm) →
+  (∃ σ, σ ∈ Pσ) →
+  Pσ ~{power_module (call_module m i), [] }~> (λ σ',
+     ∃ σm', Pm σm' ∧
+     {[ σ2 | ∃ σ, σ ∈ Pσ ∧ σ2.(cs_waiting) = σ.(cs_waiting) ∧
+                 ∃ σh, head σ2.(cs_stack) = Some σh ∧
+                         tail σ2.(cs_stack) = tail σ.(cs_stack)
+                         ∧ σh ∈ σm' (* ??? *)
+    ]} ⊆ σ').
+Proof.
+  move => /power_nil[?[? Hor]] Hs [σi ?].
+  apply: power_nil_2.
+  eexists _. split. done.
+  case: Hor => [[?[??]]|?].
+  - left => /=.
+    have [?[??]]:= Hs _ ltac:(done).
+    destruct σi as [[|??]?]; simplify_eq/=.
+    eexists _. split. eexists _. split; [done|].
+    by apply: TraceEnd. simpl.
+    admit.
+  - right.
+    eexists _. split; [done|].
+    set_unfold.
+    move => ? [[??][?[?[?[?[??]]]]]].
+    have [? [??]]:= Hs _ ltac:(done).
+    eexists _. split; [done|]. simplify_eq/=.
+Admitted.
+
+Lemma CStepPower {EV} (m : mod_state EV) (i : call_module_info EV) e σm Pm Pσ:
+  σm ~{power_module m, option_list (Vis <$> e)}~> Pm →
+  (∀ σ, σ ∈ Pσ → is_Some (head (cs_stack σ))) →
+  Pσ ~{power_module (call_module m i), option_list (Vis <$> e)}~> (λ σ',
+    {[ σ2 | ∃ σ, σ ∈ Pσ ∧ σ2.(cs_waiting) = default σ.(cs_waiting) (i.(cmi_waiting) <$> e) ∧
+                 if default false (i.(cmi_final) <$> e) then
+                   σ2.(cs_stack) = tail σ.(cs_stack)
+                 else
+                   ∃ σh, head σ2.(cs_stack) = Some σh ∧
+                         tail σ2.(cs_stack) = tail σ.(cs_stack)
+                         (* ∧ σh ∈ Pm (* ??? *) *)
+    ]} ⊆ σ').
+Proof.
+  move => ??.
+  apply: has_trace_add_empty.
+  apply: TraceStep. split. done. admit.
+  apply: TraceEnd.
+  set_unfold.
+
+  admit.
+
+Admitted.
 
 Lemma state_set_refines_exists_Forall2 {EV} (m1 m2 : module EV) σ σs:
   Forall2 (state_set_refines m1 m2) σ σs →
   ∃ σs', Forall2 elem_of σs' σs.
 Proof.
   elim. { eexists []. constructor. }
-  move => ???? /state_set_refines_non_empty[??] ? [??].
+  move => ???? /state_set_refines_inhabited[??] ? [??].
   eexists. by constructor.
 Qed.
+
+(* Lemma power_trace_equiv {EV} (m : module EV) σ1 σ2 κs Pσ1 Pσ2: *)
+(*   σ1 ≡ σ2 → *)
+(*   σ1 ~{ power_module m, κs }~> Pσ1 → *)
+(*   σ2 ~{ power_module m, κs }~> Pσ2. *)
+(* Proof. Admitted. *)
+  (* move => Heq HT. elim: HT σ2 Heq. *)
+  (* - move => ???? <- ?. by apply: TraceEnd. *)
+  (* - move => ??????? IH ???. subst. *)
+    (* have [?[??]]:= power_step_mono _ _ _ _ _ ltac:(done) ltac:(done). *)
+    (* apply: TraceStep; [done|]. by apply: IH. *)
+  (* - move => ???????. apply: TraceUb. simplify_eq/=. set_solver. *)
+(* Qed. *)
+
+(* Lemma subset_of_power_reach {EV} (m : module EV) σ σ' σs κs: *)
+(*   (∀ σ, σ ∈ σ1 → ∃ σ', σ) *)
+(*   σ1 ⊆ power_reach m σ2 κs. *)
+(* Proof. move => ?. eexists _. naive_solver. Qed. *)
+
+(* Lemma power_step {EV} (m : module EV): *)
+(*   (∀ σ, σ ∈ σs1 → m.(m_step) σ κ) *)
+(*   σs1 ~{ power_module m, option_list (Vis <$> κ) }~> Pσ, *)
+
+
 
 Lemma call_module_refines {EV} (m1 m2 : mod_state EV) (i : call_module_info EV) :
   m1 ⊑ m2 →
@@ -219,8 +317,215 @@ Proof.
   move => Href.
   apply (inv_set_implies_refines (MS (call_module m1 i) _) (MS (call_module m2 i) _) (call_module_refines_inv _ _ _)).
   - eexists []. split_and!; [ by constructor |].
-    set_unfold; move => [??] /=. rewrite /call_module_init. split; first naive_solver.
+    set_unfold; move => [??] /=. rewrite /call_module_init.
     move => [-> Hall]. inversion Hall. naive_solver.
+  - move => [csi wi] σs [csi2 wi2] e [Ts [Hall Hσs]] /= Hstep.
+    inv_step.
+    + move: Hall => /(Forall2_cons_inv_l _ _ _)[T [Ts' [Hs[??]]]]. subst.
+      apply: power_mono'; [|done]. clear σs Hσs.
+      destruct κ => /=. 2: {
+        apply: TraceEnd.
+        move => ??/=. eexists _. split; [|done].
+        constructor; [|done]. by apply: state_set_refines_step_None.
+      }
+      admit.
+
+      (* apply: has_trace_mono. *)
+      (* apply: CStepPower. { apply: state_set_refines_ub_step; [ done|]. by constructor. } *)
+      (* { admit. } *)
+      (* move => /= ????. *)
+      (* eexists ((if default false (cmi_final i <$> κ) then [] else [_]) ++ Ts'). *)
+      (* split. { *)
+      (*     apply: Forall2_app; [|done]. case_match; constructor; [|constructor]. *)
+      (*       by apply: state_set_refines_step. *)
+      (* } *)
+      (* etrans; [| done]. *)
+      (* etrans; [| done]. *)
+      (* simpl. *)
+      (* set_unfold. *)
+      (* move => [??] [? ?]. *)
+      (* case_match. *)
+
+      (* * eexists (Build_call_state _ _ _ _). *)
+      (*   split_and! => //. constructor => /=. 3: done. 2: done. admit. *)
+
+      (* * eexists (Build_call_state _ _ _ _). *)
+      (*   split_and! => //. constructor => /=. admit. admit. *)
+
+      (*
+      have ?:= state_set_refines_step _ _ _ _ _ _ ltac:(done) ltac:(done).
+
+      have : (
+               {[ σ2 | default wi (cmi_waiting i <$> κ) = cs_waiting σ2 ∧ Forall2 elem_of (cs_stack σ2) ((if default false (cmi_final i <$> κ) then [] else [(power_reach m2 T (option_list (Vis <$> κ)))]) ++ Ts') ]} ~{ power_module (call_module m2 i),
+  []
+  }~> (λ σ0 : m_state (power_module (call_module m2 i)),
+         ∀ σ'0 : m_state (power_module (call_module m2 i)),
+           σ0 ⊆ σ'0
+           → call_module_refines_inv m1 m2 i
+               {|
+               cs_stack := (if default false (cmi_final i <$> κ) then [] else [σ']) ++ σs0;
+               cs_waiting := default wi (cmi_waiting i <$> κ) |} σ'0)).
+
+      {
+        apply: TraceEnd.
+        move => ??.
+        eexists _.
+        split. { constructor; [|done]. by apply: state_set_refines_initial. }
+        etrans; [|done].
+        set_unfold.
+        move => [??] /= [? /(Forall2_cons_inv_r _ _ _ _)[?[?[?[??]]]]]. subst.
+        eexists (Build_call_state _ _ _ _). split; [done|].
+        apply: TraceStepNone; [by apply: CWaiting | apply: TraceEnd].
+        set_solver.
+                                                           2: apply: TraceEnd.
+
+
+
+
+      apply: has_trace_add_empty.
+      apply: has_trace_trans. _ _ (power_module (call_module _ _)) _ {[ σ2 | wi = cs_waiting σ2 ∧ Forall2 elem_of (cs_stack σ2) (T :: Ts') ]}).
+      *)
+
+      (* TODO: ideally we want to apply CStep here with an automatic lifting to power module. *)
+
+      (* apply: (TraceStep' _ []). 2: by rewrite right_id. *)
+      (* * simpl. split; [done|]. admit. *)
+      (* * apply: TraceEnd. *)
+      (*   eexists ((if default false (cmi_final i <$> κ) then [] else [_]) ++ Ts'). *)
+      (*   split. { *)
+      (*     apply: Forall2_app; [|done]. case_match; constructor; [|constructor]. *)
+      (*       by apply: state_set_refines_step. *)
+      (*   } *)
+      (*   etrans; [| done]. clear H. *)
+
+      (*   set_unfold. *)
+      (*   move => [??] /= [? ?]. subst. *)
+
+      (*   (* case_match. *) *)
+
+      (*   eexists (Build_call_state _ _ _ _). split; [split; [done|] |]. constructor. *)
+
+      (*   3: { *)
+      (*     apply: (TraceStep' _ []); [| by rewrite right_id |]. *)
+      (*     apply: CStep. *)
+      (*     admit. *)
+      (*     admit. *)
+      (*     admit. *)
+      (*   } *)
+      (*   admit. *)
+      (*   admit. *)
+      (*
+      apply: (TraceStep' _ []). 2: by rewrite right_id.
+      * simpl. split; [done|]. admit.
+      * apply: TraceEnd.
+        eexists ((if default false (cmi_final i <$> κ) then [] else [_]) ++ Ts').
+        split. {
+          apply: Forall2_app; [|done]. case_match; constructor; [|constructor].
+            by apply: state_set_refines_step.
+        }
+        etrans; [| by apply (power_reach_subseteq_proper (call_module _ _))].
+        set_unfold.
+        move => [??] /= [? ?]. subst.
+        eexists (Build_call_state _ _ _ _). split; [split; [done|] |]. constructor.
+
+        3: {
+          apply: (TraceStep' _ []); [| by rewrite right_id |].
+          apply: CStep. done.
+        apply: TraceStepNone; [by apply: CWaiting | apply: TraceEnd].
+        set_solver.
+        admit.
+*)
+    + apply: power_mono'; [|done].
+      apply: TraceStepNone.
+      * simpl. split; [done|].
+        move: Hall => /state_set_refines_exists_Forall2[??].
+        eexists (Build_call_state _ _ _ _).
+        apply: elem_of_subseteq_1; [apply: (power_reach_refl (call_module _ _))|].
+        done.
+      * apply: TraceEnd.
+        eexists _.
+        split. { constructor; [|done]. by apply: state_set_refines_initial. }
+        etrans; [|done].
+        set_unfold.
+        move => [??] /= [? /(Forall2_cons_inv_r _ _ _ _)[?[?[?[??]]]]]. subst.
+        eexists (Build_call_state _ _ _ _). split; [done|].
+        apply: TraceStepNone; [by apply: CWaiting | apply: TraceEnd].
+        set_solver.
+    + destruct csi2 => //=.
+      move: Hall => /(Forall2_cons_inv_l _ _ _)[T [Ts' [Hs[??]]]]. subst.
+      apply: power_mono'; [|done].
+      have ? := state_set_refines_ub _ _ _ _ ltac:(done) ltac:(done).
+      apply: (has_trace_trans []).
+      apply: call_empty_steps'; [done| |].
+      admit.
+      admit.
+      set_unfold.
+      (* TODO: we need a version of call_empty_steps for power_module *)
+      admit.
+
+(*
+
+
+        apply: elem_of_power_reach.
+        2: apply: TraceStep'. 2: apply: CStep => //.
+        eexists _. split. simpl.
+      apply: state_set_refines_ub_step.
+      destruct e as [e|] => /=. 2: {
+        eexists σs. split.
+        - eexists _. split; [|set_solver].
+          constructor => //. by apply: state_set_refines_step_None.
+        - move => σ1 ?. eexists σ1. split => //. apply: TraceEnd.
+      }
+
+
+    + revert select (m_step _ _ _ _) => Hstep.
+      move: Hall => /(Forall2_cons_inv_l _ _ _)[? [Ts' [Hs[??]]]]. subst.
+      destruct e as [e|] => /=. 2: {
+        eexists σs. split.
+        - eexists _. split; [|set_solver].
+          constructor => //. by apply: state_set_refines_step_None.
+        - move => σ1 ?. eexists σ1. split => //. apply: TraceEnd.
+      }
+      eexists _. split. {
+        eexists ((if cmi_final i e then [] else [_]) ++ Ts').
+        split => //.
+        apply: Forall2_app => //.
+        case_match. constructor. constructor; [|by constructor].
+          by apply: state_set_refines_step.
+      }
+      move => /= [??] [? Hall]. simplify_eq/=.
+      case_match; simplify_eq/=.
+      * have /state_set_refines_non_empty[σa [σb /= [? Ht]]] := state_set_refines_step _ _ _ _ _ _ Hs Hstep.
+        eexists (Build_call_state _ _ _ _). rewrite {}Hσs.
+        split. { split => //. apply: Forall2_cons => //. }
+        move: Ht => /(has_trace_cons_inv _ _ _)[? [? [? Hor]]].
+        apply: (has_trace_trans []); [ by apply: call_empty_steps|].
+        case: Hor => [?|[??]]; [by apply: TraceUb|].
+        apply: TraceStepSome; [|by apply: TraceEnd].
+        apply: CStep => //. case_match => //. simplify_eq/=. congruence.
+      * move: Hall => /(Forall2_cons_inv_r _ _ _ _)[σa [Ts [[σb [? Ht]][??]]]].
+        simplify_eq.
+        eexists (Build_call_state _ _ _ _). rewrite {}Hσs.
+        split. { split => //. apply: Forall2_cons => //. }
+        move: Ht => /(has_trace_cons_inv _ _ _)[? [? [? Hor]]].
+        apply: (has_trace_trans []); [ by apply: call_empty_steps|].
+        case: Hor => [?|[??]]; [by apply: TraceUb|].
+        apply: TraceStepSome. { by apply: CStep. }
+        case_match => //; simplify_eq/=; try congruence.
+        by apply: call_empty_steps.
+    + eexists _. split_and!. {
+        eexists _. split; [|done]. apply: Forall2_cons; [|done].
+          by apply: state_set_refines_initial.
+      }
+      move => [??] [? /(Forall2_cons_inv_r _ _ _ _) [? [?[? [??]]]]]. simplify_eq/=.
+      eexists (Build_call_state _ _ _ _). rewrite Hσs.
+      split. { split => //. }
+      apply: TraceStepNone; [|by apply: TraceEnd].
+      set_unfold; subst. by apply CWaiting.
+      (* 3: { move => ??. eexists _. apply: TraceStepNone; [|by apply: TraceEnd]. apply: CWaiting. } *)
+      (* split => //. constructor => //. by apply: ref_subset. *)
+  - move => [csi wi] σs /=.
+
   - move => [??] ? [Ts [/state_set_refines_exists_Forall2 [??] Hσs]].
     eexists (Build_call_state _ _ _ _). by rewrite {}Hσs.
   - move => [csi wi] σs /= [Ts [Hall Hσs]] Hub. destruct csi => //; simplify_eq/=.
@@ -279,6 +584,8 @@ Proof.
       (* 3: { move => ??. eexists _. apply: TraceStepNone; [|by apply: TraceEnd]. apply: CWaiting. } *)
       (* split => //. constructor => //. by apply: ref_subset. *)
 Qed.
+ *)
+Admitted.
 
 Definition call_module_link_inv {EV} (m1 m2 m3 : mod_state EV) (i : call_module_info EV) (M : link_mediator EV EV EV) (σ1 : (call_module m1 i).(m_state)) (σ2 : (call_module m2 i).(m_state)) (σ3 : (call_module m3 i).(m_state)) (σm : M.(lm_state)) : Prop :=
   True.
@@ -295,13 +602,13 @@ Proof.
   - done.
   - admit.
   - admit.
-  - move => [cs1 ws1] [[[cs2 ws2] [cs3 ws3]] σm] [??] ?/= ? ?.
-    invert_all @call_step.
-    * right.
-      admit.
-    * admit.
-  - move => [cs1 ws1] [[[cs2 ws2] [cs3 ws3]] σm] [??] ?/= ? ?.
-    admit.
+  (* - move => [cs1 ws1] [[[cs2 ws2] [cs3 ws3]] σm] [??] ?/= ? ?. *)
+  (*   invert_all @call_step. *)
+  (*   * right. *)
+  (*     admit. *)
+  (*   * admit. *)
+  (* - move => [cs1 ws1] [[[cs2 ws2] [cs3 ws3]] σm] [??] ?/= ? ?. *)
+  (*   admit. *)
     (* invert_all @link_step. *)
 Admitted.
 
@@ -318,6 +625,7 @@ Definition call_intro_inv {EV} (m : mod_state EV) (i : call_module_info EV) (is_
   | [σ] => σ1 = σ ∧ if σm then ∃ σ' e κs, m.(m_step) m.(ms_state) e σ' ∧ has_non_ub_trace m σ' κs σ else σ = m.(ms_state) ∧ σ2.(cs_waiting) = false
   | _ => False
   end.
+(* TODO: this is currently broken because has_no_behavior was removed from the invariant proof technique. *)
 Lemma call_intro {EV} (m : mod_state EV) (i : call_module_info EV) (is_init : EV → bool):
   (∀ e σ, m.(m_step) m.(ms_state) e σ → ∃ κ, e = Some κ ∧ is_init κ) → (* TODO: Is this necessary? *)
   ¬ m_is_ub m (ms_state m) →
@@ -325,6 +633,8 @@ Lemma call_intro {EV} (m : mod_state EV) (i : call_module_info EV) (is_init : EV
   (∀ σ'' σ' σ e κs e', m.(m_step) m.(ms_state) e σ' → σ' ~{ m, κs }~>ₙ σ → m.(m_step) σ (Some e') σ'' → ¬ is_init e') →
   refines_equiv m (MS (link (call_module m i) ∅ (call_intro_mediator is_init)) (call_module_init m, tt, false)).
 Proof.
+Admitted.
+(*
   move => HSome Hnotub Hfinal Hnoinit.
   apply (inv_implies_refines_equiv _ (MS (link _ _ _) _) (curry ∘ curry ∘ (call_intro_inv _ _ _))).
   - done.
@@ -392,6 +702,7 @@ Proof.
         have [?[??]]:= HSome _ _ Hstep. simplify_eq/=. destruct_and!. by case_match.
       * simpl. contradict Hnotub. naive_solver.
 Qed.
+*)
 (*** rec linking *)
 Definition rec_cmi : call_module_info rec_event := {|
   cmi_final e := if e is DoneEvt _ then true else false;
@@ -513,39 +824,59 @@ Module test.
       BinOp "u" AddOp "2"
   |}.
 
+  Lemma TraceUbFalse {EV} (m : module EV) σ1 κs:
+    m_is_ub m σ1 → σ1 ~{ m, κs }~> (λ _, False).
+   Proof. move => ?. by apply: TraceUb. Qed.
+
+
   Lemma add1_refines_cumbersome add1_name :
     MS rec_module (initial_state {[ add1_name := add1 ]}) ⊑ MS rec_module (initial_state {[ add1_name := add1_cumbersome ]}).
   Proof.
     apply: wp_implies_refines => n.
-    constructor. split. { apply. right. eexists _, _. econstructor => //. by apply: lookup_insert. }
-    move => ? ? ? ? ?. inv_step. simplify_map_eq.
-    destruct (decide (length nas = 1%nat)). 2: {
-      eexists _. left. apply: TraceStepSome. { econstructor => //. apply: lookup_insert. }
-      apply: TraceUbRefl => /=. case_bool_decide => //.
-      move => [[?|?]//|[? [??]]]. invert_all step.
+    constructor => ? ? ? ? ?. inv_step; simplify_map_eq. 2: {
+      eexists _. split; [apply: TraceUbFalse|done] => ?. naive_solver.
     }
-    eexists _. right. split. {
-      apply: TraceStepSome; [|by apply: TraceEnd].
+    destruct (decide (length nas = 1%nat)). 2: {
+      eexists _. split.
+      - apply: TraceStepSome. { econstructor => //. apply: lookup_insert. }
+        apply: TraceUbFalse => /=. case_bool_decide => //.
+        move => [[?|?]//|[? [??]]]. invert_all step.
+      - done.
+    }
+    eexists _. split. {
+      apply: TraceStepSome; [|by apply: TraceEnd'].
       econstructor => //. by apply: lookup_insert.
     }
-    simpl. case_bool_decide => //.
+    move => /= ? <-. case_bool_decide => //.
     destruct nas as [|n [|]] => //.
 
-    constructor. split. { apply. right. eexists _, _. by econstructor. }
-    move => ?????. inv_step.
-    eexists. right. split. { apply: TraceEnd. }
+    constructor => ?????. inv_step. 2: {
+      eexists _. split; [apply: TraceUbFalse|done] => -[[//|//]|] [?[??]]. apply: H0.
+      right. eexists _, _. by econstructor.
+    }
+    eexists. split. { apply: TraceEnd'. }
+    move => /= ? <-.
 
-    constructor. split. { apply. right. eexists _, _. by econstructor. }
-    move => ?????. inv_step.
-    eexists. right. split. { apply: TraceEnd. }
+    constructor => ?????. inv_step. 2: {
+      eexists _. split; [apply: TraceUbFalse|done] => -[[//|//]|] [?[??]]. apply: H.
+      right. eexists _, _. by econstructor.
+    }
+    eexists. split. { apply: TraceEnd'. }
+    move => /= ? <-.
 
-    constructor. split. { apply. right. eexists _, _. by econstructor. }
-    move => ?????. inv_step.
-    eexists. right. split. { apply: TraceEnd. }
+    constructor => ?????. inv_step. 2: {
+      eexists _. split; [apply: TraceUbFalse|done] => -[[//|//]|] [?[??]]. apply: H.
+      right. eexists _, _. by econstructor.
+    }
+    eexists. split. { apply: TraceEnd'. }
+    move => /= ? <-.
 
-    constructor. split. { apply. right. eexists _, _. by econstructor. }
-    move => ?????. inv_step. simplify_map_eq.
-    eexists. right. split. {
+    constructor => ?????. inv_step. 2: {
+      eexists _. split; [apply: TraceUbFalse|done] => -[[//|//]|] [?[??]]. apply: H.
+      right. eexists _, _. by econstructor.
+    }
+    simplify_map_eq.
+    eexists. split. {
       simpl. apply: TraceStepNone. { by econstructor. }
       simpl. apply: TraceStepNone. { by econstructor. }
       simpl. apply: TraceStepNone. { by econstructor. }
@@ -558,13 +889,11 @@ Module test.
         have -> : (n1 + 2 + -1) = n1 + 1 by lia.
         by econstructor.
       }
-      apply: TraceEnd.
+      by apply: TraceEnd'.
     }
+    move => /= ? <-.
 
-    constructor. split. { apply. naive_solver. }
-    move => ?????. inv_step.
-    Unshelve.
-    apply: inhabitant.
+    constructor => ?????. inv_step. contradict H. naive_solver.
   Qed.
 
   Lemma ret2_refines_call :
@@ -575,7 +904,8 @@ Module test.
 
   Lemma const_prop_post_refines_pre  :
     MS rec_module (initial_state {[ "cp" := const_prop_post ]}) ⊑ MS rec_module (initial_state {[ "cp" := const_prop_pre ]}).
-  Proof.
+  Proof. Admitted.
+  (*
     apply: wp_implies_refines => n.
     constructor. split. { apply. right. eexists _, _. econstructor => //. by apply: lookup_insert. }
     move => ? ? ? ? ?. inv_step. simplify_map_eq.
@@ -642,6 +972,7 @@ Module test.
     Unshelve.
     all: apply: inhabitant.
   Qed.
+*)
 End test.
 
 (*** Safety property stuff *)

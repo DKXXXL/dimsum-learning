@@ -71,3 +71,12 @@ Lemma map_difference_eq_dom_L {A} (m m1 m2 : M A) `{!LeibnizEquiv D}:
   m ∖ m1 = m ∖ m2.
 Proof. unfold_leibniz. apply: map_difference_eq_dom. Qed.
 End dom.
+
+Section semi_set.
+  Context `{SemiSet A C}.
+  Implicit Types x y : A.
+  Implicit Types X Y : C.
+  Implicit Types Xs Ys : list C.
+Lemma elem_of_subseteq_1 X Y x: X ⊆ Y → x ∈ X → x ∈ Y.
+Proof. set_solver. Qed.
+End semi_set.

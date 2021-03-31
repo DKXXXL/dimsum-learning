@@ -74,14 +74,14 @@ Definition test_cm : (computational_module call_event call_event_in call_event_o
   ;
 |}.
 
-Goal ∀ n, ∃ σ,
-      Some TCMInit ~{ test_cm, [Vis (CRecvCallEvt "test" [n]); Vis (CCallEvt "id" [n]); Vis (CRecvRetEvt n); Vis (CDoneEvt n)] }~> σ.
+Goal ∀ n,
+      Some TCMInit ~{ test_cm, [Vis (CRecvCallEvt "test" [n]); Vis (CCallEvt "id" [n]); Vis (CRecvRetEvt n); Vis (CDoneEvt n)] }~> (λ _, True).
 Proof.
-  move => ?. eexists _.
+  move => ?.
   apply: TraceStepSome. done.
   apply: TraceStepSome. done.
   apply: TraceStepSome. simpl. case_bool_decide => //.
   apply: TraceStepSome. done.
-  apply: TraceEnd.
+  by apply: TraceEnd.
 Qed.
 End test.

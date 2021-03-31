@@ -36,12 +36,16 @@ Proof.
   wp_bind (Call _ _).
   iApply (wp_ext_call [_]) => //.
 
-  iApply (wpspec_cons with "Hm"). { apply: TraceStepSome; [|apply:TraceEnd]. econstructor. }
-  iIntros "Hm". iApply wpspec_nil. iIntros (v).
-  iApply (wpspec_cons with "Hm"). { apply: TraceStepSome; [|apply:TraceEnd]. econstructor. }
-  iIntros "Hm". iMod (noub_use with "Hm") as (Hub) "Hm".
+  iApply (wpspec_cons with "Hm"). {
+    apply: TraceStepSome; [econstructor|]. by apply: TraceEnd'.
+  }
+  iIntros (? <-) "Hm". iApply wpspec_nil. iIntros (v).
+  iApply (wpspec_cons with "Hm"). {
+    apply: TraceStepSome; [econstructor|]. by apply: TraceEnd'.
+  }
+  iIntros (? <-) "Hm". iMod (noub_use with "Hm") as (Hub) "Hm".
   iApply wpspec_nil.
-  case_bool_decide; subst. 2: { contradict Hub. eexists _. by apply: TraceUbRefl. }
+  case_bool_decide; subst. 2: { contradict Hub. by apply: TraceUb. }
 
   iApply wp_let => /=. iModIntro.
   iApply wp_binop. iPureIntro. by case_bool_decide.
@@ -70,7 +74,7 @@ Definition test_concurrent_module : module rec_event := {|
 End examples.
 
 Lemma test_main_adequate :
-  (∀ κs, LEM (TSInit ~{ test_module, κs }~> -)) →
+  (∀ κs, LEM (TSInit ~{ test_module, κs }~> (λ _, True))) →
   MS (iris_module rec_lang) ([test_main], {| st_fns := ∅ |}) ⊑ MS test_module TSInit.
 Proof.
   move => HLEM.

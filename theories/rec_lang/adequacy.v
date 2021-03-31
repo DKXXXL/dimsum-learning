@@ -54,7 +54,7 @@ Proof.
 Qed.
 
 Theorem module_adequacy Σ Λ (mspec : mod_state _) `{!invPreG Σ} `{!modulePreG Λ.(observation) Σ} es σ1:
-  (∀ κs, LEM (mspec.(ms_state) ~{ mspec, κs }~> -)) →
+  (∀ κs, LEM (mspec.(ms_state) ~{ mspec, κs }~> (λ _, True))) →
   single_event_prim_step Λ →
   (∀ `{Hinv : !invG Σ} γm κsfull,
        let _ : moduleG Λ.(observation) Σ := ModuleG Λ.(observation) Σ mspec _ γm κsfull in
@@ -69,7 +69,7 @@ Theorem module_adequacy Σ Λ (mspec : mod_state _) `{!invPreG Σ} `{!modulePreG
   MS (iris_module Λ) (es, σ1) ⊑ mspec.
 Proof.
   move => HLEM Hev /= Hwp.
-  constructor => κsfull [σ2 Htrace]. case: (HLEM κsfull) => // Hnoub.
+  constructor => κsfull Htrace. case: (HLEM κsfull) => // Hnoub.
   move: Htrace => /has_trace_to_non_ub_trace[κs' [[??] [Hpre [Htrace Hor]]]].
   move: Htrace => /has_non_ub_trace_nsteps[//|?] /=.
   apply: wp_strong_adequacy => ?.
@@ -77,21 +77,22 @@ Proof.
   iMod (Hwp _ γm κs' with "[Hm1] Hm2") as (stateI fork_post) "(Hσ&Hwp&Hend)". {
     iExists [], _. iFrame. iPureIntro. split_and! => //. { by constructor. }
     contradict Hnoub => /=. move: Hpre => [? ->].
-    move: Hnoub => /= [σ' /has_trace_ub_app_inv[?[??]]].
-    eexists _. apply: has_trace_trans; [done|]. by apply: TraceUbRefl.
+    by apply: has_trace_trans.
   }
   iModIntro. iExists NotStuck, stateI, (replicate (length es) (λ _, True%I)), fork_post.
   rewrite big_sepL2_replicate_r //. iFrame.
   iIntros (es' ts' ?? Hnonstuck) "Hs _ _".
   iMod ("Hend" with "Hs") as (κs σscur Hmodful Htrace _) "_". iPureIntro.
   rewrite app_nil_r in Hmodful. simpl in *. subst.
-  case: Hor => [[<- ?]|[? [? /not_not_stuck Hstuck]]]; naive_solver.
+  case: Hor => [[<- ?]|[? [? /not_not_stuck Hstuck]]].
+  - by apply: has_trace_mono.
+  - naive_solver.
 Qed.
 
 
 
 Lemma reclang_adequacy Σ `{!reclangPreG Σ} (mspec : mod_state _) (mains : list lang.expr) (fns : gmap fn_name fndef):
-  (∀ κs, LEM (mspec.(ms_state) ~{ mspec, κs }~> -)) →
+  (∀ κs, LEM (mspec.(ms_state) ~{ mspec, κs }~> (λ _, True))) →
   (∀ {HrecG : reclangG Σ},
     ⊢ @own_module _ rec_event (module_ghostvarG) module_spec_name mspec mspec.(ms_state) -∗
       fntbl fns
