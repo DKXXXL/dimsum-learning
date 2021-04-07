@@ -80,6 +80,25 @@ Safety would be defined as follows and should be transferred by refinement:
 Definition safe {EV} (m : mod_state EV) (P : list (event EV) → Prop) :=
   ∀ Pκs, m.(ms_state) ~{ m, Pκs }~> (λ _, True) → ∃ κs, κs ∈ Pκs ∧ P κs.
 
+Or even Pκs should not be precise, i.e.
+
+    m.(m_step) σ1 κ Pσ2 →
+    (∀ σ2, Pσ2 σ2 → has_trace m σ2 (λ κs, Pκs (option_list (Vis <$> κ) ++ κs)) Pσ3) →
+    Pκs κs →
+    has_trace m σ1 Pκs Pσ3
+
+This means that Refinement can be defined as
+∀ Pκs, mimpl.(ms_state) ~{ mimpl, Pκs }~> (λ _, True) → mspec.(ms_state) ~{ mspec, Pκs }~> (λ _, True)
+
+And safety as:
+Definition safe {EV} (m : mod_state EV) (P : (list (event EV) → Prop) → Prop) :=
+  ∀ Pκs, m.(ms_state) ~{ m, Pκs }~> (λ _, True) → P Pκs.
+
+The key observation is that this definition of has_trace already builds in that a target
+can have more angelic behavior as the spec and one can only prove safe for properties that
+are closed under expansion to bigger sets. E.g. properties of the form P Pκs := ∃ κ, Pκs ∧ (...) work,
+but something with P Pκs := (∀ κs, Pκs κs → ...) does not work. This is feature, not a bug
+since such properties are not preserved by refinement anyway.
 *)
 
 Inductive has_trace {EV} (m : module EV) : m.(m_state) → list (event EV) → (m.(m_state) → Prop) → Prop :=
