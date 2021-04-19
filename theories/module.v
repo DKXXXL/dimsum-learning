@@ -122,7 +122,7 @@ Proof.
     move => ??. apply: IH => // ??. by apply: Hκs.
 Qed.
 
-Lemma has_trace_mono {EV} (m : module EV) σ1 (Pκs Pκs' Pσ2 Pσ2' : _ → Prop):
+Lemma has_trace_mono {EV} {m : module EV} (Pκs' Pσ2' Pκs Pσ2 : _ → Prop)  σ1 :
   σ1 ~{ m, Pκs' }~> Pσ2' →
   (∀ κs, Pκs' κs → Pκs κs) →
   (∀ σ, Pσ2' σ → Pσ2 σ) →
@@ -478,7 +478,7 @@ Proof.
       * eexists _. split; [done|]. by apply: DTraceUb.
 
   - move => [κs [HP Ht]].
-    apply: (has_trace_mono _ _ _ (κs =.)); [| naive_solver |done]. clear HP.
+    apply: (has_trace_mono (κs =.)); [| naive_solver |done]. clear HP.
     elim: Ht.
     + move => ???. by constructor.
     + move => ????????.
@@ -510,6 +510,171 @@ Proof.
     apply/has_trace_dem_has_trace. naive_solver.
   - move => [?]. constructor => ? /dem_has_trace_has_trace?.
     apply/dem_has_trace_has_trace. naive_solver.
+Qed.
+
+
+(*** [mod_filter] *)
+Inductive filter_step {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) :
+  m.(m_state) → option EV2 → (m.(m_state) → Prop) → Prop :=
+| FilterStep σ e e' Pσ:
+    m.(m_step) σ e Pσ →
+    (* TODO: is there a better way to formulate this? E.g. assume
+    that there is no R None None Some in the theorem? *)
+    (if e is Some κ then R κ e' else e' = None) →
+    filter_step m R σ e' Pσ.
+
+Definition mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) : module EV2 := {|
+  m_step := filter_step m R;
+|}.
+
+(*
+Inductive filter_trace_rel {EV1 EV2} (R : EV1 → option EV2 → Prop) : (list (event EV2) → Prop) → list (event EV1) → Prop :=
+| FTREnd (Pκs' : _ → Prop):
+    Pκs' [] →
+    filter_trace_rel R Pκs' []
+| FTRStep κ κ' κs Pκs':
+    R κ κ' →
+    filter_trace_rel R (λ κs', Pκs' (option_list (Vis <$> κ') ++ κs')) κs →
+    filter_trace_rel R Pκs' (Vis κ :: κs)
+| FTRUb Pκs':
+    filter_trace_rel R Pκs' [Ub]
+.
+
+Lemma mod_filter_to_mod {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pσ:
+  σ ~{ mod_filter m R, Pκs }~> Pσ →
+  σ ~{ m, filter_trace_rel R Pκs }~> Pσ.
+Proof.
+  elim.
+  - move => ?????. apply: TraceEnd; [done|]. by constructor.
+  - move => ?????? Hstep ? IH ?. inversion Hstep; simplify_eq.
+    apply: TraceStep; [done| |].
+    + move => σ2 ?. apply: has_trace_mono; [by apply: IH | |done] => /=.
+      move => κs ?. destruct e; simplify_eq/=; [|done].
+      econstructor; [done|done].
+    + destruct e; simplify_eq/=.
+      * econstructor; [done|]. apply: FTRUb.
+      * apply: FTRUb.
+Qed.
+
+Inductive filter_trace_rel' {EV1 EV2} (R : EV1 → option EV2 → Prop) : (list (event EV1) → Prop) → list (event EV2) → Prop :=
+| FTREnd' (Pκs' : _ → Prop):
+    Pκs' [] →
+    filter_trace_rel' R Pκs' []
+| FTRStep' κ κ' κs Pκs':
+    R κ' κ →
+    filter_trace_rel' R (λ κs', Pκs' (Vis κ' :: κs')) κs →
+    filter_trace_rel' R Pκs' (option_list (Vis <$> κ) ++ κs)
+| FTRUb' Pκs':
+    filter_trace_rel' R Pκs' [Ub]
+.
+
+
+Lemma mod_to_mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pσ:
+  σ ~{ m, Pκs }~> Pσ → (∀ κs κ, Pκs κs → Vis κ ∈ κs → ∃ κ', R κ κ') →
+  σ ~{ mod_filter m R, filter_trace_rel' R Pκs }~> Pσ.
+Proof.
+  elim.
+  - move => ??????. apply: TraceEnd; [done|]. by constructor.
+  - move => ???? κ ? Hstep ? IH ? HR.
+    destruct κ; simplify_eq/=.
+    + have [??]:= HR _ _ ltac:(done) ltac:(apply/elem_of_cons; by left).
+      apply: TraceStep; [ econstructor; [done | simpl;done] | | econstructor; [done|]; apply: FTRUb' ].
+      move => ??.
+      apply: has_trace_mono.
+      apply: IH; [done|].
+      move => ????. apply: HR; [done|]. set_solver.
+      move => ??. econstructor. done. done.
+      done.
+    + apply: TraceStep; [ by econstructor | | apply: FTRUb'].
+      move => ??. by apply: IH.
+Qed.
+
+Lemma filter_trace_rel_inv {EV1 EV2} (R : EV1 → option EV2 → Prop) Pκs Pκs' κs:
+  filter_trace_rel' R Pκs' κs → (∀ κs, Pκs' κs → filter_trace_rel R Pκs κs) → Pκs κs.
+Proof.
+  move => Ht.
+  elim: Ht Pκs.
+  - move => ??? HP. have Hf := HP _ ltac:(done). by inversion Hf.
+  - move => ?????? IH ? HP.
+    admit.
+  - move => ?? HP.
+Admitted.
+
+Lemma mod_filter_refines {EV1 EV2} (m1 m2 : module EV1) (R : EV1 → option EV2 → Prop) σ1 σ2 :
+  (∀ κ1 κ2 κ2', R κ1 κ2 → R κ1 κ2' → κ2 = κ2') →
+  MS m1 σ1 ⊑ MS m2 σ2 →
+  MS (mod_filter m1 R) σ1 ⊑ MS (mod_filter m2 R) σ2.
+Proof.
+  move => ? [/= Hr]. constructor => /= ? /mod_filter_to_mod/Hr/(mod_to_mod_filter _ R) Hm.
+  apply: has_trace_mono; [apply: Hm| |done].
+  - clear. move => ??. elim; set_solver.
+  - move => κs ?. by apply: filter_trace_rel_inv.
+Qed.
+ *)
+
+Inductive filter_trace_rel {EV1 EV2} (R : EV1 → option EV2 → Prop) : list (event EV1) → list (event EV2) → Prop :=
+| FTREnd :
+    filter_trace_rel R [] []
+| FTRStep κ κ' κs κs':
+    R κ κ' →
+    filter_trace_rel R κs κs' →
+    filter_trace_rel R (Vis κ :: κs) (option_list (Vis <$> κ') ++ κs')
+| FTRUb κs':
+    filter_trace_rel R [Ub] κs'
+.
+
+Lemma mod_filter_to_mod {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pσ:
+  σ ~{ mod_filter m R, Pκs }~> Pσ →
+  σ ~{ m, λ κs, ∃ κs', filter_trace_rel R κs κs' ∧ Pκs κs' }~> Pσ.
+Proof.
+  elim.
+  - move => ?????. apply: TraceEnd; [done|]. eexists []. split; [|done]. constructor.
+  - move => ?????? Hstep ? IH ?. inversion Hstep; simplify_eq.
+    apply: TraceStep; [done| |].
+    + move => σ2 ?. apply: has_trace_mono; [by apply: IH | |done] => /=.
+      move => κs [κs' [? ?]].
+      eexists _. split; [|done].
+      destruct e; simplify_eq/=; [|done]. by apply: FTRStep.
+    + eexists _. split; [|done].
+      destruct e; simplify_eq/=.
+      * constructor; [done|]. apply: FTRUb.
+      * apply: FTRUb.
+Qed.
+
+Lemma mod_to_mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pκs' Pσ:
+  (* TODO: Is this condition really necessary? It ensures that
+  [mod_filter] does not add more non-determinism. But is this unsound
+  or just harder to prove? Maybe this lemma statement is incompatible
+  with adding more non-det since one trace from m only generates one
+  trace from mod_filter? But one trace can contain more non-det... *)
+  (∀ κ1 κ2 κ2', R κ1 κ2 → R κ1 κ2' → κ2 = κ2') →
+  σ ~{ m, Pκs }~> Pσ → (∀ κs, Pκs κs → ∃ κs', filter_trace_rel R κs κs' ∧ Pκs' κs') →
+  σ ~{ mod_filter m R, Pκs' }~> Pσ.
+Proof.
+  move => HR Ht. elim: Ht Pκs'.
+  - move => ?????? HP. have [//|? [Hf ?]]:= HP [] _. inversion Hf; simplify_eq. by apply: TraceEnd.
+  - move => σ1?? Pσ3 κ ??? IH ? Pκs' HP.
+    destruct κ; simplify_eq/=.
+    + have [?[Hf ?]]:= HP _ ltac:(done).
+      inversion Hf; simplify_eq.
+      apply: TraceStep; [ econstructor; [done | simpl;done] | | done].
+      move => σ2 ?.
+      apply: (has_trace_mono (λ κs, Pκs' (option_list (Vis <$> κ') ++ κs))); [apply: IH;[done|] | done | done].
+      move => ? HP'.
+      have [?[ Hf' ?]]:= HP _ HP'. inversion Hf'; simplify_eq.
+      eexists _. split; [done|]. have := HR _ _ _ H1 H2. naive_solver.
+    + have [?[??]]:= HP _ ltac:(done).
+      apply: TraceStep; [ by econstructor | | simplify_eq/=; done]; simplify_eq/=.
+      move => σ2 ?. by apply: IH.
+Qed.
+
+Lemma mod_filter_refines {EV1 EV2} (m1 m2 : module EV1) (R : EV1 → option EV2 → Prop) σ1 σ2 :
+  (∀ κ1 κ2 κ2', R κ1 κ2 → R κ1 κ2' → κ2 = κ2') →
+  MS m1 σ1 ⊑ MS m2 σ2 →
+  MS (mod_filter m1 R) σ1 ⊑ MS (mod_filter m2 R) σ2.
+Proof.
+  move => ? [/= Hr]. constructor => /= ? /mod_filter_to_mod/Hr Hm. apply: mod_to_mod_filter; [done|done|].
+  naive_solver.
 Qed.
 
 
