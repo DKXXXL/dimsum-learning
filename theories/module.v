@@ -10,6 +10,240 @@ Inductive event (EV : Type) : Type :=
 Arguments Ub {_}.
 Arguments Vis {_}.
 
+(*
+
+Languages:
+ASM: assembly language, i.e. isla-coq
+C: C language, i.e. Caesium
+Spec: high-level language, i.e. itree
+
+Linking:
+M1 + M2 : semantic linking on modules
+C1 ∪ C2 : syntactic linking of C code
+Spec1 ∪ Spec2 : syntactic linking of itrees
+
+Code:
+
+ASM1:
+main:
+  bl F2
+  mov x5, x0
+  mov x1, global
+  bl F3
+  add x0, x5
+  mov CFG_ID_AA64PFR0_EL1_MPAM, x1
+
+ASM2:
+F2:
+  mov x0, 0
+  ret
+
+ASM3:
+F3:
+  bl F2
+  str [x1], x0
+  ret
+
+C2:
+int F2() {
+  return 0;
+}
+
+C3: Caesium
+int F3(int *p) {
+  *p = F2();
+}
+
+Spec2+3: (has C interface, but is an itree)
+F2 : λ _, 0
+F3 : λ p, do
+   write p 0;
+   ret 0
+
+Spec1: (has asm interface, but is itree)
+main: λ _,
+  x ← call F2 [];
+  y ← call F3 [global];
+  set_system_register CFG_ID_AA64PFR0_EL1_MPAM, x + y
+
+Spec1+2+3: (has asm interface, but is itree)
+main : λ _,
+  write global 0;
+  set_system_register CFG_ID_AA64PFR0_EL1_MPAM, 0
+
+Refinement diagram:
+
+              Spec1+2+3
+                 |
+     Spec1 ∪ C_TO_ASM_ITREE (Spec2+3)
+       /                    \
+     Spec1       +   C_TO_ASM_ITREE (Spec2+3)
+       |                     |
+     Spec1       +   C_TO_ASM (Spec2+3)
+       |                     |
+      ...        +   C_TO_ASM (Spec2+3)
+                             |
+      ...        +   C_TO_ASM (C2 ∪ C3)  (∪ is syntactic linking)
+                             |
+      ...        +   C_TO_ASM (C2 + C3)
+                        /          \
+      ...        + C_TO_ASM C2 + C_TO_ASM C3
+                       |            |
+     ASM1        +    ASM2     +  ASM3
+                  \           /
+                   ASM of pKVM
+
+Refinement steps:
+
+ASM2 ⊑ C_TO_ASM C2                             (via translation validation)
+ASM3 ⊑ C_TO_ASM C3                             (via translation validation)
+C_TO_ASM C2 + C_TO_ASM C3 ⊑ C_TO_ASM (C2 + C3) (via meta theory)
+C2 + C3 ⊑ C2 ∪ C3                             (via meta theory)
+C2 ∪ C3 ⊑ Spec2+3                             (via RefinedC)
+ASM1 ⊑ C_TO_ASM (Spec1)                        (via RefinedAsm)
+C_TO_ASM Spec2+3 ⊑ C_TO_ASM_ITREE Spec2+3      (via meta theory)
+Spec1 + C_TO_ASM_ITREE (Spec2+3) ⊑ Spec1 ∪ C_TO_ASM_ITREE Spec2+3 (via meta theory)
+Spec1 ∪ C_TO_ASM_ITREE Spec2+3 ⊑ Spec1+2+3     (via manual proof)
+
+Tools:
+- Translation validation: proves statements of the form
+  ASM ⊑ C_TO_ASM C
+- RefinedC: proves statements of the form
+  C1 ∪ ... ∪ Cn ⊑ Spec
+- RefinedAsm: proves statements of the form
+  Asm ⊑ Spec
+- Manual spec proofs: proves statements of the form
+  Spec1 ∪ ... ∪ Specn ⊑ Spec'
+- Meta-theory:
+  - C_TO_ASM M1 + C_TO_ASM M2 ⊑ C_TO_ASM (M2 + M2)
+  - C1 + C2 ⊑ C1 ∪ C2
+  - C_TO_ASM Spec ⊑ C_TO_ASM_ITREE Spec
+  - Spec1 + Spec2 ⊑ Spec1 ∪ Spec2
+
+Questions:
+Q1 How to define C_TO_ASM?
+Q2 How is memory handled?
+
+A1 How to define C_TO_ASM?
+
+loc := provenance * bitvector
+C_value := Int bitvector | Ptr loc
+
+Inductive C_events :=
+| CInCall  (vs : list C_value) (* env calling C, input *)
+| CInRet   (v : C_value)       (* env returning to C, input *)
+| COutCall (vs : list C_value) (* C calling env, output *)
+| COutRet  (v : C_value)       (* C returning to env, output *)
+
+Asm_value := bitvector
+Inductive Asm_events :=
+| AsmInCall  (vs : list Asm_value)
+| AsmInRet   (v : Asm_value)
+| AsmOutCall (vs : list Asm_value)
+| AsmOutRet  (v : Asm_value)
+
+
+Definition same_repr (cv : C_value) (av : Asm_value) : Prop :=
+  match cv with
+  | Int bv => bv = av
+  | Ptr (p, bv) => bv = av
+  end
+
+C_TO_ASM : module C_events → module Asm_event :=
+module_map (λ κc κasm,
+  match κasm, κc with
+  | AsmInCall avs,  CInCall cvs =>
+     AngelicChoose vs' ∧ cvs = vs' ∧ Forall2 same_repr cvs avs
+  | AsmInRet av,    CInRet cv =>
+     AngelicChoose v' ∧ cv = v' ∧ same_repr cv av
+  | AsmOutCall avs, COutCall cvs =>
+     Forall2 same_repr cvs avs
+  | AsmOutRet av,   COutRet cv =>
+     same_repr cv av
+  | _, _ => NB
+  end
+)
+
+*)
+
+(* Inductive trace (EV : Type) : Type := *)
+(* | tnil *)
+(* | tcons (T : Type) (fκ : T → EV) (fκs : T → trace EV) (P : T → Prop). *)
+(* Arguments tnil {_}. *)
+(* Arguments tcons {_}. *)
+
+(* Definition trace_next {EV} (κs : trace EV) (κ : EV) (κs' : trace EV) : Prop := *)
+(*   match κs with *)
+(*   | tcons T fκ fκs P => ∃ x, fκ x = κ ∧ P x ∧ κs' = fκs x  *)
+(*   | _ => False *)
+(*   end. *)
+(* Definition trace_next_opt {EV} (κs : trace EV) (κ : option EV) (κs' : trace EV) : Prop := *)
+(*   if κ is Some e then trace_next κs e κs' else κs = κs'. *)
+Inductive trace (EV : Type) : Type :=
+| tnil
+| tcons (fκs : EV → trace EV) (P : EV → Prop) (HP : ∃ x, P x).
+Arguments tnil {_}.
+Arguments tcons {_}.
+
+Definition trace_next {EV} (κs : trace EV) (κ : EV) (κs' : trace EV) : Prop :=
+  match κs with
+  | tcons fκs P HP => P κ ∧ κs' = fκs κ
+  | _ => False
+  end.
+Notation "κs '-[{' κ '}]->' κs' " := (trace_next κs κ κs') (at level 40).
+
+Fixpoint trace_next_list {EV} (κs : trace EV) (κ : list EV) (κs' : trace EV) : Prop :=
+  match κ with
+  | [] => κs = κs'
+  | κ'::κ'' => ∃ κs'', trace_next κs κ' κs'' ∧ trace_next_list κs'' κ'' κs'
+end.
+
+Notation "κs '-' '{' κ '}->' κs' " := (trace_next_list κs κ κs') (at level 40, format "κs  '-' '{'  κ  '}->'  κs' ").
+
+Inductive sub_trace {EV} : trace EV → trace EV → Prop :=
+| sub_trace_nil : sub_trace tnil tnil
+| sub_trace_cons fκs1 fκs2 (P1 P2 : _ → Prop) HP1 HP2 :
+    (∀ κ, P1 κ → sub_trace (fκs1 κ) (fκs2 κ)) →
+    (∀ κ, P1 κ → P2 κ) →
+    sub_trace (tcons fκs1 P1 HP1) (tcons fκs2 P2 HP2).
+Global Instance trace_subseteq EV : SubsetEq (trace EV) := @sub_trace EV.
+
+Global Instance sub_trace_preorder EV : PreOrder (@sub_trace EV).
+Proof.
+  constructor.
+  - move => κs. elim: κs. { constructor. }
+    move => ? IH ??. constructor; naive_solver.
+  - move => x y z Hs. elim: Hs z => // ??????? IH ? z Hs.
+    inversion Hs; simplify_eq. constructor. 2: naive_solver.
+    move => ??. apply: IH; naive_solver.
+Qed.
+
+Lemma sub_trace_nil_inv {EV} κs:
+  @tnil EV ⊆ κs → κs = tnil.
+Proof. by inversion 1. Qed.
+
+Lemma trace_next_inj EV (κs : trace EV) κ κs1 κs2:
+  κs -[{ κ }]-> κs1 → κs -[{ κ }]-> κs2 → κs1 = κs2.
+Proof. destruct κs => //=. naive_solver. Qed.
+
+Lemma trace_next_mono EV (κ : EV) κs1 κs2 κs' :
+  κs1 -[{ κ }]-> κs' → κs1 ⊆ κs2 →
+  ∃ κs'2 : trace EV, κs' ⊆ κs'2 ∧ κs2 -[{ κ }]-> κs'2.
+Proof.
+  destruct κs1 => //= [[??] Hs]. inversion Hs; simplify_eq/=.
+  eexists _. split_and!; [| naive_solver | done]. naive_solver.
+Qed.
+
+Lemma trace_next_list_mono EV (κ : list EV) κs1 κs2 κs' :
+  κs1 -{ κ }-> κs' → κs1 ⊆ κs2 →
+  ∃ κs'2 : trace EV, κs' ⊆ κs'2 ∧ κs2 -{ κ }-> κs'2.
+Proof.
+  elim: κ κs1 κs' κs2 => /=. { naive_solver. }
+  move => ?? IH ??? [? [Hnext ?]] ?. have [?[??]]:= trace_next_mono _ _ _ _ _ Hnext ltac:(done).
+  have [?[??]]:= IH _ _ _ ltac:(done) ltac:(done).
+  naive_solver.
+Qed.
+
 Record module (EV : Type) : Type := {
   m_state : Type;
   m_step : m_state → option EV → (m_state → Prop) → Prop;
@@ -139,34 +373,34 @@ value of the demonic choice in M2 before one sees the angelic choice.
 
  *)
 
-Inductive has_trace {EV} (m : module EV) : m.(m_state) → (list (event EV) → Prop) → (m.(m_state) → Prop) → Prop :=
-| TraceEnd σ (Pκs Pσ : _ → Prop):
+Inductive has_trace {EV} (m : module EV) : m.(m_state) → trace (event EV) → (m.(m_state) → Prop) → Prop :=
+| TraceEnd σ (Pσ : _ → Prop):
     Pσ σ →
-    Pκs [] →
-    has_trace m σ Pκs Pσ
-| TraceStep σ1 Pκs Pσ2 Pσ3 κ κs:
+    has_trace m σ tnil Pσ
+| TraceStep σ1 Pσ2 Pσ3 κ κs κs':
     m.(m_step) σ1 κ Pσ2 →
-    (∀ σ2, Pσ2 σ2 → has_trace m σ2 (λ κs, Pκs (option_list (Vis <$> κ) ++ κs)) Pσ3) →
-    Pκs (option_list (Vis <$> κ) ++ κs) →
-    has_trace m σ1 Pκs Pσ3
+    (∀ σ2, Pσ2 σ2 → has_trace m σ2 κs' Pσ3) →
+    κs -{ (option_list (Vis <$> κ)) }-> κs' →
+    has_trace m σ1 κs Pσ3
 .
 Notation " σ '~{' m , Pκs '}~>' P " := (has_trace m σ Pκs P) (at level 40).
 
 Global Instance has_trace_proper {EV} (m : module EV) :
-  Proper ((=) ==> (pointwise_relation _ impl) ==> (pointwise_relation m.(m_state) impl) ==> impl) (has_trace m).
+  Proper ((=) ==> (⊆) ==> (pointwise_relation m.(m_state) impl) ==> impl) (has_trace m).
 Proof.
-  move => ?? -> Pκs1 Pκs2 Hκs Pσ1 Pσ2 HP Ht.
-  elim: Ht Pκs2 Pσ2 Hκs HP.
-  - move => ??????? Hκs HP. apply: TraceEnd. by apply: HP. by apply: Hκs.
-  - move => ???????? IH ??? Hκs HP. apply: TraceStep => //; [|by apply: Hκs].
-    move => ??. apply: IH => // ??. by apply: Hκs.
+  move => ?? -> κs1 κs2 Hκs Pσ1 Pσ2 HP Ht.
+  elim: Ht κs2 Pσ2 Hκs HP.
+  - move => ????? /sub_trace_nil_inv -> HP. apply: TraceEnd. by apply: HP.
+  - move => ???????? IH Hnext ?? Hκs HP.
+    have [?[??]]:= trace_next_list_mono _ _ _ _ _ ltac:(done) ltac:(done).
+    apply: TraceStep => //. move => ??. by apply: IH.
 Qed.
 
-Lemma has_trace_mono {EV} {m : module EV} (Pκs' Pσ2' Pκs Pσ2 : _ → Prop)  σ1 :
-  σ1 ~{ m, Pκs' }~> Pσ2' →
-  (∀ κs, Pκs' κs → Pκs κs) →
+Lemma has_trace_mono {EV} {m : module EV} κs' κs (Pσ2' Pσ2 : _ → Prop)  σ1 :
+  σ1 ~{ m, κs' }~> Pσ2' →
+  κs' ⊆ κs →
   (∀ σ, Pσ2' σ → Pσ2 σ) →
-  σ1 ~{ m, Pκs }~> Pσ2.
+  σ1 ~{ m, κs }~> Pσ2.
 Proof. move => ???. by apply: has_trace_proper. Qed.
 
 (* Lemma TraceStepNone {EV} Pκs (m : module EV) σ2 σ1 Pσ3 : *)
@@ -287,15 +521,16 @@ Coercion ms_module : mod_state >-> module.
 
 Record refines {EV} (mimpl mspec : mod_state EV) : Prop := {
   ref_subset:
-    ∀ Pκs, mimpl.(ms_state) ~{ mimpl, Pκs }~> (λ _, True) → mspec.(ms_state) ~{ mspec, Pκs }~> (λ _, True)
+    ∀ κs, mimpl.(ms_state) ~{ mimpl, κs }~> (λ _, True) →
+          mspec.(ms_state) ~{ mspec, κs }~> (λ _, True)
 }.
 
 Global Instance sqsubseteq_refines EV : SqSubsetEq (mod_state EV) := refines.
 
 Definition refines_equiv {EV} (m1 m2 : mod_state EV) : Prop := m1 ⊑ m2 ∧ m2 ⊑ m1.
 
-Definition safe {EV} (m : mod_state EV) (P : (list (event EV) → Prop) → Prop) :=
-  ∀ Pκs, m.(ms_state) ~{ m, Pκs }~> (λ _, True) → P Pκs.
+Definition safe {EV} (m : mod_state EV) (P : trace (event EV) → Prop) :=
+  ∀ κs, m.(ms_state) ~{ m, κs }~> (λ _, True) → P κs.
 
 Lemma refines_preserves_safe EV (mspec mimpl : mod_state EV) P:
   safe mspec P →
@@ -480,7 +715,8 @@ Coercion dms_to_ms : dem_mod_state >-> mod_state.
 
 Record dem_refines {EV} (mimpl mspec : dem_mod_state EV) : Prop := {
   dem_ref_subset:
-    ∀ κs, mimpl.(dms_state) ~{ mimpl, κs }~>ₘ (λ _, True) → mspec.(dms_state) ~{ mspec, κs }~>ₘ (λ _, True)
+    ∀ κs, mimpl.(dms_state) ~{ mimpl, κs }~>ₘ (λ _, True) →
+          mspec.(dms_state) ~{ mspec, κs }~>ₘ (λ _, True)
 }.
 
 Global Instance sqsubseteq_dem_refines EV : SqSubsetEq (dem_mod_state EV) := dem_refines.
@@ -505,41 +741,88 @@ Qed.
 
 (*** Relating [module] and [dem_module] *)
 
-Lemma has_trace_dem_has_trace {EV} (m : dem_module EV) σ Pσ Pκs:
-  σ ~{ m, Pκs }~> Pσ ↔ ∃ κs, Pκs κs ∧ σ ~{ m, κs }~>ₘ Pσ.
+Fixpoint list_to_trace {EV} (κs : list EV) : trace EV :=
+  match κs with
+  | [] => tnil
+  | κ::κs' => tcons (λ _, list_to_trace κs') (κ =.) (ex_intro _ κ eq_refl)
+  end.
+
+Lemma list_to_trace_sub_inv {EV} (κs1 κs2 : list EV) :
+  list_to_trace κs1 ⊆ list_to_trace κs2 →
+  κs1 = κs2.
+Proof.
+  elim: κs1 κs2 => /=.
+  - move => [|??] // /sub_trace_nil_inv. done.
+  - move => ?? IH [/=|??] Hs; inversion Hs; simplify_eq.
+    f_equal; naive_solver.
+Qed.
+
+Lemma trace_non_empty {EV} (κs : trace EV) :
+  ∃ κs', list_to_trace κs' ⊆ κs.
+Proof.
+  elim: κs. { by eexists []. }
+  move => ? IH P [κ HP].
+  have [??]:= IH κ. eexists (κ :: _).
+  constructor; naive_solver.
+Qed.
+
+Lemma trace_sub_list_cons {EV} (κs2 κs2' : trace EV) κ l :
+  κs2 -[{ κ }]-> κs2' →
+  list_to_trace l ⊆ κs2' →
+  list_to_trace (κ :: l) ⊆ κs2.
+Proof. destruct κs2 => //= -[??] ?. constructor; naive_solver. Qed.
+
+Lemma trace_sub_list_app {EV} (κs2 κs2' : trace EV) l1 l2 :
+  κs2 -{ l1 }-> κs2' →
+  list_to_trace l2 ⊆ κs2' →
+  list_to_trace (l1 ++ l2) ⊆ κs2.
+Proof.
+  elim: l1 κs2 κs2' => /=. { naive_solver. }
+  move => ?? IH ?? [? [??]] ?. apply: trace_sub_list_cons; naive_solver.
+Qed.
+
+Lemma list_to_trace_next_app {EV} (l1 l2 : list EV) :
+  list_to_trace (l1 ++ l2) -{ l1 }-> list_to_trace l2.
+Proof. elim: l1 => //= ???. naive_solver. Qed.
+
+Lemma has_trace_dem_has_trace {EV} (m : dem_module EV) σ Pσ κs:
+  σ ~{ m, κs }~> Pσ ↔ ∃ κs', list_to_trace κs' ⊆ κs ∧ σ ~{ m, κs' }~>ₘ Pσ.
 Proof.
   split.
   - elim.
-    + move => ?????. eexists _. split;[done|]. by constructor.
-    + move => ?????? Hstep _ IH ?.
+    + move => ???. eexists []. split; [done|]. by constructor.
+    + move => ??? κ κs' κs'' Hstep ? IH ?.
       inversion Hstep; simplify_eq.
       * have [?[??]]:= IH _ ltac:(done).
-        eexists _. split; [done|]. by apply: DTraceStep.
-      * eexists _. split; [done|]. by apply: DTraceUb.
-
-  - move => [κs [HP Ht]].
-    apply: (has_trace_mono (κs =.)); [| naive_solver |done]. clear HP.
-    elim: Ht.
+        eexists _. split; [ | by apply: DTraceStep].
+        by apply: trace_sub_list_app.
+      * simplify_eq/=. have [??]:= trace_non_empty κs''.
+        eexists _. split; [done | by apply: DTraceUb].
+  - move => [κs' [HP Ht]].
+    apply: (has_trace_mono (list_to_trace κs')); [| naive_solver |done]. clear HP.
+    elim: Ht => /=.
     + move => ???. by constructor.
-    + move => ????????.
-      apply: TraceStep; [by constructor| |done].
-      move => ??. subst. apply: has_trace_mono; [done| |done]. naive_solver.
-    + move => ????.
-      apply: TraceStep; [by constructor| done |done].
+    + move => ??? κ ????.
+      apply: TraceStep; [ by constructor | naive_solver |].
+      by apply: list_to_trace_next_app.
+    + move => ????. apply: TraceStep; [by constructor | done | done].
 Qed.
 
 Lemma dem_has_trace_has_trace {EV} (m : dem_module EV) σ Pσ κs:
-  σ ~{ m, κs }~>ₘ Pσ ↔ σ ~{ m, (κs =.) }~> Pσ.
-Proof. rewrite has_trace_dem_has_trace. naive_solver. Qed.
+  σ ~{ m, κs }~>ₘ Pσ ↔ σ ~{ m, list_to_trace κs }~> Pσ.
+Proof.
+  rewrite has_trace_dem_has_trace. split; first naive_solver.
+  by move => [? [/list_to_trace_sub_inv -> ?]].
+Qed.
 
 Lemma safe_dem_safe {EV} (m : dem_mod_state EV) P:
-  dem_safe m P ↔ safe m (λ Pκs, ∃ κs, Pκs κs ∧ P κs).
+  dem_safe m P ↔ safe m (λ κs, ∃ κs', list_to_trace κs' ⊆ κs ∧ P κs').
 Proof.
   split.
   - move => Hsafe ?. move => /has_trace_dem_has_trace[?[??]].
     eexists _. split; [done|]. by apply: Hsafe.
   - move => Hsafe ? /dem_has_trace_has_trace Ht.
-    have := Hsafe _ Ht. naive_solver.
+    have [?[/list_to_trace_sub_inv? ?]]:= Hsafe _ Ht. naive_solver.
 Qed.
 
 Lemma refines_dem_refines {EV} (m1 m2 : dem_mod_state EV):
@@ -892,7 +1175,8 @@ Qed.
 Lemma refines_horizontal {EV1 EV2 EV3} (m1 m2 m1' m2' : module _) σ1 σ2 σ1' σ2' (M : link_mediator EV1 EV2 EV3) :
   MS m1 σ1 ⊑ MS m1' σ1' →
   MS m2 σ2 ⊑ MS m2' σ2' →
-  MS (link m1 m2 M) (σ1, σ2, M.(lm_initial)) ⊑ MS (link m1' m2' M) (σ1', σ2', M.(lm_initial)).
+  MS (link m1 m2 M) (σ1, σ2, M.(lm_initial)) ⊑
+  MS (link m1' m2' M) (σ1', σ2', M.(lm_initial)).
 Proof.
   move => [Hr1] [Hr2].
   constructor => κs /= /link_trace_related_create [?[?[?[?[??]]]]].
