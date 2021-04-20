@@ -99,6 +99,46 @@ but something with P Pκs := (∀ κs, Pκs κs → ...) does not work. This is 
 since such properties are not preserved by refinement anyway.
 *)
 
+(* Defining traces using (list (event EV) → Prop) has one big problem:
+With this definition angelic choice commutes with visible events and
+this causes a few problems. One problem for [mod_filter] is explained
+below, but there is a worse problem: horizontal compositionality does
+not hold! In short, the problem is that when linking two modules, one
+can depend on the angelic choices of the other (this is an important
+feature), but refinement can move the angelic choices such that the
+spec cannot emulate the same dependency that the implementation had.
+
+Consider the following programs:
+
+MI1:
+                S           A
+    /- 2 true  --- 3 true  ---
+1 -a
+    \- 2 false --- 3 false ---
+                S           B
+
+MS1:                        A
+         S      /- 4 true  ---
+1 --- 2 --- 3 -a
+                \- 4 false ---
+                            B
+
+M2:
+                S           A
+    /- 2 true  --- 3 true  ---
+1 -d
+    \- 2 false --- 3 false ---
+                S           B
+
+We have MI1 ⊑ MS1, but link MI1 M2 ⊑ link MS1 M2 does not hold!
+In particular, link MI1 M2 has the trace
+ [(S, S); (A, A)] ∨ [(S, S); (B, B)]
+(because the demonic choice in M2 can use the value of the angelic choice of MI1)
+but link MS1 M2 does not have this trace since there one has to pick the
+value of the demonic choice in M2 before one sees the angelic choice.
+
+ *)
+
 Inductive has_trace {EV} (m : module EV) : m.(m_state) → (list (event EV) → Prop) → (m.(m_state) → Prop) → Prop :=
 | TraceEnd σ (Pκs Pσ : _ → Prop):
     Pσ σ →
@@ -642,11 +682,29 @@ Proof.
 Qed.
 
 Lemma mod_to_mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pκs' Pσ:
-  (* TODO: Is this condition really necessary? It ensures that
-  [mod_filter] does not add more non-determinism. But is this unsound
-  or just harder to prove? Maybe this lemma statement is incompatible
-  with adding more non-det since one trace from m only generates one
-  trace from mod_filter? But one trace can contain more non-det... *)
+(* The first condition states that [mod_filter] does not add more
+non-determinism. This condition (or maybe something slightly weaker)
+sadly is necessary, because this definition of refinement allows to
+commute angelic choice and visible events. Consider the modules I and S
+
+I :       A     B
+    /- 2 --- 4 --- 6
+1 -a
+    \- 3 --- 5 --- 7
+          A     C
+
+S :              B
+         A      /- 6
+1 --- 2 --- 4 -a
+                \- 7
+                C
+
+and a relation R with [R A (Some A1)], [R A (Some A2)], [R B (Some B)], [R C (Some C)].
+Then we have I ⊑ S but not mod_filter R I ⊑ mod_filter R S since the trace
+ [A1; B] ∨ [A2; C] can be produced by mod_filter R I, but not by mod_filter R S.
+The cruicial difference is that I can pick two different elements of R for A, while S
+can only pick one and whatever it picks, the angelic choice could resolve in the wrong way.
+ *)
   (∀ κ1 κ2 κ2', R κ1 κ2 → R κ1 κ2' → κ2 = κ2') →
   σ ~{ m, Pκs }~> Pσ → (∀ κs, Pκs κs → ∃ κs', filter_trace_rel R κs κs' ∧ Pκs' κs') →
   σ ~{ mod_filter m R, Pκs' }~> Pσ.
