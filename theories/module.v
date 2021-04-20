@@ -164,6 +164,12 @@ module_map (λ κc κasm,
   end
 )
 
+Without angelic choice one has to prove *all* of the following traces:
+AsmInCall [bv], CInCall [Int bv]
+AsmInCall [bv], CInCall [Ptr p, bv]
+
+Without angelic choice one has to prove *one* of the previous traces!
+
 *)
 
 (* Inductive trace (EV : Type) : Type := *)
