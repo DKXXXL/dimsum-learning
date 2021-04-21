@@ -1,4 +1,5 @@
 Require Import Coq.Logic.EqdepFacts.
+Require Import refframe.base.
 
 Module Ax : EqdepElimination.
 
@@ -8,4 +9,10 @@ Axiom eq_rect_eq :
 
 End Ax.
 
-Module Export UIPM := EqdepTheory Ax.
+Module UIPM := EqdepTheory Ax.
+
+Ltac simplify_K :=
+  repeat match goal with
+  | H : existT _ _ = existT _ _ |- _ =>
+     apply UIPM.inj_pair2 in H
+  end; simplify_eq.

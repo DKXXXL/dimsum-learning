@@ -80,3 +80,7 @@ Section semi_set.
 Lemma elem_of_subseteq_1 X Y x: X ⊆ Y → x ∈ X → x ∈ Y.
 Proof. set_solver. Qed.
 End semi_set.
+
+Lemma option_list_fmap {A B} (f : A → B) x:
+  option_list (f <$> x) = f <$> (option_list x).
+Proof. by destruct x. Qed.
