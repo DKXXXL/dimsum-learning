@@ -5,6 +5,7 @@ Require Import stdpp.strings.
 Require Import stdpp.gmap.
 Require Import stdpp.binders.
 Require Import stdpp.propset.
+Require Import stdpp.telescopes.
 
 Inductive event (EV : Type) : Type :=
 | Ub | Vis (e : EV).
@@ -217,21 +218,16 @@ Inductive trace_next {EV} : trace EV → list EV → trace EV → Prop :=
 | TNcons κs κs' lκ κ:
     trace_next κs lκ κs' →
     trace_next (tcons κ κs) (κ :: lκ) κs'
-| TNchoice κs' lκ T x f Hdec:
+| TNchoice {T} x κs' lκ f Hdec:
     trace_next (f x) lκ κs' →
     trace_next (tchoice T Hdec f) lκ κs'
+(*
+| TNchoiceR {T1 T2} lκ f1 f2 Hdec1 Hdec2:
+    (∀ x, trace_next (tchoice T1 Hdec1 f1) lκ (f2 x)) →
+    trace_next (tchoice T1 Hdec1 f1) lκ (tchoice T2 Hdec2 f2)
+ *)
 .
 Notation "κs '-[{' κ '}]->' κs' " := (trace_next κs κ κs') (at level 40).
-
-Lemma subtrace_nil_choice_inv EV T Hdec f:
-  @tnil EV ⊆ tchoice T Hdec f →
-  ∃ x, tnil ⊆ f x.
-Proof. inversion 1; simplify_K. naive_solver. Qed.
-
-Lemma subtrace_cons_choice_inv {EV} (κ : EV) κs T Hdec f:
-  tcons κ κs ⊆ tchoice T Hdec f →
-  ∃ x, tcons κ κs ⊆ f x.
-Proof. inversion 1; simplify_K. naive_solver. Qed.
 
 Global Instance subtrace_preorder EV : PreOrder (@subtrace EV).
 Proof.
@@ -246,7 +242,7 @@ Proof.
       elim: z Hs.
       * inversion 1.
       * move => ??? Hs. inversion Hs; simplify_eq. constructor. naive_solver.
-      * move => ???? /(subtrace_cons_choice_inv _) [? ?].
+      * move => ???? Hs. inversion Hs; simplify_K.
         econstructor. naive_solver.
     + move => ???? IH ??. constructor. naive_solver.
     + move => ?? v ??? IH z Hs.
@@ -264,11 +260,56 @@ Proof.
   - move => ??? [??] [??]. by split; etrans.
 Qed.
 
+Lemma subtrace_nil_choice_inv EV T Hdec f:
+  @tnil EV ⊆ tchoice T Hdec f →
+  ∃ x, tnil ⊆ f x.
+Proof. inversion 1; simplify_K. naive_solver. Qed.
+
+Lemma subtrace_cons_choice_inv {EV} (κ : EV) κs T Hdec f:
+  tcons κ κs ⊆ tchoice T Hdec f →
+  ∃ x, tcons κ κs ⊆ f x.
+Proof. inversion 1; simplify_K. naive_solver. Qed.
+
+Lemma subtrace_choice_inv_l {T} x {EV} (κs : trace EV)  Hdec f:
+  tchoice T Hdec f ⊆ κs →
+  f x ⊆ κs.
+Proof.
+  inversion 1; simplify_K; [ naive_solver|].
+  econstructor. etrans; [|done]. econstructor. done.
+Qed.
+
+
+Definition tub {EV} :=
+  @tchoice EV Empty_set _ (λ x, match x with end).
+
+Lemma tub_sub {EV} (κs : trace EV):
+  tub ⊆ κs.
+Proof. by constructor. Qed.
+
 Lemma tchoice_unit EV Hdec (f : _ → trace EV):
   tchoice () Hdec f ≡ f tt.
 Proof. split; econstructor; [case|]; done. Qed.
 
-Lemma subtrace_cons_inv EV κs (κ : EV) κs':
+Lemma tchoice_merge EV T1 Hdec1 f1 T2 Hdec2 f2 x:
+  f1 x ≡ tchoice T2 Hdec2 f2 →
+  tchoice T1 Hdec1 f1 ≡@{trace EV} tchoice (prod T1 (option T2)) _
+          (λ '(x1, x2), if bool_decide (x1 = x) then
+                          if x2 is Some x2 then f2 x2 else tub else f1 x1 ).
+Proof.
+  move => [??].
+  split.
+  - constructor => y.
+    destruct (decide (y = x)); subst.
+    + etrans; [done|]. constructor => ?.
+      by eapply (subtrace_choice_r (x, Some _)); case_bool_decide.
+    + by eapply (subtrace_choice_r (y, None)); case_bool_decide.
+  - constructor => -[? b].
+    case_bool_decide; subst.
+    + econstructor. etrans; [|done]. by case_match; subst; econstructor.
+    + by econstructor.
+Qed.
+
+Lemma subtrace_cons_inv_l EV κs (κ : EV) κs':
   tcons κ κs ⊆ κs' →
   ∃ T Hdec f x κs'', κs' ≡ tchoice T Hdec f ∧ f x = tcons κ κs'' ∧ κs ⊆ κs''.
 Proof.
@@ -279,43 +320,183 @@ Proof.
     by rewrite tchoice_unit.
   - move => T1 ? f1 IH ?? /(subtrace_cons_choice_inv _ _)[x ?].
     have [T[? [f [fx [?[ Heq [??]]]]]]]:= IH _ _ _ ltac:(done).
-    eexists (prod T1 T), _, (λ '(x1, x2),
-                          if bool_decide (x1 = x) then f x2 else f1 x1
-                         ), (x, fx), _.
-    rewrite bool_decide_eq_true_2; [done|].
-    split_and!; [|done..].
-    split.
-    + constructor => x'.
-      destruct (decide (x' = x)); subst.
-      *
-        move: Heq => [? ?].
-        etrans; [done|]. constructor => ?.
-        eapply (subtrace_choice_r (x, _)); case_bool_decide => //.
-      * eapply (subtrace_choice_r (x', _)); case_bool_decide => //.
-    + constructor => -[??].
-      case_bool_decide; subst.
-      * econstructor.
-        move: Heq => [? ?]. etrans; [|done].
-        by econstructor.
-      * by econstructor.
-        Unshelve. done.
+    eexists _, _, _, (x, Some fx), _.
+    split_and!.
+    + by apply: tchoice_merge.
+    + simpl. by rewrite bool_decide_eq_true_2.
+    + done.
 Qed.
 
-Lemma subtrace_choice_inv {T} x {EV} (κs : trace EV)  Hdec f:
-  tchoice T Hdec f ⊆ κs →
-  f x ⊆ κs.
+(*
+Lemma subtrace_cons_inv_r EV κs (κ : EV) κs':
+  κs ⊆ tcons κ κs' →
+  ∃ T : { X : Type | prod (EqDecision X) (X → trace EV) }, κs ≡ tchoice (proj1_sig T) T T ∧ ∀ x, ∃ κs'', T x = tcons κ κs'' ∧ κs'' ⊆ κs'.
 Proof.
-  inversion 1; simplify_K; [ naive_solver|].
-  econstructor. etrans; [|done]. econstructor. done.
+  elim: κs κ κs'.
+  - inversion 1.
+  - move => ?? IH ?? Hs. inversion Hs; simplify_eq.
+    eexists unit, (const _), _. split_and!. by rewrite tchoice_unit /=.
+    move => []. eexists _. done.
+  - move => T1 ? f1 IH ??.
+    inversion 1; simplify_K.
+    have {}IH:= IH _ _ _ ltac:(naive_solver).
+
+    eexists ( { x : T1 & proj1_sig (choice _ (IH x))} ).
+    eexists (λ '(existT x _), f1 x).
+    split.
+    + split.
+      * constructor => x.
+        have [?[?[?[??]]]]:= IH x.
+        eapply (subtrace_choice_r (existT x _)). done.
+      * econstructor => -[??].
+        econstructor. done.
+    + move => [? Hp].
+      match type of Hp with
+      | `?Z => have [?[?[? Hs]]]:= proj2_sig Z
+      end.
+      eapply Hs.
+
+      have := proj2_sig _ _ (choice
+           (λ T : Type,
+              ∃ (Hdec : EqDecision T) (f : T → trace EV),
+                f1 _x_ ≡ tchoice T Hdec f ∧ (∀ x : T, ∃ κs'' : trace EV, f x = tcons _κ_ κs'' ∧ κs'' ⊆ _κs'_))
+           (IH _x_)).
+      Unset Printing Notations.
+      eexists _. split. 2: done
+        Unshelve. 6: destruct x. 6: apply: (f1 x). done.
+        }
+        6: econstructor.
+          }
+
+          move => ?.
+          econstructor.
+        instantiate (2 := x).
+        ; case_bool_decide.
+
+        econstructor.
+
+    have : ∀ (t : T1) (κ : EV) (κs' : trace EV),
+         ∃ (T : Type) (Hdec : EqDecision T) (f : T → trace EV),
+           f1 t ≡ tchoice T Hdec f ∧ (∀ x : T, ∃ κs'' : trace EV, f x = tcons κ κs'' ∧ κs'' ⊆ κs').
+    move => ???. apply: IH. naive_solver.
+    eexists _, _, _.
+
+    /(subtrace_cons_choice_inv _ _)[x ?].
+    have [T[? [f [fx [?[ Heq [??]]]]]]]:= IH _ _ _ ltac:(done).
+    eexists _, _, _, (x, Some fx), _.
+    split_and!.
+    + by apply: tchoice_merge.
+    + simpl. by rewrite bool_decide_eq_true_2.
+    + done.
 Qed.
+*)
+(*
+Inductive choice_data EV :=
+| cd_trace (κs : trace EV) | cd_choice (T : Type) (Hdec : EqDecision T) (f : T → choice_data EV).
+Arguments cd_trace {_}.
+Arguments cd_choice {_}.
+
+Fixpoint Tchoice {EV} (cd : choice_data EV) : trace EV :=
+  match cd with
+  | cd_trace κs => κs
+  | cd_choice T Hdec f => tchoice T Hdec (λ x, Tchoice (f x))
+  end.
+
+Fixpoint to_Tchoice {EV} (κs : trace EV) :=
+  match κs with
+  | tchoice T Hdec f => cd_choice T Hdec (λ x, to_Tchoice (f x))
+  | _ => cd_trace κs
+  end.
+
+Lemma to_Tchoice_eq {EV} (κs : trace EV) :
+  κs = Tchoice (to_Tchoice κs).
+Proof. elim: κs => //= ????. f_equal.
+Admitted.
+*)
+(* Lemma subtrace_cons_inv_l' EV (κ : EV) κs' cd: *)
+  (* tcons κ κs' ⊆ Tchoice cd → True. *)
+
+(*
+  Lemma subtrace_cons_inv_l' EV κs (κ : EV) κs':
+  tcons κ κs' ⊆ κs →
+  ∃ cd, κs = Tchoice cd.
+    let X := foldr (λ '(CIRT _ T x Hdec f) P, (P.1 ∧ P.2 = f x, tchoice T Hdec f)) (True, tcons κ κs'') Ts in
+    κs = X.2 ∧ X.1 ∧ κs' ⊆ κs''.
+Proof.
+  elim: κs κ κs'.
+  - move => ??. inversion 1.
+  - move => ?????. inversion 1; simplify_eq. eexists [], _ => /=. done.
+  - move => ??? IH ?? /(subtrace_cons_choice_inv _ _)[x ?].
+    have [Ts[?[?[??]]]]:= IH _ _ _ ltac:(done).
+    eexists (CIRT _ _ _ _ _::Ts), _. simpl. split_and! => //.
+Qed.
+
+Record cons_inv_r_type EV := CIRT {
+  cirt_type : Type;
+  cirt_inh : cirt_type;
+  cirt_eqdev : EqDecision cirt_type;
+  cirt_f : cirt_type → trace EV;
+}.
+
+Lemma subtrace_cons_inv_l' EV κs (κ : EV) κs':
+  tcons κ κs' ⊆ κs →
+  ∃ (Ts : list (cons_inv_r_type EV)) κs'',
+    let X := foldr (λ '(CIRT _ T x Hdec f) P, (P.1 ∧ P.2 = f x, tchoice T Hdec f)) (True, tcons κ κs'') Ts in
+    κs = X.2 ∧ X.1 ∧ κs' ⊆ κs''.
+Proof.
+  elim: κs κ κs'.
+  - move => ??. inversion 1.
+  - move => ?????. inversion 1; simplify_eq. eexists [], _ => /=. done.
+  - move => ??? IH ?? /(subtrace_cons_choice_inv _ _)[x ?].
+    have [Ts[?[?[??]]]]:= IH _ _ _ ltac:(done).
+    eexists (CIRT _ _ _ _ _::Ts), _. simpl. split_and! => //.
+Qed.
+*)
+(*
+Lemma subtrace_cons_inv_r EV κs (κ : EV) κs':
+  κs ⊆ tcons κ κs' →
+  ∃ (Ts : list (cons_inv_r_type EV)) κs'',
+    foldr (λ '(CIRT _ T x Hdec f) P κ, κ = tchoice T Hdec f ∧ P (f x)) (λ x, κs = x) Ts (tcons κ κs'')
+    ∧ κs'' ⊆ κs'.
+Proof.
+  elim: κs κ κs'.
+  - move => ??. inversion 1.
+  - move => ?????. inversion 1; simplify_eq. eexists [], _ => /=. done.
+  - move => ??????. inversion 1; simplify_K.
+    eexists
+
+    /(subtrace_cons_choice_inv _ _)[x ?].
+.
+  elim.
+
+Lemma subtrace_cons_inv_r EV κs (κ : EV) κs':
+  κs ⊆ tcons κ κs' →
+  ∃ T Hdec f x κs'', κs ≡ tchoice T Hdec f ∧ f x = tcons κ κs'' ∧ κs'' ⊆ κs'.
+Proof.
+  elim: κs κ κs'.
+  - inversion 1.
+  - move => ?? IH ?? Hs. inversion Hs; simplify_eq.
+    eexists unit, _, (const _), tt, _. split_and!; [| done | done].
+    by rewrite tchoice_unit /=.
+  - move => T1 ? f1 IH ??.
+    inversion 1; simplify_K.
+    /(subtrace_cons_choice_inv _ _)[x ?].
+    have [T[? [f [fx [?[ Heq [??]]]]]]]:= IH _ _ _ ltac:(done).
+    eexists _, _, _, (x, Some fx), _.
+    split_and!.
+    + by apply: tchoice_merge.
+    + simpl. by rewrite bool_decide_eq_true_2.
+    + done.
+Qed.
+*)
 
 Lemma trace_next_nil {EV} (κs : trace EV) κs2:
   κs -[{ [] }]-> κs2 ↔ κs2 ⊆ κs.
 Proof.
   split; [|by constructor].
   move Hκ: ([]) => κ Hn.
-  elim: Hn Hκ => // ?????????.
-  econstructor. naive_solver.
+  elim: Hn Hκ => //.
+  - move => ?????????. econstructor. naive_solver.
 Qed.
 
 Lemma trace_next_mono EV (κ : list EV) κs1 κs2 κs'1 κs'2 :
@@ -336,12 +517,70 @@ Proof.
       constructor. naive_solver.
     + move => ??? IH2 /(subtrace_cons_choice_inv _ _)[??] ?.
       econstructor. naive_solver.
+  - move => ??? IH ?? κs2 Hs Hsub.
+    inversion Hs; simplify_K.
+    { constructor. etrans; [done|]. by etrans. }
+    + move: Hsub => /(subtrace_choice_inv_l x). naive_solver.
+Qed.
+
+Lemma trace_next_cons {EV} (κs κs' : trace EV) κ lκ :
+  κs -[{ κ :: lκ }]-> κs' ↔
+  ∃ κs'', tcons κ κs'' ⊆ κs ∧ κs'' -[{ lκ }]-> κs'.
+Proof.
+  split.
+  - move Heq: (κ :: lκ) => l Hs.
+    elim: Hs Heq => //.
+    + move => ?????? [??]. simplify_eq.
+      eexists _. done.
+    + move => ??????? IH ?.
+      have [//|?[??]]:= IH.
+      eexists _. split; [|done].
+        by econstructor.
+  - move => [κs'' [Hsub Hnext]].
+    elim: κs Hsub Hnext.
+    + inversion 1.
+    + move => ??? Hs ?. inversion Hs; simplify_eq.
+      constructor. by apply: trace_next_mono.
+    + move => ???? /(subtrace_cons_choice_inv _ _)[??] ?. econstructor. naive_solver.
+Qed.
+
+(*
+
+      generalize dependent κs2. elim.
+      * inversion 1; simplify_K.
+
+      move => Hsub2. inversion Hsub2; simplify_K.
+      * admit.
+      * apply: IH; [| |done]. admit. admit. done.
+
+      admit.
+
+
+  move => Hnext.
+  elim: Hnext κs2 κs'2.
+  - admit.
+  - move => ??????????.
+Admitted. *)
+(*
+  elim: κs1 κ κs'1 κs2.
+  - move => ???. inversion 1; simplify_eq => ??.
+    + apply trace_next_nil. etrans; [done|]. by etrans; [apply trace_next_nil |].
+    + admit.
+  - move => ?? IH ? ? κs2 Hnext.
+    inversion Hnext; simplify_eq.
+    { constructor. etrans; [done|]. by etrans. }
+    elim: κs2.
+    + inversion 1.
+    + move => ??? Hs ?. inversion Hs; simplify_eq.
+      constructor. naive_solver.
+    + move => ??? IH2 /(subtrace_cons_choice_inv _ _)[??] ?.
+      econstructor. naive_solver.
   - move => ??????? Hs Hsub.
     inversion Hs; simplify_K.
     { constructor. etrans; [done|]. by etrans. }
     move: Hsub => /(subtrace_choice_inv x). naive_solver.
 Qed.
-
+*)
 Record module (EV : Type) : Type := {
   m_state : Type;
   m_step : m_state → option EV → (m_state → Prop) → Prop;
@@ -503,24 +742,92 @@ Lemma has_trace_mono {EV} {m : module EV} κs' κs (Pσ2' Pσ2 : _ → Prop)  σ
   σ1 ~{ m, κs }~> Pσ2.
 Proof. move => ???. by apply: has_trace_proper. Qed.
 
-(* Lemma TraceStepNone {EV} Pκs (m : module EV) σ2 σ1 Pσ3 : *)
-(*   m.(m_step) σ1 None σ2 → *)
-(*   σ2 ~{ m, Pκs }~> Pσ3 → *)
-(*   σ1 ~{ m, Pκs }~> Pσ3. *)
-(* Proof. move => ??. by apply: (TraceStep _ _ _ _ None). Qed. *)
 
-(* Lemma TraceStepSome {EV} κs (m : module EV) σ2 σ1 Pσ3 κ : *)
-(*   m.(m_step) σ1 (Some κ) σ2 → *)
-(*   σ2 ~{ m, κs }~> Pσ3 → *)
-(*   σ1 ~{ m, Vis κ :: κs }~> Pσ3. *)
-(* Proof. move => ??. by apply: (TraceStep _ _ _ _ (Some _)). Qed. *)
+Lemma has_trace_cons_inv' {EV} κs κs' κ (m : module EV) σ1 Pσ3:
+  σ1 ~{ m, κs }~> Pσ3 → κs ⊆ tcons κ κs' →
+  σ1 ~{ m, tnil }~> (λ σ2, ∃ Pσ2', m.(m_step) σ2 (Some κ) Pσ2' ∧ ∀ σ2', Pσ2' σ2' → σ2' ~{ m, κs' }~> Pσ3).
+Proof.
+  move => Hs.
+  elim: Hs κ κs'.
+  - move => ?????  κ κs' ?.
+    have : tnil ⊆ tcons κ κs' by etrans.
+    easy.
+  - move => ??? κ' ???? IH Hs ?? Hsub.
+    destruct κ'; simplify_eq/=.
+    + move: Hs => /(trace_next_cons _ _ _ _) [? [Hsub2 ?]].
+      pose proof (transitivity Hsub2 Hsub) as Ht.
+      inversion Ht; simplify_eq.
+      constructor; [|done].
+      eexists _. split; [ done |]. move => ??.
+      apply: has_trace_mono; [ naive_solver | | naive_solver].
+      etrans. by apply trace_next_nil.  done.
+    + apply: TraceStep; [ done | | by constructor].
+      move => ??. apply: IH; [done|].
+      etrans. by apply trace_next_nil. done.
+Qed.
 
-(* Lemma TraceStep' {EV} κs κs' (m : module EV) σ2 σ1 Pσ3 κ : *)
-(*   m.(m_step) σ1 κ σ2 → *)
-(*   κs = option_list (Vis <$> κ) ++ κs' → *)
-(*   σ2 ~{ m, κs' }~> Pσ3 → *)
-(*   σ1 ~{ m, κs }~> Pσ3. *)
-(* Proof. move => ? -> ?. by apply: TraceStep. Qed. *)
+Lemma has_trace_cons_inv {EV} κs' κ (m : module EV) σ1 Pσ3:
+  σ1 ~{ m, tcons κ κs' }~> Pσ3 →
+  σ1 ~{ m, tnil }~> (λ σ2, ∃ Pσ2', m.(m_step) σ2 (Some κ) Pσ2' ∧ ∀ σ2', Pσ2' σ2' → σ2' ~{ m, κs' }~> Pσ3).
+Proof. move => ?. by apply: has_trace_cons_inv'. Qed.
+
+Lemma has_trace_choice_inv' {EV} κs T Hdec f (m : module EV) σ1 Pσ3:
+  σ1 ~{ m, κs }~> Pσ3 → κs ⊆ tchoice T Hdec f →
+  σ1 ~{ m, tnil }~> (λ σ2, ∃ x, σ2 ~{ m, f x }~> Pσ3).
+Proof.
+  move => Hs.
+  elim: Hs T Hdec f.
+  - move => ????? T Hdec f ?.
+    have : tnil ⊆ tchoice T Hdec f by etrans.
+    move => /subtrace_nil_choice_inv[??].
+    constructor; [|done]. eexists _. by constructor.
+  - move => ??? κ ???? IH Hs ??? Hsub.
+    destruct κ; simplify_eq/=.
+    + move: Hs => /(trace_next_cons _ _ _ _) [? [Hsub2 ?]].
+      pose proof (transitivity Hsub2 Hsub) as Ht.
+      move: Ht => /(subtrace_cons_choice_inv _ _)[??].
+      constructor; [|done]. eexists _.
+      apply: TraceStep; [done|done|].
+      apply trace_next_cons. eexists _. done.
+    + apply: TraceStep; [ done | | by constructor].
+      move => ??. apply: IH; [done|].
+      etrans. by apply trace_next_nil. done.
+Qed.
+
+Lemma has_trace_choice_inv {EV} T Hdec f (m : module EV) σ1 Pσ3:
+  σ1 ~{ m, tchoice T Hdec f }~> Pσ3 →
+  σ1 ~{ m, tnil }~> (λ σ2, ∃ x, σ2 ~{ m, f x }~> Pσ3).
+Proof. move => ?. by apply: has_trace_choice_inv'. Qed.
+
+(*
+    subst.
+    Check subtrace_ind.
+
+    inversion Hs; simplify_eq.
+    +  destruct κ' => //; simplify_eq/=.
+      apply: (TraceStep _ _ _ _ None); [ done | | by constructor].
+      move => ??.  apply: IH; [done|]. by etrans.
+    + destruct κ' => //; simplify_eq/=. inversion Hsub; simplify_eq.
+      constructor; [|done].
+      eexists _. split; [ done |]. move => ??.
+      apply: has_trace_mono; [ naive_solver | | naive_solver].
+      etrans. by apply trace_next_nil.  done.
+    + move: Hsub => /(subtrace_choice_inv x). move => ?.
+      apply: (TraceStep _ _ _ _ None); [ | | by constructor].
+      admit.
+*)
+
+(*
+      naive_solver.
+      done.
+      by apply trace_next_nil.
+    apply: IH.
+    move => ??? [] //=.
+    + move => ???? IH [] ??. subst. apply: TraceEnd. eexists _. split; [done|]. naive_solver.
+    + move => ??? IH ?. apply: TraceStepNone; [done|]. naive_solver.
+  - move => ?????. by apply: TraceUb.
+Qed.
+*)
 
 (*
 Lemma has_trace_trans {EV} κs1 κs2 (m : module EV) σ1 Pσ2 Pσ3 :
@@ -896,7 +1203,7 @@ Proof.
   - move => ?????????. econstructor. naive_solver.
 Qed.
 
-Lemma list_to_trace_next_app {EV} (l1 : list EV) l2 :
+Lemma list_to_trace_next_app_l {EV} (l1 : list EV) l2 :
   list_to_trace ((Vis <$> l1) ++ l2) -[{ l1 }]-> list_to_trace l2.
 Proof. elim: l1 => //; csimpl => *; by constructor. Qed.
 
@@ -921,7 +1228,7 @@ Proof.
     + move => ??? κ ????.
       apply: TraceStep; [ by constructor | naive_solver |].
       rewrite option_list_fmap.
-      by apply list_to_trace_next_app.
+      by apply list_to_trace_next_app_l.
     + move => ????. apply: TraceStep; [by constructor | done | ].
       by constructor.
 Qed.
@@ -958,103 +1265,251 @@ Qed.
 
 
 (*** [mod_filter] *)
-Inductive filter_step {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) :
+Inductive filter_step {EV1 EV2} (m : module EV1) (R : EV1 → option (option EV2)) :
   m.(m_state) → option EV2 → (m.(m_state) → Prop) → Prop :=
 | FilterStep σ e e' Pσ:
     m.(m_step) σ e Pσ →
     (* TODO: is there a better way to formulate this? E.g. assume
     that there is no R None None Some in the theorem? *)
-    (if e is Some κ then R κ e' else e' = None) →
+    (if e is Some κ then R κ = Some e' else e' = None) →
     filter_step m R σ e' Pσ.
 
-Definition mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) : module EV2 := {|
+Definition mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option (option EV2)) : module EV2 := {|
   m_step := filter_step m R;
 |}.
 
-(*
-Inductive filter_trace_rel {EV1 EV2} (R : EV1 → option EV2 → Prop) : (list (event EV2) → Prop) → list (event EV1) → Prop :=
-| FTREnd (Pκs' : _ → Prop):
-    Pκs' [] →
-    filter_trace_rel R Pκs' []
-| FTRStep κ κ' κs Pκs':
-    R κ κ' →
-    filter_trace_rel R (λ κs', Pκs' (option_list (Vis <$> κ') ++ κs')) κs →
-    filter_trace_rel R Pκs' (Vis κ :: κs)
-| FTRUb Pκs':
-    filter_trace_rel R Pκs' [Ub]
-.
+Definition set_refines {EV} (mi ms : module EV) (Pσi : mi.(m_state) → Prop) (Pσs : ms.(m_state) → Prop) : Prop :=
+  ∀ κs, ∃ σi, Pσi σi ∧ (σi ~{ mi, κs }~> (λ _, True) → ∃ σs, Pσs σs ∧ σs ~{ ms, κs }~> (λ _, True)).
 
-Lemma mod_filter_to_mod {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pσ:
-  σ ~{ mod_filter m R, Pκs }~> Pσ →
-  σ ~{ m, filter_trace_rel R Pκs }~> Pσ.
+(* Definition set_refines {EV} (mi ms : module EV) (Pσi : mi.(m_state) → Prop) (Pσs : ms.(m_state) → Prop) : Prop := *)
+  (* ∀ κs, ∀ σi, Pσi σi → σi ~{ mi, κs }~> (λ _, True) → ∃ σs, Pσs σs ∧ σs ~{ ms, κs }~> (λ _, True). *)
+
+Lemma set_refines_intro EV (mi ms : mod_state EV):
+  mi ⊑ ms →
+  set_refines mi ms (mi.(ms_state) =.) (ms.(ms_state) =.).
+Proof. move => [?] ?. naive_solver. Qed.
+
+Lemma set_refines_step_Some {EV} (m1 m2 : module EV) Pσi1 Pσs1 Pσi2 e:
+  set_refines m1 m2 Pσi1 Pσs1 →
+  (∀ σi1, Pσi1 σi1 → m1.(m_step) σi1 (Some e) Pσi2) →
+  set_refines m1 m2 (λ σi, ∃ σis, Pσi1 σis ∧ σis ~{m1, tcons e tnil}~> (λ σie, σi = σie))
+              (λ σs, ∃ σss, Pσs1 σss ∧ σss ~{m2, tcons e tnil}~> (λ σse, σs = σse)).
 Proof.
-  elim.
-  - move => ?????. apply: TraceEnd; [done|]. by constructor.
-  - move => ?????? Hstep ? IH ?. inversion Hstep; simplify_eq.
-    apply: TraceStep; [done| |].
-    + move => σ2 ?. apply: has_trace_mono; [by apply: IH | |done] => /=.
-      move => κs ?. destruct e; simplify_eq/=; [|done].
-      econstructor; [done|done].
-    + destruct e; simplify_eq/=.
-      * econstructor; [done|]. apply: FTRUb.
-      * apply: FTRUb.
-Qed.
 
-Inductive filter_trace_rel' {EV1 EV2} (R : EV1 → option EV2 → Prop) : (list (event EV1) → Prop) → list (event EV2) → Prop :=
-| FTREnd' (Pκs' : _ → Prop):
-    Pκs' [] →
-    filter_trace_rel' R Pκs' []
-| FTRStep' κ κ' κs Pκs':
-    R κ' κ →
-    filter_trace_rel' R (λ κs', Pκs' (Vis κ' :: κs')) κs →
-    filter_trace_rel' R Pκs' (option_list (Vis <$> κ) ++ κs)
-| FTRUb' Pκs':
-    filter_trace_rel' R Pκs' [Ub]
-.
+  move => Hr Hstep κs.
+  have [σi2 [? Hs]]:= Hr (tcons e κs).
 
+  have [|?[??]]:= Hs. {
+    apply: TraceStep. naive_solver. 2: by constructor; constructor. ; [done | | ].
 
-Lemma mod_to_mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pσ:
-  σ ~{ m, Pκs }~> Pσ → (∀ κs κ, Pκs κs → Vis κ ∈ κs → ∃ κ', R κ κ') →
-  σ ~{ mod_filter m R, filter_trace_rel' R Pκs }~> Pσ.
-Proof.
-  elim.
-  - move => ??????. apply: TraceEnd; [done|]. by constructor.
-  - move => ???? κ ? Hstep ? IH ? HR.
-    destruct κ; simplify_eq/=.
-    + have [??]:= HR _ _ ltac:(done) ltac:(apply/elem_of_cons; by left).
-      apply: TraceStep; [ econstructor; [done | simpl;done] | | econstructor; [done|]; apply: FTRUb' ].
-      move => ??.
-      apply: has_trace_mono.
-      apply: IH; [done|].
-      move => ????. apply: HR; [done|]. set_solver.
-      move => ??. econstructor. done. done.
-      done.
-    + apply: TraceStep; [ by econstructor | | apply: FTRUb'].
-      move => ??. by apply: IH.
-Qed.
-
-Lemma filter_trace_rel_inv {EV1 EV2} (R : EV1 → option EV2 → Prop) Pκs Pκs' κs:
-  filter_trace_rel' R Pκs' κs → (∀ κs, Pκs' κs → filter_trace_rel R Pκs κs) → Pκs κs.
-Proof.
-  move => Ht.
-  elim: Ht Pκs.
-  - move => ??? HP. have Hf := HP _ ltac:(done). by inversion Hf.
-  - move => ?????? IH ? HP.
+  have [//| |σsx[? /(has_trace_cons_inv _ _)?]]:= Hr (tcons e κs) σi1. {
+    apply: TraceStep; [done | | ].
     admit.
-  - move => ?? HP.
-Admitted.
+  }
+  eexists σsx.
+  split.
+  - admit.
+  -
 
-Lemma mod_filter_refines {EV1 EV2} (m1 m2 : module EV1) (R : EV1 → option EV2 → Prop) σ1 σ2 :
-  (∀ κ1 κ2 κ2', R κ1 κ2 → R κ1 κ2' → κ2 = κ2') →
-  MS m1 σ1 ⊑ MS m2 σ2 →
-  MS (mod_filter m1 R) σ1 ⊑ MS (mod_filter m2 R) σ2.
+  (*
+  move => Hr ? Hstep κs.
+  have [σi2 [??]]:= Hr (tcons e κs).
+  eexists σi1. split. {
+    eexists _. split; [done|].
+    apply: TraceStep. ; [done | | ].
+   *)
+
+  move => Hr ? Hstep κs ? ? ?.
+  have [//| |σsx[? /(has_trace_cons_inv _ _)?]]:= Hr (tcons e κs) σi1. {
+    apply: TraceStep; [done | | ]. 2: { constructor. by constructor. }
+    admit.
+  }
+  eexists σsx.
+  split.
+  - admit.
+  -
+
+Lemma set_refines_step_Some {EV} (m1 m2 : module EV) Pσi1 Pσs1 σi1 Pσi2 e:
+  set_refines m1 m2 Pσi1 Pσs1 →
+  Pσi1 σi1 →
+  m1.(m_step) σi1 (Some e) Pσi2 →
+  set_refines m1 m2 (λ σi, ∃ σis, Pσi1 σis ∧ σis ~{m1, tcons e tnil}~> (λ σie, σi = σie))
+              (λ σs, ∃ σss, Pσs1 σss ∧ σss ~{m2, tcons e tnil}~> (λ σse, σs = σse)).
 Proof.
-  move => ? [/= Hr]. constructor => /= ? /mod_filter_to_mod/Hr/(mod_to_mod_filter _ R) Hm.
-  apply: has_trace_mono; [apply: Hm| |done].
-  - clear. move => ??. elim; set_solver.
-  - move => κs ?. by apply: filter_trace_rel_inv.
+  (*
+  move => Hr ? Hstep κs.
+  have [σi2 [??]]:= Hr (tcons e κs).
+  eexists σi1. split. {
+    eexists _. split; [done|].
+    apply: TraceStep. ; [done | | ].
+   *)
+  move => Hr ? Hstep κs ? [σx [??]] ?.
+  have [//| |σsx[? /(has_trace_cons_inv _ _)?]]:= Hr (tcons e κs) σx. {
+    admit.
+  }
+  eexists σsx.
+  split.
+  - admit.
+  -
+    (* apply: TraceStep; [done | | ]. *)
+
+set_refines mi ms Pσi Pσs
+
+Lemma mod_filter_nil_refines {EV1 EV2} (mi ms : module EV1) (R : EV1 → option (option EV2)) σi Pσi Pσs Pσ:
+  set_refines mi ms Pσi Pσs →
+  Pσi σi →
+  σi ~{ mod_filter mi R, tnil }~> Pσ →
+  ∃ σs, Pσs σs ∧ σs ~{ mod_filter ms R, tnil }~> (λ _, True).
+Proof. Admitted.
+
+Lemma mod_filter_refines {EV1 EV2} (R : EV1 → option (option EV2)) mi ms σi σs:
+  MS mi σi ⊑ MS ms σs →
+  MS (mod_filter mi R) σi ⊑ MS (mod_filter ms R) σs.
+Proof.
+  move => /set_refines_intro /= Hr. constructor => κs /=.
+  suff Hs : (
+              ∀ Pσi Pσs, set_refines mi ms Pσi Pσs →
+             ∀ σi, Pσi σi →
+                 σi ~{ mod_filter mi R, κs }~> (λ _, True) → ∃ σs, Pσs σs ∧ σs ~{ mod_filter ms R, κs }~> (λ _, True)
+
+            ). {
+    have := Hs (σi =.) (σs =.). naive_solver.
+  }
+  elim: κs; clear.
+  - move => Pσi Pσs Hr σi ??.
+    have [//| |?[??]]:= Hr tnil σi. by constructor.
+    eexists _. split;[done|]. by constructor.
+  - move => κ κs IH Pσi Pσs Hr σi ? /(has_trace_cons_inv _ _ _).
+    move HP: (λ σ2, ∃ P, _) => P.
+    move Hκn: tnil => κn Ht.
+    have {}Hκn : (κn ⊆ tnil) by naive_solver.
+    elim: Ht HP Hκn. 2: {
+      move => ??? κ' ?? Hstep ? IH2 Hnext ? Hsub. subst.
+      have {}IH2:= IH2 _ _ ltac:(done).
+      destruct κ'; simplify_eq/=. {
+        move: Hnext => /trace_next_cons[? [Hsub2 ?]].
+        pose proof (transitivity Hsub2 Hsub). easy.
+      }
+      move: Hnext => /trace_next_nil Hnext.
+      inversion Hstep; simplify_eq.
+      apply: IH2. admit. admit.
+    }
+    move => ??? HP ???. subst.
+    have {HP} [?[Hstep ?]]:= HP.
+    inversion Hstep; simplify_eq. destruct e => //.
+
+    admit.
+    +
+    admit.
+  - move => T Hdec f IH Pσi Pσs Hr σi ? /(has_trace_choice_inv _ _ _) Ht.
+
+
+
+  →
+  σ ~{ mod_filter m R, κs }~> Pσ →
+  σ ~{ m, filter_trace_to_mod R κs }~> Pσ.
+Proof.
+
+
+Fixpoint filter_trace_choose {EV1 EV2} (n : nat) (R : EV1 → option (option EV2)) (κs : trace EV1)
+         `{!EqDecision EV1} : trace (EV1) :=
+  match n with
+  | 0 => κs
+  | S n => tchoice EV1 _ (λ e, if R e is Some None then tcons e (filter_trace_choose n R κs) else tub)
+  end.
+
+Lemma filter_trace_choose_mono {EV1 EV2} (R : EV1 → option (option EV2)) n κs1 κs2 `{!EqDecision EV1}:
+  κs1 ⊆ κs2 →
+  filter_trace_choose n R κs1 ⊆ filter_trace_choose n R κs2.
+Proof.
+  elim: n => //= ???.
+  constructor => x. eapply (subtrace_choice_r x). case_match => //. case_match => //.
+  constructor. naive_solver.
 Qed.
- *)
+
+Fixpoint filter_trace_to_mod {EV1 EV2} (R : EV1 → option (option EV2))
+  (κs : trace EV2) `{!EqDecision EV1} `{!EqDecision EV2} : trace (EV1) :=
+  match κs with
+  | tnil => tchoice nat _ (λ n, filter_trace_choose n R tnil)
+  | tcons κ κs => tchoice nat _ (λ n, filter_trace_choose n R (
+      tchoice EV1 _ (λ e, if R e is Some e' then if e' is Some e'' then if bool_decide (e'' = κ) then
+          tcons e (filter_trace_to_mod R κs) else tub else tub else tub)))
+  | tchoice T Hdec f => tchoice T Hdec (λ x, filter_trace_to_mod R (f x))
+  end .
+
+Lemma filter_trace_to_mod_mono {EV1 EV2} (R : EV1 → option (option EV2)) κs1 κs2 `{!EqDecision EV1} `{!EqDecision EV2}:
+  κs1 ⊆ κs2 →
+  filter_trace_to_mod R κs1 ⊆ filter_trace_to_mod R κs2.
+Proof.
+  elim => /=.
+  - done.
+  - move => ?????.
+    constructor => n. eapply (subtrace_choice_r n).
+    apply: filter_trace_choose_mono.
+    constructor => x. eapply (subtrace_choice_r x).
+    case_match; [case_match|] => //. case_bool_decide => //. by econstructor.
+  - move => ??????. constructor. naive_solver.
+  - move => ???????. econstructor. naive_solver.
+Qed.
+
+Lemma mod_filter_to_mod {EV1 EV2} (m : module EV1) (R : EV1 → option (option EV2)) σ κs Pσ `{!EqDecision EV1} `{!EqDecision EV2}:
+  σ ~{ mod_filter m R, κs }~> Pσ →
+  σ ~{ m, filter_trace_to_mod R κs }~> Pσ.
+Proof.
+  elim; clear.
+  - move => ?? κs ?.
+    elim: κs => /=.
+    + move => ?. constructor; [done|]. by eapply (subtrace_choice_r 0).
+    + move => ??? Hs. inversion Hs.
+    + move => ???? /subtrace_nil_choice_inv[x ?].
+      apply: has_trace_mono; [ naive_solver | | done]. by econstructor.
+  - move => ??? κ κs κs' Hs _ IH Hnext. inversion Hs; simplify_eq.
+    apply: TraceStep; [done| apply: IH |]. clear IH.
+    destruct e; simplify_eq/=. 2: {
+      apply trace_next_nil. apply filter_trace_to_mod_mono. by apply trace_next_nil.
+    }
+    destruct κ. 2: {
+      move: Hnext => /trace_next_nil Hnext.
+      elim: Hnext => //=.
+      - apply: TNchoiceR => n.
+        apply: (TNchoice (S n)) => /=.
+        apply: (TNchoice e) => /=. case_match; simplify_eq.
+        constructor.
+        constructor. done.
+      - move => ?????.
+        apply: TNchoiceR => n.
+        apply: (TNchoice (S n)) => /=.
+        apply: (TNchoice e) => /=. case_match; simplify_eq.
+        constructor.
+        constructor. apply: filter_trace_choose_mono.
+        constructor => x. eapply (subtrace_choice_r x).
+        case_match; [case_match|] => //. case_bool_decide => //.  econstructor.
+        by apply: filter_trace_to_mod_mono.
+      - move => ??????. constructor. done.
+      - move => ???????. econstructor. done.
+    }
+      elim: κs Hnext => /=.
+      - move => ?. econstructor.
+      move: Hnext.
+    }
+    move: Hnext. move Hlk: (option_list _) => lκ Hnext.
+    elim: Hnext Hlk.
+    + destruct κ => //. admit.
+    elim: κs κs' Hnext => /=.
+    + admit.
+      (* inversion 1; simplify_eq. destruct e; simplify_eq/=. *)
+      (* admit. constructor. *)
+      (* constructor. *)
+    + move => ?? IH ??.
+      econstructor. erewrite H0. case_match.
+
+     mo
+    elim: Hs.
+    eexists _. by constructor.
+  - move => ?????? Hstep ? IH ?.
+    inversion Hstep; simplify_eq.
+    eexists (tchoice _ _ (λ σ, ex_proj1 (IH σ _))).
+
 
 Inductive filter_trace_rel {EV1 EV2} (R : EV1 → option EV2 → Prop) : list (event EV1) → list (event EV2) → Prop :=
 | FTREnd :
