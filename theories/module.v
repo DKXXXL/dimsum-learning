@@ -1678,17 +1678,19 @@ Lemma mod_filter_refines' {EV1 EV2} (R : EV1 → option (option EV2)) mi ms σi 
   MS (mod_filter mi R) σi ⊑ MS (mod_filter ms R) σs.
 Proof.
   move => /set_refines_intro /= Hr. constructor => κs /=.
-  suff Hs : (
+  have Hs : (
               ∀ Pσi Pσs, set_refines mi ms Pσi Pσs →
-                (∀ σi, Pσi σi → σi ~{ mod_filter mi R, κs }~> (λ _, True)) → ∃ σs, Pσs σs ∧ σs ~{ mod_filter ms R, κs }~> (λ _, True)
-
-            ). {
-    have := Hs (σi =.) (σs =.). naive_solver.
+                (∀ σi, Pσi σi → σi ~{ mod_filter mi R, κs }~> (λ _, True)) →
+                ∃ κs' σs, κs' ⊆ κs ∧ Pσs σs ∧ σs ~{ mod_filter ms R, κs' }~> (λ _, True)
+            ); last first. {
+    move => ?.
+    have [//| |?[?[?[??]]]]:= Hs (σi =.) (σs =.); [naive_solver|]. subst.
+    by apply: has_trace_mono.
   }
   elim: κs; clear.
   - move => Pσi Pσs Hr Hi.
     have [ |?[??]]:= Hr tnil _. by constructor.
-    eexists _. split;[done|]. by constructor.
+    eexists tnil, _. split;[done|]. split;[done|]. by constructor.
   - move => κ κs IH Pσi Pσs Hr Hi.
 
     (* TODO: Define nhas_trace, i.e. has_trace indexed by a trace ()
@@ -1745,10 +1747,13 @@ Proof.
 
     have [[σx ?]|?]:= EM (∃ σ, Pσi σ). 2: {
       have [ |x [?/has_trace_choice_inv ?]]:= Hr tub _. naive_solver.
-      eexists _. split;[done|].
+      eexists _, _. split;[done|]. split;[done|].
       (* should be provable *)
       admit.
     }
+
+    (* TODO: not sure if adding the ∃ (κs' : trace EV2) in the goal was a good idea. *)
+
     suff : ∃ x σs, Pσs σs ∧ σs ~{ mod_filter ms R, f x }~> (λ _, True). {
       move => [?[?[??]]]. eexists _. split; [done|]. by apply: has_trace_choice.
     }
