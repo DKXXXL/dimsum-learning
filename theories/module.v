@@ -13,6 +13,7 @@ Arguments Ub {_}.
 Arguments Vis {_}.
 
 (*
+025519
 
 Languages:
 ASM: assembly language, i.e. isla-coq
@@ -33,7 +34,7 @@ main:
   mov x1, global
   bl F3
   add x0, x5
-  mov CFG_ID_AA64PFR0_EL1_MPAM, x1
+  mov CFG_ID_AA64PFR0_EL1_MPAM, x0
 
 ASM2:
 F2:
@@ -51,14 +52,16 @@ int F2() {
   return 0;
 }
 
-C3: Caesium
+C3:
 int F3(int *p) {
-  *p = F2();
+  int ret = F2();
+  *p = ret;
+  return ret;
 }
 
 Spec2+3: (has C interface, but is an itree)
-F2 : λ _, 0
-F3 : λ p, do
+F2 : λ _, ret 0
+F3 : λ p,
    write p 0;
    ret 0
 
@@ -89,11 +92,13 @@ Refinement diagram:
                              |
       ...        +   C_TO_ASM (C2 + C3)
                         /          \
-      ...        + C_TO_ASM C2 + C_TO_ASM C3
+      ...        + C_TO_ASM [C2] + C_TO_ASM [C3]
                        |            |
-     ASM1        +    ASM2     +  ASM3
+     [ASM1]      +    [ASM2]     +  [ASM3]
+      |                 |           |
+     [ASM1        ∪    ASM2    ∪   ASM3]
                   \           /
-                   ASM of pKVM
+                       ASM
 
 Refinement steps:
 
@@ -117,10 +122,13 @@ Tools:
 - Manual spec proofs: proves statements of the form
   Spec1 ∪ ... ∪ Specn ⊑ Spec'
 - Meta-theory:
-  - C_TO_ASM M1 + C_TO_ASM M2 ⊑ C_TO_ASM (M2 + M2)
+  - [ASM1 ∪ ASM2] ⊑ [ASM1] + [ASM2]
+  - [C_TO_ASM M1] + [C_TO_ASM M2] ⊑ C_TO_ASM (M1 + M2)
   - C1 + C2 ⊑ C1 ∪ C2
   - C_TO_ASM Spec ⊑ C_TO_ASM_ITREE Spec
   - Spec1 + Spec2 ⊑ Spec1 ∪ Spec2
+  - M1 ⊑ M2 → C_TO_ASM M1 ⊑ C_TO_ASM M2
+  - M1 ⊑ M1' → M2 ⊑ M2' → M1 + M2 ⊑ M1' + M2'
 
 Questions:
 Q1 How to define C_TO_ASM?
@@ -193,6 +201,9 @@ Usecases for angelic choice:
   F: λ b i,
    if b then i + 1 else i
 
+  - Source language is not typed!
+  - [if Int _] and [Bool _ + _] are UB in source
+
   target client program:
   main:
     F(0, 1)
@@ -205,12 +216,42 @@ Usecases for angelic choice:
   to source values?
   -> Angelic choice
 
-  SOURCE_TO_TARGET := ...
+  to_int (Bool b) := if b then 1 else 0
+  to_int (Int z) := z
+
+  SOURCE_TO_TARGET :=
+   InCallT (target_val) =>
+     AngelicChoose source_val;
+     assert (to_int source_val = target_val);
+     InCallS source_val
+   InRetT (target_val) =>
+     AngelicChoose source_val;
+     assert (to_int source_val = target_val);
+     InRetS source_val
+   OutCallS (source_val) => OutCallT (to_int source_val)
+   OutRetS (source_val) => OutRetT (to_int source_val)
 
   goals:
   - F_t ⊑ SOURCE_TO_TARGET F_s
   - main_t ⊑ SOURCE_TO_TARGET main_s
   - SOURCE_TO_TARGET m1 + SOURCE_TO_TARGET m2 ⊑ SOURCE_TO_TARGET (m1 ∪ m2)
+
+  Handling of F(Bool 0) when merging source programs:
+
+    OutCallS (Bool 0)   (triggered by call in opsem of source)
+         |
+         v
+    OutCallT (0)        (translated by SOURCE_TO_TARGET)
+         |
+         v
+    InCallT (0)         (received by called module)
+         |
+         v
+   InCallS (Bool 0)     (translated by SOURCE_TO_TARGET and guessing the original value)
+
+   Note that this works also if F is called with 0 from the target language!
+
+- TODO: add an example for asm vs. C provenance
 
 - Logical arguments that exist in the specification, but not in the
   implementation. E.g. preconditions or ghost state (used by CRUSL)
@@ -1196,6 +1237,17 @@ But the second does not!
 So it seems like one needs to loose a commuting rule of non-det choice. With
 angelic choice in the environment, one can now observe the difference between these
 two modules. Not sure if this is bad or good.
+
+
+The problem of adding tall to dem module is that when instantiating Iris, one
+cannot use nat as the step index as has_trace might contain infinite branching.
+Two solutions:
+1. Use Transfinite Iris
+2. Restrict all angelic choices everywhere to be finite.
+  - This might be the way to go for a first try as most of the examples
+    that I can think of so far only rely on finite angelic non-det (e.g.
+    choosing a provenance should only need to choose an existing provenance
+    I hope). But I am still afraid that this will blow up in our face somewhen.
  *)
 Lemma has_trace_dem_has_trace {EV} (m : dem_module EV) σ Pσ κs:
   σ ~{ m, κs }~> Pσ ↔ ∃ κs', list_to_trace κs' ⊆ κs ∧ σ ~{ m, κs' }~>ₘ Pσ.
