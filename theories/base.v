@@ -1,6 +1,7 @@
 From Coq Require Export ssreflect.
 Require Export stdpp.prelude.
 Require Export stdpp.gmap.
+Require Export stdpp.finite.
 
 Global Unset Program Cases.
 
