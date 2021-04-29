@@ -1601,14 +1601,30 @@ Lemma mod_product_nil_l {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2 P�
   (σ1, σ2) ~{ mod_product m1 m2, tnil }~> (λ σ', Pσ σ'.1 ∧ σ2 = σ'.2).
 Proof.
   elim.
-Admitted.
+  - move => ??????. constructor; [|done]. naive_solver.
+  - move => ??? κ ????? Hs1 ? Hs2.
+    pose proof (transitivity Hs1 Hs2) as Hs.
+    destruct κ; [inversion Hs|]; simplify_eq/=.
+    apply: TraceStep; [ by apply: ProductStepL | | simpl;done | by move => -[??]].
+    move => [??] /=. naive_solver.
+  - move => ??????? Hs1 Hs2.
+    pose proof (transitivity Hs1 Hs2) as [??]%subtrace_all_nil_inv. naive_solver.
+Qed.
 
 Lemma mod_product_nil_r {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2 Pσ κs:
   σ2 ~{ m2, κs }~> Pσ → κs ⊆ tnil →
   (σ1, σ2) ~{ mod_product m1 m2, tnil }~> (λ σ', Pσ σ'.2 ∧ σ1 = σ'.1).
 Proof.
   elim.
-Admitted.
+  - move => ??????. constructor; [|done]. naive_solver.
+  - move => ??? κ ????? Hs1 ? Hs2.
+    pose proof (transitivity Hs1 Hs2) as Hs.
+    destruct κ; [inversion Hs|]; simplify_eq/=.
+    apply: TraceStep; [ by apply: ProductStepR | | simpl;done | by move => -[??]].
+    move => [??] /=. naive_solver.
+  - move => ??????? Hs1 Hs2.
+    pose proof (transitivity Hs1 Hs2) as [??]%subtrace_all_nil_inv. naive_solver.
+Qed.
 
 Lemma mods_to_mod_product {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ κs κs1 κs2:
   mod_product_rel κs κs1 κs2 →
@@ -1630,17 +1646,34 @@ Proof.
     apply: has_trace_mono; [|done| done].
     apply: has_trace_all => ?. naive_solver.
   - move => ?????? IH ? [??]/= /(has_trace_cons_inv _ _) ??.
-    unshelve (apply: has_trace_mono; [|done| done]). refine (λ _, True).
+    apply: has_trace_mono; [|done| done].
     apply: (has_trace_trans tnil). { by apply: mod_product_nil_l. }
     move => /= [??] /= [[?[?[Hvis ?]]]?]. subst.
     apply: TraceStep; [ by apply: ProductStepL |  | simpl;done |]. 2: {
       have [|??]:= Hvis. naive_solver. unfold VisNoUb in *. eexists (_,_). naive_solver.
     }
     move => [??] /= [??]. subst. naive_solver.
-
-  - move => ????. admit.
-  - move => ????. admit.
-Admitted.
+  - move => ?????? IH ? [??]/=? /(has_trace_cons_inv _ _)?.
+    apply: has_trace_mono; [|done| done].
+    apply: (has_trace_trans tnil). { by apply: mod_product_nil_r. }
+    move => /= [??] /= [[?[?[Hvis ?]]]?]. subst.
+    apply: TraceStep; [ by apply: ProductStepR |  | simpl;done |]. 2: {
+      have [|??]:= Hvis. naive_solver. unfold VisNoUb in *. eexists (_,_). naive_solver.
+    }
+    move => [??] /= [??]. subst. naive_solver.
+  - move => ??????? IH ? [??]/= /(has_trace_cons_inv _ _)? /(has_trace_cons_inv _ _)?.
+    apply: has_trace_mono; [|done| done].
+    apply: (has_trace_trans tnil). { by apply: mod_product_nil_l. }
+    move => /= [??] /= [[?[?[Hvis ?]]]?]. subst.
+    apply: (has_trace_trans tnil). { by apply: mod_product_nil_r. }
+    move => /= [??] /= [[?[?[Hvis2 ?]]]?]. subst.
+    apply: TraceStep; [ by apply: ProductStepBoth |  | simpl;done |]. 2: {
+      have [|??]:= Hvis. naive_solver.
+      have [|??]:= Hvis2. naive_solver.
+      unfold VisNoUb in *. eexists (_,_). naive_solver.
+    }
+    move => [??] /= [??]. subst. naive_solver.
+Qed.
 
 Lemma mod_product_refines {EV1 EV2} (m1 m1' : module EV1) (m2 m2' : module EV2) σ1 σ1' σ2 σ2':
   MS m1 σ1 ⊑ MS m1' σ1' →
@@ -1672,6 +1705,14 @@ Proof.
     apply: has_trace_mono; [|done|done].
     apply: has_trace_all => ?. naive_solver.
 Qed.
+
+(* TODO:
+
+ mod_seq : (m1 : module EV1) (m2 : module EV2) (f1 : EV1 -> (EV2 + EV3)) (f2 : EV2 -> (EV1 + EV3)) : module EV3
+
+mod_wrap : (m1 : module EV2) : (in : EV1 → trace EV2) (out : EV2 → trace EV1)
+-> probably needs some kind of polarity on the events.
+ *)
 
 (*** old stuff *)
 
