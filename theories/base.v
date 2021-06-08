@@ -16,6 +16,9 @@ Proof.
   eexists x'', _. by apply: app_comm_cons.
 Qed.
 
+Tactic Notation "efeed" "revert" constr(H) :=
+  efeed H using (fun p => let H' := fresh in pose proof p as H'; revert H').
+
 Record wrap A := Wrap { a : A }.
 
 Definition Z_of_bool (b : bool) : Z :=

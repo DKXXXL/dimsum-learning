@@ -45,254 +45,6 @@ Proof.
   apply max_list_elem_of_le. apply elem_of_list_fmap. naive_solver.
 Qed.
 
-(*
-Languages:
-ASM: assembly language, i.e. isla-coq
-C: C language, i.e. Caesium
-Spec: high-level language, i.e. itree
-
-Linking:
-M1 + M2 : semantic linking on modules
-C1 ∪ C2 : syntactic linking of C code
-Spec1 ∪ Spec2 : syntactic linking of itrees
-
-Code:
-
-ASM1:
-main:
-  bl F2
-  mov x5, x0
-  mov x1, global
-  bl F3
-  add x0, x5
-  mov CFG_ID_AA64PFR0_EL1_MPAM, x0
-
-ASM2:
-F2:
-  mov x0, 0
-  ret
-
-ASM3:
-F3:
-  bl F2
-  str [x1], x0
-  ret
-
-C2:
-int F2() {
-  return 0;
-}
-
-C3:
-int F3(int *p) {
-  int ret = F2();
-  *p = ret;
-  return ret;
-}
-
-Spec2+3: (has C interface, but is an itree)
-F2 : λ _, ret 0
-F3 : λ p,
-   write p 0;
-   ret 0
-
-Spec1: (has asm interface, but is itree)
-main: λ _,
-  x ← call F2 [];
-  y ← call F3 [global];
-  set_system_register CFG_ID_AA64PFR0_EL1_MPAM, x + y
-
-Spec1+2+3: (has asm interface, but is itree)
-main : λ _,
-  write global 0;
-  set_system_register CFG_ID_AA64PFR0_EL1_MPAM, 0
-
-Refinement diagram:
-
-              Spec1+2+3
-                 |
-     Spec1 ∪ C_TO_ASM_ITREE (Spec2+3)
-       /                    \
-     Spec1       +   C_TO_ASM_ITREE (Spec2+3)
-       |                     |
-     Spec1       +   C_TO_ASM (Spec2+3)
-       |                     |
-      ...        +   C_TO_ASM (Spec2+3)
-                             |
-      ...        +   C_TO_ASM (C2 ∪ C3)  (∪ is syntactic linking)
-                             |
-      ...        +   C_TO_ASM (C2 + C3)
-                        /          \
-      ...        + C_TO_ASM [C2] + C_TO_ASM [C3]
-                       |            |
-     [ASM1]      +    [ASM2]     +  [ASM3]
-      |                 |           |
-     [ASM1        ∪    ASM2    ∪   ASM3]
-                  \           /
-                       ASM
-
-Refinement steps:
-
-ASM2 ⊑ C_TO_ASM C2                             (via translation validation)
-ASM3 ⊑ C_TO_ASM C3                             (via translation validation)
-C_TO_ASM C2 + C_TO_ASM C3 ⊑ C_TO_ASM (C2 + C3) (via meta theory)
-C2 + C3 ⊑ C2 ∪ C3                             (via meta theory)
-C2 ∪ C3 ⊑ Spec2+3                             (via RefinedC)
-ASM1 ⊑ C_TO_ASM (Spec1)                        (via RefinedAsm)
-C_TO_ASM Spec2+3 ⊑ C_TO_ASM_ITREE Spec2+3      (via meta theory)
-Spec1 + C_TO_ASM_ITREE (Spec2+3) ⊑ Spec1 ∪ C_TO_ASM_ITREE Spec2+3 (via meta theory)
-Spec1 ∪ C_TO_ASM_ITREE Spec2+3 ⊑ Spec1+2+3     (via manual proof)
-
-Tools:
-- Translation validation: proves statements of the form
-  ASM ⊑ C_TO_ASM C
-- RefinedC: proves statements of the form
-  C1 ∪ ... ∪ Cn ⊑ Spec
-- RefinedAsm: proves statements of the form
-  Asm ⊑ Spec
-- Manual spec proofs: proves statements of the form
-  Spec1 ∪ ... ∪ Specn ⊑ Spec'
-- Meta-theory:
-  - [ASM1 ∪ ASM2] ⊑ [ASM1] + [ASM2]
-  - [C_TO_ASM M1] + [C_TO_ASM M2] ⊑ C_TO_ASM (M1 + M2)
-  - C1 + C2 ⊑ C1 ∪ C2
-  - C_TO_ASM Spec ⊑ C_TO_ASM_ITREE Spec
-  - Spec1 + Spec2 ⊑ Spec1 ∪ Spec2
-  - M1 ⊑ M2 → C_TO_ASM M1 ⊑ C_TO_ASM M2
-  - M1 ⊑ M1' → M2 ⊑ M2' → M1 + M2 ⊑ M1' + M2'
-
-Questions:
-Q1 How to define C_TO_ASM?
-Q2 How is memory handled?
-
-A1 How to define C_TO_ASM?
-
-loc := provenance * bitvector
-C_value := Int bitvector | Ptr loc
-
-Inductive C_events :=
-| CInCall  (vs : list C_value) (* env calling C, input *)
-| CInRet   (v : C_value)       (* env returning to C, input *)
-| COutCall (vs : list C_value) (* C calling env, output *)
-| COutRet  (v : C_value)       (* C returning to env, output *)
-
-Asm_value := bitvector
-Inductive Asm_events :=
-| AsmInCall  (vs : list Asm_value)
-| AsmInRet   (v : Asm_value)
-| AsmOutCall (vs : list Asm_value)
-| AsmOutRet  (v : Asm_value)
-
-
-Definition same_repr (cv : C_value) (av : Asm_value) : Prop :=
-  match cv with
-  | Int bv => bv = av
-  | Ptr (p, bv) => bv = av
-  end
-
-C_TO_ASM : module C_events → module Asm_event :=
-module_map (λ κc κasm,
-  match κasm, κc with
-  | AsmInCall avs,  CInCall cvs =>
-     AngelicChoose vs' ∧ cvs = vs' ∧ Forall2 same_repr cvs avs
-  | AsmInRet av,    CInRet cv =>
-     AngelicChoose v' ∧ cv = v' ∧ same_repr cv av
-  | AsmOutCall avs, COutCall cvs =>
-     Forall2 same_repr cvs avs
-  | AsmOutRet av,   COutRet cv =>
-     same_repr cv av
-  | _, _ => NB
-  end
-)
-
-Without angelic choice one has to prove *all* of the following traces:
-AsmInCall [bv], CInCall [Int bv]
-AsmInCall [bv], CInCall [Ptr p, bv]
-
-Without angelic choice one has to prove *one* of the previous traces!
- *)
-
-(* In general, angelic choice allows passing abstract values from
-specification to implementation. (The dual of demonic choice.)
-
-Usecases for angelic choice:
-
-- Guessing the value to pass in the specification if the specification
-  has a richer notion of values. E.g. pointer provenance in C vs. Asm,
-  or untyped source language that distinguished integers and booleans
-  vs. a untyped target language that does not
-
-  target:
-  values : Z
-  F: λ b i,
-   if b then i + 1 else i
-
-  source:
-  values: Bool bool | Int Z
-  F: λ b i,
-   if b then i + 1 else i
-
-  - Source language is not typed!
-  - [if Int _] and [Bool _ + _] are UB in source
-
-  target client program:
-  main:
-    F(0, 1)
-
-  source client program:
-  main:
-    F(Bool 0, Int 1)
-
-  How to define a generic translation function from target values
-  to source values?
-  -> Angelic choice
-
-  to_int (Bool b) := if b then 1 else 0
-  to_int (Int z) := z
-
-  SOURCE_TO_TARGET :=
-   InCallT (target_val) =>
-     AngelicChoose source_val;
-     assert (to_int source_val = target_val);
-     InCallS source_val
-   InRetT (target_val) =>
-     AngelicChoose source_val;
-     assert (to_int source_val = target_val);
-     InRetS source_val
-   OutCallS (source_val) => OutCallT (to_int source_val)
-   OutRetS (source_val) => OutRetT (to_int source_val)
-
-  goals:
-  - F_t ⊑ SOURCE_TO_TARGET F_s
-  - main_t ⊑ SOURCE_TO_TARGET main_s
-  - SOURCE_TO_TARGET m1 + SOURCE_TO_TARGET m2 ⊑ SOURCE_TO_TARGET (m1 ∪ m2)
-
-  Handling of F(Bool 0) when merging source programs:
-
-    OutCallS (Bool 0)   (triggered by call in opsem of source)
-         |
-         v
-    OutCallT (0)        (translated by SOURCE_TO_TARGET)
-         |
-         v
-    InCallT (0)         (received by called module)
-         |
-         v
-   InCallS (Bool 0)     (translated by SOURCE_TO_TARGET and guessing the original value)
-
-   Note that this works also if F is called with 0 from the target language!
-
-- TODO: add an example for asm vs. C provenance
-
-- Logical arguments that exist in the specification, but not in the
-  implementation. E.g. preconditions or ghost state (used by CRUSL)
-
-- integer to pointer casts as non-deterministic choice of provenance
-
-- Guessing when to transfer ownership between different modules
-
-
-*)
 Inductive trace (EV : Type) : Type :=
 | tnil
 | tcons (κ : EV) (κs : trace EV)
@@ -427,6 +179,16 @@ Proof.
   - move => ????????. econstructor. naive_solver.
   - move => ?????????. econstructor. naive_solver.
   - move => ?????????. econstructor. naive_solver.
+Qed.
+
+Lemma tapp_tnil_r {EV} (κs : trace EV) :
+  tapp κs tnil = κs.
+Proof.
+  elim: κs.
+  - done.
+  - move => ?? Htapp /=. by f_equal.
+  - move => ?? IH /=. f_equal. apply functional_extensionality. naive_solver.
+  - move => ??? IH /=. f_equal. apply functional_extensionality. naive_solver.
 Qed.
 
 Definition tub {EV} :=
@@ -1732,6 +1494,8 @@ Proof.
 Qed.
 
 (*** Proving refinement *)
+
+(** ** [inv] *)
 Lemma inv_implies_refines {EV} (m1 m2 : mod_state EV) (inv : m1.(m_state) → m2.(m_state) → Prop):
   inv m1.(ms_state) m2.(ms_state) →
   (∀ σi1 σs1 Pσi2 e,
@@ -1753,13 +1517,234 @@ Proof.
     apply: has_trace_all => ?. naive_solver.
 Qed.
 
+(** ** [wp] *)
+Inductive wp {EV} (m1 m2 : module EV) : nat → m1.(m_state) -> m2.(m_state) -> Prop :=
+| wp_step' σi1 σs1 n:
+    (∀ Pσi2 κ n', n = S n' → m_step m1 σi1 κ Pσi2 -> ∃ Pσ2,
+      σs1 ~{ m2, option_trace κ }~> Pσ2 ∧
+      ∀ σs2, Pσ2 σs2 → ∃ σi2, Pσi2 σi2 ∧ wp m1 m2 n' σi2 σs2) ->
+    wp m1 m2 n σi1 σs1
+.
+Lemma wp_mono {EV} (m1 : module EV) m2 κs σ n n':
+  wp m1 m2 n σ κs →
+  n' ≤ n →
+  wp m1 m2 n' σ κs.
+Proof.
+  elim: n' n σ κs.
+  - move => ???? Hwp. constructor. done.
+  - move => n' IH [|n] σ κs Hwp ?. lia.
+    inversion Hwp as [??? Hwp']; simplify_eq.
+    constructor => Pσi2 κ ?[?]?. subst.
+    efeed revert Hwp';[done..|] => -[?[? Hwp'']].
+    naive_solver lia.
+Qed.
+
+Lemma wp_step {EV} (m1 m2 : module EV) σi1 σs1 n:
+    (∀ Pσi2 κ n', n = S n' → m_step m1 σi1 κ Pσi2 ->
+      σs1 ~{ m2, option_trace κ }~> (λ σs2, ∃ σi2, Pσi2 σi2 ∧ wp m1 m2 n' σi2 σs2)) ->
+    wp m1 m2 n σi1 σs1
+.
+Proof. move => ?. constructor. naive_solver. Qed.
+
+Lemma wp_implies_refines {EV} (m1 m2 : mod_state EV):
+  (∀ n, wp m1 m2 n m1.(ms_state) m2.(ms_state)) →
+  m1 ⊑ m2.
+Proof.
+  move => Hwp.
+  constructor => κs /has_trace_to_n [n Hi].
+  move: Hi {Hwp}(Hwp n).
+  move: m1.(ms_state) => σi1.
+  move: m2.(ms_state) => σs1 Hi.
+  elim: Hi σs1.
+  - move => ????????. by apply: TraceEnd.
+  - move => ????????? IH ??? Hwp.
+    inversion_clear Hwp as [??? Hwp2]; subst.
+    efeed revert Hwp2; [done..|] => -[?[? Hwp]].
+    apply: has_trace_mono; [|done..].
+    apply: has_trace_trans; [done|] => ??.
+    efeed revert Hwp; [done|] => -[?[??]]. by apply: IH.
+  - move => ????????? IH ????.
+    apply: has_trace_mono; [|done..].
+    apply: has_trace_all => ?. apply: IH.
+    by apply: wp_mono.
+Qed.
+
+Lemma wp_step_impl {EV} (m1 m2 : module EV) σi1 σs n:
+  (∀ Pσi2 κ n', n = S n' → m_step m1 σi1 κ Pσi2 ->
+    ∃ σi2, Pσi2 σi2 ∧ κ = None ∧ wp m1 m2 n' σi2 σs) ->
+  wp m1 m2 n σi1 σs
+.
+Proof.
+  move => Hstep.
+  apply wp_step => ?????.
+  efeed revert Hstep; [done..|] => -[?[?[??]]]. subst.
+  constructor; [|done]. naive_solver.
+Qed.
+
+Lemma wp_step_spec {EV} (m1 m2 : module EV) σi σs1 Pσs2 n:
+  m_step m2 σs1 None Pσs2 ->
+  (∀ σs2, Pσs2 σs2 → wp m1 m2 n σi σs2) ->
+  wp m1 m2 n σi σs1
+.
+Proof.
+  move => Hstep Hwp.
+  apply wp_step => ?????.
+  apply: TraceStep; [done| | simpl;done | by move => -[??]] => ??.
+  efeed revert Hwp; [done|] => {}Hwp.
+  inversion_clear Hwp as [??? Hwp2].
+  efeed revert Hwp2; [done..|] => -[?[??]].
+  by apply: has_trace_mono.
+Qed.
+
+Lemma wp_step_both {EV} (m1 m2 : module EV) σi1 σs1 n :
+  (∀ Pσi2 κ n', n = S n' → m_step m1 σi1 κ Pσi2 -> ∃ Pσ2,
+   m_step m2 σs1 κ Pσ2 ∧ VisNoUb m2 κ Pσ2 ∧
+   ∀ σs2, Pσ2 σs2 → ∃ σi2, Pσi2 σi2 ∧ wp m1 m2 n' σi2 σs2) ->
+  wp m1 m2 n σi1 σs1.
+Proof.
+  move => Hstep.
+  constructor => ?????.
+  efeed revert Hstep; [done..|] => -[?[?[??]]].
+  eexists _. split; [|done].
+  apply: TraceStep; [done| by constructor | |done].
+  by rewrite tapp_tnil_r.
+Qed.
+
 (* TODO:
 
  mod_seq : (m1 : module EV1) (m2 : module EV2) (f1 : EV1 -> (EV2 + EV3)) (f2 : EV2 -> (EV1 + EV3)) : module EV3
 
-mod_wrap : (m1 : module EV2) : (in : EV1 → trace EV2) (out : EV2 → trace EV1)
--> probably needs some kind of polarity on the events.
+mod_wrap : (m1 : module EV2) : (w : EV1 → trace EV2) :
+- allows silent steps of m1
+- at each step demonically chooses if it tries to emit an event e in EV1
+  - if it does so, it follows the demonic and angelic choices of the trace [w e]
+  - when that reaches a cons k ks, m1 takes a step emitting k
+    - only then the event for the wrapped module is emitted
+  - the demonic and angelic choices make up the richer structure of EV2 from EV1
+- this formulation should work for events that contain mixed angelic and demonic choice
+  - e.g. translating an atomic read from an assembly memory module to a C memory module
+
+Proof rule for merging mod_wrap:
+∀ w : EV1 → trace EV2,
+(∀ e1 e2, f1 e1 = inl e2 →
+   trace_bind (λ k, if f2 k is inl k' then tcons k' tnil else tub) (w e1) ⊆ w e2) →
+mod_seq (mod_wrap m1 w) (mod_wrap m2 w) f1 f1 ⊑ mod_wrap (mod_seq m1 m2 f2) w
+
+The proof should follow the subtrace relationship when constructing the new evaluation.
+
+Example of w:
+λ e,
+ match e with
+| AsmInCall  v => tall T (λ x, tcons (CInCall (asm_val_to_C x v)) tnil)
+| AsmInRet   v => tall T (λ x, tcons (CInRet (asm_val_to_C x v)) tnil)
+| AsmOutCall v => tex T (λ x, tcons (COutCall (asm_val_to_C x v)) tnil)
+| AsmOutRet  v => tex T (λ x, tcons (COutRet (asm_val_to_C x v)) tnil)
  *)
+
+Ltac invert_all_tac f :=
+  let do_invert H := inversion H; clear H in
+  repeat lazymatch goal with
+         | H : f |- _ => do_invert H
+         | H : f _ |- _ => do_invert H
+         | H : f _ _|- _ => do_invert H
+         | H : f _ _ _|- _ => do_invert H
+         | H : f _ _ _ _|- _ => do_invert H
+         | H : f _ _ _ _ _|- _ => do_invert H
+         | H : f _ _ _ _ _ _|- _ => do_invert H
+         | H : f _ _ _ _ _ _ _|- _ => do_invert H
+         | H : f _ _ _ _ _ _ _ _|- _ => do_invert H
+         | H : f _ _ _ _ _ _ _ _ _|- _ => do_invert H
+         end.
+
+Tactic Notation "invert_all" constr(f) := invert_all_tac f; simplify_eq/=.
+Tactic Notation "invert_all'" constr(f) := invert_all_tac f.
+
+
+(* Ltac inv_step := invert_all' @m_ub_step; invert_all @m_step. *)
+Ltac inv_step := invert_all @m_step.
+
+(*** Tests *)
+
+(*
+  TODO: prove the following refinement for which wp is probably not enough
+
+            A     B
+           /- 2  --- 3
+  spec: 1 -
+           \- 2' --- 4
+            A     C
+
+                  B
+           A     /- 3
+  impl: 1 --- 2 -
+                 \- 4
+                 C
+
+*)
+Module test.
+
+(*   2
+  1 --- 2 (done)
+ *)
+Inductive mod1_step : bool → option nat → (bool → Prop) → Prop :=
+| T1False: mod1_step false (Some 2) (true =.).
+
+
+Program Definition mod1 : module nat := {|
+  m_state := bool;
+  m_step := mod1_step;
+|}.
+Next Obligation.
+  move => ???. inversion 1. apply: FinitePred_eq.
+Qed.
+
+(*         2
+  1 --- 2 --- 3 (done)
+ *)
+Inductive mod2_state := | S1 | S2 | S3.
+Inductive mod2_step : mod2_state → option nat → (mod2_state → Prop) → Prop :=
+| T2S1: mod2_step S1 None (S2 =.)
+| T2S2: mod2_step S2 (Some 2) (S3 =.).
+Program Definition mod2 : module nat := {|
+  m_state := mod2_state;
+  m_step := mod2_step;
+|}.
+Next Obligation.
+  move => ???. inversion 1; apply: FinitePred_eq.
+Qed.
+
+Definition t2_to_t1_inv (σ1 : mod2_state) (σ2 : bool) : Prop :=
+  σ2 = match σ1 with
+  | S1 | S2 => false
+  | _ => true
+  end.
+Lemma test_refines1 :
+  MS mod2 S1 ⊑ MS mod1 false.
+Proof.
+  apply (inv_implies_refines (MS mod2 S1) (MS mod1 false) t2_to_t1_inv).
+  - done.
+  - move => σi1 σs1 σi2 e -> ?. inv_step => //.
+    + apply: TraceEnd; [|done]. naive_solver.
+    + apply: TraceStep; [constructor | | simpl;done | by econstructor].
+      move => ? <-.
+      apply: TraceEnd; [|done]. naive_solver.
+Qed.
+
+Lemma test_refines1_wp :
+  MS mod2 S1 ⊑ MS mod1 false.
+Proof.
+  apply wp_implies_refines => n /=.
+
+  apply: wp_step_impl => ?????. inv_step.
+  eexists _. split_and!; [done..|].
+
+  apply: wp_step_both => ?????. inv_step.
+  eexists _. split_and!; [constructor| by econstructor |] => ? <-.
+  eexists _. split_and!; [done..|].
+
+  apply: wp_step_impl => ?????. inv_step.
+Qed.
+
 
 (*** old stuff *)
 
