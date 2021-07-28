@@ -338,6 +338,8 @@ In particular, link MI1 M2 has the trace
 but link MS1 M2 does not have this trace since there one has to pick the
 value of the demonic choice in M2 before one sees the angelic choice.
 
+But maybe the problem is with the proof technique? One should be able to
+delay the demonic choice across the event. I.e. an automaton is always in a set of states.
  *)
 
 Inductive trace_steps : Type :=
