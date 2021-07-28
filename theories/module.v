@@ -1518,6 +1518,20 @@ Proof.
 Qed.
 
 (** ** [wp] *)
+
+(*
+I think the wp proof technique should be complete (by instantiating the refinement with
+ tapp (option_trace κ) (tex (σ | Pσ) (λ σ, tall (κs | σ ~{m, κs}~> -) (λ κs, κs))))
+but this proof does not work because of universes (a trace cannot make a choice over traces
+as this would mean that trace has trace in a not strictly postive occurence).
+
+It should still be possible to prove that wp is complete, but I don't know how.
+(There is a problem that TraceAll can spawn executions of different length, so
+even if the module ifself does not make choices outside of Set, maybe they can get
+in via TraceAll? So it seems hard to prove that for some concrete module, all traces
+can be described by a set of traces that only make choices on types in Set.).
+*)
+
 Inductive wp {EV} (m1 m2 : module EV) : nat → m1.(m_state) -> m2.(m_state) -> Prop :=
 | wp_step' σi1 σs1 n:
     (∀ Pσi2 κ n', n = S n' → m_step m1 σi1 κ Pσi2 -> ∃ Pσ2,
