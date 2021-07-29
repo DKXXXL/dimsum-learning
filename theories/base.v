@@ -80,3 +80,11 @@ Section semi_set.
 Lemma elem_of_subseteq_1 X Y x: X ⊆ Y → x ∈ X → x ∈ Y.
 Proof. set_solver. Qed.
 End semi_set.
+
+Lemma omap_app {A B} l1 l2 (f : A → option B) :
+  omap f (l1 ++ l2) = omap f l1 ++ omap f l2.
+Proof. elim: l1 => //; csimpl => ?? ->. by case_match. Qed.
+
+Lemma omap_option_list {A B} (f : A → option B) o :
+  omap f (option_list o) = option_list (o ≫= f).
+Proof. by destruct o. Qed.
