@@ -172,17 +172,23 @@ execution or go to a NB state after each event that should not commute with UB?
 This would be a finite angelic choice and thus be not so bad.
 *)
 
-Inductive has_trace {EV} (m : module EV) : m.(m_state) → (list EV → Prop) → (m.(m_state) → Prop) → Prop :=
+(* It is important to use (list (event EV) → Prop) instead of (list EV
+→ Prop) since we want to distinguish the program that
+non-deterministically generates all events and the program that has
+UB. In particular, the NB program would be equivalent to the UB
+program if EV is not inhabited if we don't use [event EV] *)
+
+Inductive has_trace {EV} (m : module EV) : m.(m_state) → (list (event EV) → Prop) → (m.(m_state) → Prop) → Prop :=
 | TraceEnd σ (Pκs Pσ : _ → Prop):
     Pσ σ →
     Pκs ≡ ([] =.) →
     has_trace m σ Pκs Pσ
 | TraceStep σ1 Pκs Pσ2 Pσ3 κ:
     m.(m_step) σ1 κ Pσ2 →
-    (∀ σ2, Pσ2 σ2 → has_trace m σ2 (λ κs, Pκs (option_list κ ++ κs)) Pσ3) →
+    (∀ σ2, Pσ2 σ2 → has_trace m σ2 (λ κs, Pκs (option_list (Vis <$> κ) ++ κs)) Pσ3) →
     (* Or should the following be:
      (if κ is Some e then Pκs [] ∧ Pκs [e] else True) → *)
-    (Pκs [] ∧ Pκs (option_list κ)) →
+    (Pκs [] ∧ Pκs (option_list (Vis <$> κ))) →
     has_trace m σ1 Pκs Pσ3
 .
 Notation " σ '~{' m , Pκs '}~>' P " := (has_trace m σ Pκs P) (at level 40).
@@ -331,7 +337,7 @@ Global Instance sqsubseteq_refines EV : SqSubsetEq (mod_state EV) := refines.
 
 Definition refines_equiv {EV} (m1 m2 : mod_state EV) : Prop := m1 ⊑ m2 ∧ m2 ⊑ m1.
 
-Definition safe {EV} (m : mod_state EV) (P : (list EV → Prop) → Prop) :=
+Definition safe {EV} (m : mod_state EV) (P : (list (event EV) → Prop) → Prop) :=
   ∀ Pκs, m.(ms_state) ~{ m, Pκs }~> (λ _, True) → P Pκs.
 
 Lemma refines_preserves_safe EV (mspec mimpl : mod_state EV) P:
@@ -357,7 +363,7 @@ Definition mod1 : module nat := {|
 |}.
 
 Lemma mod1_traces Pκs:
-  0 ~{mod1, Pκs}~> (λ _, True) ↔ Pκs ≡ ([] =.) ∨ (Pκs [] ∧ (λ κs, Pκs (1::κs)) ≡ ([] =.)).
+  0 ~{mod1, Pκs}~> (λ _, True) ↔ Pκs ≡ ([] =.) ∨ (Pκs [] ∧ (λ κs, Pκs (Vis 1::κs)) ≡ ([] =.)).
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
@@ -384,8 +390,8 @@ Definition mod2 : module nat := {|
 Lemma mod2_traces Pκs:
   0 ~{mod2, Pκs}~> (λ _, True) ↔
     Pκs ≡ ([] =.)
-  ∨ (Pκs [] ∧ (λ κs, Pκs (1::κs)) ≡ ([] =.))
-  ∨ (Pκs [] ∧ Pκs [1] ∧ (λ κs, Pκs (1::2::κs)) ≡ ([] =.)).
+  ∨ (Pκs [] ∧ (λ κs, Pκs (Vis 1::κs)) ≡ ([] =.))
+  ∨ (Pκs [] ∧ Pκs [Vis 1] ∧ (λ κs, Pκs (Vis 1::Vis 2::κs)) ≡ ([] =.)).
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
@@ -441,7 +447,7 @@ Definition mod1_ub : module nat := {|
 Lemma mod1ub_traces Pκs:
   0 ~{mod1_ub, Pκs}~> (λ _, True) ↔
     Pκs ≡ ([] =.)
-  ∨ (Pκs [] ∧ Pκs [1]).
+  ∨ (Pκs [] ∧ Pκs [Vis 1]).
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
@@ -458,17 +464,20 @@ Proof.
       done.
 Qed.
 
-Inductive mod_ub_step : nat → option nat → (nat → Prop) → Prop :=
+Inductive mod_ub_step {EV} : nat → option EV → (nat → Prop) → Prop :=
 | TUS0: mod_ub_step 0 None (λ σ', False)
 .
 
-Definition mod_ub : module nat := {|
+Definition mod_ub EV : module EV := {|
   m_state := nat;
   m_step := mod_ub_step;
 |}.
 
-Lemma modub_traces Pκs:
-  0 ~{mod_ub, Pκs}~> (λ _, True) ↔ Pκs [].
+Lemma modub_traces EV Pκs:
+  (* Note that without [event EV], for EV not inhabited, this would be
+  equivalent to the program that does not do anything (but does not
+  have UB). *)
+  0 ~{mod_ub EV, Pκs}~> (λ _, True) ↔ Pκs [].
 Proof.
   split.
   - inversion 1; simplify_eq. 1: move: (H1 []); naive_solver.
@@ -491,7 +500,7 @@ Definition mod12_ang : module nat := {|
 Lemma mod12_ang_traces Pκs:
   0 ~{mod12_ang, Pκs}~> (λ _, True) ↔
     Pκs ≡ ([] =.)
-  ∨ (Pκs [] ∧ (λ κs, Pκs (1::κs)) ≡ ([] =.) ∧ (λ κs, Pκs (2::κs)) ≡ ([] =.)).
+  ∨ (Pκs [] ∧ (λ κs, Pκs (Vis 1::κs)) ≡ ([] =.) ∧ (λ κs, Pκs (Vis 2::κs)) ≡ ([] =.)).
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
@@ -812,14 +821,14 @@ Proof.
   - move => ??? [Hr1] [Hr2]. constructor => /=. naive_solver.
 Qed.
 
-Inductive dem_trace_to_set {EV} : list (event EV) → (list EV → Prop) → Prop :=
+Inductive dem_trace_to_set {EV} : list (event EV) → (list (event EV) → Prop) → Prop :=
 | DT2S_nil Pκs:
     Pκs ≡ ([] =.) →
     dem_trace_to_set [] Pκs
 | DT2S_vis κ κs (Pκs : _ → Prop):
-    Pκs [] ∧ Pκs [κ] →
+    Pκs [] →
     (* (∃ κs, ¬ Pκs κs) → *)
-    dem_trace_to_set κs (λ κs, Pκs (κ::κs)) →
+    dem_trace_to_set κs (λ κs, Pκs (Vis κ::κs)) →
     dem_trace_to_set (Vis κ :: κs) Pκs
 | DT2S_ub κs (Pκs : _ → Prop):
     Pκs [] →
@@ -830,6 +839,17 @@ Lemma dem_trace_to_set_nil {EV} (κs : list (event EV)) Pκs:
   dem_trace_to_set κs Pκs → Pκs [].
 Proof. inversion 1 => //; simplify_eq; try naive_solver. revert select (_ ≡ _) => Heq. by apply Heq. Qed.
 
+Lemma dem_trace_to_set_mono {EV} (κs : list (event EV)) Pκs Pκs':
+  dem_trace_to_set κs Pκs →
+  Pκs ≡ Pκs' →
+  dem_trace_to_set κs Pκs'.
+Proof.
+  move => Ht. elim: Ht Pκs'.
+  - move => ????. constructor. unfold equiv, propset_equiv in *; naive_solver.
+  - move => ????? IH ??. constructor. { unfold equiv, propset_equiv in *; naive_solver. }
+    apply: IH. unfold equiv, propset_equiv in *; naive_solver.
+  - move => ?????. constructor. unfold equiv, propset_equiv in *; naive_solver.
+Qed.
 (*
 Lemma events_to_set_subseteq {EV} (κs1 κs2 : list (event EV)) :
   events_to_set κs1 ⊆ events_to_set κs2 →
@@ -864,7 +884,7 @@ Proof.
       * have [κs [Hsub ?]]:= IH _ ltac:(done).
         eexists (option_list (Vis <$> _) ++ κs).
         split. 2: by apply: DTraceStep.
-        destruct κ => //=. constructor => //.
+        destruct κ => //=. constructor => //. naive_solver.
         (* move: (HEV e) => [y ?]. eexists [y] => ?. *)
         (* move: Hsub => /dem_trace_to_set_nil /= ?. *)
 
@@ -876,7 +896,8 @@ Proof.
     + move => σ1 σ2 Pσ3 κ κs' Hstep _ IH Pκs Ht.
       apply: TraceStep. { by constructor. } 2: {
         move: (Ht) => /dem_trace_to_set_nil ?.
-        destruct κ => //. inversion Ht; simplify_eq/=. done.
+        destruct κ => //. inversion Ht; simplify_eq/=.
+        split; [done|]. move: H3 => /dem_trace_to_set_nil. done.
 
         (* move: (Ht) => /dem_trace_to_set_nil ?.  split; [done|]. *)
           (* by move: (H3) => /dem_trace_to_set_nil ?. *)
@@ -887,13 +908,13 @@ Proof.
       split; by apply: dem_trace_to_set_nil.
 Qed.
 
-(*
-Fixpoint events_to_set {EV} (κs : list (event EV)) : list EV → Prop :=
+
+Fixpoint events_to_set {EV} (κs : list (event EV)) : list (event EV) → Prop :=
   match κs with
   | [] => ([] =.)
-  | Ub::_ => const True
+  | Ub::_ => λ κs'', κs'' = []  ∨ κs'' = [Ub]
   | Vis κ::κs' => λ κs'', (κs'' = [])
-      ∨ ∃ κs''', κs'' = κ::κs''' ∧ events_to_set κs' κs'''
+      ∨ ∃ κs''', κs'' = Vis κ::κs''' ∧ events_to_set κs' κs'''
   end.
 
 Compute events_to_set [Vis 1].
@@ -907,7 +928,7 @@ Abort.
 
 Lemma events_to_set_nil {EV} (κs : list (event EV)) :
   events_to_set κs [].
-Proof. destruct κs as [|[|]] => //. by left. Qed.
+Proof. destruct κs as [|[|]] => //; by left. Qed.
 
 Lemma dem_trace_to_set_events {EV} (κs : list (event EV)) :
   (* (∀ x : EV, ∃ y : EV, x ≠ y) → *)
@@ -915,50 +936,55 @@ Lemma dem_trace_to_set_events {EV} (κs : list (event EV)) :
 Proof.
   (* move => HEV. *)
   elim: κs. 1: by constructor.
-  move => [|κ] κs IH /=. 1: by constructor.
+  move => [|κ] κs IH /=. 1: constructor; by left.
   constructor.
   - by left.
   (* - move: (HEV κ) => [κ' ?]. eexists [κ']. naive_solver. *)
-  - (* provable *) admit.
-Admitted.
+  - (* provable *)
+    apply: dem_trace_to_set_mono; [done|].
+    unfold equiv, propset_equiv in *; naive_solver.
+Qed.
 
-Lemma dem_trace_to_set_ub {EV} `{!Inhabited EV} (κs : list (event EV)) :
+Lemma dem_trace_to_set_ub {EV} (κs : list (event EV)) :
   dem_trace_to_set κs (λ _, True) → Ub ∈ κs.
 Proof.
   elim: κs => [|[|?] ?] //=.
-  - inversion 1; simplify_eq. pose proof (H0 [inhabitant]). naive_solver.
+  - inversion 1; simplify_eq. pose proof (H0 [Ub]). naive_solver.
   - set_solver.
-  - move => ?. inversion 1; set_solver.
+  - move => ?. inversion 1; simplify_eq.
+    set_solver.
 Qed.
 
-Lemma dem_trace_to_set_inj {EV} `{!Inhabited EV} (κs1 κs2 : list (event EV)):
+Lemma dem_trace_to_set_inj {EV} (κs1 κs2 : list (event EV)):
   dem_trace_to_set κs2 (events_to_set κs1) →
   κs1 = κs2 ∨ ∃ κs, κs ++ [Ub] `prefix_of` κs2 ∧ κs `prefix_of` κs1.
 Proof.
   elim: κs2 κs1 => [|[|κ2] κs2] /=.
   - move => [|[|κ] κs] Hdem.
     + naive_solver.
-    + inversion Hdem; simplify_eq/=. pose proof (H [inhabitant]). naive_solver.
+    + inversion Hdem; simplify_eq/=. pose proof (H [Ub]). naive_solver.
     + inversion Hdem; simplify_eq/=.
       have := events_to_set_nil κs.
-      move: (H [κ]) => [? _]. naive_solver.
+      move: (H [Vis κ]) => [? _]. naive_solver.
   - move => IH κs1 /= Hdem. right. eexists [].
     split; [apply: prefix_cons|]; apply: prefix_nil.
   - move => IH [|[|κ] κs] /=; inversion 1; simplify_eq/=.
     + by move: H4 => /dem_trace_to_set_nil.
-    +
+    + move: H4 => /dem_trace_to_set_nil. naive_solver.
+      (* move: H4 *)
       (* naive_solver. *)
       (* CRITICAL QUESTION: IS THIS PROVABLE? *)
-      move: H4 => /dem_trace_to_set_ub.
-      admit.
+      (* move: H4 => /dem_trace_to_set_ub. *)
+      (* admit. *)
     + move: (H4) => /dem_trace_to_set_nil [//|[?[??]]]; simplify_eq.
       have [| |]:= IH κs.
-      -- (* provable *) admit.
+      -- apply: dem_trace_to_set_mono; [done|].
+         unfold equiv, propset_equiv in *; naive_solver.
       -- naive_solver.
       -- move => [κs1 [??]]. right.
          eexists (_:: _) => /=. split; by apply: prefix_cons.
-Admitted.
-
+Qed.
+(*
 Lemma dem_trace_to_set_inj' {EV} `{!Inhabited EV} (κs1 κs2 : list (event EV)):
   dem_trace_to_set κs2 (events_to_set κs1) →
   κs1 = κs2 ∨ ∃ κs, κs ++ [Ub] `prefix_of` κs2 ∧ κs `prefix_of` κs1.
@@ -970,7 +996,7 @@ Proof.
     + right. eexists []. split; [|done]. apply: prefix_cons. apply: prefix_nil.
   - move => [|κ] κs IH κs2 Hdem.
     + inversion Hdem; simplify_eq/=.
-      * pose proof (H [inhabitant]). naive_solver.
+      * pose proof (H [Ub]). naive_solver.
       * exfalso. admit.
       * right. eexists []. split; [ apply: prefix_cons|]; apply: prefix_nil.
     + inversion Hdem; simplify_eq/=.
@@ -984,9 +1010,9 @@ Proof.
            eexists (_:: _) => /=. split; by apply: prefix_cons.
       * right. eexists []. split; [ apply: prefix_cons|]; apply: prefix_nil.
 Admitted.
+*)
 
-
-Lemma dem_has_trace_has_trace {EV} `{!Inhabited EV} (m : dem_module EV) σ Pσ κs:
+Lemma dem_has_trace_has_trace {EV} (m : dem_module EV) σ Pσ κs:
   σ ~{ m, κs }~>ₘ Pσ ↔ σ ~{ m, events_to_set κs}~> Pσ.
 Proof.
   rewrite has_trace_dem_has_trace.
@@ -996,7 +1022,7 @@ Proof.
     move => /dem_has_trace_app_inv/dem_has_trace_ub_app_inv ?.
     by apply: dem_has_trace_trans.
 Qed.
-
+(*
 Lemma has_trace_has_nil {EV} (m : module EV) σ Pσ Pκs:
   σ ~{ m, Pκs }~> Pσ → Pκs [].
 Proof. inversion 1 => //; simplify_eq; unfold equiv, propset_equiv in *; naive_solver. Qed.
@@ -1018,7 +1044,8 @@ Proof.
     + apply: TraceStep; [done| |done].
       move => ??. by apply: IH.
 Admitted.
-
+ *)
+(*
 Lemma has_trace_trans_nil {EV} (m : module EV) σ Pσ Pσ' (Pκs : _ → Prop) Pκs':
   σ ~{ m, Pκs' }~> Pσ' →
   Pκs' ≡ ([] =.) →
@@ -1046,7 +1073,8 @@ Proof.
     inversion Hstep; simplify_eq/=. 2: by apply: DTraceUb.
     apply: DTraceStepNone; [done| ]. by apply: IH.
 Qed.
-
+*)
+(*
 Lemma has_trace_to_dem_ub {EV} (m : dem_module EV) σ Pσ' Pκs':
   σ ~{ m, Pκs' }~> Pσ' →
   Pκs' ≡ const False →
@@ -1063,6 +1091,55 @@ Proof.
     (* Qed. *)
 Admitted.
  *)
+(*
+Inductive events_set {EV} : list (event EV) → (list EV → Prop) → Prop :=
+| ES_nil :
+    events_set [] ([] =.)
+| ES_vis κ κs (Pκs : _ → Prop):
+    Pκs [] →
+    events_set κs (λ κs', Pκs (κ :: κs')) →
+    events_set (Vis κ::κs) Pκs
+| ES_ub κs (Pκs : _ → Prop):
+    Pκs [] →
+    events_set (Ub::κs) Pκs
+.
+
+Lemma dem_has_trace_has_trace' {EV} `{!Inhabited EV} (m : dem_module EV) σ Pσ κs:
+  σ ~{ m, κs }~>ₘ Pσ ↔ ∀ Pσs, events_set κs Pσs → σ ~{ m, Pσs }~> Pσ.
+Proof.
+  split.
+  - elim.
+    + move => /= ???? Hset. apply: TraceEnd; [done|]. inversion Hset => //.
+    + move => σ1 σ2 Pσ3 κ κs1 ?? IH ? Hset.
+      apply: TraceStep; [ by constructor | |].
+      2: {
+        (* destruct κ => //=. split; [done|]. *)
+           admit.
+           (* split; unfold equiv, propset_equiv in *; naive_solver. *)
+      }
+      move => ? ->. destruct κ => //=. 2: naive_solver.
+      inversion Hset; simplify_eq => //.
+      by apply: IH.
+    + move => ????? Hset.
+      apply: TraceStep; [by constructor | done | ]. admit.
+  - elim: κs σ.
+    + move => ? /= HP. apply: has_trace_to_dem_nil; [|done]. apply: HP. constructor.
+    + move => [|κ] κs IH σ /= HP.
+      * admit.
+      * move => Ht.
+        admit.
+        move: (Ht) => /(has_trace_vis _ κ _ _ _) Hf.
+        feed pose proof Hf as Hf'.
+        { eexists [κ]. split; [done|]. right. eexists _.
+          split; [done| ]. admit. }
+        { naive_solver. }
+        clear Hf. move: Hf' => /has_trace_to_dem_nil Hf.
+        apply: (dem_has_trace_trans []). { by apply: Hf. }
+        move => ? [? [Hstep ?]]. inversion Hstep; simplify_eq.
+        apply: DTraceStepSome; [done|]. apply: IH.
+        admit.
+Admitted.
+*)
 (*
 Fixpoint events_to_set' {EV} (κs : list (event EV)) : list EV → Prop :=
   match κs with
@@ -1159,16 +1236,16 @@ Proof.
   move => [?]. constructor => ? /has_trace_dem_has_trace?.
   apply/has_trace_dem_has_trace. naive_solver.
 Qed.
-Print Assumptions dem_refines_refines.
+(* Print Assumptions dem_refines_refines. *)
 
-Lemma refines_dem_refines {EV} `{!Inhabited EV} (m1 m2 : dem_mod_state EV):
+Lemma refines_dem_refines {EV} (m1 m2 : dem_mod_state EV):
   refines m1 m2 → dem_refines m1 m2.
 Proof.
   move => [?]. constructor => ?.
   move => /dem_has_trace_has_trace?.
   apply/dem_has_trace_has_trace. naive_solver.
 Qed.
-Print Assumptions refines_dem_refines.
+(* Print Assumptions refines_dem_refines. *)
 
 (*** [mod_filter] *)
 Inductive filter_step {EV1 EV2} (m : module EV1) (f : EV1 → option EV2) :
