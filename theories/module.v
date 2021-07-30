@@ -34,7 +34,7 @@ Arguments Vis {_}.
 
 Record module (EV : Type) : Type := {
   m_state : Type;
-  m_step : m_state → (m_state → option EV → Prop) → Prop;
+  m_step : m_state → option EV → (m_state → Prop) → Prop;
 }.
 Arguments m_state {_}.
 Arguments m_step {_}.
@@ -177,15 +177,12 @@ Inductive has_trace {EV} (m : module EV) : m.(m_state) → (list EV → Prop) �
     Pσ σ →
     Pκs ≡ ([] =.) →
     has_trace m σ Pκs Pσ
-| TraceStep σ1 Pκs Pσ2 Pσ3:
-    m.(m_step) σ1 Pσ2 →
-    (∀ σ2 κ, Pσ2 σ2 κ → has_trace m σ2 (λ κs, Pκs (option_list κ ++ κs)) Pσ3) →
-    (* Or should the following be Pκs [option_list (Vis <$> κ)] ? It
-    enforces that the event is part of the resulting set, i.e. part of
-    the upclosure. Maybe this goes away if we emit the events after
-    the demonic and angelic choice instead of between them? *)
-    (* Pκs (option_list (Vis <$> κ) ++ κs) → *)
-    Pκs [] →
+| TraceStep σ1 Pκs Pσ2 Pσ3 κ:
+    m.(m_step) σ1 κ Pσ2 →
+    (∀ σ2, Pσ2 σ2 → has_trace m σ2 (λ κs, Pκs (option_list κ ++ κs)) Pσ3) →
+    (* Or should the following be:
+     (if κ is Some e then Pκs [] ∧ Pκs [e] else True) → *)
+    (Pκs [] ∧ Pκs (option_list κ)) →
     has_trace m σ1 Pκs Pσ3
 .
 Notation " σ '~{' m , Pκs '}~>' P " := (has_trace m σ Pκs P) (at level 40).
@@ -351,8 +348,8 @@ Proof.
 Qed.
 
 Module test1.
-Inductive mod1_step : nat → (nat → option nat → Prop) → Prop :=
-| T1S0: mod1_step 0 (λ σ' κ', σ' = 1 ∧ κ' = (Some 1)).
+Inductive mod1_step : nat → option nat → (nat → Prop) → Prop :=
+| T1S0: mod1_step 0 (Some 1) (λ σ', σ' = 1).
 
 Definition mod1 : module nat := {|
   m_state := nat;
@@ -365,18 +362,18 @@ Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H1 _ _ ltac:(done)).
+    have {}H := (H1 _ ltac:(done)).
     inversion H; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
   - move => [?|[??]]. 1: by apply: TraceEnd.
-    apply: TraceStep; [by constructor| |done].
-    move => ?? [??]. simplify_eq.
-      by apply: TraceEnd.
+    apply: TraceStep; [by constructor| | unfold equiv, propset_equiv in *; naive_solver ].
+    move => ??. simplify_eq.
+    by apply: TraceEnd.
 Qed.
 
-Inductive mod2_step : nat → (nat → option nat → Prop) → Prop :=
-| T2S0: mod2_step 0 (λ σ' κ', σ' = 1 ∧ κ' = (Some 1))
-| T2S1: mod2_step 1 (λ σ' κ', σ' = 2 ∧ κ' = (Some 2))
+Inductive mod2_step : nat → option nat → (nat → Prop) → Prop :=
+| T2S0: mod2_step 0 (Some 1) (λ σ', σ' = 1)
+| T2S1: mod2_step 1 (Some 2) (λ σ', σ' = 2)
 .
 
 Definition mod2 : module nat := {|
@@ -393,28 +390,28 @@ Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H1 _ _ ltac:(done)).
+    have {}H := (H1 _ ltac:(done)).
     inversion H; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H3 _ _ ltac:(done)).
+    have {}H := (H3 _ ltac:(done)).
     inversion H; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
   - move => [?|[[??]|[?[??]]]].
     + by apply: TraceEnd.
-    + apply: TraceStep; [by constructor| |done].
-      move => ?? [??]. simplify_eq.
+    + apply: TraceStep; [by constructor| |unfold equiv, propset_equiv in *; naive_solver].
+      move => ??. simplify_eq.
       by apply: TraceEnd.
     + apply: TraceStep; [by constructor| |done].
-      move => ?? [??]. simplify_eq.
-      apply: TraceStep; [by constructor| |done].
-      move => ?? [??]. simplify_eq.
+      move => ??. simplify_eq/=.
+      apply: TraceStep; [by constructor| |unfold equiv, propset_equiv in *; naive_solver].
+      move => ??. simplify_eq/=.
       by apply: TraceEnd.
 Qed.
 
-Inductive mod3_step : nat → (nat → option nat → Prop) → Prop :=
-| T3S0: mod3_step 0 (λ σ' κ', σ' = 1 ∧ κ' = (Some 1))
-| T3S1: mod3_step 1 (λ σ' κ', σ' = 2 ∧ κ' = (Some 2))
-| T3S2: mod3_step 1 (λ σ' κ', σ' = 3 ∧ κ' = (Some 3))
+Inductive mod3_step : nat → option nat → (nat → Prop) → Prop :=
+| T3S0: mod3_step 0 (Some 1) (λ σ', σ' = 1)
+| T3S1: mod3_step 1 (Some 2) (λ σ', σ' = 2)
+| T3S2: mod3_step 1 (Some 3) (λ σ', σ' = 3)
 .
 
 Definition mod3 : module nat := {|
@@ -422,8 +419,8 @@ Definition mod3 : module nat := {|
   m_step := mod3_step;
 |}.
 
-Inductive mod3'_step : nat → (nat → option nat → Prop) → Prop :=
-| T3'S0: mod3'_step 0 (λ σ' κ', σ' = 1 ∧ κ' = (Some 3))
+Inductive mod3'_step : nat → option nat → (nat → Prop) → Prop :=
+| T3'S0: mod3'_step 0 (Some 3) (λ σ', σ' = 1)
 .
 
 Definition mod3' : module nat := {|
@@ -431,9 +428,9 @@ Definition mod3' : module nat := {|
   m_step := mod3'_step;
 |}.
 
-Inductive mod1_ub_step : nat → (nat → option nat → Prop) → Prop :=
-| T1US0: mod1_ub_step 0 (λ σ' κ', σ' = 1 ∧ κ' = (Some 1))
-| T1US1: mod1_ub_step 1 (λ σ' κ', False)
+Inductive mod1_ub_step : nat → option nat → (nat → Prop) → Prop :=
+| T1US0: mod1_ub_step 0 (Some 1) (λ σ', σ' = 1)
+| T1US1: mod1_ub_step 1 None (λ σ', False)
 .
 
 Definition mod1_ub : module nat := {|
@@ -449,20 +446,20 @@ Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H1 _ _ ltac:(done)).
+    have {}H := (H1 _ ltac:(done)).
     inversion H; simplify_eq. 1: move: (H3 []); naive_solver.
     invert_all @m_step => //.
     naive_solver.
   - move => [?|[??]].
     + by apply: TraceEnd.
     + apply: TraceStep; [by constructor| |done].
-      move => ?? [??]. simplify_eq.
+      move => ? ->.
       apply: TraceStep; [by constructor| |done].
       done.
 Qed.
 
-Inductive mod_ub_step : nat → (nat → option nat → Prop) → Prop :=
-| TUS0: mod_ub_step 0 (λ σ' κ', False)
+Inductive mod_ub_step : nat → option nat → (nat → Prop) → Prop :=
+| TUS0: mod_ub_step 0 None (λ σ', False)
 .
 
 Definition mod_ub : module nat := {|
@@ -475,13 +472,15 @@ Lemma modub_traces Pκs:
 Proof.
   split.
   - inversion 1; simplify_eq. 1: move: (H1 []); naive_solver.
-    invert_all @m_step => //.
+    naive_solver.
   - move => ?.
     apply: TraceStep; [by constructor| |done]. done.
 Qed.
 
-Inductive mod12_ang_step : nat → (nat → option nat → Prop) → Prop :=
-| T12AS0: mod12_ang_step 0 (λ σ' κ', σ' = 1 ∧ (κ' = (Some 1) ∨ κ' = Some 2))
+Inductive mod12_ang_step : nat → option nat → (nat → Prop) → Prop :=
+| T12AS0: mod12_ang_step 0 None (λ σ', σ' = 1 ∨ σ' = 2)
+| T12AS1: mod12_ang_step 1 (Some 1) (λ σ', σ' = 3)
+| T12AS2: mod12_ang_step 2 (Some 2) (λ σ', σ' = 3)
 .
 
 Definition mod12_ang : module nat := {|
@@ -497,17 +496,25 @@ Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H1 _ (Some 1) ltac:(naive_solver)).
+    have {}H := (H1 1 ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+    have {}H := (H3 _ ltac:(naive_solver)).
     inversion H; simplify_eq. 2: invert_all @m_step => //.
-    have {}H := (H1 _ (Some 2) ltac:(naive_solver)).
+    have {}H := (H1 2 ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+    have {}H := (H7 _ ltac:(naive_solver)).
     inversion H; simplify_eq. 2: invert_all @m_step => //.
     naive_solver.
   - move => [?|[?[??]]].
     + by apply: TraceEnd.
     + apply: TraceStep; [by constructor| |done].
-      move => ?? [?[?|?]]; simplify_eq.
-      * by apply: TraceEnd.
-      * by apply: TraceEnd.
+      move => ? [?|?]; simplify_eq.
+      * apply: TraceStep; [by constructor | | unfold equiv, propset_equiv in *; naive_solver].
+        move => ? ->. by apply: TraceEnd.
+      * apply: TraceStep; [by constructor | | unfold equiv, propset_equiv in *; naive_solver].
+        move => ? ->. by apply: TraceEnd.
 Qed.
 
 Lemma mod1_refines_mod2 :
@@ -516,9 +523,9 @@ Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: TraceEnd.
   invert_all @m_step => //.
-  have H := (H0 _ _ ltac:(done)).
+  have H := (H0 _ ltac:(done)).
   apply: TraceStep. { constructor. } 2: done.
-  move => ?? [??]. simplify_eq.
+  move => ? ->.
   inversion H; simplify_eq. 1: by apply: TraceEnd.
   invert_all @m_step => //.
 Qed.
@@ -529,14 +536,14 @@ Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: TraceEnd.
   invert_all @m_step => //.
-  have H := (H0 _ _ ltac:(done)).
+  have H := (H0 _ ltac:(done)).
   apply: TraceStep. { constructor. } 2: done.
-  move => ?? [??]. simplify_eq.
+  move => ? ->. simplify_eq.
   inversion H; simplify_eq. 1: by apply: TraceEnd.
   invert_all @m_step => //.
-  have {}H := (H3 _ _ ltac:(done)).
+  have {}H := (H3 _ ltac:(done)).
   apply: TraceStep. { constructor. } 2: done.
-  move => ?? [??]. simplify_eq.
+  move => ? ->. simplify_eq.
   inversion H; simplify_eq. 1: by apply: TraceEnd.
   invert_all @m_step => //.
 Qed.
@@ -547,11 +554,11 @@ Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: TraceEnd.
   invert_all @m_step => //.
-  have H := (H0 _ _ ltac:(done)).
+  have H := (H0 _ ltac:(done)).
   apply: TraceStep. { constructor. } 2: done.
-  move => ?? [??]. simplify_eq.
+  move => ? ->. simplify_eq.
   inversion H; simplify_eq. 1: by apply: TraceEnd.
-  apply: TraceStep. { constructor. } 2: done.
+  apply: TraceStep. { constructor. } 2: naive_solver.
   done.
 Qed.
 
@@ -561,20 +568,20 @@ Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: TraceEnd.
   invert_all @m_step => //.
-  have H := (H0 _ _ ltac:(done)).
+  have H := (H0 _ ltac:(done)).
   apply: TraceStep. { constructor. } 2: done.
-  move => ?? [??]. simplify_eq.
+  move => ? ->. simplify_eq.
   inversion H; simplify_eq.
   { simplify_eq/=. apply: TraceEnd; [done|].
     done.
     (* split. 2: move => <-.  *)
   }
   invert_all @m_step => //.
-  have {}H := (H0 _ _ ltac:(done)).
-  apply: TraceStep; [| |done]. Fail constructor.
+  have {}H := (H0 _ ltac:(done)).
+  apply: TraceStep; [| | ]. Fail constructor.
   Undo. Undo.
   apply: TraceEnd; [done|].
-  split. 2: by move => <-.
+  split. 2: move => <-; naive_solver.
 Abort.
 
 
@@ -584,11 +591,14 @@ Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: TraceEnd.
   invert_all @m_step => //.
-  have H := (H0 _ (Some 1) ltac:(naive_solver)).
-  apply: TraceStep. { constructor. } 2: done.
-  move => ?? [??]. simplify_eq.
+  have H := (H0 1 ltac:(naive_solver)).
   inversion H; simplify_eq. 1: by apply: TraceEnd.
   invert_all @m_step => //.
+  have {}H := (H3 _ ltac:(naive_solver)).
+  inversion H; simplify_eq.
+  2: invert_all @m_step => //.
+  apply: TraceStep; [by constructor| | naive_solver].
+  move => ?->. by apply: TraceEnd.
 Qed.
 
 Lemma mod12_ang_refines_mod3' :
@@ -597,15 +607,16 @@ Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: TraceEnd.
   invert_all @m_step => //.
-  have H := (H0 _ (Some 1) ltac:(naive_solver)).
-  inversion H; simplify_eq.
-  2: invert_all @m_step => //.
-  have {}H := (H0 _ (Some 2) ltac:(naive_solver)).
-  inversion H; simplify_eq.
-  2: invert_all @m_step => //.
-  exfalso. simplify_eq/=.
-  move: (H3 [2]). move: (H5 []).
+  have H := (H0 1 ltac:(naive_solver)).
 Abort.
+  (* inversion H; simplify_eq. *)
+  (* 2: invert_all @m_step => //. *)
+  (* have {}H := (H0 _ (Some 2) ltac:(naive_solver)). *)
+  (* inversion H; simplify_eq. *)
+  (* 2: invert_all @m_step => //. *)
+  (* exfalso. simplify_eq/=. *)
+  (* move: (H3 [2]). move: (H5 []). *)
+(* Abort. *)
 End test1.
 
 (*** Demonic module **)
@@ -748,13 +759,13 @@ Proof.
   apply: dem_has_trace_ub_inv.
 Qed.
 
-Inductive dem_ub_step {EV} (m : dem_module EV) : m.(dem_state) → (m.(dem_state) → option EV → Prop) → Prop :=
+Inductive dem_ub_step {EV} (m : dem_module EV) : m.(dem_state) → option EV → (m.(dem_state) → Prop) → Prop :=
 | MStepStep σ1 κ σ2:
     m.(dem_step) σ1 κ σ2 →
-    dem_ub_step m σ1 (λ σ2' κ', σ2' = σ2 ∧ κ = κ')
+    dem_ub_step m σ1 κ (λ σ2', σ2' = σ2)
 | MStepUb σ1:
     m.(dem_is_ub) σ1 →
-    dem_ub_step m σ1 (λ _ _, False).
+    dem_ub_step m σ1 None (λ _, False).
 
 Definition dem_module_to_module {EV} (m : dem_module EV) : module EV := {|
   m_step := dem_ub_step m
@@ -806,7 +817,7 @@ Inductive dem_trace_to_set {EV} : list (event EV) → (list EV → Prop) → Pro
     Pκs ≡ ([] =.) →
     dem_trace_to_set [] Pκs
 | DT2S_vis κ κs (Pκs : _ → Prop):
-    Pκs [] →
+    Pκs [] ∧ Pκs [κ] →
     (* (∃ κs, ¬ Pκs κs) → *)
     dem_trace_to_set κs (λ κs, Pκs (κ::κs)) →
     dem_trace_to_set (Vis κ :: κs) Pκs
@@ -817,7 +828,7 @@ Inductive dem_trace_to_set {EV} : list (event EV) → (list EV → Prop) → Pro
 
 Lemma dem_trace_to_set_nil {EV} (κs : list (event EV)) Pκs:
   dem_trace_to_set κs Pκs → Pκs [].
-Proof. inversion 1 => //; simplify_eq. revert select (_ ≡ _) => Heq. by apply Heq. Qed.
+Proof. inversion 1 => //; simplify_eq; try naive_solver. revert select (_ ≡ _) => Heq. by apply Heq. Qed.
 
 (*
 Lemma events_to_set_subseteq {EV} (κs1 κs2 : list (event EV)) :
@@ -848,28 +859,35 @@ Proof.
   split.
   - elim.
     + move => ?????. eexists [] => /=. split;[by constructor|]. by constructor.
-    + move => ???? Hstep _ IH ?.
+    + move => ???? κ Hstep _ IH ?.
       inversion Hstep; simplify_eq.
-      * have [κs [Hsub ?]]:= IH _ _ ltac:(done).
-        eexists (option_list (Vis <$> κ) ++ κs).
+      * have [κs [Hsub ?]]:= IH _ ltac:(done).
+        eexists (option_list (Vis <$> _) ++ κs).
         split. 2: by apply: DTraceStep.
         destruct κ => //=. constructor => //.
         (* move: (HEV e) => [y ?]. eexists [y] => ?. *)
         (* move: Hsub => /dem_trace_to_set_nil /= ?. *)
 
         (* admit. *)
-      * eexists [Ub]. split; [by constructor|]. by apply: DTraceUb.
+      * eexists [Ub]. split; [constructor| by apply: DTraceUb]. naive_solver.
   - move => [κs [HP Ht]].
     elim: Ht Pκs HP.
     + move => ???? Ht. inversion Ht; simplify_eq. by constructor.
     + move => σ1 σ2 Pσ3 κ κs' Hstep _ IH Pκs Ht.
-      apply: TraceStep. { by constructor. } 2: by apply: dem_trace_to_set_nil.
-      move => ?? [-> <-]. apply: IH.
+      apply: TraceStep. { by constructor. } 2: {
+        move: (Ht) => /dem_trace_to_set_nil ?.
+        destruct κ => //. inversion Ht; simplify_eq/=. done.
+
+        (* move: (Ht) => /dem_trace_to_set_nil ?.  split; [done|]. *)
+          (* by move: (H3) => /dem_trace_to_set_nil ?. *)
+       }
+      move => ? ->. apply: IH.
       destruct κ => //; simplify_eq/=. by inversion Ht; simplify_eq.
     + move => ????? Ht. apply: TraceStep; [ by constructor | done | ].
-      by apply: dem_trace_to_set_nil.
+      split; by apply: dem_trace_to_set_nil.
 Qed.
 
+(*
 Fixpoint events_to_set {EV} (κs : list (event EV)) : list EV → Prop :=
   match κs with
   | [] => ([] =.)
@@ -981,36 +999,111 @@ Qed.
 
 Lemma has_trace_has_nil {EV} (m : module EV) σ Pσ Pκs:
   σ ~{ m, Pκs }~> Pσ → Pκs [].
-Proof. inversion 1 => //; simplify_eq. unfold equiv, propset_equiv in *. naive_solver. Qed.
-
-Lemma has_trace_vis {EV} (m : module EV) σ Pσ Pκs κ:
+Proof. inversion 1 => //; simplify_eq; unfold equiv, propset_equiv in *; naive_solver. Qed.
+ *)
+(*
+Lemma has_trace_vis {EV} (m : module EV) κ σ Pσ Pκs:
   σ ~{ m, Pκs }~> Pσ →
-  Pκs [κ] →
-  σ ~{ m, ([] =.) }~> (λ σ', ∃ Pσ', m_step m σ' Pσ' ∧ (∀ σ'' κ'', Pσ' σ'' κ'' → κ'' = Some κ ∧ True)).
+  (∃ κ', κ' ≠ [] ∧ Pκs κ') →
+  (∀ κ', κ' ≠ [] → Pκs κ' → head κ' = Some κ) →
+  σ ~{ m, ([] =.) }~> (λ σ', ∃ Pσ', m_step m σ' (Some κ) Pσ' ∧ (∀ σ'', Pσ' σ'' → σ'' ~{ m, λ κs, Pκs (κ :: κs) }~> Pσ)).
 Proof.
   elim.
   - move => ???. admit.
-  - move => ????? Ht IH ??. apply: TraceStep; [done| |done].
-    move => ???.
+  - move => ???? κ' Hstep Ht IH [??] ? Hall.
+    destruct κ'; simplify_eq.
+    + apply: TraceEnd; [|done].
+      move: (Hall [e] ltac:(done) ltac:(done)) => ?; simplify_eq/=.
+      eexists _. by  split; [done|].
+    + apply: TraceStep; [done| |done].
+      move => ??. by apply: IH.
+Admitted.
 
+Lemma has_trace_trans_nil {EV} (m : module EV) σ Pσ Pσ' (Pκs : _ → Prop) Pκs':
+  σ ~{ m, Pκs' }~> Pσ' →
+  Pκs' ≡ ([] =.) →
+  Pκs [] →
+  (∀ σ, Pσ' σ → σ ~{ m, Pκs }~> Pσ) →
+  σ ~{ m, Pκs }~> Pσ.
+Proof.
+  elim.
+  - move => ??????? Hend. by apply: Hend.
+  - move => ???? κ ?? IH [??] ???. destruct κ.
+    { unfold equiv, propset_equiv in *; naive_solver. }
+    apply: TraceStep; [done| | done].
+    move => ??. apply: IH => //.
+Qed.
+
+Lemma has_trace_to_dem_nil {EV} (m : dem_module EV) σ Pσ' Pκs':
+  σ ~{ m, Pκs' }~> Pσ' →
+  Pκs' ≡ ([] =.) →
+  σ ~{ m, [] }~>ₘ Pσ'.
+Proof.
+  elim.
+  - move => ??????. by apply: DTraceEnd.
+  - move => ???? κ Hstep ? IH [??] ?. destruct κ.
+    { unfold equiv, propset_equiv in *; naive_solver. }
+    inversion Hstep; simplify_eq/=. 2: by apply: DTraceUb.
+    apply: DTraceStepNone; [done| ]. by apply: IH.
+Qed.
+
+Lemma has_trace_to_dem_ub {EV} (m : dem_module EV) σ Pσ' Pκs':
+  σ ~{ m, Pκs' }~> Pσ' →
+  Pκs' ≡ const False →
+  σ ~{ m, [] }~>ₘ (λ _, False).
+Proof.
+  elim.
+  - move => ??????. admit.
+  - move => ???? κ Hstep ? IH [??] ?.
+    inversion Hstep; simplify_eq. 2: by apply: DTraceUb.
+    move: (IH _ ltac:(done)).
+    (* { unfold equiv, propset_equiv in *; naive_solver. } *)
+    (* inversion Hstep; simplify_eq/=. 2: by apply: DTraceUb. *)
+    (* apply: DTraceStepNone; [done| ]. by apply: IH. *)
+    (* Qed. *)
+Admitted.
+ *)
+(*
+Fixpoint events_to_set' {EV} (κs : list (event EV)) : list EV → Prop :=
+  match κs with
+  | [] => ([] =.)
+  | Ub::_ => const False
+  (* | Ub::_ => ([] =.) *)
+  | Vis κ::κs' => λ κs'', (κs'' = []) ∨ (κs'' = [κ])
+      ∨ ∃ κs''', κs'' = κ::κs''' ∧ events_to_set' κs' κs'''
+  end.
 
 Lemma dem_has_trace_has_trace' {EV} `{!Inhabited EV} (m : dem_module EV) σ Pσ κs:
-  σ ~{ m, κs }~>ₘ Pσ ↔ σ ~{ m, events_to_set κs }~> Pσ.
+  σ ~{ m, κs }~>ₘ Pσ ↔ σ ~{ m, events_to_set' κs }~> Pσ.
 Proof.
   split.
   - elim.
     + move => ???. by apply: TraceEnd.
     + move => σ1 σ2 Pσ3 κ κs1 ?? ?.
-      apply: TraceStep; [by constructor | | by apply: events_to_set_nil].
-      move => ?? [-> <-] /=. destruct κ => //=.
+      apply: TraceStep; [ by constructor | |].
+      2: { destruct κ => //=.
+           split; naive_solver. }
+      move => ? ->. destruct κ => //=.
       admit.
-    + move => ????. apply: TraceStep; [by constructor | |apply: events_to_set_nil]. done.
+    + move => ????.
+      apply: TraceStep; [by constructor | done | ]. done.
   - elim: κs σ.
-    + move => ?. inversion 1; simplify_eq; apply: DTraceEnd => //.
+    + move => ? /=.
       admit.
+      (* move => /has_trace_to_dem_nil. apply. done. *)
     + move => [|κ] κs IH σ /=.
       * admit.
-      * move => Ht. move: (Ht) => /has_trace_has_nil.
+      * move => Ht.
+        admit.
+        move: (Ht) => /(has_trace_vis _ κ _ _ _) Hf.
+        feed pose proof Hf as Hf'.
+        { eexists [κ]. split; [done|]. right. eexists _.
+          split; [done| ]. admit. }
+        { naive_solver. }
+        clear Hf. move: Hf' => /has_trace_to_dem_nil Hf.
+        apply: (dem_has_trace_trans []). { by apply: Hf. }
+        move => ? [? [Hstep ?]]. inversion Hstep; simplify_eq.
+        apply: DTraceStepSome; [done|]. apply: IH.
         admit.
 Admitted.
 
@@ -1058,7 +1151,7 @@ Proof.
         -- move => [//|[?[[??]?]]]; simplify_eq.
            apply: DTraceStepSome; [done|]. apply: IH => /=. admit.
       * by apply: DTraceUb.
-
+*)
 
 Lemma dem_refines_refines {EV} (m1 m2 : dem_mod_state EV):
   dem_refines m1 m2 → refines m1 m2.
