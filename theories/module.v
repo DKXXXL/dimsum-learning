@@ -444,25 +444,40 @@ Definition mod1_ub : module nat := {|
 Lemma mod1ub_traces Pκs:
   0 ~{mod1_ub, Pκs}~> (λ _, True) ↔
     Pκs ≡ ([] =.)
-  ∨ (Pκs [] ∧ (λ κs, Pκs (1::κs)) ≡ ([] =.))
   ∨ (Pκs [] ∧ Pκs [1]).
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
     have {}H := (H1 _ _ ltac:(done)).
-    inversion H; simplify_eq. 1: naive_solver.
+    inversion H; simplify_eq. 1: move: (H3 []); naive_solver.
     invert_all @m_step => //.
     naive_solver.
-  - move => [?|[[??]|[??]]].
+  - move => [?|[??]].
     + by apply: TraceEnd.
-    + apply: TraceStep; [by constructor| |done].
-      move => ?? [??]. simplify_eq.
-      by apply: TraceEnd.
     + apply: TraceStep; [by constructor| |done].
       move => ?? [??]. simplify_eq.
       apply: TraceStep; [by constructor| |done].
       done.
+Qed.
+
+Inductive mod_ub_step : nat → (nat → option nat → Prop) → Prop :=
+| TUS0: mod_ub_step 0 (λ σ' κ', False)
+.
+
+Definition mod_ub : module nat := {|
+  m_state := nat;
+  m_step := mod_ub_step;
+|}.
+
+Lemma modub_traces Pκs:
+  0 ~{mod_ub, Pκs}~> (λ _, True) ↔ Pκs [].
+Proof.
+  split.
+  - inversion 1; simplify_eq. 1: move: (H1 []); naive_solver.
+    invert_all @m_step => //.
+  - move => ?.
+    apply: TraceStep; [by constructor| |done]. done.
 Qed.
 
 Inductive mod12_ang_step : nat → (nat → option nat → Prop) → Prop :=
@@ -853,8 +868,12 @@ Fixpoint events_to_set {EV} (κs : list (event EV)) : list EV → Prop :=
   | [] => ([] =.)
   | Ub::_ => const True
   | Vis κ::κs' => λ κs'', (κs'' = [])
-                ∨ ∃ κs''', κs'' = κ::κs''' ∧ events_to_set κs' κs'''
+      ∨ ∃ κs''', κs'' = κ::κs''' ∧ events_to_set κs' κs'''
   end.
+
+Lemma events_to_set_nil {EV} (κs : list (event EV)) :
+  events_to_set κs [].
+Proof. destruct κs as [|[|]] => //. by left. Qed.
 
 Lemma dem_trace_to_set_events {EV} (κs : list (event EV)) :
   dem_trace_to_set κs (events_to_set κs).
@@ -863,10 +882,45 @@ Proof.
   move => [|κ] κs IH /=. 1: by constructor.
   constructor.
   - by left.
-  - admit.
+  - (* provable *) admit.
 Admitted.
 
+Lemma dem_trace_to_set_ub {EV} `{!Inhabited EV} (κs : list (event EV)) :
+  dem_trace_to_set κs (λ _, True) → Ub ∈ κs.
+Proof.
+  elim: κs => [|[|?] ?] //=.
+  - inversion 1; simplify_eq. pose proof (H0 [inhabitant]). naive_solver.
+  - set_solver.
+  - move => ?. inversion 1; set_solver.
+Qed.
+
 Lemma dem_trace_to_set_inj {EV} `{!Inhabited EV} (κs1 κs2 : list (event EV)):
+  dem_trace_to_set κs2 (events_to_set κs1) →
+  κs1 = κs2 ∨ ∃ κs, κs ++ [Ub] `prefix_of` κs2 ∧ κs `prefix_of` κs1.
+Proof.
+  elim: κs2 κs1 => [|[|κ2] κs2] /=.
+  - move => [|[|κ] κs] Hdem.
+    + naive_solver.
+    + inversion Hdem; simplify_eq/=. pose proof (H [inhabitant]). naive_solver.
+    + inversion Hdem; simplify_eq/=.
+      have := events_to_set_nil κs.
+      move: (H [κ]) => [? _]. naive_solver.
+  - move => IH κs1 /= Hdem. right. eexists [].
+    split; [apply: prefix_cons|]; apply: prefix_nil.
+  - move => IH [|[|κ] κs] /=; inversion 1; simplify_eq/=.
+    + by move: H4 => /dem_trace_to_set_nil.
+    + (* CRITICAL QUESTION: IS THIS PROVABLE? *)
+      move: H4 => /dem_trace_to_set_ub.
+      admit.
+    + move: (H4) => /dem_trace_to_set_nil [//|[?[??]]]; simplify_eq.
+      have [| |]:= IH κs.
+      -- (* provable *) admit.
+      -- naive_solver.
+      -- move => [κs1 [??]]. right.
+         eexists (_:: _) => /=. split; by apply: prefix_cons.
+Admitted.
+
+Lemma dem_trace_to_set_inj' {EV} `{!Inhabited EV} (κs1 κs2 : list (event EV)):
   dem_trace_to_set κs2 (events_to_set κs1) →
   κs1 = κs2 ∨ ∃ κs, κs ++ [Ub] `prefix_of` κs2 ∧ κs `prefix_of` κs1.
 Proof.
@@ -881,12 +935,14 @@ Proof.
       * admit.
       * right. eexists []. split; [ apply: prefix_cons|]; apply: prefix_nil.
     + inversion Hdem; simplify_eq/=.
-      * exfalso. admit.
-      * have [| |]:= IH κs0.
+      * exfalso. have := events_to_set_nil κs.
+        move: (H [κ]) => [? _]. naive_solver.
+      * move: (H0) => /dem_trace_to_set_nil [//|[?[??]]]; simplify_eq.
+        have [| |]:= IH κs0.
         -- admit.
-        -- move => ->. left.
-           admit.
-        -- admit.
+        -- naive_solver.
+        -- move => [κs1 [??]]. right.
+           eexists (_:: _) => /=. split; by apply: prefix_cons.
       * right. eexists []. split; [ apply: prefix_cons|]; apply: prefix_nil.
 Admitted.
 
