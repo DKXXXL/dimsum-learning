@@ -193,25 +193,23 @@ Inductive has_trace {EV} (m : module EV) : m.(m_state) → (list (event EV) → 
 .
 Notation " σ '~{' m , Pκs '}~>' P " := (has_trace m σ Pκs P) (at level 40).
 
-
-(*
 Global Instance has_trace_proper {EV} (m : module EV) :
-  Proper ((=) ==> (pointwise_relation _ impl) ==> (pointwise_relation m.(m_state) impl) ==> impl) (has_trace m).
+  Proper ((=) ==> (≡) ==> (pointwise_relation m.(m_state) impl) ==> impl) (has_trace m).
 Proof.
   move => ?? -> Pκs1 Pκs2 Hκs Pσ1 Pσ2 HP Ht.
   elim: Ht Pκs2 Pσ2 Hκs HP.
-  - move => ??????? Hκs HP. apply: TraceEnd. by apply: HP. by apply: Hκs.
-  - move => ?????? IH ?? Hκs HP. apply: TraceStep; [done|].
-    move => ???. apply: IH => // ??. by apply: Hκs.
+  - move => ??????? Hκs HP. apply: TraceEnd. by apply: HP. unfold equiv, propset_equiv in *. naive_solver.
+  - move => ??????? IH ??? Hκs HP. apply: TraceStep; [done| | unfold equiv, propset_equiv in *; naive_solver].
+    move => ??. apply: IH => //. unfold equiv, propset_equiv in *; naive_solver.
 Qed.
 
 Lemma has_trace_mono {EV} {m : module EV} (Pκs' Pσ2' Pκs Pσ2 : _ → Prop)  σ1 :
   σ1 ~{ m, Pκs' }~> Pσ2' →
-  (∀ κs, Pκs' κs → Pκs κs) →
+  Pκs' ≡ Pκs →
   (∀ σ, Pσ2' σ → Pσ2 σ) →
   σ1 ~{ m, Pκs }~> Pσ2.
 Proof. move => ???. by apply: has_trace_proper. Qed.
-*)
+
 (* Lemma TraceStepNone {EV} Pκs (m : module EV) σ2 σ1 Pσ3 : *)
 (*   m.(m_step) σ1 None σ2 → *)
 (*   σ2 ~{ m, Pκs }~> Pσ3 → *)
@@ -962,6 +960,105 @@ Qed.
 (* Print Assumptions refines_dem_refines. *)
 
 (*** [mod_filter] *)
+Inductive filter_step {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) :
+  m.(m_state) → option EV2 → (m.(m_state) → Prop) → Prop :=
+| FilterStep σ e e' Pσ:
+    m.(m_step) σ e Pσ →
+    (* TODO: is there a better way to formulate this? E.g. assume
+    that there is no R None None Some in the theorem? *)
+    (if e is Some κ then R κ e' else e' = None) →
+    filter_step m R σ e' Pσ.
+
+Definition mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) : module EV2 := {|
+  m_step := filter_step m R;
+|}.
+
+Inductive filter_trace_rel {EV1 EV2} (R : EV1 → option EV2 → Prop) : list (event EV1) → list (event EV2) → Prop :=
+| FTREnd :
+    filter_trace_rel R [] []
+| FTRStep κ κ' κs κs':
+    R κ κ' →
+    filter_trace_rel R κs κs' →
+    filter_trace_rel R (Vis κ :: κs) (option_list (Vis <$> κ') ++ κs')
+| FTRUb κs':
+    filter_trace_rel R [Ub] κs'
+.
+
+Lemma mod_filter_to_mod {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pσ:
+  σ ~{ mod_filter m R, Pκs }~> Pσ →
+  σ ~{ m, λ κs, ∃ κs', filter_trace_rel R κs κs' ∧ Pκs κs' }~> Pσ.
+Proof.
+  elim.
+  - move => ???? Heq. apply: TraceEnd; [done|].
+    split.
+    + move => [?[Hel /Heq?]]. subst. inversion Hel; simplify_eq => //. admit. admit.
+    + move => <-. eexists []. admit.
+  - move => ????? Hstep ? IH ?. inversion Hstep; simplify_eq.
+    apply: TraceStep; [done| |].
+    + move => σ2 ?. apply: has_trace_mono; [by apply: IH | |done] => /=.
+      move => κs [κs' [? ?]].
+      eexists _. split; [|done].
+      destruct e; simplify_eq/=; [|done]. by apply: FTRStep.
+    + eexists _. split; [|done].
+      destruct e; simplify_eq/=.
+      * constructor; [done|]. apply: FTRUb.
+      * apply: FTRUb.
+Qed.
+
+Lemma mod_to_mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pκs' Pσ:
+(* The first condition states that [mod_filter] does not add more
+non-determinism. This condition (or maybe something slightly weaker)
+sadly is necessary, because this definition of refinement allows to
+commute angelic choice and visible events. Consider the modules I and S
+
+I :       A     B
+    /- 2 --- 4 --- 6
+1 -a
+    \- 3 --- 5 --- 7
+          A     C
+
+S :              B
+         A      /- 6
+1 --- 2 --- 4 -a
+                \- 7
+                C
+
+and a relation R with [R A (Some A1)], [R A (Some A2)], [R B (Some B)], [R C (Some C)].
+Then we have I ⊑ S but not mod_filter R I ⊑ mod_filter R S since the trace
+ [A1; B] ∨ [A2; C] can be produced by mod_filter R I, but not by mod_filter R S.
+The cruicial difference is that I can pick two different elements of R for A, while S
+can only pick one and whatever it picks, the angelic choice could resolve in the wrong way.
+ *)
+  (∀ κ1 κ2 κ2', R κ1 κ2 → R κ1 κ2' → κ2 = κ2') →
+  σ ~{ m, Pκs }~> Pσ → (∀ κs, Pκs κs → ∃ κs', filter_trace_rel R κs κs' ∧ Pκs' κs') →
+  σ ~{ mod_filter m R, Pκs' }~> Pσ.
+Proof.
+  move => HR Ht. elim: Ht Pκs'.
+  - move => ?????? HP. have [//|? [Hf ?]]:= HP [] _. inversion Hf; simplify_eq. by apply: TraceEnd.
+  - move => σ1?? Pσ3 κ ??? IH ? Pκs' HP.
+    destruct κ; simplify_eq/=.
+    + have [?[Hf ?]]:= HP _ ltac:(done).
+      inversion Hf; simplify_eq.
+      apply: TraceStep; [ econstructor; [done | simpl;done] | | done].
+      move => σ2 ?.
+      apply: (has_trace_mono (λ κs, Pκs' (option_list (Vis <$> κ') ++ κs))); [apply: IH;[done|] | done | done].
+      move => ? HP'.
+      have [?[ Hf' ?]]:= HP _ HP'. inversion Hf'; simplify_eq.
+      eexists _. split; [done|]. have := HR _ _ _ H1 H2. naive_solver.
+    + have [?[??]]:= HP _ ltac:(done).
+      apply: TraceStep; [ by econstructor | | simplify_eq/=; done]; simplify_eq/=.
+      move => σ2 ?. by apply: IH.
+Qed.
+
+Lemma mod_filter_refines {EV1 EV2} (m1 m2 : module EV1) (R : EV1 → option EV2 → Prop) σ1 σ2 :
+  (∀ κ1 κ2 κ2', R κ1 κ2 → R κ1 κ2' → κ2 = κ2') →
+  MS m1 σ1 ⊑ MS m2 σ2 →
+  MS (mod_filter m1 R) σ1 ⊑ MS (mod_filter m2 R) σ2.
+Proof.
+  move => ? [/= Hr]. constructor => /= ? /mod_filter_to_mod/Hr Hm. apply: mod_to_mod_filter; [done|done|].
+  naive_solver.
+Qed.
+
 Inductive filter_step {EV1 EV2} (m : module EV1) (f : EV1 → option EV2) :
   m.(m_state) → (m.(m_state) → option EV2 → Prop) → Prop :=
 | FilterStep σ Pσ:
