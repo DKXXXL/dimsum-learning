@@ -13,6 +13,12 @@ End Ax.
 
 Module Export UIPM := EqdepTheory Ax.
 
+Ltac simplify_K :=
+  repeat match goal with
+  | H : existT _ _ = existT _ _ |- _ =>
+     apply UIPM.inj_pair2 in H
+  end; simplify_eq.
+
 
 Axiom AxCHOICE : ∀ A B, FunctionalChoice_on A B.
 
