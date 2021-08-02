@@ -1,9 +1,10 @@
-Require Import refframe.base.
 Require Import stdpp.namespaces.
 Require Import stdpp.strings.
 Require Import stdpp.gmap.
 Require Import stdpp.binders.
 Require Import stdpp.propset.
+Require Import refframe.base.
+Require Import refframe.axioms.
 
 Local Instance propset_subseteq {A} : SubsetEq (A → Prop) :=
   λ P1 P2, ∀ x, P1 x → P2 x.
@@ -28,8 +29,9 @@ Tactic Notation "invert_all" constr(f) := invert_all_tac f; simplify_eq/=.
 Tactic Notation "invert_all'" constr(f) := invert_all_tac f.
 
 Inductive event (EV : Type) : Type :=
-| Ub | Vis (e : EV).
+| Nb | Ub | Vis (e : EV).
 Arguments Ub {_}.
+Arguments Nb {_}.
 Arguments Vis {_}.
 
 Record module (EV : Type) : Type := {
@@ -181,7 +183,7 @@ program if EV is not inhabited if we don't use [event EV] *)
 Inductive has_trace {EV} (m : module EV) : m.(m_state) → (list (event EV) → Prop) → (m.(m_state) → Prop) → Prop :=
 | TraceEnd σ (Pκs Pσ : _ → Prop):
     Pσ σ →
-    Pκs ≡ ([] =.) →
+    Pκs [] ∧ Pκs [Nb] →
     has_trace m σ Pκs Pσ
 | TraceStep σ1 Pκs Pσ2 Pσ3 κ:
     m.(m_step) σ1 κ Pσ2 →
@@ -194,21 +196,36 @@ Inductive has_trace {EV} (m : module EV) : m.(m_state) → (list (event EV) → 
 Notation " σ '~{' m , Pκs '}~>' P " := (has_trace m σ Pκs P) (at level 40).
 
 Global Instance has_trace_proper {EV} (m : module EV) :
-  Proper ((=) ==> (≡) ==> (pointwise_relation m.(m_state) impl) ==> impl) (has_trace m).
+  Proper ((=) ==> (pointwise_relation _ impl) ==> (pointwise_relation m.(m_state) impl) ==> impl) (has_trace m).
 Proof.
   move => ?? -> Pκs1 Pκs2 Hκs Pσ1 Pσ2 HP Ht.
   elim: Ht Pκs2 Pσ2 Hκs HP.
-  - move => ??????? Hκs HP. apply: TraceEnd. by apply: HP. unfold equiv, propset_equiv in *. naive_solver.
-  - move => ??????? IH ??? Hκs HP. apply: TraceStep; [done| | unfold equiv, propset_equiv in *; naive_solver].
-    move => ??. apply: IH => //. unfold equiv, propset_equiv in *; naive_solver.
+  - move => ????[??] ?? Hκs HP. apply: TraceEnd. by apply: HP. split; by apply: Hκs.
+  - move => ??????? IH ??? Hκs HP. apply: TraceStep; [done| | split; apply: Hκs; naive_solver].
+    move => ??. apply: IH => // ??. by apply: Hκs.
 Qed.
 
 Lemma has_trace_mono {EV} {m : module EV} (Pκs' Pσ2' Pκs Pσ2 : _ → Prop)  σ1 :
   σ1 ~{ m, Pκs' }~> Pσ2' →
-  Pκs' ≡ Pκs →
+  (∀ κs, Pκs' κs → Pκs κs) →
   (∀ σ, Pσ2' σ → Pσ2 σ) →
   σ1 ~{ m, Pκs }~> Pσ2.
 Proof. move => ???. by apply: has_trace_proper. Qed.
+
+Lemma has_trace_exists {EV} {A} {m : module EV} Pκs Pσ σ1 :
+  (∃ x, σ1 ~{ m, Pκs x}~> Pσ) →
+  σ1 ~{ m, λ κs, ∃ x : A, Pκs x κs }~> Pσ.
+Proof. move => [??]. apply: has_trace_mono; [done| |done]. naive_solver. Qed.
+
+Lemma has_trace_or {EV} {m : module EV} Pκs1 Pκs2 Pσ σ1 :
+  (σ1 ~{ m, Pκs1 }~> Pσ ∨ σ1 ~{ m, Pκs2 }~> Pσ) →
+  σ1 ~{ m, λ κs, Pκs1 κs ∨ Pκs2 κs}~> Pσ.
+Proof. move => [?|?]; (apply: has_trace_mono; [done| |done]); naive_solver. Qed.
+
+Lemma has_trace_forall_inv {EV} {A} {m : module EV} (Pκs : A → _ → Prop) Pσ σ1 :
+  (σ1 ~{ m, λ κs, ∀ x : A, Pκs x κs}~> Pσ) →
+  ∀ x, σ1 ~{ m, Pκs x }~> Pσ.
+Proof. move => ??. apply: has_trace_mono; [done| |done]. naive_solver. Qed.
 
 (* Lemma TraceStepNone {EV} Pκs (m : module EV) σ2 σ1 Pσ3 : *)
 (*   m.(m_step) σ1 None σ2 → *)
@@ -335,6 +352,13 @@ Global Instance sqsubseteq_refines EV : SqSubsetEq (mod_state EV) := refines.
 
 Definition refines_equiv {EV} (m1 m2 : mod_state EV) : Prop := m1 ⊑ m2 ∧ m2 ⊑ m1.
 
+Global Instance equiv_refines EV : Equiv (mod_state EV) := refines_equiv.
+
+Lemma refines_equiv_equiv {EV} (m1 m2 : mod_state EV) :
+  (∀ Pκs, m1.(ms_state) ~{ m1, Pκs }~> (λ _, True) ↔ m2.(ms_state) ~{ m2, Pκs }~> (λ _, True)) →
+  m1 ≡ m2.
+Proof. move => ?. split; constructor => ?; naive_solver. Qed.
+
 Definition safe {EV} (m : mod_state EV) (P : (list (event EV) → Prop) → Prop) :=
   ∀ Pκs, m.(ms_state) ~{ m, Pκs }~> (λ _, True) → P Pκs.
 
@@ -361,7 +385,7 @@ Definition mod1 : module nat := {|
 |}.
 
 Lemma mod1_traces Pκs:
-  0 ~{mod1, Pκs}~> (λ _, True) ↔ Pκs ≡ ([] =.) ∨ (Pκs [] ∧ (λ κs, Pκs (Vis 1::κs)) ≡ ([] =.)).
+  0 ~{mod1, Pκs}~> (λ _, True) ↔ (Pκs [] ∧ Pκs [Nb]) ∨ (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Nb]).
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
@@ -370,7 +394,7 @@ Proof.
     inversion H; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
   - move => [?|[??]]. 1: by apply: TraceEnd.
-    apply: TraceStep; [by constructor| | unfold equiv, propset_equiv in *; naive_solver ].
+    apply: TraceStep; [by constructor| | naive_solver ].
     move => ??. simplify_eq.
     by apply: TraceEnd.
 Qed.
@@ -387,9 +411,9 @@ Definition mod2 : module nat := {|
 
 Lemma mod2_traces Pκs:
   0 ~{mod2, Pκs}~> (λ _, True) ↔
-    Pκs ≡ ([] =.)
-  ∨ (Pκs [] ∧ (λ κs, Pκs (Vis 1::κs)) ≡ ([] =.))
-  ∨ (Pκs [] ∧ Pκs [Vis 1] ∧ (λ κs, Pκs (Vis 1::Vis 2::κs)) ≡ ([] =.)).
+     (Pκs [] ∧ Pκs [Nb])
+  ∨ (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Nb])
+  ∨ (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Vis 2] ∧ Pκs [Vis 1; Vis 2; Nb]).
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
@@ -402,12 +426,12 @@ Proof.
     invert_all @m_step => //.
   - move => [?|[[??]|[?[??]]]].
     + by apply: TraceEnd.
-    + apply: TraceStep; [by constructor| |unfold equiv, propset_equiv in *; naive_solver].
+    + apply: TraceStep; [by constructor| |naive_solver].
       move => ??. simplify_eq.
       by apply: TraceEnd.
     + apply: TraceStep; [by constructor| |done].
       move => ??. simplify_eq/=.
-      apply: TraceStep; [by constructor| |unfold equiv, propset_equiv in *; naive_solver].
+      apply: TraceStep; [by constructor| |naive_solver].
       move => ??. simplify_eq/=.
       by apply: TraceEnd.
 Qed.
@@ -444,14 +468,14 @@ Definition mod1_ub : module nat := {|
 
 Lemma mod1ub_traces Pκs:
   0 ~{mod1_ub, Pκs}~> (λ _, True) ↔
-    Pκs ≡ ([] =.)
+     (Pκs [] ∧ Pκs [Nb])
   ∨ (Pκs [] ∧ Pκs [Vis 1]).
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
     have {}H := (H1 _ ltac:(done)).
-    inversion H; simplify_eq. 1: move: (H3 []); naive_solver.
+    inversion H; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
     naive_solver.
   - move => [?|[??]].
@@ -478,7 +502,7 @@ Lemma modub_traces EV Pκs:
   0 ~{mod_ub EV, Pκs}~> (λ _, True) ↔ Pκs [].
 Proof.
   split.
-  - inversion 1; simplify_eq. 1: move: (H1 []); naive_solver.
+  - inversion 1; simplify_eq. 1: naive_solver.
     naive_solver.
   - move => ?.
     apply: TraceStep; [by constructor| |done]. done.
@@ -497,8 +521,8 @@ Definition mod12_ang : module nat := {|
 
 Lemma mod12_ang_traces Pκs:
   0 ~{mod12_ang, Pκs}~> (λ _, True) ↔
-    Pκs ≡ ([] =.)
-  ∨ (Pκs [] ∧ (λ κs, Pκs (Vis 1::κs)) ≡ ([] =.) ∧ (λ κs, Pκs (Vis 2::κs)) ≡ ([] =.)).
+     (Pκs [] ∧ Pκs [Nb])
+  ∨ (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Nb] ∧ Pκs [Vis 2] ∧ Pκs [Vis 2; Nb] ).
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
@@ -518,10 +542,10 @@ Proof.
     + by apply: TraceEnd.
     + apply: TraceStep; [by constructor| |done].
       move => ? [?|?]; simplify_eq.
-      * apply: TraceStep; [by constructor | | unfold equiv, propset_equiv in *; naive_solver].
-        move => ? ->. by apply: TraceEnd.
-      * apply: TraceStep; [by constructor | | unfold equiv, propset_equiv in *; naive_solver].
-        move => ? ->. by apply: TraceEnd.
+      * apply: TraceStep; [by constructor | | naive_solver].
+        move => ? ->.  apply: TraceEnd; [done| naive_solver].
+      * apply: TraceStep; [by constructor | |naive_solver].
+        move => ? ->. apply: TraceEnd; [done| naive_solver].
 Qed.
 
 Lemma mod1_refines_mod2 :
@@ -588,7 +612,6 @@ Proof.
   apply: TraceStep; [| | ]. Fail constructor.
   Undo. Undo.
   apply: TraceEnd; [done|].
-  split. 2: move => <-; naive_solver.
 Abort.
 
 
@@ -624,9 +647,146 @@ Abort.
   (* exfalso. simplify_eq/=. *)
   (* move: (H3 [2]). move: (H5 []). *)
 (* Abort. *)
+
+(** Angelic choice commutes with events: *)
+
+(*               B
+    A      /- 3 --- 4
+ 1 --- 2 -a
+           \- 5 --- 6
+                 C
+ *)
+Inductive mod_ang_comm1_step : nat → option nat → (nat → Prop) → Prop :=
+| TAC1S1: mod_ang_comm1_step 0 (Some 1) (λ σ', σ' = 2)
+| TAC1S2: mod_ang_comm1_step 2 None     (λ σ', σ' = 3 ∨ σ' = 5)
+| TAC1S3: mod_ang_comm1_step 3 (Some 2) (λ σ', σ' = 4)
+| TAC1S5: mod_ang_comm1_step 5 (Some 3) (λ σ', σ' = 6)
+.
+
+Definition mod_ang_comm1 : module nat := {|
+  m_state := nat;
+  m_step := mod_ang_comm1_step;
+|}.
+
+(*         A     B
+     /- 2 --- 3 --- 4
+ 1 -a
+     \- 5 --- 6 --- 7
+           A     C
+ *)
+Inductive mod_ang_comm2_step : nat → option nat → (nat → Prop) → Prop :=
+| TAC2S1: mod_ang_comm2_step 0 None     (λ σ', σ' = 2 ∨ σ' = 5)
+| TAC2S2: mod_ang_comm2_step 2 (Some 1) (λ σ', σ' = 3)
+| TAC2S3: mod_ang_comm2_step 3 (Some 2) (λ σ', σ' = 4)
+| TAC2S5: mod_ang_comm2_step 5 (Some 1) (λ σ', σ' = 6)
+| TAC2S6: mod_ang_comm2_step 6 (Some 3) (λ σ', σ' = 7)
+.
+
+Definition mod_ang_comm2 : module nat := {|
+  m_state := nat;
+  m_step := mod_ang_comm2_step;
+|}.
+
+Lemma mod_ang_comm1_traces Pκs:
+  0 ~{mod_ang_comm1, Pκs}~> (λ _, True) ↔
+    Pκs [] ∧
+  (Pκs [Nb] ∨
+   (Pκs [Vis 1] ∧
+    (Pκs [Vis 1; Nb] ∨
+     (Pκs [Vis 1; Vis 2] ∧ Pκs [Vis 1; Vis 2; Nb] ∧
+      Pκs [Vis 1; Vis 3] ∧ Pκs [Vis 1; Vis 3; Nb])))).
+Proof.
+  split.
+  - inversion 1; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+    split; [naive_solver|].
+    have {}H := (H1 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+
+    have {}H := (H3 3 ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+    have {}H := (H5 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 2: invert_all @m_step => //.
+
+    have {}H := (H3 5 ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+    have {}H := (H9 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+  - move => [?[?|[? HP]]]. 1: by apply: TraceEnd.
+    apply: TraceStep; [by constructor| |done].
+    move => /= ??; simplify_eq.
+    move: HP => [?|?]. 1: by apply: TraceEnd.
+    apply: TraceStep; [by constructor| |done].
+    move => /= ? [?|?]; simplify_eq.
+    + apply: TraceStep; [by constructor | |naive_solver].
+      move => /= ? ->. apply: TraceEnd; [done | naive_solver].
+    + apply: TraceStep; [by constructor | |naive_solver].
+      move => /= ? ->. apply: TraceEnd; [done | naive_solver].
+Qed.
+
+Lemma mod_ang_comm2_traces Pκs:
+  0 ~{mod_ang_comm2, Pκs}~> (λ _, True) ↔
+    Pκs [] ∧
+  (Pκs [Nb] ∨
+   (Pκs [Vis 1] ∧
+    (Pκs [Vis 1; Nb] ∨
+     (Pκs [Vis 1; Vis 2] ∧ Pκs [Vis 1; Vis 2; Nb] ∧
+      Pκs [Vis 1; Vis 3] ∧ Pκs [Vis 1; Vis 3; Nb])))).
+Proof.
+  split.
+  - inversion 1; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+    split; [naive_solver|].
+
+    have {}H := (H1 2 ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+    have {}H := (H3 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+    have {}H := (H5 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 2: invert_all @m_step => //.
+
+    have {}H := (H1 5 ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+    have {}H := (H9 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+    have {}H := (H11 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 2: invert_all @m_step => //.
+    naive_solver.
+  - move => [?[?|[? HP]]]. 1: by apply: TraceEnd.
+    apply: TraceStep; [by constructor| |done].
+    move => /= ?[?|?]; simplify_eq.
+    + apply: TraceStep; [by constructor| |done].
+      move => /= ? ->.
+      move: HP => [?|?]. 1: by apply: TraceEnd.
+      apply: TraceStep; [by constructor | |naive_solver].
+      move => /= ? ->. apply: TraceEnd; [done | naive_solver].
+    + apply: TraceStep; [by constructor| |done].
+      move => /= ? ->.
+      move: HP => [?|?]. 1: by apply: TraceEnd.
+      apply: TraceStep; [by constructor | |naive_solver].
+      move => /= ? ->. apply: TraceEnd; [done | naive_solver].
+Qed.
+
+Lemma mod_ang_comm_equiv:
+  MS mod_ang_comm1 0 ≡ MS mod_ang_comm2 0.
+Proof. apply: refines_equiv_equiv => ?. rewrite mod_ang_comm1_traces mod_ang_comm2_traces. done. Qed.
+
 End test1.
 
 (*** Demonic module **)
+Inductive dem_event (EV : Type) : Type :=
+| DUb | DVis (e : EV).
+Arguments DUb {_}.
+Arguments DVis {_}.
+
 Record dem_module (EV : Type) : Type := {
   dem_state : Type;
   dem_step : dem_state → option EV → dem_state → Prop;
@@ -636,14 +796,14 @@ Arguments dem_state {_}.
 Arguments dem_step {_}.
 Arguments dem_is_ub {_}.
 
-Inductive dem_has_trace {EV} (m : dem_module EV) : m.(dem_state) → list (event EV) → (m.(dem_state) → Prop) → Prop :=
+Inductive dem_has_trace {EV} (m : dem_module EV) : m.(dem_state) → list (dem_event EV) → (m.(dem_state) → Prop) → Prop :=
 | DTraceEnd σ (Pσ : _ → Prop):
     Pσ σ →
     dem_has_trace m σ [] Pσ
 | DTraceStep σ1 σ2 Pσ3 κ κs:
     m.(dem_step) σ1 κ σ2 →
     dem_has_trace m σ2 κs Pσ3 →
-    dem_has_trace m σ1 (option_list (Vis <$> κ) ++ κs) Pσ3
+    dem_has_trace m σ1 (option_list (DVis <$> κ) ++ κs) Pσ3
 | DTraceUb σ1 κs Pσ2:
     m.(dem_is_ub) σ1 →
     dem_has_trace m σ1 κs Pσ2
@@ -679,12 +839,12 @@ Proof. move => ??. by apply: (DTraceStep _ _ _ _ None). Qed.
 Lemma DTraceStepSome {EV} κs (m : dem_module EV) σ2 σ1 Pσ3 κ :
   m.(dem_step) σ1 (Some κ) σ2 →
   σ2 ~{ m, κs }~>ₘ Pσ3 →
-  σ1 ~{ m, Vis κ :: κs }~>ₘ Pσ3.
+  σ1 ~{ m, DVis κ :: κs }~>ₘ Pσ3.
 Proof. move => ??. by apply: (DTraceStep _ _ _ _ (Some _)). Qed.
 
 Lemma DTraceStep' {EV} κs κs' (m : dem_module EV) σ2 σ1 Pσ3 κ :
   m.(dem_step) σ1 κ σ2 →
-  κs = option_list (Vis <$> κ) ++ κs' →
+  κs = option_list (DVis <$> κ) ++ κs' →
   σ2 ~{ m, κs' }~>ₘ Pσ3 →
   σ1 ~{ m, κs }~>ₘ Pσ3.
 Proof. move => ? -> ?. by apply: DTraceStep. Qed.
@@ -722,10 +882,10 @@ Proof.
 Qed.
 
 Lemma dem_has_trace_ub_inv {EV} κs (m : dem_module EV) σ1 Pσ2:
-  σ1 ~{m, Ub :: κs }~>ₘ Pσ2 →
+  σ1 ~{m, DUb :: κs }~>ₘ Pσ2 →
   σ1 ~{m, [] }~>ₘ (λ _, False).
 Proof.
-  move Hκ: (Ub :: κs) => κ Hκs.
+  move Hκ: (DUb :: κs) => κ Hκs.
   elim: Hκs Hκ => //.
   - move => ??? [] //= ??? IH ?. apply: DTraceStepNone; [done|].
     naive_solver.
@@ -733,10 +893,10 @@ Proof.
 Qed.
 
 Lemma dem_has_trace_cons_inv {EV} κs κ (m : dem_module EV) σ1 Pσ3:
-  σ1 ~{ m, Vis κ :: κs }~>ₘ Pσ3 →
+  σ1 ~{ m, DVis κ :: κs }~>ₘ Pσ3 →
   σ1 ~{ m, [] }~>ₘ (λ σ2, ∃ σ2', m.(dem_step) σ2 (Some κ) σ2' ∧ σ2' ~{ m, κs }~>ₘ Pσ3).
 Proof.
-  move Hs: (Vis κ :: κs) => s Hκs.
+  move Hs: (DVis κ :: κs) => s Hκs.
   elim: Hκs Hs => //.
   - move => ??? [] //=.
     + move => ???? IH [] ??. subst. apply: DTraceEnd. eexists _. split; [done|]. naive_solver.
@@ -757,7 +917,7 @@ Proof.
 Qed.
 
 Lemma dem_has_trace_ub_app_inv {EV} κs (m : dem_module EV) σ1 Pσ2:
-  σ1 ~{ m, κs ++ [Ub] }~>ₘ Pσ2 →
+  σ1 ~{ m, κs ++ [DUb] }~>ₘ Pσ2 →
   σ1 ~{ m, κs }~>ₘ (λ _, False).
 Proof.
   move => /dem_has_trace_app_inv ?.
@@ -803,7 +963,7 @@ Global Instance sqsubseteq_dem_refines EV : SqSubsetEq (dem_mod_state EV) := dem
 
 Definition dem_refines_equiv {EV} (m1 m2 : dem_mod_state EV) : Prop := m1 ⊑ m2 ∧ m2 ⊑ m1.
 
-Definition dem_safe {EV} (m : dem_mod_state EV) (P : list (event EV) → Prop) :=
+Definition dem_safe {EV} (m : dem_mod_state EV) (P : list (dem_event EV) → Prop) :=
   ∀ κs, m.(dms_state) ~{ m, κs }~>ₘ (λ _, True) → P κs.
 
 Lemma dem_refines_preserves_safe EV (mspec mimpl : dem_mod_state EV) P:
@@ -821,33 +981,34 @@ Qed.
 
 (*** Equivalence between refines and dem_refines *)
 
-Inductive dem_trace_to_set {EV} : list (event EV) → (list (event EV) → Prop) → Prop :=
-| DT2S_nil Pκs:
-    Pκs ≡ ([] =.) →
+Inductive dem_trace_to_set {EV} : list (dem_event EV) → (list (event EV) → Prop) → Prop :=
+| DT2S_nil (Pκs : _ → Prop):
+    Pκs [] →
+    Pκs [Nb] →
     dem_trace_to_set [] Pκs
 | DT2S_vis κ κs (Pκs : _ → Prop):
     Pκs [] →
     dem_trace_to_set κs (λ κs, Pκs (Vis κ::κs)) →
-    dem_trace_to_set (Vis κ :: κs) Pκs
+    dem_trace_to_set (DVis κ :: κs) Pκs
 | DT2S_ub κs (Pκs : _ → Prop):
     Pκs [] →
-    dem_trace_to_set (Ub :: κs) Pκs
+    dem_trace_to_set (DUb :: κs) Pκs
 .
 
-Lemma dem_trace_to_set_nil {EV} (κs : list (event EV)) Pκs:
+Lemma dem_trace_to_set_nil {EV} (κs : list (dem_event EV)) Pκs:
   dem_trace_to_set κs Pκs → Pκs [].
-Proof. inversion 1 => //; simplify_eq; try naive_solver. revert select (_ ≡ _) => Heq. by apply Heq. Qed.
+Proof. inversion 1 => //; simplify_eq; naive_solver.  Qed.
 
-Lemma dem_trace_to_set_mono {EV} (κs : list (event EV)) Pκs Pκs':
+Lemma dem_trace_to_set_mono {EV} (κs : list (dem_event EV)) Pκs Pκs':
   dem_trace_to_set κs Pκs →
-  Pκs ≡ Pκs' →
+  Pκs ⊆ Pκs' →
   dem_trace_to_set κs Pκs'.
 Proof.
   move => Ht. elim: Ht Pκs'.
-  - move => ????. constructor. unfold equiv, propset_equiv in *; naive_solver.
-  - move => ????? IH ??. constructor. { unfold equiv, propset_equiv in *; naive_solver. }
-    apply: IH. unfold equiv, propset_equiv in *; naive_solver.
-  - move => ?????. constructor. unfold equiv, propset_equiv in *; naive_solver.
+  - move => ???? Hsub. constructor; by apply: Hsub.
+  - move => ????? IH ? Hsub. constructor. { by apply: Hsub. }
+    apply: IH => ??. by apply: Hsub.
+  - move => ???? Hsub. constructor. by apply: Hsub.
 Qed.
 
 Lemma has_trace_dem_has_trace {EV} (m : dem_module EV) σ Pσ Pκs:
@@ -855,14 +1016,14 @@ Lemma has_trace_dem_has_trace {EV} (m : dem_module EV) σ Pσ Pκs:
 Proof.
   split.
   - elim.
-    + move => ?????. eexists [] => /=. split;[by constructor|]. by constructor.
+    + move => ???? [??]. eexists [] => /=. split;[by constructor|]. by constructor.
     + move => ???? κ Hstep _ IH ?.
       inversion Hstep; simplify_eq.
       * have [κs [Hsub ?]]:= IH _ ltac:(done).
-        eexists (option_list (Vis <$> _) ++ κs).
+        eexists (option_list (DVis <$> _) ++ κs).
         split. 2: by apply: DTraceStep.
         destruct κ => //=. constructor => //. naive_solver.
-      * eexists [Ub]. split; [constructor| by apply: DTraceUb]. naive_solver.
+      * eexists [DUb]. split; [constructor| by apply: DTraceUb]. naive_solver.
   - move => [κs [HP Ht]].
     elim: Ht Pκs HP.
     + move => ???? Ht. inversion Ht; simplify_eq. by constructor.
@@ -879,11 +1040,11 @@ Proof.
 Qed.
 
 
-Fixpoint events_to_set {EV} (κs : list (event EV)) : list (event EV) → Prop :=
+Fixpoint events_to_set {EV} (κs : list (dem_event EV)) : list (event EV) → Prop :=
   match κs with
-  | [] => ([] =.)
-  | Ub::_ => λ κs'', κs'' = []  ∨ κs'' = [Ub]
-  | Vis κ::κs' => λ κs'', (κs'' = [])
+  | [] => λ κs'', κs'' = []  ∨ κs'' = [Nb]
+  | DUb::_ => λ κs'', κs'' = []  ∨ κs'' = [Ub]
+  | DVis κ::κs' => λ κs'', (κs'' = [])
       ∨ ∃ κs''', κs'' = Vis κ::κs''' ∧ events_to_set κs' κs'''
   end.
 
@@ -891,41 +1052,38 @@ Fixpoint events_to_set {EV} (κs : list (event EV)) : list (event EV) → Prop :
 (* Compute events_to_set [Vis 1; Ub]. *)
 (* Compute events_to_set [Ub]. *)
 
-Lemma events_to_set_nil {EV} (κs : list (event EV)) :
+Lemma events_to_set_nil {EV} (κs : list (dem_event EV)) :
   events_to_set κs [].
-Proof. destruct κs as [|[|]] => //; by left. Qed.
+Proof. destruct κs as [|[|]] => //; naive_solver. Qed.
 
-Lemma dem_trace_to_set_events {EV} (κs : list (event EV)) :
+Lemma dem_trace_to_set_events {EV} (κs : list (dem_event EV)) :
   dem_trace_to_set κs (events_to_set κs).
 Proof.
-  elim: κs. 1: by constructor.
+  elim: κs. 1: constructor; naive_solver.
   move => [|κ] κs IH /=. 1: constructor; by left.
   constructor.
   - by left.
-  - apply: dem_trace_to_set_mono; [done|].
-    unfold equiv, propset_equiv in *; naive_solver.
+  - apply: dem_trace_to_set_mono; [done|] => ??. naive_solver.
 Qed.
 
-Lemma dem_trace_to_set_inj {EV} (κs1 κs2 : list (event EV)):
+Lemma dem_trace_to_set_inj {EV} (κs1 κs2 : list (dem_event EV)):
   dem_trace_to_set κs2 (events_to_set κs1) →
-  κs1 = κs2 ∨ ∃ κs, κs ++ [Ub] `prefix_of` κs2 ∧ κs `prefix_of` κs1.
+  κs1 = κs2 ∨ ∃ κs, κs ++ [DUb] `prefix_of` κs2 ∧ κs `prefix_of` κs1.
 Proof.
   elim: κs2 κs1 => [|[|κ2] κs2] /=.
   - move => [|[|κ] κs] Hdem.
     + naive_solver.
-    + inversion Hdem; simplify_eq/=. pose proof (H [Ub]). naive_solver.
+    + inversion Hdem; simplify_eq/=. naive_solver.
     + inversion Hdem; simplify_eq/=.
-      have := events_to_set_nil κs.
-      move: (H [Vis κ]) => [? _]. naive_solver.
+      have := events_to_set_nil κs. naive_solver.
   - move => IH κs1 /= Hdem. right. eexists [].
     split; [apply: prefix_cons|]; apply: prefix_nil.
   - move => IH [|[|κ] κs] /=; inversion 1; simplify_eq/=.
-    + by move: H4 => /dem_trace_to_set_nil.
+    + move: H4 => /dem_trace_to_set_nil. naive_solver.
     + move: H4 => /dem_trace_to_set_nil. naive_solver.
     + move: (H4) => /dem_trace_to_set_nil [//|[?[??]]]; simplify_eq.
       have [| |]:= IH κs.
-      -- apply: dem_trace_to_set_mono; [done|].
-         unfold equiv, propset_equiv in *; naive_solver.
+      -- apply: dem_trace_to_set_mono; [done|] => ??. naive_solver.
       -- naive_solver.
       -- move => [κs1 [??]]. right.
          eexists (_:: _) => /=. split; by apply: prefix_cons.
@@ -960,6 +1118,9 @@ Qed.
 (* Print Assumptions refines_dem_refines. *)
 
 (*** [mod_filter] *)
+
+Ltac pnaive_solver := unfold subseteq, propset_subseteq in *; naive_solver.
+
 Inductive filter_step {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) :
   m.(m_state) → option EV2 → (m.(m_state) → Prop) → Prop :=
 | FilterStep σ e e' Pσ:
@@ -973,149 +1134,360 @@ Definition mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Pro
   m_step := filter_step m R;
 |}.
 
-Inductive filter_trace_rel {EV1 EV2} (R : EV1 → option EV2 → Prop) : list (event EV1) → list (event EV2) → Prop :=
-| FTREnd :
-    filter_trace_rel R [] []
-| FTRStep κ κ' κs κs':
-    R κ κ' →
-    filter_trace_rel R κs κs' →
-    filter_trace_rel R (Vis κ :: κs) (option_list (Vis <$> κ') ++ κs')
-| FTRUb κs':
-    filter_trace_rel R [Ub] κs'
-.
+Module test2.
+  (* This example shows that filter does not preserve refinement if
+  the filter function is not functional, i.e. if it can introduce
+  non-determinism. The intuitive reason for the failure of refinement
+  preservation is that angelic choice can be commuted before filtering
+  but not after. *)
+  Definition test_filter (n1 : nat) (n2 : option nat) :=
+    (n1 = 1 ∧ (n2 = Some 4 ∨ n2 = Some 5)) ∨
+    (n1 = 2 ∧ (n2 = Some 2)) ∨
+    (n1 = 3 ∧ (n2 = Some 3)).
+  Arguments test_filter _ _ /.
 
-Lemma mod_filter_to_mod {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pσ:
-  σ ~{ mod_filter m R, Pκs }~> Pσ →
-  σ ~{ m, λ κs, ∃ κs', filter_trace_rel R κs κs' ∧ Pκs κs' }~> Pσ.
-Proof.
-  elim.
-  - move => ???? Heq. apply: TraceEnd; [done|].
-    split.
-    + move => [?[Hel /Heq?]]. subst. inversion Hel; simplify_eq => //. admit. admit.
-    + move => <-. eexists []. admit.
-  - move => ????? Hstep ? IH ?. inversion Hstep; simplify_eq.
-    apply: TraceStep; [done| |].
-    + move => σ2 ?. apply: has_trace_mono; [by apply: IH | |done] => /=.
-      move => κs [κs' [? ?]].
-      eexists _. split; [|done].
-      destruct e; simplify_eq/=; [|done]. by apply: FTRStep.
-    + eexists _. split; [|done].
-      destruct e; simplify_eq/=.
-      * constructor; [done|]. apply: FTRUb.
-      * apply: FTRUb.
-Qed.
-
-Lemma mod_to_mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pκs' Pσ:
-(* The first condition states that [mod_filter] does not add more
-non-determinism. This condition (or maybe something slightly weaker)
-sadly is necessary, because this definition of refinement allows to
-commute angelic choice and visible events. Consider the modules I and S
-
-I :       A     B
-    /- 2 --- 4 --- 6
-1 -a
-    \- 3 --- 5 --- 7
-          A     C
-
-S :              B
-         A      /- 6
-1 --- 2 --- 4 -a
-                \- 7
-                C
-
-and a relation R with [R A (Some A1)], [R A (Some A2)], [R B (Some B)], [R C (Some C)].
-Then we have I ⊑ S but not mod_filter R I ⊑ mod_filter R S since the trace
- [A1; B] ∨ [A2; C] can be produced by mod_filter R I, but not by mod_filter R S.
-The cruicial difference is that I can pick two different elements of R for A, while S
-can only pick one and whatever it picks, the angelic choice could resolve in the wrong way.
- *)
-  (∀ κ1 κ2 κ2', R κ1 κ2 → R κ1 κ2' → κ2 = κ2') →
-  σ ~{ m, Pκs }~> Pσ → (∀ κs, Pκs κs → ∃ κs', filter_trace_rel R κs κs' ∧ Pκs' κs') →
-  σ ~{ mod_filter m R, Pκs' }~> Pσ.
-Proof.
-  move => HR Ht. elim: Ht Pκs'.
-  - move => ?????? HP. have [//|? [Hf ?]]:= HP [] _. inversion Hf; simplify_eq. by apply: TraceEnd.
-  - move => σ1?? Pσ3 κ ??? IH ? Pκs' HP.
-    destruct κ; simplify_eq/=.
-    + have [?[Hf ?]]:= HP _ ltac:(done).
-      inversion Hf; simplify_eq.
-      apply: TraceStep; [ econstructor; [done | simpl;done] | | done].
-      move => σ2 ?.
-      apply: (has_trace_mono (λ κs, Pκs' (option_list (Vis <$> κ') ++ κs))); [apply: IH;[done|] | done | done].
-      move => ? HP'.
-      have [?[ Hf' ?]]:= HP _ HP'. inversion Hf'; simplify_eq.
-      eexists _. split; [done|]. have := HR _ _ _ H1 H2. naive_solver.
-    + have [?[??]]:= HP _ ltac:(done).
-      apply: TraceStep; [ by econstructor | | simplify_eq/=; done]; simplify_eq/=.
-      move => σ2 ?. by apply: IH.
-Qed.
-
-Lemma mod_filter_refines {EV1 EV2} (m1 m2 : module EV1) (R : EV1 → option EV2 → Prop) σ1 σ2 :
-  (∀ κ1 κ2 κ2', R κ1 κ2 → R κ1 κ2' → κ2 = κ2') →
-  MS m1 σ1 ⊑ MS m2 σ2 →
-  MS (mod_filter m1 R) σ1 ⊑ MS (mod_filter m2 R) σ2.
-Proof.
-  move => ? [/= Hr]. constructor => /= ? /mod_filter_to_mod/Hr Hm. apply: mod_to_mod_filter; [done|done|].
-  naive_solver.
-Qed.
-
-Inductive filter_step {EV1 EV2} (m : module EV1) (f : EV1 → option EV2) :
-  m.(m_state) → (m.(m_state) → option EV2 → Prop) → Prop :=
-| FilterStep σ Pσ:
-    m.(m_step) σ Pσ →
-    filter_step m f σ (λ σ κ, ∃ κ', (κ' ≫= f) = κ ∧ Pσ σ κ').
-
-Definition mod_filter {EV1 EV2} (m : module EV1) (f : EV1 → option EV2) : module EV2 := {|
-  m_step := filter_step m f;
-|}.
-
-Lemma mod_filter_to_mod {EV1 EV2} (m : module EV1) (f : EV1 → option EV2) σ Pκs Pσ:
-  σ ~{ mod_filter m f, Pκs }~> Pσ →
-  σ ~{ m, λ κs, Pκs (omap f κs) }~> Pσ.
-Proof.
-  elim.
-  - move => ?????. apply: TraceEnd; [done|]. move => ?.
-    admit.
-  - move => ???? Hstep _ IH. inversion Hstep; simplify_eq.
-    apply: TraceStep; [done| ]. move => σ2 κ ?.
-    feed pose proof (IH σ2 (κ ≫= f)) as IH'; first by naive_solver.
-    apply: has_trace_mono; [done| |done]. move => ? /=.
-    by rewrite omap_app omap_option_list.
-Qed.
-
-Lemma mod_to_mod_filter {EV1 EV2} (m : module EV1) (f : EV1 → option EV2) σ Pκs' Pσ:
-  σ ~{ m, Pκs' }~> Pσ →
-  ∀ Pκs, Pκs' ⊆ (λ κs, Pκs (omap f κs)) →
-  σ ~{ mod_filter m f, Pκs }~> Pσ.
-Proof.
-  elim.
-  - move => ?????? Hsub. apply: TraceEnd; [done|]. by apply: (Hsub []).
-  - move => ????? _ IH ? Hsub. apply: TraceStep; [ by constructor|].
-    move => ?? [?[??]]. simplify_eq. apply: IH; [done|].
-    move => ? /Hsub. by rewrite omap_app omap_option_list.
-Qed.
-
-Lemma mod_filter_equiv {EV1 EV2} (m : module EV1) (f : EV1 → option EV2) σ Pκs Pσ:
-  σ ~{ mod_filter m f, Pκs }~> Pσ ↔
-  ∃ Pκs', Pκs' ⊆ (λ κs, Pκs (omap f κs)) ∧ σ ~{ m, Pκs' }~> Pσ.
+Lemma mod_ang_comm1_filter_traces Pκs:
+  0 ~{mod_filter test1.mod_ang_comm1 test_filter, Pκs}~> (λ _, True) ↔
+    Pκs [] ∧
+  (Pκs [Nb] ∨
+   ∃ n, (n = 4 ∨ n = 5) ∧
+   (Pκs [Vis n] ∧
+    (Pκs [Vis n; Nb] ∨
+     (Pκs [Vis n; Vis 2] ∧ Pκs [Vis n; Vis 2; Nb] ∧
+      Pκs [Vis n; Vis 3] ∧ Pκs [Vis n; Vis 3; Nb])))).
 Proof.
   split.
-  - move => /mod_filter_to_mod?. eexists _. split; [|done]. move => ?. done.
-  - move => [?[? /(mod_to_mod_filter _ f)]] Hs. by apply: Hs.
+  - inversion 1; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+    split; [naive_solver|]. right.
+    have [κ' ?]: ∃ κ', κ = Some κ' by naive_solver. subst.
+    eexists κ'.
+    have {}H := (H1 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+
+    have {}H := (H3 3 ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+    have {}H := (H6 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 2: invert_all @m_step => //.
+
+    have {}H := (H3 5 ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+    have {}H := (H11 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+  - move => [?[?|[n [? [? HP]]]]]. 1: by apply: TraceEnd.
+    apply: TraceStep. { apply: (FilterStep _ _ _ _ (Some n)). econstructor. naive_solver. }
+    2: naive_solver.
+    move => /= ??; simplify_eq.
+    move: HP => [?|?]. 1: by apply: TraceEnd.
+    apply: TraceStep; [by econstructor; constructor| |done].
+    move => /= ? [?|?]; simplify_eq.
+    + apply: TraceStep.
+      { econstructor; [constructor|]. naive_solver. }
+      2: naive_solver.
+      move => /= ? ->. apply: TraceEnd; [done | naive_solver].
+    + apply: TraceStep.
+      { econstructor; [constructor|]. naive_solver. }
+      2: naive_solver.
+      move => /= ? ->. apply: TraceEnd; [done | naive_solver].
 Qed.
 
-Lemma mod_filter_refines {EV1 EV2} (m1 m2 : module EV1) (f : EV1 → option EV2) σ1 σ2 :
-  MS m1 σ1 ⊑ MS m2 σ2 →
-  MS (mod_filter m1 f) σ1 ⊑ MS (mod_filter m2 f) σ2.
+Lemma mod_ang_comm2_filter_traces Pκs:
+  0 ~{mod_filter test1.mod_ang_comm2 test_filter, Pκs}~> (λ _, True) ↔
+    Pκs [] ∧
+  (Pκs [Nb] ∨
+   ∃ n1 n2, (n1 = 4 ∨ n1 = 5) ∧ (n2 = 4 ∨ n2 = 5) ∧
+   (Pκs [Vis n1] ∧ Pκs [Vis n2] ∧
+    ∃ b1 b2,
+      (if b1 then Pκs [Vis n1; Nb] else Pκs [Vis n1; Vis 2] ∧ Pκs [Vis n1; Vis 2; Nb]) ∧
+      (if b2 then Pκs [Vis n2; Nb] else Pκs [Vis n2; Vis 3] ∧ Pκs [Vis n2; Vis 3; Nb]))).
 Proof.
-  move => [/= Hr]. constructor => /= ? /mod_filter_to_mod/Hr Hm.
-  apply: mod_to_mod_filter; [done|]. move => ?. done.
+  split.
+  - inversion 1; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+    split; [naive_solver|].
+
+    have {}H := (H1 2 ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //.
+
+    have {}H := (H1 5 ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //. right.
+
+    have [κ' ?]: ∃ κ', κ = Some κ' by naive_solver. subst.
+    have [κ'' ?]: ∃ κ', κ0 = Some κ' by naive_solver. subst.
+    eexists κ', κ''. split; [naive_solver|].
+    split; [naive_solver|]. split; [naive_solver|]. split; [naive_solver|].
+
+    have {}H := (H3 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: {
+      eexists true.
+      have {}H := (H5 _ ltac:(naive_solver)).
+      inversion H; simplify_eq. 1: eexists true; naive_solver.
+      invert_all @m_step => //.
+
+      have {}H := (H11 _ ltac:(naive_solver)).
+      inversion H; simplify_eq. 2: invert_all @m_step => //.
+      eexists false; naive_solver.
+    }
+    eexists false.
+    invert_all @m_step => //.
+
+    have {}H := (H8 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 2: invert_all @m_step => //.
+
+    have {}H := (H5 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: eexists true; naive_solver.
+    invert_all @m_step => //.
+
+    have {}H := (H14 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 2: invert_all @m_step => //.
+    eexists false; naive_solver.
+  - move => [?[?|[n1 [n2 [? [? [? [? [b1 [b2 [??]]]]]]]]]]]. 1: by apply: TraceEnd.
+    apply: TraceStep. { econstructor; [constructor|]. naive_solver. } 2: naive_solver.
+    move => /= ? [?|?]; simplify_eq.
+    + apply: TraceStep. { apply: (FilterStep _ _ _ _ (Some n1)). econstructor. naive_solver. } 2: naive_solver.
+      move => /=??. simplify_eq.
+      destruct b1. 1: by apply: TraceEnd.
+      apply: TraceStep. { econstructor; [constructor|]. naive_solver. } 2: naive_solver.
+      move => /=??. simplify_eq. by apply: TraceEnd.
+    + apply: TraceStep. { apply: (FilterStep _ _ _ _ (Some n2)). econstructor. naive_solver. } 2: naive_solver.
+      move => /=??. simplify_eq.
+      destruct b2. 1: by apply: TraceEnd.
+      apply: TraceStep. { econstructor; [constructor|]. naive_solver. } 2: naive_solver.
+      move => /=??. simplify_eq. by apply: TraceEnd.
 Qed.
+
+Lemma mod_ang_comm2_filter_not_refines_mod_ang_comm1_filter:
+  ¬ refines (MS (mod_filter test1.mod_ang_comm2 test_filter) 0) (MS (mod_filter test1.mod_ang_comm1 test_filter) 0).
+Proof.
+  move => [/=].
+  setoid_rewrite mod_ang_comm1_filter_traces.
+  setoid_rewrite mod_ang_comm2_filter_traces.
+  move => Hr.
+  move: (Hr (λ κs, κs = [] ∨
+                   κs = [Vis 4] ∨ κs = [Vis 4; Vis 2] ∨ κs = [Vis 4; Vis 2; Nb] ∨
+                   κs = [Vis 5] ∨ κs = [Vis 5; Vis 3] ∨ κs = [Vis 5; Vis 3; Nb])).
+  move => [|].
+  - split; [ naive_solver|].
+    right. eexists 4, 5.
+    split_and!; [ naive_solver..|].
+    eexists false, false. naive_solver.
+  - naive_solver.
+Qed.
+End test2.
 
 (*
+Inductive filter_trace_rel {EV1 EV2} (R : EV1 → option EV2 → Prop) : (list (event EV1) → Prop) → (list (event EV2) → Prop) → Prop :=
+| FTREnd (Pκs : _ → Prop) Pκs':
+    (Pκs' ⊆ (λ κs, κs = [] ∨ κs = [Nb])) →
+    Pκs [] →
+    Pκs [Nb] →
+    filter_trace_rel R Pκs' Pκs
+| FTRStep (Pκs2 : _ → Prop) Pκs1 Pκs1'  e κ:
+    Pκs1 ⊆ (λ κs, κs = [] ∨ κs = [Vis e] ∨ (∃ κs', κs = Vis e :: κs' ∧ Pκs1' κs')) →
+    Pκs2 [] →
+    Pκs2 (option_list (Vis <$> κ)) →
+    R e κ →
+    filter_trace_rel R Pκs1' (λ κs, Pκs2 (option_list (Vis <$> κ) ++ κs)) →
+    filter_trace_rel R Pκs1 Pκs2
+| FTRChoice A f (Pκs : _ → Prop) Pκs':
+    Pκs' ⊆ (λ κs', κs' = [] ∨ ∃ x : A, f x κs') →
+    Pκs [] →
+    (∀ x, filter_trace_rel R (f x) Pκs) →
+    filter_trace_rel R Pκs' Pκs
+(* | FTRStep (Pκs : _ → Prop) e: *)
+(*     Pκs [] → *)
+(*     Pκs [Nb] → *)
+(*     filter_trace_rel R (λ κs, κs = [] ∨ κs = option_list (Vis <$> e) *)
+(*         ∨ (∃ κs', κs = option_list (Vis <$> e) ++ κs' ∧ (∃ x : {x : m_state m  | Pσ2 x}, f x κs'))) Pκs  *)
+.
+
+
+Global Instance propsubseteq_preorder A : PreOrder (⊆@{A → Prop}).
+Proof.
+  constructor.
+  - move => ???. naive_solver.
+  - move => ???. unfold subseteq, propset_subseteq. naive_solver.
+Qed.
+
+
+Lemma filter_trace_rel_nil {EV1 EV2} (R : EV1 → option EV2 → Prop) Pκs Pκs':
+  filter_trace_rel R Pκs Pκs' →
+  Pκs' [].
+Proof. by inversion 1. Qed.
+
+Lemma filter_trace_rel_nb {EV1 EV2} (R : EV1 → option EV2 → Prop) Pκs Pκs':
+  filter_trace_rel R Pκs Pκs' →
+  Pκs [Nb] →
+  Pκs' [Nb].
+Proof. elim; pnaive_solver. Qed.
+
+Lemma filter_trace_rel_vis {EV1 EV2} (R : EV1 → option EV2 → Prop) Pκs1 Pκs2 e:
+  filter_trace_rel R Pκs1 Pκs2 →
+  Pκs1 [Vis e] →
+  (* ∃ A : Type, ∀ x : A,  *)
+  ∃ (P : _ → Prop),
+  ∀ Pκs1' κ, P (Pκs1', κ) →
+  Pκs1 ⊆ (λ κs, κs = [] ∨ κs = [Vis e] ∨ (∃ κs', κs = Vis e :: κs' ∧ Pκs1' κs')) ∧
+  Pκs2 [] ∧
+  Pκs2 (option_list (Vis <$> (κ))) ∧
+  R e (κ)
+  ∧
+  filter_trace_rel R Pκs1' (λ κs, Pκs2 (option_list (Vis <$> (κ)) ++ κs)).
+Proof.
+  elim.
+  - move => ?? Hsub?? /Hsub. naive_solver.
+  - move => ??? e' ? Hsub ???? _ /Hsub ?.
+  (* eexists unit. move => ?. *)
+    eexists ((_, _) =.). move => ?? [<- <-].
+    have ? : e = e' by naive_solver. subst e'. done.
+      (* by eexists _, _. *)
+  - move => ???? Hsub ?? IH ?.
+    have [f Hf]:= CHOICE IH.
+    eexists (λ x, ∃ y, f y x).
+    move => ?? [??].
+    (* admit. *)
+    (* move => /Hsub [//| [? /IH [?[?[Hf ?]]]]]. eexists _, _. split; [|done]. *)
+    (* admit. *)
+    (* etrans; [done|] => ? [?|[?]]. 1: naive_solver. *)
+    (* move => /Hf. *)
+
+    (* pnaive_solver. *)
+    (* 2: done. *)
+Abort.
+
+Lemma filter_trace_rel_vis {EV1 EV2} (R : EV1 → option EV2 → Prop) Pκs1 Pκs2 e:
+  filter_trace_rel R Pκs1 Pκs2 →
+  Pκs1 [Vis e] →
+  (* ∃ A : Type, ∀ x : A,  *)
+  ∃ Pκs1' κ,
+  Pκs1 ⊆ (λ κs, κs = [] ∨ κs = [Vis e] ∨ (∃ κs', κs = Vis e :: κs' ∧ Pκs1' κs')) ∧
+  Pκs2 [] ∧
+  Pκs2 (option_list (Vis <$> (κ))) ∧
+  R e (κ)
+  ∧
+  filter_trace_rel R Pκs1' (λ κs, Pκs2 (option_list (Vis <$> (κ)) ++ κs)).
+Proof.
+  elim.
+  - move => ?? Hsub?? /Hsub. naive_solver.
+  - move => ??? e' ? Hsub ???? _ /Hsub ?.
+    (* eexists unit. move => ?. *)
+    have ? : e = e' by naive_solver. subst e'.
+      by eexists _, _.
+  - move => ???? Hsub ?? IH.
+    (* have [f Hf]:= CHOICE IH. *)
+    (* admit. *)
+    move => /Hsub [//| [? /IH [?[?[Hf ?]]]]]. eexists _, _. split; [|done].
+    (* admit. *)
+    etrans; [done|] => ? [?|[?]]. 1: naive_solver.
+    (* move => /Hf. *)
+
+    (* pnaive_solver. *)
+    (* 2: done. *)
+Abort.
+(* Proof. elim; pnaive_solver. Qed. *)
+
+Lemma filter_trace_rel_mono_l {EV1 EV2} (R : EV1 → option EV2 → Prop) Pκs1 Pκs2 Pκs':
+  filter_trace_rel R Pκs1 Pκs' →
+  Pκs2 ⊆ (λ κs, κs = [] ∨ Pκs1 κs) →
+  filter_trace_rel R Pκs2 Pκs'.
+Proof.
+  move => Ht.
+  elim: Ht Pκs2.
+  - move => ???????. apply: FTREnd; pnaive_solver.
+  - move => ?????????????. apply: FTRStep; pnaive_solver.
+  - move => *. apply: FTRChoice. 2: pnaive_solver. 2: pnaive_solver.
+    etrans; [done|].
+    pnaive_solver.
+Qed.
+
+Lemma mod_filter_to_mod {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pσ:
+  σ ~{ mod_filter m R, Pκs }~> Pσ →
+  ∃ Pκs', filter_trace_rel R Pκs' Pκs ∧ σ ~{ m, Pκs' }~> Pσ.
+Proof.
+  elim.
+  - move => ????[??]. eexists _.
+    split. { apply: FTREnd; [move => ?; apply|done..]. }
+    apply: TraceEnd; [done|]. naive_solver.
+  - move => ???? κ Hstep ? IH [??]. inversion Hstep; simplify_eq.
+    have [f Hf]:= CHOICE IH.
+    destruct e.
+    + eexists (λ κs, κs = [] ∨ κs = [Vis e] ∨ ∃ κs', κs = Vis e :: κs' ∧ ∃ x, f x κs'). split.
+      * apply: FTRStep; [|done..|]; last first.
+        -- apply: (FTRChoice _ _ f). { move => ?. apply. } { by rewrite right_id_L. }
+           move => -[??]. naive_solver.
+        -- move => ? [?|[?|[?[?[[??]?]]]]]; [naive_solver..|]; simplify_eq.
+           right. right. eexists _. split; [done|]. right. eexists (exist _ _ _). naive_solver.
+      * apply: TraceStep; [done| |].
+        -- move => ??. have [? Ht]:= Hf _ ltac:(done).
+           apply: has_trace_mono; [done| |done] => ??. naive_solver.
+        -- naive_solver.
+    + simplify_eq. eexists _.
+      split.
+      * apply (FTRChoice _ _ f). { move => ?. apply. } { done. } move => [??]. naive_solver.
+      * apply: TraceStep; [done| |].
+        -- move => ??.
+           have [? Ht]:= Hf _ ltac:(done).
+           apply: has_trace_mono; [done| |done] => ??. naive_solver.
+        -- naive_solver.
+Qed.
+
+Lemma mod_to_mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pσ:
+  σ ~{ m, Pκs }~> Pσ → ∀ Pκs', filter_trace_rel R Pκs Pκs' →
+  σ ~{ mod_filter m R, Pκs' }~> Pσ.
+Proof.
+  elim.
+  - move => ????[??]? Hrel. apply: TraceEnd; [done|].
+    split.
+    + by apply: filter_trace_rel_nil.
+    + by apply: filter_trace_rel_nb.
+  - move => ???? κ? _ IH [? Hvis] ? Hrel.
+    destruct κ; simplify_eq/=.
+    + inversion Hrel; simplify_eq. pnaive_solver. admit.
+
+
+      induction Hrel.
+      * pnaive_solver.
+      * have ? : e = e0 by pnaive_solver. subst e0.
+        apply: TraceStep; [econstructor;[done| simpl; done ] | |done].
+        move => ??. apply: IH; [done|].
+        apply: filter_trace_rel_mono_l; [done|].
+        move => ? /H [?|[?|?]]; naive_solver.
+      * move: Hvis => /H [//|[??]].
+        apply: H2. 3: done.
+        -- move => ????. apply: IH; [done|].
+           admit.
+        -- admit.
+        (* -- done. *)
+  (* } *)
+  (*     have ? : e = e0 by unfold subseteq, propset_subseteq in *; naive_solver. subst e0. *)
+  (*     apply: TraceStep; [econstructor;[done| simpl; done ] | |done]. *)
+  (*     move => ??. apply: IH; [done|]. *)
+  (*     apply: filter_trace_rel_mono_l; [done|]. *)
+  (*     move => ? /H [?|[?|?]]; naive_solver. *)
+    + apply: TraceStep; [ by econstructor | | by inversion Hrel ].
+      move => ??/=. by apply: IH.
+Admitted.
+
+Lemma mod_filter_refines {EV1 EV2} (m1 m2 : module EV1) (R : EV1 → option EV2 → Prop) σ1 σ2 :
+  (* (∀ κ1 κ2 κ2', R κ1 κ2 → R κ1 κ2' → κ2 = κ2') → *)
+  MS m1 σ1 ⊑ MS m2 σ2 →
+  MS (mod_filter m1 R) σ1 ⊑ MS (mod_filter m2 R) σ2.
+Proof.
+  move => [/= Hr]. constructor => /= ? /mod_filter_to_mod[? [? /Hr ?]].
+  by apply: mod_to_mod_filter.
+Qed.
+*)
 Inductive filter_trace_rel {EV1 EV2} (R : EV1 → option EV2 → Prop) : list (event EV1) → list (event EV2) → Prop :=
-| FTREnd :
+| FTRNil :
     filter_trace_rel R [] []
+| FTREnd :
+    filter_trace_rel R [Nb] [Nb]
 | FTRStep κ κ' κs κs':
     R κ κ' →
     filter_trace_rel R κs κs' →
@@ -1129,17 +1501,17 @@ Lemma mod_filter_to_mod {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → P
   σ ~{ m, λ κs, ∃ κs', filter_trace_rel R κs κs' ∧ Pκs κs' }~> Pσ.
 Proof.
   elim.
-  - move => ?????. apply: TraceEnd; [done|]. eexists []. split; [|done]. constructor.
-  - move => ?????? Hstep ? IH ?. inversion Hstep; simplify_eq.
+  - move => ????[??]. apply: TraceEnd; [done|].
+    split; eexists _; (split; [ by constructor | done]).
+  - move => ????? Hstep ? IH [??]. inversion Hstep; simplify_eq.
     apply: TraceStep; [done| |].
     + move => σ2 ?. apply: has_trace_mono; [by apply: IH | |done] => /=.
       move => κs [κs' [? ?]].
       eexists _. split; [|done].
       destruct e; simplify_eq/=; [|done]. by apply: FTRStep.
-    + eexists _. split; [|done].
-      destruct e; simplify_eq/=.
-      * constructor; [done|]. apply: FTRUb.
-      * apply: FTRUb.
+    + destruct e => /=; split; eexists _.
+      all: try by split; [by constructor|].
+      split; [constructor => //; constructor|]. by rewrite right_id_L.
 Qed.
 
 Lemma mod_to_mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pκs' Pσ:
@@ -1165,24 +1537,30 @@ Then we have I ⊑ S but not mod_filter R I ⊑ mod_filter R S since the trace
  [A1; B] ∨ [A2; C] can be produced by mod_filter R I, but not by mod_filter R S.
 The cruicial difference is that I can pick two different elements of R for A, while S
 can only pick one and whatever it picks, the angelic choice could resolve in the wrong way.
+See also the example above.
  *)
   (∀ κ1 κ2 κ2', R κ1 κ2 → R κ1 κ2' → κ2 = κ2') →
-  σ ~{ m, Pκs }~> Pσ → (∀ κs, Pκs κs → ∃ κs', filter_trace_rel R κs κs' ∧ Pκs' κs') →
+  σ ~{ m, Pκs }~> Pσ → Pκs ⊆ (λ κs, ∃ κs', filter_trace_rel R κs κs' ∧ Pκs' κs') →
   σ ~{ mod_filter m R, Pκs' }~> Pσ.
 Proof.
   move => HR Ht. elim: Ht Pκs'.
-  - move => ?????? HP. have [//|? [Hf ?]]:= HP [] _. inversion Hf; simplify_eq. by apply: TraceEnd.
-  - move => σ1?? Pσ3 κ ??? IH ? Pκs' HP.
+  - move => ????[??]? HP.
+    have [//|? [Hf ?]]:= HP [] _. inversion Hf; simplify_eq.
+    have [//|? [Hf2 ?]]:= HP [Nb] _. inversion Hf2; simplify_eq.
+    by apply: TraceEnd.
+  - move => σ1?? Pσ3 κ ?? IH [??] Pκs' HP.
     destruct κ; simplify_eq/=.
-    + have [?[Hf ?]]:= HP _ ltac:(done).
+    + have [?[Hf HP']]:= HP [_] ltac:(done).
       inversion Hf; simplify_eq.
+      have [?[Hf2 ?]]:= HP [] ltac:(done).
+      inversion Hf2; simplify_eq.
+      revert select (filter_trace_rel _ _ κs'). inversion 1; simplify_eq.
+      rewrite right_id in HP'.
       apply: TraceStep; [ econstructor; [done | simpl;done] | | done].
-      move => σ2 ?.
-      apply: (has_trace_mono (λ κs, Pκs' (option_list (Vis <$> κ') ++ κs))); [apply: IH;[done|] | done | done].
-      move => ? HP'.
-      have [?[ Hf' ?]]:= HP _ HP'. inversion Hf'; simplify_eq.
+      move => σ2 ?. apply: IH; [done| ] => κs'' HP''.
+      have [?[ Hf' ?]]:= HP _ HP''. inversion Hf'; simplify_eq.
       eexists _. split; [done|]. have := HR _ _ _ H1 H2. naive_solver.
-    + have [?[??]]:= HP _ ltac:(done).
+    + have [?[Hf ?]]:= HP _ ltac:(done). inversion Hf; simplify_eq.
       apply: TraceStep; [ by econstructor | | simplify_eq/=; done]; simplify_eq/=.
       move => σ2 ?. by apply: IH.
 Qed.
@@ -1193,9 +1571,8 @@ Lemma mod_filter_refines {EV1 EV2} (m1 m2 : module EV1) (R : EV1 → option EV2 
   MS (mod_filter m1 R) σ1 ⊑ MS (mod_filter m2 R) σ2.
 Proof.
   move => ? [/= Hr]. constructor => /= ? /mod_filter_to_mod/Hr Hm. apply: mod_to_mod_filter; [done|done|].
-  naive_solver.
+  move => ??. naive_solver.
 Qed.
-*)
 
 (*** link *)
 Record link_mediator EV1 EV2 EV3 := {
