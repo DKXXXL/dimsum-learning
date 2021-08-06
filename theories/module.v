@@ -1249,7 +1249,8 @@ Lemma mod_ang_comm2_filter_traces Pκs:
    ∃ n1 n2, (n1 = 4 ∨ n1 = 5) ∧ (n2 = 4 ∨ n2 = 5) ∧
    (Pκs [Vis n1] ∧ Pκs [Vis n2] ∧
     ∃ b1 b2,
-      (if b1 then Pκs [Vis n1; Nb] else Pκs [Vis n1; Vis 2] ∧ Pκs [Vis n1; Vis 2; Nb]) ∧
+      (if b1 then Pκs [Vis n1; Nb] else Pκs [Vis n1; Vis 2] ∧ Pκs [Vis n1; Vis 2; Nb])
+      ∧
       (if b2 then Pκs [Vis n2; Nb] else Pκs [Vis n2; Vis 3] ∧ Pκs [Vis n2; Vis 3; Nb]))).
 Proof.
   split.
@@ -1674,7 +1675,6 @@ MB': 0 --- 1 --- 2 -a
                     \- 5 --- 6
                           4
 
-
 We have [M1 ⊑ prod MA MB] and [MB ⊑ MB'], but ¬ [M1 ⊑ prod MA MB'].
 Thus we cannot have [prod MA MB ⊑ prod MA MB'].
 
@@ -1709,7 +1709,37 @@ commute the angelic choice over the call to f (which would just be an external
 event). But this is not sound!
 
 (If the angelic choice and demonic choice seems to abstract, one can think of the
-angelic choice as a integer to pointer cast and the demonic choice as an allocation.) *)
+angelic choice as a integer to pointer cast and the demonic choice as an allocation.)
+
+
+Question: Should one be able to do the following optimization if integer to pointer
+casts are defined via angelic choice?
+
+Either if f is an unknown function call or a call to malloc or a call to a function
+where we know that it does not do a non-deterministic choice?
+
+int x = ...;
+int *a = (int * )x;
+//f();
+int *y = malloc();
+return y + *a;
+
+-optimize to>
+
+int x = ...;
+//f();
+int *y = malloc();
+return y + *(int * )x;
+
+
+For malloc, the commutation is probably invalid and thus also for the case of unknown
+function. But is there a model where one can commute the angelic choice over the
+external function call if one knows that it does not do demonic choices?
+Maybe, but such a model might be quite complicated and it is not clear how much it is worth
+to be able to do this commutation in this quite specific case (or it is not clear how common
+the case where the commutation is sound is).
+
+ *)
 
 Inductive prod_mod1_step : nat → option nat → (nat → Prop) → Prop :=
 | PM1S0: prod_mod1_step 0 None (λ σ', σ' = 1 ∨ σ' = 4)
