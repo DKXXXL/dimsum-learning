@@ -376,6 +376,11 @@ Proof.
 Qed.
 
 Module test1.
+
+(*
+    1
+ 0 --- 1
+*)
 Inductive mod1_step : nat → option nat → (nat → Prop) → Prop :=
 | T1S0: mod1_step 0 (Some 1) (λ σ', σ' = 1).
 
@@ -385,7 +390,9 @@ Definition mod1 : module nat := {|
 |}.
 
 Lemma mod1_traces Pκs:
-  0 ~{mod1, Pκs}~> (λ _, True) ↔ (Pκs [] ∧ Pκs [Nb]) ∨ (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Nb]).
+  0 ~{mod1, Pκs}~> (λ _, True) ↔
+  (Pκs [] ∧ Pκs [Nb]) ∨
+  (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Nb]).
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
@@ -507,6 +514,13 @@ Proof.
   - move => ?.
     apply: TraceStep; [by constructor| |done]. done.
 Qed.
+
+(*        1
+    /- 1 --- 3
+0 -a
+    \- 2 --- 3
+          2
+*)
 
 Inductive mod12_ang_step : nat → option nat → (nat → Prop) → Prop :=
 | T12AS0: mod12_ang_step 0 None (λ σ', σ' = 1 ∨ σ' = 2)
@@ -1117,6 +1131,39 @@ Proof.
 Qed.
 (* Print Assumptions refines_dem_refines. *)
 
+Definition dem_set {EV} (T : list EV → Prop) : list EV → Prop :=
+  λ κs, ∃ t, T t ∧ κs `prefix_of` t.
+
+Definition ang_dem_set {EV} (T : list EV → Prop) : (list EV → Prop) → Prop :=
+  λ Pκs, ∃ t, T t ∧ (λ κs, κs `prefix_of` t) ⊆ Pκs.
+
+Lemma refines_dem_refines_alt {EV} (T1 T2 : list EV → Prop) :
+  dem_set T1 ⊆ dem_set T2 ↔ ang_dem_set T1 ⊆ ang_dem_set T2.
+Proof.
+  split.
+  - move => Hdem Pκs [t [? Hang]]. eexists t. split; [|done].
+    have [|]:= Hdem t. { eexists _. done. }
+    move => ? [??].
+    admit.
+  - move => Hang κs [?[??]].
+    have [|]:= Hang (λ κs', κs' = κs). { eexists _. split; [done|]. move => ??. admit. }
+    move => ? [??]. eexists _. split; [done|].
+    admit.
+Abort.
+
+(*
+∃ a set T of traces, such that the semantics equals ∪ t ∈ T, prefixes(t)
+
+semantics in sets: D(T) = { t' | ∃ t, t ∈ T ∧ t' ∈ prefixes(t) }
+semantics in sets of sets: S(T) = { x | ∃ t, t ∈ T ∧ prefixes(t) ⊆ x }
+
+∀ T T', D(T') ⊆ D(T) ↔ S(T') ⊆ S(T)
+
+semantics in only demonic world:
+{ [], [Nb], [Vis 1], [Vis 1; Nb], [Vis 2], [Vis 2; Nb] }
+*)
+
+
 (*** [mod_filter] *)
 
 Ltac pnaive_solver := unfold subseteq, propset_subseteq in *; naive_solver.
@@ -1598,6 +1645,216 @@ Inductive product_step {EV1 EV2} (m1 : module EV1) (m2 : module EV2) :
 Definition mod_product {EV1 EV2} (m1 : module EV1) (m2 : module EV2) : module (option EV1 * option EV2) := {|
   m_step := product_step m1 m2;
 |}.
+
+Module test3.
+
+(*
+
+              1     3
+        /- 1 --- 2 --- 3
+M1: 0 -a
+        \- 4 --- 5 --- 6
+              2     4
+
+                    1     Y
+       X      /- 2 --- 3 --- 4
+MA: 0 --- 1 -d
+              \- 5 --- 6 --- 7
+                    2     Y
+
+              X     Y     3
+        /- 1 --- 2 --- 3 --- 4
+MB: 0 -a
+        \- 5 --- 6 --- 7 --- 8
+              X     Y     4
+
+                          3
+        X     Y     /- 3 --- 4
+MB': 0 --- 1 --- 2 -a
+                    \- 5 --- 6
+                          4
+
+
+We have [M1 ⊑ prod MA MB] and [MB ⊑ MB'], but ¬ [M1 ⊑ prod MA MB'].
+Thus we cannot have [prod MA MB ⊑ prod MA MB'].
+
+To see that this is a realistic case, consider [M1 ⊑ prod MA MB] in two steps:
+First we have [M1 ⊑ M1'] which introduces the demonic choice:
+
+
+                      1     3
+                /- 2 --- 3 --- 4
+          /- 1 -d
+         /      \- 5 --- 6 --- 7
+        /             2     3
+M1': 0 -a
+        \             1     4
+         \      /- 9 --- A --- B
+          \- 8 -d
+                \- C --- D --- E
+                      2     4
+
+Written as programs, we have :
+
+M1 : x ← angelic_choice({3, 4}); y ← if x = 3 then 1 else 2; output(y); output(x)
+M1': x ← angelic_choice({3, 4}); y ← demonic_choice({1, 2}); output(y); output(x)
+
+Now we want to split the demonic choice in M1' into a separate function:
+
+f   := y ← demonic_choice({1, 2}); output(y)
+M1'': x ← angelic_choice({3, 4}); f(); output(x)
+
+If one now one wants to verify M1'' and f separately, it might seem that one can
+commute the angelic choice over the call to f (which would just be an external
+event). But this is not sound!
+
+(If the angelic choice and demonic choice seems to abstract, one can think of the
+angelic choice as a integer to pointer cast and the demonic choice as an allocation.) *)
+
+Inductive prod_mod1_step : nat → option nat → (nat → Prop) → Prop :=
+| PM1S0: prod_mod1_step 0 None (λ σ', σ' = 1 ∨ σ' = 4)
+| PM1S1: prod_mod1_step 1 (Some 1) (λ σ', σ' = 2)
+| PM1S2: prod_mod1_step 2 (Some 3) (λ σ', σ' = 3)
+| PM1S4: prod_mod1_step 4 (Some 2) (λ σ', σ' = 5)
+| PM1S5: prod_mod1_step 5 (Some 4) (λ σ', σ' = 6)
+.
+
+Definition prod_mod1 : module nat := {|
+  m_step := prod_mod1_step;
+|}.
+
+Inductive prod_modA_step : nat → option nat → (nat → Prop) → Prop :=
+| PMAS0 : prod_modA_step 0 (Some 10) (λ σ', σ' = 1)
+| PMAS11: prod_modA_step 1 None (λ σ', σ' = 2)
+| PMAS12: prod_modA_step 1 None (λ σ', σ' = 5)
+| PMAS2 : prod_modA_step 2 (Some 1) (λ σ', σ' = 3)
+| PMAS3 : prod_modA_step 3 (Some 11) (λ σ', σ' = 4)
+| PMAS5 : prod_modA_step 5 (Some 2) (λ σ', σ' = 6)
+| PMAS6 : prod_modA_step 6 (Some 11) (λ σ', σ' = 7)
+.
+
+Definition prod_modA : module nat := {|
+  m_step := prod_modA_step;
+|}.
+
+Inductive prod_modB_step : nat → option nat → (nat → Prop) → Prop :=
+| PMBS0: prod_modB_step 0 None (λ σ', σ' = 1 ∨ σ' = 5)
+| PMBS1: prod_modB_step 1 (Some 10) (λ σ', σ' = 2)
+| PMBS2: prod_modB_step 2 (Some 11) (λ σ', σ' = 3)
+| PMBS3: prod_modB_step 3 (Some 3) (λ σ', σ' = 4)
+| PMBS5: prod_modB_step 5 (Some 10) (λ σ', σ' = 6)
+| PMBS6: prod_modB_step 6 (Some 11) (λ σ', σ' = 7)
+| PMBS7: prod_modB_step 7 (Some 4) (λ σ', σ' = 8)
+.
+
+Definition prod_modB : module nat := {|
+  m_step := prod_modB_step;
+|}.
+
+Inductive prod_modB'_step : nat → option nat → (nat → Prop) → Prop :=
+| PMB'S0: prod_modB'_step 0 (Some 10) (λ σ', σ' = 1)
+| PMB'S1: prod_modB'_step 1 (Some 11) (λ σ', σ' = 2)
+| PMB'S2: prod_modB'_step 2 None (λ σ', σ' = 3 ∨ σ' = 5)
+| PMB'S3: prod_modB'_step 3 (Some 3) (λ σ', σ' = 4)
+| PMB'S5: prod_modB'_step 5 (Some 4) (λ σ', σ' = 6)
+.
+
+Definition prod_modB' : module nat := {|
+  m_step := prod_modB'_step;
+|}.
+
+Definition filterR (e1 : (option nat * option nat)) (e2 : option nat) : Prop :=
+    (e1 = (Some 10, Some 10) ∧ e2 = None)
+  ∨ (e1 = (Some 11, Some 11) ∧ e2 = None)
+  ∨ (e1 = (Some 1, None) ∧ e2 = Some 1)
+  ∨ (e1 = (Some 2, None) ∧ e2 = Some 2)
+  ∨ (e1 = (None, Some 3) ∧ e2 = Some 3)
+  ∨ (e1 = (None, Some 4) ∧ e2 = Some 4).
+Arguments filterR _ _ /.
+Definition prod_mod : module nat := mod_filter (mod_product prod_modA prod_modB) filterR.
+Definition prod_mod' : module nat := mod_filter (mod_product prod_modA prod_modB') filterR.
+
+Lemma prod_mod1_refines_prod_mod:
+  MS prod_mod1 0 ⊑ MS prod_mod (0, 0).
+Proof.
+  constructor => Pκs /= Himpl.
+  inversion Himpl; simplify_eq. 1: by apply: TraceEnd.
+  invert_all @m_step.
+
+  apply: TraceStep. { econstructor. { apply ProductStepR. constructor. } done. } 2: done.
+  move => [??] [?[?|?]]; simplify_eq.
+  - have {}H := (H0 1 ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: by apply: TraceEnd.
+    invert_all @m_step => //.
+
+    apply: TraceStep. { econstructor. { apply ProductStepBoth; constructor. } naive_solver. }
+    2: done. move => [??] [??]; simplify_eq/=.
+    apply: TraceStep. { econstructor. { apply ProductStepL. apply: PMAS11. } naive_solver. }
+    2: done. move => [??] [??]; simplify_eq/=.
+    apply: TraceStep. { econstructor. { apply ProductStepL. constructor. } naive_solver. }
+    2: done. move => [??] [??]; simplify_eq/=.
+    apply: TraceStep. { econstructor. { apply ProductStepBoth; constructor. } naive_solver. }
+    2: naive_solver. move => [??] [??]; simplify_eq/=.
+
+    have {}H := (H3 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: by apply: TraceEnd.
+    invert_all @m_step => //.
+    apply: TraceStep. { econstructor. { apply ProductStepR. constructor. } naive_solver. }
+    2: naive_solver. move => [??] [??]; simplify_eq/=.
+    have {}H := (H5 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: by apply: TraceEnd.
+    invert_all @m_step => //.
+  - have {}H := (H0 4 ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: by apply: TraceEnd.
+    invert_all @m_step => //.
+
+    apply: TraceStep. { econstructor. { apply ProductStepBoth; constructor. } naive_solver. }
+    2: done. move => [??] [??]; simplify_eq/=.
+    apply: TraceStep. { econstructor. { apply ProductStepL. apply: PMAS12. } naive_solver. }
+    2: done. move => [??] [??]; simplify_eq/=.
+    apply: TraceStep. { econstructor. { apply ProductStepL. constructor. } naive_solver. }
+    2: done. move => [??] [??]; simplify_eq/=.
+    apply: TraceStep. { econstructor. { apply ProductStepBoth; constructor. } naive_solver. }
+    2: naive_solver. move => [??] [??]; simplify_eq/=.
+
+    have {}H := (H3 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: by apply: TraceEnd.
+    invert_all @m_step => //.
+    apply: TraceStep. { econstructor. { apply ProductStepR. constructor. } naive_solver. }
+    2: naive_solver. move => [??] [??]; simplify_eq/=.
+    have {}H := (H5 _ ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: by apply: TraceEnd.
+    invert_all @m_step => //.
+Qed.
+
+Lemma prod_mod1_not_refines_prod_mod':
+  ¬ MS prod_mod1 0 ⊑ MS prod_mod' (0, 0).
+Proof.
+  move => [/=Hr].
+  feed pose proof (Hr (λ κs, κs = [] ∨ κs = [Vis 1] ∨ κs = [Vis 1; Vis 3] ∨ κs = [Vis 1; Vis 3; Nb] ∨
+                             κs = [Vis 2] ∨ κs = [Vis 2; Vis 4] ∨ κs = [Vis 2; Vis 4; Nb])) as Hr'.
+  - apply: TraceStep. { constructor. } 2: naive_solver.
+    move => /= ? [?|?]; simplify_eq.
+    + apply: TraceStep. { constructor. } 2: naive_solver.
+      move => /= ??; simplify_eq.
+      apply: TraceStep. { constructor. } 2: naive_solver.
+      move => /= ??; simplify_eq.
+      apply: TraceEnd; [done|]. naive_solver.
+    + apply: TraceStep. { constructor. } 2: naive_solver.
+      move => /= ??; simplify_eq.
+      apply: TraceStep. { constructor. } 2: naive_solver.
+      move => /= ??; simplify_eq.
+      apply: TraceEnd; [done|]. naive_solver.
+  - inversion Hr'; simplify_eq. 1: naive_solver.
+    invert_all @m_step. 1,2: naive_solver.
+    have ? : κ = None by naive_solver. subst κ. clear H3 H1 Hr Hr'.
+    have {}H := (H0 (_, _) ltac:(naive_solver)).
+    inversion H; simplify_eq. 1: naive_solver.
+    invert_all @m_step => //. 3: naive_solver.
+    (* This should work by passing the opposite of the demonic choice
+    to the angelic choice but has many case distinctions *)
+Abort.
+End test3.
 
 Inductive mod_product_rel1 {EV1 EV2} (m2 : module EV2) : list (event EV1) → m2.(m_state) → list (event (option EV1 * option EV2)) → Prop :=
 |MPR_nil σ:
@@ -2241,36 +2498,7 @@ Proof.
       admit.
     + move => ??????????. etrans; [done|].
       constructor. naive_solver.
-    elim: κs' κs Hrel.
-    + move => ?.
-    elim.
-    + move => ???? [??]. eexists tnil. split; [by constructor|]. by apply: TTraceEnd.
-    + move => ?? Pσ2 ? κ Hstep ? IH [??].
-      have [f Hf] := CHOICE IH.
-      eexists (tapp (option_trace κ) (tex _ f)).
-      split.
-      * destruct κ => /=.
-        -- apply: TRel_cons; [done..|]. apply: TRel_ex; [done..|] => -[??]. naive_solver.
-        -- apply: TRel_ex; [done..|] => -[??]. naive_solver.
-      * apply: TTraceStep; [done..| |done].
-        move => ??. apply: thas_trace_ex. naive_solver.
-  - move => [κs [Hκs Ht]].
-    elim: Ht Pκs Hκs.
-    + move => ???????. apply: TraceEnd; [done|].
-      by apply: thas_trace_rel_tnil.
-    + move => ??? κ ???? IH ?? Hrel.
-      move: (Hrel) => /thas_trace_rel_nil?.
-      apply: TraceStep; [done| |].
-      * move => ??. apply: IH; [done| ].
-        destruct κ => //; simplify_eq/=. 2: by apply: thas_trace_rel_mono_r.
-        efeed pose proof @thas_trace_rel_tcons as H; [done..|]. naive_solver.
-      * split; [done|]. destruct κ => //; simplify_eq/=.
-        efeed pose proof @thas_trace_rel_tcons as H; [done..|]. naive_solver.
-    + move => ?????? IH Hall ??.
-      have := thas_trace_rel_tall _ _ _ _ ltac:(done) ltac:(done).
-      naive_solver.
-      Unshelve. done.
-Qed.
+Abort.
 
 
 
