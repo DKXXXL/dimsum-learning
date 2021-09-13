@@ -10,16 +10,36 @@ Require Import refframe.axioms.
 
 Which refinements should hold and which should not hold?
 
+Properties of silent steps:
+
+      A           B                       A     B
+0. 1 --- 2 --- 3 --- 4  equivalent to  1 --- 2 --- 3
+
+  A(); B(1 + 1);  equivalent to  A(); B(2);
+
 Properties of NB:
+
+NB means that the program does not have any further behavior.
+It can be seen a termination, but in an actual programming language,
+termination probably should also emit a visible event. So here we exploit
+that diverging is not observable (since we only consider safety) and
+use a diverging loop [while(true);] to model NB.
 
       A                 A     B
 1. 1 --- 2  refines  1 --- 2 --- 3
 
+  A(); while(true);  refines  A(); B();
+
       A     B                     A
 2. 1 --- 2 --- 3  not refines  1 --- 2
 
+  A(); B();  not refines  A(); while(true);
+
 
 3. ∀ m, 1 --- 2  refines  m
+
+  ∀ m, while(true);  refines  m
+
   -> NB is the bottom element of the refinement lattice
   -> NB is similar to False
 
@@ -30,24 +50,49 @@ Properties of NB:
 
 Properties of UB:
 
+UB means that the program executes an action that it should not execute. We model
+it in the pseudo code with dereferencing a NULL pointer [*NULL].
+
       A     B                 A
 5. 1 --- 2 --- 3  refines  1 --- 2 -UB
+
+  A(); B();  refines  A(); *NULL;
 
       A                         A     B
 6. 1 --- 2 -UB  not refines  1 --- 2 --- 3
 
+  A(); *NULL;  not refines  A(); B();
+
 7. ∀ m, m  refines 1 -UB
+
+  ∀ m, m refines  *NULL;
+
   -> UB is the top element of the refinement lattice
   -> UB is similar to True
 
 
 Properties of ∃ exists choice:
 
+∃ choice allows to perform a choice when constructing a trace.
+It occurs e.g. when choosing the address or provenance of an allocation.
+Thus, here we use [x = malloc(n);] as an example for ∃-choice.
+
+(Memory model: Locations are pairs of provenances and addresses, memory is a map
+from addresses to provenances and values and accesses a memory location checks that
+the provenance of the location corresponds to the provenance of the memory, UB
+otherwise)
+
                                A
       A                  /- 2 --- 3
 8. 1 --- 2  refines  1 -∃
                          \- 4 --- 5
                                B
+
+  x = alloc_at(10, n); f(x);  refines  x = malloc(n); f(x)
+    (where alloc_at also takes the concrete address as argument)
+  or
+  x = malloc(n + n); y = x + n; f(x, y);  refines  x = malloc(n); y = malloc(n); f(x, y);
+
   -> Similar to A → A ∨ B
 
                                A
@@ -55,6 +100,9 @@ Properties of ∃ exists choice:
 9. 1 --- 2  refines  1 -∃
                          \- 4 --- 5
                                B
+
+  (example same as above)
+
   -> Similar to B → A ∨ B
 
                                    A
@@ -63,59 +111,160 @@ Properties of ∃ exists choice:
                              \- 4 --- 5
                                    B
 
+  g();   not refines   x = malloc(n); f(x);
+
               A
         /- 2 --- 3                   A
 11. 1 -∃            equivalent to 1 --- 2
+        \- 4 --- 5
+              A
+
+  malloc(n); f();  equivalent to  f();
+
+  -> Similar to A ∨ A ↔ A
+
+              A
+        /- 2 --- 3                   A
+12. 1 -∃            equivalent to 1 --- 2
         \- 4
+
+  x = malloc(n); while((int) n >= 2 ^ 64); equivalent to  x = malloc_64bit(n)
+    (where malloc_64bit only returns 64bit addresses)
+
   -> right to left follows from 8.
+  -> left to right follows from 3 in the first branch and then 11
   -> similar to False ∨ A ↔ A
 
 
               A
         /- 2 --- 3
-12. 1 -∃            equivalent to 1 -UB
+13. 1 -∃            equivalent to 1 -UB
         \- 4 -UB
+
+  (This is used to justify guessing addresses based on allocator non-determinism.)
+
   -> right to left follows from 9.
   -> left to right follows from 7.
   -> similar to True ∨ A ↔ True
 
 Properties of ∀ forall choice:
 
+∀ choice gives us the value of the choice when constructing a trace and
+one has to provide it when destructing the trace.
+It can be used to model integer to pointer casts where the cast uses angelic
+choice to choose the provenance (and the integer for the address).
+
                A
          /- 2 --- 3              A
-13.  1 -∀             refines 1 --- 2
+14.  1 -∀             refines 1 --- 2
          \- 4 --- 5
                B
+
+  p = (void * ) x; f(p)  refines  p = copy_alloc_id(x, q); f(p);
+
   -> Similar to A ∧ B → A
 
                A
          /- 2 --- 3              B
-14.  1 -∀             refines 1 --- 2
+15.  1 -∀             refines 1 --- 2
          \- 4 --- 5
                B
+
+  p = (void * ) x; f(p)  refines  p = copy_alloc_id(x, r); f(p);
+
   -> Similar to A ∧ B → B
 
                A
          /- 2 --- 3                  C
-15.  1 -∀             not refines 1 --- 2
+16.  1 -∀             not refines 1 --- 2
          \- 4 --- 5
                B
+
+  p = (void * ) x; f(p)  not refines  g();
+
   -> The refinement holds in AL
 
               A
+        /- 2 --- 3                   A
+17. 1 -∀            equivalent to 1 --- 2
+        \- 4 --- 5
+              A
+
+  (void * )n; f();  equivalent to  f();
+
+  -> Similar to A ∧ A ↔ A
+              A
         /- 2 --- 3
-16. 1 -∀            equivalent to 1 --- 2
+18. 1 -∀            equivalent to 1 --- 2
         \- 4
-  -> left to right follows from 14.
+  -> left to right follows from 15.
   -> right to left follows from 3.
   -> Similar to False ∧ A ↔ False
 
               A
         /- 2 --- 3                   A
-17. 1 -∀            equivalent to 1 --- 2
+19. 1 -∀            equivalent to 1 --- 2
         \- 4 -UB
-  -> left to right follows from 13.
+
+  p = (void * ) x; p - q; f(p)  equivalent to   p = copy_alloc_id(x, q); p - q; f(p);
+   (p - q has UB if the provanance of p and q differs)
+
+  -> left to right follows from 14.
+  -> right to left follows from 7. in the second branch an then 17.
   -> Similar to True ∧ A ↔ A
+
+Commuting ∃ with events:
+
+              A     B                               B
+        /- 2 --- 3 --- 4               A      /- 3 --- 4
+∃C1 1 -∃                   refines  1 --- 2 -∃
+        \- 5 --- 6 --- 7                      \- 5 --- 6
+              A     C                               C
+
+   x = malloc(n); p = f(); g(x, p);  refines  p = f(); x = malloc(n); g(x, p);
+
+   This should always hold as one can always use the value of the ∃ in the implementation
+   to instantiate the ∃ choice in the spec.
+
+                     B                       A     B
+        A      /- 3 --- 4              /- 2 --- 3 --- 4
+∃C2  1 --- 2 -∃            refines  1 -∃
+               \- 5 --- 6              \- 5 --- 6 --- 7
+                     C                       A     C
+
+   p = f(); x = malloc(n); g(x, p);   refines  x = malloc(n); p = f(); g(x, p);
+
+   Should this hold?
+   - What if f is some external call outside of C?
+   - What if f := return (void * )a; and g(x, p) := x - p?
+       Then there is UB in the implementation (by picking the provenance of
+       x to be different than p), but not in the spec (p can have the same provanance as x)!
+
+Commuting ∀ with events:
+
+                     B                       A     B
+        A      /- 3 --- 4              /- 2 --- 3 --- 4
+∀C2  1 --- 2 -∀            refines  1 -∀
+               \- 5 --- 6              \- 5 --- 6 --- 7
+                     C                       A     C
+
+   p = f(); x = (void * )n; g(x, p);   refines  x = (void * )n; p = f(); g(x, p);
+
+   This should always hold as one can use the ∀ choice from the spec to instantiate
+   the ∀ choice in the implementation.
+
+              A     B                               B
+        /- 2 --- 3 --- 4               A      /- 3 --- 4
+∀C1 1 -∀                   refines  1 --- 2 -∀
+        \- 5 --- 6 --- 7                      \- 5 --- 6
+              A     C                               C
+
+   x = (void * )n; p = f(); g(x, p);  refines  p = f(); x = (void * )n; g(x, p);
+
+   Should this hold?
+   - What if f is some external call outside of C?
+   - What if f := return malloc(a); and g(x, p) := x - p?
+       Then there is UB in the implementation, but not in the spec! (see above)
 *)
 
 Local Instance propset_subseteq {A} : SubsetEq (A → Prop) :=
