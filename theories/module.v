@@ -132,7 +132,7 @@ otherwise)
     (where malloc_64bit only returns 64bit addresses)
 
   -> right to left follows from 8.
-  -> left to right follows from 3 in the first branch and then 11
+  -> left to right follows from 3 in the second branch and then 11
   -> similar to False ∨ A ↔ A
 
 
