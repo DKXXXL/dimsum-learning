@@ -8,6 +8,10 @@ Require Import refframe.axioms.
 
 (*
 
+module : state transition system
+
+refines : module → module → Prop
+
 Which refinements should hold and which should not hold?
 
 Properties of silent steps:
@@ -175,8 +179,8 @@ choice to choose the provenance (and the integer for the address).
   -> Similar to A ∧ B → B
 
                A
-         /- 2 --- 3                  C
-16.  1 -∀             not refines 1 --- 2
+         /- 2 --- 3                   C
+16.  1 -∀              not refines 1 --- 2
          \- 4 --- 5
                B
 
@@ -193,6 +197,7 @@ choice to choose the provenance (and the integer for the address).
   (void * )n; f();  equivalent to  f();
 
   -> Similar to A ∧ A ↔ A
+
               A
         /- 2 --- 3
 18. 1 -∀            equivalent to 1 --- 2
@@ -200,6 +205,12 @@ choice to choose the provenance (and the integer for the address).
   -> left to right follows from 15.
   -> right to left follows from 3.
   -> Similar to False ∧ A ↔ False
+
+                         A
+                   /- 2 --- 3                     A                         B
+18. m refines  1 -∀             iff  m refines 1 --- 2   and   m refines 1 --- 2
+                   \- 4 --- 5
+                         B
 
               A
         /- 2 --- 3                   A
@@ -240,6 +251,56 @@ Commuting ∃ with events:
        Then there is UB in the implementation (by picking the provenance of
        x to be different than p), but not in the spec (p can have the same provanance as x)!
 
+main1:
+  p = f(); x = malloc(n); g(x, p);
+
+  inlined:
+    p = (void * )a; x = malloc(n); assert_same_provenance(x, p)
+
+
+main2:
+  x = malloc(n); p = f(); g(x, p);
+
+  inlined:
+    x = malloc(n); p = (void * )a; assert_same_provenance(x, p)
+
+f():
+  return (void * )a
+
+g(x, p):
+  assert_same_provenance(x, p)
+
+
+main1 + f + g  not refines main2 + f + g
+
+m1 refines m1' →
+m2 refines m2' →
+m1 + m2 refines m1' + m2'
+
+main1  refines  main2
+
+
+module[P1 ∪ P2]  equivalent to  module[P1] + module[P2]
+
+-----------------------------
+module[C]  refines  module[C]        module[P1]  refines  module[P2]
+-----------------------------       --------------------------------
+∀ C, module[C] + module[P1]  refines  module[C] + module[P2]
+------------------------------------------------------------
+∀ C, module[C ∪ P1]  refines  module[C ∪ P2]
+-----------------------------------------------
+∀ C, C ∪ P1  language-refines  C ∪ P2
+
+main1 + f + g  not refines main2 + f + g
+
+
+m1 refines m1' →
+m2 refines m2' →
+m1 + m2 refines m1' + m2'
+
+main1  not refines  main2
+
+
 Commuting ∀ with events:
 
                      B                       A     B
@@ -265,6 +326,7 @@ Commuting ∀ with events:
    - What if f is some external call outside of C?
    - What if f := return malloc(a); and g(x, p) := x - p?
        Then there is UB in the implementation, but not in the spec! (see above)
+
 *)
 
 Local Instance propset_subseteq {A} : SubsetEq (A → Prop) :=
