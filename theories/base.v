@@ -88,3 +88,21 @@ Proof. elim: l1 => //; csimpl => ?? ->. by case_match. Qed.
 Lemma omap_option_list {A B} (f : A → option B) o :
   omap f (option_list o) = option_list (o ≫= f).
 Proof. by destruct o. Qed.
+
+Ltac invert_all_tac f :=
+  let do_invert H := inversion H; clear H in
+  repeat lazymatch goal with
+         | H : f |- _ => do_invert H
+         | H : f _ |- _ => do_invert H
+         | H : f _ _|- _ => do_invert H
+         | H : f _ _ _|- _ => do_invert H
+         | H : f _ _ _ _|- _ => do_invert H
+         | H : f _ _ _ _ _|- _ => do_invert H
+         | H : f _ _ _ _ _ _|- _ => do_invert H
+         | H : f _ _ _ _ _ _ _|- _ => do_invert H
+         | H : f _ _ _ _ _ _ _ _|- _ => do_invert H
+         | H : f _ _ _ _ _ _ _ _ _|- _ => do_invert H
+         end.
+
+Tactic Notation "invert_all" constr(f) := invert_all_tac f; simplify_eq/=.
+Tactic Notation "invert_all'" constr(f) := invert_all_tac f.

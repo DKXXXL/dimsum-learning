@@ -12,6 +12,12 @@
 theories/base.v
 theories/axioms.v
 theories/module.v
+theories/example_modules.v
+theories/refines.v
+theories/filter.v
+theories/product.v
+theories/dem_module.v
+theories/trefines.v
 theories/computational.v
 theories/rec_lang/lang.v
 theories/rec_lang/heap.v
