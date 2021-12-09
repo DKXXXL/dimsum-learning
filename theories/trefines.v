@@ -170,13 +170,6 @@ Lemma tex_unit EV (f : _ → trace EV):
   tex () f ≡ f tt.
 Proof. split; econstructor; [case|]; done. Qed.
 
-(* Record module (EV : Type) : Type := { *)
-(*   m_state : Type; *)
-(*   m_step : m_state → option EV → (m_state → Prop) → Prop; *)
-(* }. *)
-(* Arguments m_state {_}. *)
-(* Arguments m_step {_}. *)
-
 
 (* Definition VisNoUb {EV} (m : module EV) (κ : option EV) (Pσ : (m.(m_state) → Prop)) := *)
   (* is_Some κ → ∃ σ, Pσ σ. *)
@@ -191,9 +184,6 @@ Inductive thas_trace {EV} (m : module EV) : m.(m_state) → trace EV → (m.(m_s
     (∀ σ2, Pσ2 σ2 → thas_trace m σ2 κs' Pσ3) →
     tapp (option_trace κ) κs' ⊆ κs →
     (* VisNoUb m κ Pσ2 → *)
-    (* The following is not useful. One needs to know if any of the traces can lead to UB.
-    LEM (∃ σ, Pσ2 σ) →
-     *)
     thas_trace m σ1 κs Pσ3
 | TTraceAll T f σ κs Pσ:
     (∀ x, thas_trace m σ (f x) Pσ) →
@@ -212,9 +202,6 @@ Inductive thas_trace_simple {EV} (m : module EV) : m.(m_state) → trace EV → 
     (∀ σ2, Pσ2 σ2 → thas_trace_simple m σ2 κs' Pσ3) →
     tapp (option_trace κ) κs' ⊆ κs →
     (* VisNoUb m κ Pσ2 → *)
-    (* The following is not useful. One needs to know if any of the traces can lead to UB.
-    LEM (∃ σ, Pσ2 σ) →
-     *)
     thas_trace_simple m σ1 κs Pσ3
 .
 Notation " σ '~{' m , Pκs '}~>ₛ' P " := (thas_trace_simple m σ Pκs P) (at level 40).
