@@ -67,7 +67,7 @@ it in the pseudo code with dereferencing a NULL pointer [*NULL].
   -> UB is similar to True
 
 
-Properties of ∃ exists choice:
+Properties of ∃ exists choice: (choose in CCR)
 
 ∃ choice allows to perform a choice when constructing a trace.
 It occurs e.g. when choosing the address or provenance of an allocation.
@@ -143,7 +143,7 @@ otherwise)
   -> left to right follows from 7.
   -> similar to True ∨ A ↔ True
 
-Properties of ∀ forall choice:
+Properties of ∀ forall choice: (take in CCR)
 
 ∀ choice gives us the value of the choice when constructing a trace and
 one has to provide it when destructing the trace.
@@ -178,7 +178,7 @@ choice to choose the provenance (and the integer for the address).
 
   p = (void * ) x; f(p)  not refines  g();
 
-  -> The refinement holds in AL
+  -> The refinement holds in the underlying refinement of CCR
 
               A
         /- 2 --- 3                   A
@@ -235,7 +235,9 @@ Commuting ∃ with events:
                \- 5 --- 6              \- 5 --- 6 --- 7
                      C                       A     C
 
-   p = f(); x = malloc(n); g(x, p);   refines  x = malloc(n); p = f(); g(x, p);
+   p = f(); x = malloc(n); (uintptr_t)x; g(x, p);
+     refines
+   x = malloc(n); (uintptr_t)x; p = f(); g(x, p);
 
    Should this hold?
    - What if f is some external call outside of C?

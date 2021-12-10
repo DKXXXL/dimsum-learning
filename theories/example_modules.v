@@ -29,7 +29,8 @@ Proof.
 Qed.
 
 Lemma mod1_ttraces κs:
-  0 ~{mod1, κs}~>ₜ (λ _, True) ↔ tall bool (λ b, if b then tnil else tcons 1 tnil) ⊆ κs.
+  0 ~{mod1, κs}~>ₜ (λ _, True) ↔
+    tall bool (λ b, if b then tnil else tcons 1 tnil) ⊆ κs.
 Proof.
   split.
   - move => Ht.
