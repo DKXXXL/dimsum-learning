@@ -19,6 +19,7 @@ theories/product.v
 theories/dem_module.v
 theories/trefines.v
 theories/refines_meta.v
+theories/proof_techniques.v
 # theories/rec_lang/lang.v
 # theories/rec_lang/heap.v
 # theories/rec_lang/lifting.v

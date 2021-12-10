@@ -314,7 +314,7 @@ Abort.
   (* move: (H3 [2]). move: (H5 []). *)
 (* Abort. *)
 
-(** Angelic choice commutes with events: *)
+(** Angelic choice commutes with events for srefines: *)
 
 (*               B
     A      /- 3 --- 4
@@ -439,6 +439,7 @@ Lemma mod_ang_comm_sequiv:
   srefines_equiv (MS mod_ang_comm1 0) (MS mod_ang_comm2 0).
 Proof. apply: srefines_equiv_equiv => ?. rewrite mod_ang_comm1_straces mod_ang_comm2_straces. done. Qed.
 
+(** but not for trefines *)
 Lemma mod_ang_comm_not_trefines:
   ¬ trefines (MS mod_ang_comm2 0) (MS mod_ang_comm1 0).
 Proof.
