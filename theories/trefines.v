@@ -243,6 +243,16 @@ Lemma thas_trace_mono' {EV} {m : module EV} κs' κs (Pσ2 : _ → Prop)  σ1 :
   σ1 ~{ m, κs }~>ₜ Pσ2.
 Proof. by move => ? <-. Qed.
 
+Lemma thas_trace_all {EV T} f (m : module EV) σ Pσ:
+  (∀ x, σ ~{ m, f x }~>ₜ Pσ) →
+  σ ~{ m, tall T f }~>ₜ Pσ.
+Proof. move => ?. by eapply TTraceAll. Qed.
+
+Lemma thas_trace_ex {EV T} x f (m : module EV) σ Pσ:
+  σ ~{ m, f x }~>ₜ Pσ →
+  σ ~{ m, tex T f }~>ₜ Pσ.
+Proof. move => ?. apply: thas_trace_mono'; [done|]. by econstructor. Qed.
+
 (* thas_trace_inv gives an induction hypothesis for tall. *)
 (* TODO: How useful is this? It cannot be used to replace the
 inductions in this file as it does not allow changing the state. *)
@@ -269,7 +279,8 @@ Ltac thas_trace_inv H :=
   | _ ~{ _, ?κs }~>ₜ _ => pattern κs
   end;
   apply: (thas_trace_inv _ _ _ _ _ _ _ _ _ H); [ | |
-   try by [move => *; apply subtrace_all_r; naive_solver] |
+   try by [move => *; apply subtrace_all_r; naive_solver];
+   try by [move => *; apply thas_trace_all; naive_solver] |
    try by [move => ??? <-]
  ].
 
@@ -287,16 +298,6 @@ Proof.
     eapply TTraceAll; [|simpl; done].
     naive_solver.
 Qed.
-
-Lemma thas_trace_ex {EV T} x f (m : module EV) σ Pσ:
-  σ ~{ m, f x }~>ₜ Pσ →
-  σ ~{ m, tex T f }~>ₜ Pσ.
-Proof. move => ?. apply: thas_trace_mono'; [done|]. by econstructor. Qed.
-
-Lemma thas_trace_all {EV T} f (m : module EV) σ Pσ:
-  (∀ x, σ ~{ m, f x }~>ₜ Pσ) →
-  σ ~{ m, tall T f }~>ₜ Pσ.
-Proof. move => ?. by eapply TTraceAll. Qed.
 
 Lemma thas_trace_nil_inv' {EV} κs (m : module EV) σ1 Pσ3:
   σ1 ~{ m, κs }~>ₜ Pσ3 → κs ⊆ tnil →

@@ -213,6 +213,21 @@ Proof.
   invert_all @m_step => //.
 Qed.
 
+Lemma mod1_trefines_mod2 :
+  trefines (MS mod1 0) (MS mod2 0).
+Proof.
+  constructor => κs /= Hs.
+  thas_trace_inv Hs. 1: move => ?; by apply: TTraceEnd.
+  move => ???? {}Hs Hnext.
+  invert_all @m_step => //.
+  have {}Hnext := (Hnext _ ltac:(done)).
+  apply: TTraceStep. { constructor. } 2: simpl; done.
+  move => ? ->.
+  thas_trace_inv Hnext. 1: move => ?; by apply: TTraceEnd.
+  move => *.
+  invert_all @m_step.
+Qed.
+
 Lemma mod2_srefines_mod3 :
   srefines (MS mod2 0) (MS mod3 0).
 Proof.
