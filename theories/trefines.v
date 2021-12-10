@@ -268,7 +268,10 @@ Ltac thas_trace_inv H :=
   lazymatch type of H with
   | _ ~{ _, ?κs }~>ₜ _ => pattern κs
   end;
-  apply: (thas_trace_inv _ _ _ _ _ _ _ _ _ H).
+  apply: (thas_trace_inv _ _ _ _ _ _ _ _ _ H); [ | |
+   try by [move => *; apply subtrace_all_r; naive_solver] |
+   try by [move => ??? <-]
+ ].
 
 Lemma thas_trace_trans {EV} κs1 κs2 (m : module EV) σ1 Pσ2 Pσ3 :
   σ1 ~{ m, κs1 }~>ₜ Pσ2 →

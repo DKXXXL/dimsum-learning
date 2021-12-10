@@ -32,18 +32,14 @@ Lemma mod1_ttraces κs:
   0 ~{mod1, κs}~>ₜ (λ _, True) ↔ tall bool (λ b, if b then tnil else tcons 1 tnil) ⊆ κs.
 Proof.
   split.
-  - move => Ht. thas_trace_inv Ht => //.
+  - move => Ht.
+    thas_trace_inv Ht => //.
     1: { move => ?. by apply: (subtrace_all_l true). }
-    2: { move => *. apply subtrace_all_r => ?. naive_solver. }
-    2: { move => ??? <-. done. }
     move => ????? Hnext. invert_all @m_step => //. apply: (subtrace_all_l false).
     constructor.
     have {}Hnext := (Hnext _ ltac:(done)).
-    thas_trace_inv Hnext.
-    + done.
-    + move => ????. inversion 1.
-    + move => *. by apply subtrace_all_r.
-    + move => ????. by etrans.
+    thas_trace_inv Hnext; [done|].
+    move => ????. inversion 1.
   - move => ?.
     apply: (thas_trace_mono _ _ (const True)); [|done|done].
     apply thas_trace_all => -[]. 1: by apply: TTraceEnd.
