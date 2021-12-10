@@ -3,6 +3,9 @@ image: ralfjung/opam-ci:opam2
 stages:
   - build
 
+variables:
+  CPU_CORES: "10"
+
 .template: &template
   stage: build
   script:
