@@ -454,3 +454,53 @@ Maybe one can work around it by inserting an angelic choice whether to continue 
 execution or go to a NB state after each event that should not commute with UB?
 This would be a finite angelic choice and thus be not so bad.
 *)
+
+
+(* [trefines m1 m2 ↔ dem_refines m1 m2] cannot hold anymore since we made the
+environment more powerful and it can now react to the choices of the module.
+
+Consider the following (demonic) module:
+         B
+   A     /- 3
+1 --- 2 -
+         \- 4
+         C
+
+It currently refines:
+   A      B
+   /- 2' --- 3
+1 -
+   \- 2  --- 4
+   A      C
+
+But when cast to an angelic module, the original module
+accepts the trace
+[tcons A (tall bool (λ b, if b then tcons B nil else tcons C nil))]
+But the second does not!
+
+So it seems like one needs to loose a commuting rule of non-det choice. With
+angelic choice in the environment, one can now observe the difference between these
+two modules. Not sure if this is bad or good.
+
+
+The problem of adding tall to dem module is that when instantiating Iris, one
+cannot use nat as the step index as has_trace might contain infinite branching.
+Two solutions:
+1. Use Transfinite Iris
+2. Restrict all angelic choices everywhere to be finite.
+  - This might be the way to go for a first try as most of the examples
+    that I can think of so far only rely on finite angelic non-det (e.g.
+    choosing a provenance should only need to choose an existing provenance
+    I hope). But I am still afraid that this will blow up in our face somewhen.
+3. Don't use step-indexing
+ *)
+
+
+(*
+TODO: next steps:
+- Add sequential product
+- Add stateful filter
+- Add product that only executes one side and non-determinisitically switches between the two (with an explicit event)
+  - This might be more general than the current product as one might be able to get the current one by hiding the switching events?!
+    - For (Some _, Some _) events one might need the stateful filter
+*)

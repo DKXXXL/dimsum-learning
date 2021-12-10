@@ -154,9 +154,7 @@ Inductive dem_ub_step {EV} (m : dem_module EV) : m.(dem_state) → option EV →
     m.(dem_is_ub) σ1 →
     dem_ub_step m σ1 None (λ _, False).
 
-Definition dem_module_to_module {EV} (m : dem_module EV) : module EV := {|
-  m_step := dem_ub_step m
-|}.
+Definition dem_module_to_module {EV} (m : dem_module EV) : module EV := Mod (dem_ub_step m).
 Coercion dem_module_to_module : dem_module >-> module.
 
 Record dem_mod_state EV := DMS {
@@ -167,11 +165,10 @@ Arguments DMS {_}.
 Arguments dms_module {_}.
 Arguments dms_state {_}.
 Coercion dms_module : dem_mod_state >-> dem_module.
+Add Printing Constructor dem_mod_state.
 
-Definition dms_to_ms {EV} (m : dem_mod_state EV) : mod_state EV := {|
-  ms_module := m;
-  ms_state := m.(dms_state)
-|}.
+Definition dms_to_ms {EV} (m : dem_mod_state EV) : mod_state EV :=
+  MS m m.(dms_state).
 Coercion dms_to_ms : dem_mod_state >-> mod_state.
 
 Record dem_refines {EV} (mimpl mspec : dem_mod_state EV) : Prop := {
@@ -197,140 +194,4 @@ Proof.
   constructor.
   - constructor => // κ Hi; naive_solver.
   - move => ??? [Hr1] [Hr2]. constructor => /=. naive_solver.
-Qed.
-
-(*** Equivalence between refines and dem_refines *)
-
-Inductive dem_trace_to_set {EV} : list (dem_event EV) → (list (event EV) → Prop) → Prop :=
-| DT2S_nil (Pκs : _ → Prop):
-    Pκs [] →
-    Pκs [Nb] →
-    dem_trace_to_set [] Pκs
-| DT2S_vis κ κs (Pκs : _ → Prop):
-    Pκs [] →
-    dem_trace_to_set κs (λ κs, Pκs (Vis κ::κs)) →
-    dem_trace_to_set (DVis κ :: κs) Pκs
-| DT2S_ub κs (Pκs : _ → Prop):
-    Pκs [] →
-    dem_trace_to_set (DUb :: κs) Pκs
-.
-
-Lemma dem_trace_to_set_nil {EV} (κs : list (dem_event EV)) Pκs:
-  dem_trace_to_set κs Pκs → Pκs [].
-Proof. inversion 1 => //; simplify_eq; naive_solver.  Qed.
-
-Lemma dem_trace_to_set_mono {EV} (κs : list (dem_event EV)) (Pκs Pκs' : _ → Prop):
-  dem_trace_to_set κs Pκs →
-  (∀ x, Pκs x → Pκs' x) →
-  dem_trace_to_set κs Pκs'.
-Proof.
-  move => Ht. elim: Ht Pκs'.
-  - move => ???? Hsub. constructor; by apply: Hsub.
-  - move => ????? IH ? Hsub. constructor. { by apply: Hsub. }
-    apply: IH => ??. by apply: Hsub.
-  - move => ???? Hsub. constructor. by apply: Hsub.
-Qed.
-
-Lemma has_trace_dem_has_trace {EV} (m : dem_module EV) σ Pσ Pκs:
-  σ ~{ m, Pκs }~>ₛ Pσ ↔ ∃ κs, dem_trace_to_set κs Pκs ∧ σ ~{ m, κs }~>ₘ Pσ.
-Proof.
-  split.
-  - elim.
-    + move => ???? [??]. eexists [] => /=. split;[by constructor|]. by constructor.
-    + move => ???? κ Hstep _ IH ?.
-      inversion Hstep; simplify_eq.
-      * have [κs [Hsub ?]]:= IH _ ltac:(done).
-        eexists (option_list (DVis <$> _) ++ κs).
-        split. 2: by apply: DTraceStep.
-        destruct κ => //=. constructor => //. naive_solver.
-      * eexists [DUb]. split; [constructor| by apply: DTraceUb]. naive_solver.
-  - move => [κs [HP Ht]].
-    elim: Ht Pκs HP.
-    + move => ???? Ht. inversion Ht; simplify_eq. by constructor.
-    + move => σ1 σ2 Pσ3 κ κs' Hstep _ IH Pκs Ht.
-      apply: STraceStep. { by constructor. } 2: {
-        move: (Ht) => /dem_trace_to_set_nil ?.
-        destruct κ => //. inversion Ht; simplify_eq/=.
-        split; [done|]. move: H3 => /dem_trace_to_set_nil. done.
-       }
-      move => ? ->. apply: IH.
-      destruct κ => //; simplify_eq/=. by inversion Ht; simplify_eq.
-    + move => ????? Ht. apply: STraceStep; [ by constructor | done | ].
-      split; by apply: dem_trace_to_set_nil.
-Qed.
-
-
-Fixpoint events_to_set {EV} (κs : list (dem_event EV)) : list (event EV) → Prop :=
-  match κs with
-  | [] => λ κs'', κs'' = []  ∨ κs'' = [Nb]
-  | DUb::_ => λ κs'', κs'' = []  ∨ κs'' = [Ub]
-  | DVis κ::κs' => λ κs'', (κs'' = [])
-      ∨ ∃ κs''', κs'' = Vis κ::κs''' ∧ events_to_set κs' κs'''
-  end.
-
-(* Compute events_to_set [Vis 1]. *)
-(* Compute events_to_set [Vis 1; Ub]. *)
-(* Compute events_to_set [Ub]. *)
-
-Lemma events_to_set_nil {EV} (κs : list (dem_event EV)) :
-  events_to_set κs [].
-Proof. destruct κs as [|[|]] => //; naive_solver. Qed.
-
-Lemma dem_trace_to_set_events {EV} (κs : list (dem_event EV)) :
-  dem_trace_to_set κs (events_to_set κs).
-Proof.
-  elim: κs. 1: constructor; naive_solver.
-  move => [|κ] κs IH /=. 1: constructor; by left.
-  constructor.
-  - by left.
-  - apply: dem_trace_to_set_mono; [done|] => ??. naive_solver.
-Qed.
-
-Lemma dem_trace_to_set_inj {EV} (κs1 κs2 : list (dem_event EV)):
-  dem_trace_to_set κs2 (events_to_set κs1) →
-  κs1 = κs2 ∨ ∃ κs, κs ++ [DUb] `prefix_of` κs2 ∧ κs `prefix_of` κs1.
-Proof.
-  elim: κs2 κs1 => [|[|κ2] κs2] /=.
-  - move => [|[|κ] κs] Hdem.
-    + naive_solver.
-    + inversion Hdem; simplify_eq/=. naive_solver.
-    + inversion Hdem; simplify_eq/=.
-      have := events_to_set_nil κs. naive_solver.
-  - move => IH κs1 /= Hdem. right. eexists [].
-    split; [apply: prefix_cons|]; apply: prefix_nil.
-  - move => IH [|[|κ] κs] /=; inversion 1; simplify_eq/=.
-    + move: H4 => /dem_trace_to_set_nil. naive_solver.
-    + move: H4 => /dem_trace_to_set_nil. naive_solver.
-    + move: (H4) => /dem_trace_to_set_nil [//|[?[??]]]; simplify_eq.
-      have [| |]:= IH κs.
-      -- apply: dem_trace_to_set_mono; [done|] => ??. naive_solver.
-      -- naive_solver.
-      -- move => [κs1 [??]]. right.
-         eexists (_:: _) => /=. split; by apply: prefix_cons.
-Qed.
-
-Lemma dem_has_trace_has_trace {EV} (m : dem_module EV) σ Pσ κs:
-  σ ~{ m, κs }~>ₘ Pσ ↔ σ ~{ m, events_to_set κs}~>ₛ Pσ.
-Proof.
-  rewrite has_trace_dem_has_trace.
-  split.
-  - move => ?. eexists _. split; [|done]. apply: dem_trace_to_set_events.
-  - move => [κs2[/dem_trace_to_set_inj[->//|[?[[?->][?->]]]]]].
-    move => /dem_has_trace_app_inv/dem_has_trace_ub_app_inv ?.
-    by apply: dem_has_trace_trans.
-Qed.
-
-Lemma dem_refines_refines {EV} (m1 m2 : dem_mod_state EV):
-  dem_refines m1 m2 → srefines m1 m2.
-Proof.
-  move => [?]. constructor => ? /has_trace_dem_has_trace?.
-  apply/has_trace_dem_has_trace. naive_solver.
-Qed.
-
-Lemma refines_dem_refines {EV} (m1 m2 : dem_mod_state EV):
-  srefines m1 m2 → dem_refines m1 m2.
-Proof.
-  move => [?]. constructor => ?.
-  move => /dem_has_trace_has_trace?.
-  apply/dem_has_trace_has_trace. naive_solver.
 Qed.

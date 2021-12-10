@@ -7,12 +7,14 @@ Arguments Ub {_}.
 Arguments Nb {_}.
 Arguments Vis {_}.
 
-Record module (EV : Type) : Type := {
+Record module (EV : Type) : Type := Mod {
   m_state : Type;
   m_step : m_state → option EV → (m_state → Prop) → Prop;
 }.
 Arguments m_state {_}.
 Arguments m_step {_}.
+Arguments Mod {_ _}.
+Add Printing Constructor module.
 
 Record mod_state EV := MS {
   ms_module : module EV;
@@ -21,4 +23,6 @@ Record mod_state EV := MS {
 Arguments MS {_}.
 Arguments ms_module {_}.
 Arguments ms_state {_}.
+Add Printing Constructor mod_state.
+
 Coercion ms_module : mod_state >-> module.

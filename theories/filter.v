@@ -1,5 +1,6 @@
 Require Export refframe.module.
 Require Import refframe.srefines.
+Require Import refframe.trefines.
 Require Import refframe.example_modules.
 
 Inductive filter_step {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) :
@@ -11,9 +12,8 @@ Inductive filter_step {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Pro
     (if e is Some κ then R κ e' else e' = None) →
     filter_step m R σ e' Pσ.
 
-Definition mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) : module EV2 := {|
-  m_step := filter_step m R;
-|}.
+Definition mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) : module EV2 :=
+  Mod (filter_step m R).
 
 Module filter_example.
   (* This example shows that filter does not preserve refinement if
@@ -253,4 +253,93 @@ Lemma mod_filter_srefines {EV1 EV2} (m1 m2 : module EV1) (R : EV1 → option EV2
 Proof.
   move => ? [/= Hr]. constructor => /= ? /mod_filter_to_mod/Hr Hm. apply: mod_to_mod_filter; [done|done|].
   move => ??. naive_solver.
+Qed.
+
+(*** trefines for [mod_filter] *)
+
+Fixpoint trace_bind {EV1 EV2} (f : EV1 → trace EV2) (κs : trace EV1) : trace EV2 :=
+  match κs with
+  | tnil => tnil
+  | tcons κ κs => tapp (f κ) (trace_bind f κs)
+  | tex T f' => tex T (λ x, trace_bind f (f' x))
+  | tall T f' => tall T (λ x, trace_bind f (f' x))
+  end.
+
+Lemma trace_bind_mono {EV1 EV2} (f : EV1 → trace EV2) κs1 κs2 :
+  κs1 ⊆ κs2 →
+  trace_bind f κs1 ⊆ trace_bind f κs2.
+Proof.
+  elim => //=.
+  - move => ?????. by apply: tapp_mono.
+  - move => ?????. constructor. naive_solver.
+  - move => ?????. econstructor. naive_solver.
+  - move => ??????. econstructor. naive_solver.
+  - move => ??????. econstructor. naive_solver.
+Qed.
+
+
+Definition filtered_trace {EV1 EV2} (R : EV1 → option EV2 → Prop)
+  : trace EV1 → trace EV2 :=
+  trace_bind (λ κ, tall ({ κ' | R κ κ'}) (λ x, option_trace (`x))).
+
+Lemma filtered_trace_mono {EV1 EV2} (R : EV1 → option EV2 → Prop) κs1 κs2 :
+  κs1 ⊆ κs2 →
+  filtered_trace R κs1 ⊆ filtered_trace R κs2.
+Proof. apply trace_bind_mono. Qed.
+
+Lemma tmod_filter_to_mod {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σi Pσ κs:
+  σi ~{ mod_filter m R, κs }~>ₜ Pσ →
+  ∃ κs', filtered_trace R κs' ⊆ κs ∧ σi ~{ m, κs' }~>ₜ Pσ.
+Proof.
+  elim.
+  - move => ?????. eexists tnil => /=. split; [done|]. by constructor.
+  - move => ??? κ ?? Hstep ? IH Hs.
+    inversion Hstep; simplify_eq.
+    have [f Hf]:= CHOICE IH.
+    eexists (tapp (option_trace e) (tex _ f)). split.
+    + etrans; [|done].
+      destruct e => /=; simplify_option_eq.
+      * rewrite /filtered_trace/=-/(filtered_trace _).
+        apply: (subtrace_all_l (exist _ _ _)); [done|] => ?.
+        apply: tapp_mono; [done|].
+        constructor => -[??]. naive_solver.
+      * rewrite /filtered_trace/=-/(filtered_trace _).
+        constructor => -[??]. naive_solver.
+    + apply: TTraceStep; [done | |done].
+      move => ??/=. eapply thas_trace_ex. naive_solver.
+      Unshelve. done.
+  - move => T f ???? IH ?.
+    have [fx Hfx]:= AxCHOICE _ _ _ IH.
+    eexists (tall T (λ x, fx x)) => /=.
+    rewrite /filtered_trace/=-/(filtered_trace _).
+    split.
+    + etrans; [|done]. constructor => ?. econstructor. naive_solver.
+    + apply: thas_trace_all. naive_solver.
+Qed.
+
+Lemma tmod_to_mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σi Pσ κs:
+  σi ~{ m, κs }~>ₜ Pσ →
+  σi ~{ mod_filter m R, filtered_trace R κs }~>ₜ Pσ.
+Proof.
+  elim.
+  - move => ?????. constructor. done. by apply: (filtered_trace_mono _ tnil).
+  - move => ??? κ ?? Hstep ? IH Hs.
+    apply: thas_trace_mono; [| by apply: filtered_trace_mono |done].
+    destruct κ => /=.
+    + rewrite /filtered_trace/=-/(filtered_trace _).
+      apply thas_trace_all => -[??].
+      apply: TTraceStep; [econstructor;[done| simpl;done] |done |done].
+    + apply: TTraceStep; [by econstructor | done | simpl;done].
+  - move => ????????.
+    apply: thas_trace_mono; [| by apply: filtered_trace_mono |done].
+    rewrite /filtered_trace/=-/(filtered_trace _).
+    apply: thas_trace_all. naive_solver.
+Qed.
+
+Lemma tmod_filter_refines {EV1 EV2} (R : EV1 → option EV2 → Prop) mi ms σi σs:
+  trefines (MS mi σi) (MS ms σs) →
+  trefines (MS (mod_filter mi R) σi) (MS (mod_filter ms R) σs).
+Proof.
+  move => [/=Hr]. constructor => /=? /tmod_filter_to_mod[?[? /Hr/tmod_to_mod_filter?]].
+  by apply: thas_trace_mono.
 Qed.

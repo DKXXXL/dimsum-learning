@@ -1,5 +1,6 @@
 Require Export refframe.module.
 Require Import refframe.srefines.
+Require Import refframe.trefines.
 
 (*
     1
@@ -8,10 +9,7 @@ Require Import refframe.srefines.
 Inductive mod1_step : nat → option nat → (nat → Prop) → Prop :=
 | T1S0: mod1_step 0 (Some 1) (λ σ', σ' = 1).
 
-Definition mod1 : module nat := {|
-  m_state := nat;
-  m_step := mod1_step;
-|}.
+Definition mod1 : module nat := Mod mod1_step.
 
 Lemma mod1_traces Pκs:
   0 ~{mod1, Pκs}~>ₛ (λ _, True) ↔
@@ -35,10 +33,7 @@ Inductive mod2_step : nat → option nat → (nat → Prop) → Prop :=
 | T2S1: mod2_step 1 (Some 2) (λ σ', σ' = 2)
 .
 
-Definition mod2 : module nat := {|
-  m_state := nat;
-  m_step := mod2_step;
-|}.
+Definition mod2 : module nat := Mod mod2_step.
 
 Lemma mod2_traces Pκs:
   0 ~{mod2, Pκs}~>ₛ (λ _, True) ↔
@@ -73,29 +68,20 @@ Inductive mod3_step : nat → option nat → (nat → Prop) → Prop :=
 | T3S2: mod3_step 1 (Some 3) (λ σ', σ' = 3)
 .
 
-Definition mod3 : module nat := {|
-  m_state := nat;
-  m_step := mod3_step;
-|}.
+Definition mod3 : module nat := Mod mod3_step.
 
 Inductive mod3'_step : nat → option nat → (nat → Prop) → Prop :=
 | T3'S0: mod3'_step 0 (Some 3) (λ σ', σ' = 1)
 .
 
-Definition mod3' : module nat := {|
-  m_state := nat;
-  m_step := mod3'_step;
-|}.
+Definition mod3' : module nat := Mod mod3'_step.
 
 Inductive mod1_ub_step : nat → option nat → (nat → Prop) → Prop :=
 | T1US0: mod1_ub_step 0 (Some 1) (λ σ', σ' = 1)
 | T1US1: mod1_ub_step 1 None (λ σ', False)
 .
 
-Definition mod1_ub : module nat := {|
-  m_state := nat;
-  m_step := mod1_ub_step;
-|}.
+Definition mod1_ub : module nat := Mod mod1_ub_step.
 
 Lemma mod1ub_traces Pκs:
   0 ~{mod1_ub, Pκs}~>ₛ (λ _, True) ↔
@@ -121,10 +107,7 @@ Inductive mod_ub_step {EV} : nat → option EV → (nat → Prop) → Prop :=
 | TUS0: mod_ub_step 0 None (λ σ', False)
 .
 
-Definition mod_ub EV : module EV := {|
-  m_state := nat;
-  m_step := mod_ub_step;
-|}.
+Definition mod_ub EV : module EV := Mod mod_ub_step.
 
 Lemma modub_traces EV Pκs:
   (* Note that without [event EV], for EV not inhabited, this would be
@@ -142,10 +125,7 @@ Qed.
 Inductive mod_nb_step {EV} : nat → option EV → (nat → Prop) → Prop :=
 .
 
-Definition mod_nb EV : module EV := {|
-  m_state := nat;
-  m_step := mod_nb_step;
-|}.
+Definition mod_nb EV : module EV := Mod mod_nb_step.
 
 Lemma modnb_traces EV Pκs:
   0 ~{mod_nb EV, Pκs}~>ₛ (λ _, True) ↔ Pκs [] ∧ Pκs [Nb].
@@ -169,10 +149,7 @@ Inductive mod12_ang_step : nat → option nat → (nat → Prop) → Prop :=
 | T12AS2: mod12_ang_step 2 (Some 2) (λ σ', σ' = 3)
 .
 
-Definition mod12_ang : module nat := {|
-  m_state := nat;
-  m_step := mod12_ang_step;
-|}.
+Definition mod12_ang : module nat := Mod mod12_ang_step.
 
 Lemma mod12_ang_traces Pκs:
   0 ~{mod12_ang, Pκs}~>ₛ (λ _, True) ↔
@@ -317,10 +294,7 @@ Inductive mod_ang_comm1_step : nat → option nat → (nat → Prop) → Prop :=
 | TAC1S5: mod_ang_comm1_step 5 (Some 3) (λ σ', σ' = 6)
 .
 
-Definition mod_ang_comm1 : module nat := {|
-  m_state := nat;
-  m_step := mod_ang_comm1_step;
-|}.
+Definition mod_ang_comm1 : module nat := Mod mod_ang_comm1_step.
 
 (*         A     B
      /- 2 --- 3 --- 4
@@ -336,11 +310,7 @@ Inductive mod_ang_comm2_step : nat → option nat → (nat → Prop) → Prop :=
 | TAC2S6: mod_ang_comm2_step 6 (Some 3) (λ σ', σ' = 7)
 .
 
-Definition mod_ang_comm2 : module nat := {|
-  m_state := nat;
-  m_step := mod_ang_comm2_step;
-|}.
-
+Definition mod_ang_comm2 : module nat := Mod mod_ang_comm2_step.
 
 Lemma mod_ang_comm1_traces Pκs:
   0 ~{mod_ang_comm1, Pκs}~>ₛ (λ _, True) ↔
@@ -433,3 +403,35 @@ Qed.
 Lemma mod_ang_comm_equiv:
   srefines_equiv (MS mod_ang_comm1 0) (MS mod_ang_comm2 0).
 Proof. apply: srefines_equiv_equiv => ?. rewrite mod_ang_comm1_traces mod_ang_comm2_traces. done. Qed.
+
+Lemma mod_ang_comm_not_refines:
+  ¬ trefines (MS mod_ang_comm2 0) (MS mod_ang_comm1 0).
+Proof.
+  move => [/=Hr]. feed pose proof (Hr (tex bool (λ b, if b then tcons 1 $ tcons 2 tnil else tcons 1 $ tcons 3 tnil))) as Hr2.
+  - apply: TTraceStep; [constructor| | simpl; done]. move => ?[->|->].
+    + apply: (thas_trace_ex true).
+      apply: TTraceStep; [constructor| | simpl; done]. move => ?->.
+      apply: TTraceStep; [constructor| | simpl; done]. move => ?->.
+      by apply: TTraceEnd.
+    + apply: (thas_trace_ex false).
+      apply: TTraceStep; [constructor| | simpl; done]. move => ?->.
+      apply: TTraceStep; [constructor| | simpl; done]. move => ?->.
+      by apply: TTraceEnd.
+  - move: Hr2 => /thas_trace_ex_inv/thas_trace_nil_inv{}Hr2.
+    inversion Hr2; simplify_eq => //. 2: invert_all @m_step => //; easy.
+    move: H => [[] {}Hr].
+    all: move: Hr => /(thas_trace_cons_inv _ _ _)/thas_trace_nil_inv{}Hr.
+    all: inversion Hr; simplify_K; [| invert_all @m_step => //; easy].
+    all: move: H => [? [? {}Hr]].
+    all: invert_all @m_step.
+    all: move: (Hr _ ltac:(done)) => {}Hr.
+
+    all: move: Hr => /(thas_trace_cons_inv _ _ _)/thas_trace_nil_inv{}Hr.
+    all: inversion Hr; simplify_K; [ move: H => [?[??]]; by invert_all @m_step|].
+    all: invert_all @m_step.
+    1: move: (H2 5 ltac:(naive_solver)) => {}Hr.
+    2: move: (H2 3 ltac:(naive_solver)) => {}Hr.
+    all: inversion Hr; simplify_K; [ move: H => [?[??]]; invert_all mod_ang_comm1_step|].
+    all: invert_all @m_step.
+    all: pose proof (transitivity H5 H3); easy.
+Qed.
