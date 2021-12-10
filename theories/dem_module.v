@@ -1,5 +1,5 @@
 Require Export refframe.module.
-Require Export refframe.refines.
+Require Export refframe.srefines.
 
 (*** Demonic module **)
 Inductive dem_event (EV : Type) : Type :=
@@ -232,7 +232,7 @@ Proof.
 Qed.
 
 Lemma has_trace_dem_has_trace {EV} (m : dem_module EV) σ Pσ Pκs:
-  σ ~{ m, Pκs }~> Pσ ↔ ∃ κs, dem_trace_to_set κs Pκs ∧ σ ~{ m, κs }~>ₘ Pσ.
+  σ ~{ m, Pκs }~>ₛ Pσ ↔ ∃ κs, dem_trace_to_set κs Pκs ∧ σ ~{ m, κs }~>ₘ Pσ.
 Proof.
   split.
   - elim.
@@ -248,14 +248,14 @@ Proof.
     elim: Ht Pκs HP.
     + move => ???? Ht. inversion Ht; simplify_eq. by constructor.
     + move => σ1 σ2 Pσ3 κ κs' Hstep _ IH Pκs Ht.
-      apply: TraceStep. { by constructor. } 2: {
+      apply: STraceStep. { by constructor. } 2: {
         move: (Ht) => /dem_trace_to_set_nil ?.
         destruct κ => //. inversion Ht; simplify_eq/=.
         split; [done|]. move: H3 => /dem_trace_to_set_nil. done.
        }
       move => ? ->. apply: IH.
       destruct κ => //; simplify_eq/=. by inversion Ht; simplify_eq.
-    + move => ????? Ht. apply: TraceStep; [ by constructor | done | ].
+    + move => ????? Ht. apply: STraceStep; [ by constructor | done | ].
       split; by apply: dem_trace_to_set_nil.
 Qed.
 
@@ -310,7 +310,7 @@ Proof.
 Qed.
 
 Lemma dem_has_trace_has_trace {EV} (m : dem_module EV) σ Pσ κs:
-  σ ~{ m, κs }~>ₘ Pσ ↔ σ ~{ m, events_to_set κs}~> Pσ.
+  σ ~{ m, κs }~>ₘ Pσ ↔ σ ~{ m, events_to_set κs}~>ₛ Pσ.
 Proof.
   rewrite has_trace_dem_has_trace.
   split.
@@ -321,14 +321,14 @@ Proof.
 Qed.
 
 Lemma dem_refines_refines {EV} (m1 m2 : dem_mod_state EV):
-  dem_refines m1 m2 → refines m1 m2.
+  dem_refines m1 m2 → srefines m1 m2.
 Proof.
   move => [?]. constructor => ? /has_trace_dem_has_trace?.
   apply/has_trace_dem_has_trace. naive_solver.
 Qed.
 
 Lemma refines_dem_refines {EV} (m1 m2 : dem_mod_state EV):
-  refines m1 m2 → dem_refines m1 m2.
+  srefines m1 m2 → dem_refines m1 m2.
 Proof.
   move => [?]. constructor => ?.
   move => /dem_has_trace_has_trace?.

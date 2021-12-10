@@ -13,18 +13,17 @@ theories/base.v
 theories/axioms.v
 theories/module.v
 theories/example_modules.v
-theories/refines.v
+theories/srefines.v
 theories/filter.v
 theories/product.v
 theories/dem_module.v
 theories/trefines.v
-theories/computational.v
-theories/rec_lang/lang.v
-theories/rec_lang/heap.v
-theories/rec_lang/lifting.v
-theories/rec_lang/adequacy.v
-theories/rec_lang/proofmode.v
-theories/rec_lang/examples.v
-theories/old/module.v
+# theories/rec_lang/lang.v
+# theories/rec_lang/heap.v
+# theories/rec_lang/lifting.v
+# theories/rec_lang/adequacy.v
+# theories/rec_lang/proofmode.v
+# theories/rec_lang/examples.v
+# theories/old/module.v
 # theories/old/while.v
-theories/old/rec_lang.v
+# theories/old/rec_lang.v

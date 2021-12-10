@@ -1,5 +1,5 @@
 Require Export refframe.module.
-Require Import refframe.refines.
+Require Import refframe.srefines.
 Require Import refframe.filter.
 
 
@@ -186,76 +186,76 @@ Definition prod_mod : module nat := mod_filter (mod_product prod_modA prod_modB)
 Definition prod_mod' : module nat := mod_filter (mod_product prod_modA prod_modB') filterR.
 
 Lemma prod_mod1_refines_prod_mod:
-  MS prod_mod1 0 ⊑ MS prod_mod (0, 0).
+  srefines (MS prod_mod1 0) (MS prod_mod (0, 0)).
 Proof.
   constructor => Pκs /= Himpl.
-  inversion Himpl; simplify_eq. 1: by apply: TraceEnd.
+  inversion Himpl; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step.
 
-  apply: TraceStep. { econstructor. { apply ProductStepR. constructor. } done. } 2: done.
+  apply: STraceStep. { econstructor. { apply ProductStepR. constructor. } done. } 2: done.
   move => [??] [?[?|?]]; simplify_eq.
   - have {}H := (H0 1 ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: by apply: TraceEnd.
+    inversion H; simplify_eq. 1: by apply: STraceEnd.
     invert_all @m_step => //.
 
-    apply: TraceStep. { econstructor. { apply ProductStepBoth; constructor. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply ProductStepBoth; constructor. } naive_solver. }
     2: done. move => [??] [??]; simplify_eq/=.
-    apply: TraceStep. { econstructor. { apply ProductStepL. apply: PMAS11. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply ProductStepL. apply: PMAS11. } naive_solver. }
     2: done. move => [??] [??]; simplify_eq/=.
-    apply: TraceStep. { econstructor. { apply ProductStepL. constructor. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply ProductStepL. constructor. } naive_solver. }
     2: done. move => [??] [??]; simplify_eq/=.
-    apply: TraceStep. { econstructor. { apply ProductStepBoth; constructor. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply ProductStepBoth; constructor. } naive_solver. }
     2: naive_solver. move => [??] [??]; simplify_eq/=.
 
     have {}H := (H3 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: by apply: TraceEnd.
+    inversion H; simplify_eq. 1: by apply: STraceEnd.
     invert_all @m_step => //.
-    apply: TraceStep. { econstructor. { apply ProductStepR. constructor. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply ProductStepR. constructor. } naive_solver. }
     2: naive_solver. move => [??] [??]; simplify_eq/=.
     have {}H := (H5 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: by apply: TraceEnd.
+    inversion H; simplify_eq. 1: by apply: STraceEnd.
     invert_all @m_step => //.
   - have {}H := (H0 4 ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: by apply: TraceEnd.
+    inversion H; simplify_eq. 1: by apply: STraceEnd.
     invert_all @m_step => //.
 
-    apply: TraceStep. { econstructor. { apply ProductStepBoth; constructor. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply ProductStepBoth; constructor. } naive_solver. }
     2: done. move => [??] [??]; simplify_eq/=.
-    apply: TraceStep. { econstructor. { apply ProductStepL. apply: PMAS12. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply ProductStepL. apply: PMAS12. } naive_solver. }
     2: done. move => [??] [??]; simplify_eq/=.
-    apply: TraceStep. { econstructor. { apply ProductStepL. constructor. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply ProductStepL. constructor. } naive_solver. }
     2: done. move => [??] [??]; simplify_eq/=.
-    apply: TraceStep. { econstructor. { apply ProductStepBoth; constructor. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply ProductStepBoth; constructor. } naive_solver. }
     2: naive_solver. move => [??] [??]; simplify_eq/=.
 
     have {}H := (H3 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: by apply: TraceEnd.
+    inversion H; simplify_eq. 1: by apply: STraceEnd.
     invert_all @m_step => //.
-    apply: TraceStep. { econstructor. { apply ProductStepR. constructor. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply ProductStepR. constructor. } naive_solver. }
     2: naive_solver. move => [??] [??]; simplify_eq/=.
     have {}H := (H5 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: by apply: TraceEnd.
+    inversion H; simplify_eq. 1: by apply: STraceEnd.
     invert_all @m_step => //.
 Qed.
 
 Lemma prod_mod1_not_refines_prod_mod':
-  ¬ MS prod_mod1 0 ⊑ MS prod_mod' (0, 0).
+  ¬ srefines (MS prod_mod1 0) (MS prod_mod' (0, 0)).
 Proof.
   move => [/=Hr].
   feed pose proof (Hr (λ κs, κs = [] ∨ κs = [Vis 1] ∨ κs = [Vis 1; Vis 3] ∨ κs = [Vis 1; Vis 3; Nb] ∨
                              κs = [Vis 2] ∨ κs = [Vis 2; Vis 4] ∨ κs = [Vis 2; Vis 4; Nb])) as Hr'.
-  - apply: TraceStep. { constructor. } 2: naive_solver.
+  - apply: STraceStep. { constructor. } 2: naive_solver.
     move => /= ? [?|?]; simplify_eq.
-    + apply: TraceStep. { constructor. } 2: naive_solver.
+    + apply: STraceStep. { constructor. } 2: naive_solver.
       move => /= ??; simplify_eq.
-      apply: TraceStep. { constructor. } 2: naive_solver.
+      apply: STraceStep. { constructor. } 2: naive_solver.
       move => /= ??; simplify_eq.
-      apply: TraceEnd; [done|]. naive_solver.
-    + apply: TraceStep. { constructor. } 2: naive_solver.
+      apply: STraceEnd; [done|]. naive_solver.
+    + apply: STraceStep. { constructor. } 2: naive_solver.
       move => /= ??; simplify_eq.
-      apply: TraceStep. { constructor. } 2: naive_solver.
+      apply: STraceStep. { constructor. } 2: naive_solver.
       move => /= ??; simplify_eq.
-      apply: TraceEnd; [done|]. naive_solver.
+      apply: STraceEnd; [done|]. naive_solver.
   - inversion Hr'; simplify_eq. 1: naive_solver.
     invert_all @m_step. 1,2: naive_solver.
     have ? : κ = None by naive_solver. subst κ. clear H3 H1 Hr Hr'.
@@ -275,21 +275,21 @@ Inductive mod_product_rel1 {EV1 EV2} (m2 : module EV2) : list (event EV1) → m2
 .
 
 Lemma mod_product_to_mod_1 {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ Pσ Pκs:
-  σ ~{ mod_product m1 m2, Pκs }~> Pσ →
-  σ.1 ~{ m1, λ κs, ∃ κs', mod_product_rel1 m2 κs σ.2 κs' ∧ Pκs κs' }~> (λ _, True).
+  σ ~{ mod_product m1 m2, Pκs }~>ₛ Pσ →
+  σ.1 ~{ m1, λ κs, ∃ κs', mod_product_rel1 m2 κs σ.2 κs' ∧ Pκs κs' }~>ₛ (λ _, True).
 Proof.
   elim.
-  - move => ????[??]. apply: TraceEnd; [done|]. split; eexists _; (split; [constructor|done]).
+  - move => ????[??]. apply: STraceEnd; [done|]. split; eexists _; (split; [constructor|done]).
   - move => [??]???? Hstep ? IH [He1 He2].
     inversion Hstep; simplify_eq.
-    + apply: TraceStep; [done| |].
-      * move => ??. apply: has_trace_mono; [ by apply: (IH (_, _)) | |done].
+    + apply: STraceStep; [done| |].
+      * move => ??. apply: shas_trace_mono; [ by apply: (IH (_, _)) | |done].
         move => /=? [?[??]]. eexists _. split; [|done]. destruct e => //=.
         admit.
       * split; eexists _; split; [| apply: He1 | | apply: He2] => /=.
         -- constructor.
         -- admit.
-    + apply: has_trace_mono; [ apply: (IH (_, _)) | |done].
+    + apply: shas_trace_mono; [ apply: (IH (_, _)) | |done].
 Abort.
 
 
@@ -330,15 +330,15 @@ Inductive mod_product_rel2 {EV1 EV2} : ((list (event (option EV1 * option EV2)))
 *)
 
 Lemma mod_product_to_mods {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ Pσ κs:
-  σ ~{ mod_product m1 m2, κs }~> Pσ → ∃ κs', mod_product_rel2 κs κs'.1 κs'.2 ∧
-    σ.1 ~{ m1, κs'.1 }~> (λ _, True) ∧ σ.2 ~{ m2, κs'.2 }~> (λ _, True).
+  σ ~{ mod_product m1 m2, κs }~>ₛ Pσ → ∃ κs', mod_product_rel2 κs κs'.1 κs'.2 ∧
+    σ.1 ~{ m1, κs'.1 }~>ₛ (λ _, True) ∧ σ.2 ~{ m2, κs'.2 }~>ₛ (λ _, True).
 Proof.
   elim.
   - move => [σ1 σ2] ????. eexists (_, _) => /=.
     split_and!.
     + admit.
-    + apply: TraceEnd; [done| ]. admit.
-    + apply: TraceEnd; [done| ]. admit.
+    + apply: STraceEnd; [done| ]. admit.
+    + apply: STraceEnd; [done| ]. admit.
   - move => [σ1 σ2] ???? Hstep _ IH [??].
     inversion Hstep; simplify_eq.
     + have {}IH := IH (_, σ2) (conj _ ltac:(exact (eq_refl σ2))).
@@ -348,12 +348,12 @@ Proof.
           , (λ κs, ∀ x, (f x).2 κs)) => /=.
       split_and!.
       * admit.
-      * apply: TraceStep; [done| |naive_solver]. move => ??.
-        apply: has_trace_mono; [naive_solver| |done] => /=.
+      * apply: STraceStep; [done| |naive_solver]. move => ??.
+        apply: shas_trace_mono; [naive_solver| |done] => /=.
         move => ??. naive_solver.
       * have [[[??]?]|?]:= EM (∃ x, ∀ κs, (f x).2 κs → ∀ x', (f x').2 κs).
-        -- apply: has_trace_mono; [naive_solver| |done] => /=. done.
-        -- apply: TraceEnd. done.
+        -- apply: shas_trace_mono; [naive_solver| |done] => /=. done.
+        -- apply: STraceEnd. done.
            split. admit.
            move => [??].
 Admitted.

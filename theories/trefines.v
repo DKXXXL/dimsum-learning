@@ -1,5 +1,5 @@
 Require Export refframe.module.
-Require Import refframe.refines.
+Require Import refframe.srefines.
 Require Import refframe.filter.
 Require Import refframe.product.
 Require Import refframe.example_modules.
@@ -204,7 +204,7 @@ Inductive thas_trace_simple {EV} (m : module EV) : m.(m_state) → trace EV → 
     (* VisNoUb m κ Pσ2 → *)
     thas_trace_simple m σ1 κs Pσ3
 .
-Notation " σ '~{' m , Pκs '}~>ₛ' P " := (thas_trace_simple m σ Pκs P) (at level 40).
+Notation " σ '~{' m , Pκs '}~>ₜₛ' P " := (thas_trace_simple m σ Pκs P) (at level 40).
 
 Global Instance thas_trace_proper {EV} (m : module EV) :
   Proper ((=) ==> (⊆) ==> (pointwise_relation m.(m_state) impl) ==> impl) (thas_trace m).
@@ -259,7 +259,7 @@ Proof. move => ?. by eapply TTraceAll. Qed.
 
 Lemma thas_trace_nil_inv' {EV} κs (m : module EV) σ1 Pσ3:
   σ1 ~{ m, κs }~>ₜ Pσ3 → κs ⊆ tnil →
-  σ1 ~{ m, tnil }~>ₛ Pσ3.
+  σ1 ~{ m, tnil }~>ₜₛ Pσ3.
 Proof.
   elim.
   - move => *. by apply: TSTraceEnd.
@@ -274,7 +274,7 @@ Qed.
 
 Lemma thas_trace_nil_inv {EV} (m : module EV) σ1 Pσ3:
   σ1 ~{ m, tnil }~>ₜ Pσ3 →
-  σ1 ~{ m, tnil }~>ₛ Pσ3.
+  σ1 ~{ m, tnil }~>ₜₛ Pσ3.
 Proof. move => ?. by apply: thas_trace_nil_inv'. Qed.
 
 Lemma thas_trace_cons_inv' {EV} κs κs' κ (m : module EV) σ1 Pσ3:
@@ -437,7 +437,7 @@ Qed.
 
 End ttest.
 
-(*** Proof that trefines implies refines *)
+(*** Proof that trefines implies srefines *)
 Inductive thas_trace_rel {EV} : (list (event EV) → Prop) → (trace EV) → Prop :=
 | TRel_nil (Pκs : _ → Prop) κs:
    κs ⊆ tnil →
@@ -531,8 +531,8 @@ Lemma thas_trace_rel_nil {EV} Pκs (κs : trace EV) :
   Pκs [].
 Proof. inversion 1; by simplify_eq. Qed.
 
-Lemma has_trace_thas_trace {EV} (m : module EV) σ Pσ Pκs:
-  σ ~{ m, Pκs }~> Pσ ↔ ∃ κs, thas_trace_rel Pκs κs ∧ σ ~{ m, κs }~>ₜ Pσ.
+Lemma shas_trace_thas_trace {EV} (m : module EV) σ Pσ (Pκs : _ → Prop):
+  σ ~{ m, Pκs }~>ₛ Pσ ↔ ∃ κs, thas_trace_rel Pκs κs ∧ σ ~{ m, κs }~>ₜ Pσ.
 Proof.
   split.
   - elim.
@@ -548,11 +548,11 @@ Proof.
         move => ??. apply: thas_trace_ex. naive_solver.
   - move => [κs [Hκs Ht]].
     elim: Ht Pκs Hκs.
-    + move => ???????. apply: TraceEnd; [done|].
+    + move => ???????. apply: STraceEnd; [done|].
       by apply: thas_trace_rel_tnil.
     + move => ??? κ ???? IH ?? Hrel.
       move: (Hrel) => /thas_trace_rel_nil?.
-      apply: TraceStep; [done| |].
+      apply: STraceStep; [done| |].
       * move => ??. apply: IH; [done| ].
         destruct κ => //; simplify_eq/=. 2: by apply: thas_trace_rel_mono_r.
         efeed pose proof @thas_trace_rel_tcons as H; [done..|]. naive_solver.
@@ -564,11 +564,11 @@ Proof.
       Unshelve. done.
 Qed.
 
-Lemma trefines_refines {EV} (m1 m2 : mod_state EV):
-  trefines m1 m2 → refines m1 m2.
+Lemma trefines_srefines {EV} (m1 m2 : mod_state EV):
+  trefines m1 m2 → srefines m1 m2.
 Proof.
-  move => [?]. constructor => ? /has_trace_thas_trace[?[??]].
-  apply/has_trace_thas_trace. naive_solver.
+  move => [?]. constructor => ? /shas_trace_thas_trace[?[??]].
+  apply/shas_trace_thas_trace. naive_solver.
 Qed.
 (* Print Assumptions trefines_refines. *)
 
@@ -582,9 +582,9 @@ Fixpoint trace_to_set {EV} (κs : trace EV) : list (event EV) → Prop :=
 
 (* The following cannot be provable since [refines m1 m2 → trefines m1 m2] does not hold. *)
 Lemma thas_trace_has_trace {EV} (m : module EV) σ Pσ κs:
-  σ ~{ m, κs }~>ₜ Pσ ↔ σ ~{ m, trace_to_set κs }~> Pσ.
+  σ ~{ m, κs }~>ₜ Pσ ↔ σ ~{ m, trace_to_set κs }~>ₛ Pσ.
 Proof.
-  rewrite has_trace_thas_trace. split.
+  rewrite shas_trace_thas_trace. split.
   - move => ?. eexists _. split; [|done].
     clear. elim: κs => /=.
     + apply: TRel_nil; naive_solver.
@@ -612,7 +612,7 @@ Proof.
 Abort.
 
 Lemma refines_not_trefines:
-  ¬ (∀ EV (m1 m2 : mod_state EV), refines m1 m2 → trefines m1 m2).
+  ¬ (∀ EV (m1 m2 : mod_state EV), srefines m1 m2 → trefines m1 m2).
 Proof.
   move => Hr. apply: ttest.mod_ang_comm_not_refines. apply: Hr.
   apply mod_ang_comm_equiv.

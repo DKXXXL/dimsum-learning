@@ -1,5 +1,5 @@
 Require Export refframe.module.
-Require Import refframe.refines.
+Require Import refframe.srefines.
 
 (*
     1
@@ -14,7 +14,7 @@ Definition mod1 : module nat := {|
 |}.
 
 Lemma mod1_traces Pκs:
-  0 ~{mod1, Pκs}~> (λ _, True) ↔
+  0 ~{mod1, Pκs}~>ₛ (λ _, True) ↔
   (Pκs [] ∧ Pκs [Nb]) ∨
   (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Nb]).
 Proof.
@@ -24,10 +24,10 @@ Proof.
     have {}H := (H1 _ ltac:(done)).
     inversion H; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-  - move => [?|[??]]. 1: by apply: TraceEnd.
-    apply: TraceStep; [by constructor| | naive_solver ].
+  - move => [?|[??]]. 1: by apply: STraceEnd.
+    apply: STraceStep; [by constructor| | naive_solver ].
     move => ??. simplify_eq.
-    by apply: TraceEnd.
+    by apply: STraceEnd.
 Qed.
 
 Inductive mod2_step : nat → option nat → (nat → Prop) → Prop :=
@@ -41,7 +41,7 @@ Definition mod2 : module nat := {|
 |}.
 
 Lemma mod2_traces Pκs:
-  0 ~{mod2, Pκs}~> (λ _, True) ↔
+  0 ~{mod2, Pκs}~>ₛ (λ _, True) ↔
      (Pκs [] ∧ Pκs [Nb])
   ∨ (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Nb])
   ∨ (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Vis 2] ∧ Pκs [Vis 1; Vis 2; Nb]).
@@ -56,15 +56,15 @@ Proof.
     inversion H; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
   - move => [?|[[??]|[?[??]]]].
-    + by apply: TraceEnd.
-    + apply: TraceStep; [by constructor| |naive_solver].
+    + by apply: STraceEnd.
+    + apply: STraceStep; [by constructor| |naive_solver].
       move => ??. simplify_eq.
-      by apply: TraceEnd.
-    + apply: TraceStep; [by constructor| |done].
+      by apply: STraceEnd.
+    + apply: STraceStep; [by constructor| |done].
       move => ??. simplify_eq/=.
-      apply: TraceStep; [by constructor| |naive_solver].
+      apply: STraceStep; [by constructor| |naive_solver].
       move => ??. simplify_eq/=.
-      by apply: TraceEnd.
+      by apply: STraceEnd.
 Qed.
 
 Inductive mod3_step : nat → option nat → (nat → Prop) → Prop :=
@@ -98,7 +98,7 @@ Definition mod1_ub : module nat := {|
 |}.
 
 Lemma mod1ub_traces Pκs:
-  0 ~{mod1_ub, Pκs}~> (λ _, True) ↔
+  0 ~{mod1_ub, Pκs}~>ₛ (λ _, True) ↔
      (Pκs [] ∧ Pκs [Nb])
   ∨ (Pκs [] ∧ Pκs [Vis 1]).
 Proof.
@@ -110,10 +110,10 @@ Proof.
     invert_all @m_step => //.
     naive_solver.
   - move => [?|[??]].
-    + by apply: TraceEnd.
-    + apply: TraceStep; [by constructor| |done].
+    + by apply: STraceEnd.
+    + apply: STraceStep; [by constructor| |done].
       move => ? ->.
-      apply: TraceStep; [by constructor| |done].
+      apply: STraceStep; [by constructor| |done].
       done.
 Qed.
 
@@ -130,13 +130,13 @@ Lemma modub_traces EV Pκs:
   (* Note that without [event EV], for EV not inhabited, this would be
   equivalent to the program that does not do anything (but does not
   have UB). *)
-  0 ~{mod_ub EV, Pκs}~> (λ _, True) ↔ Pκs [].
+  0 ~{mod_ub EV, Pκs}~>ₛ (λ _, True) ↔ Pκs [].
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
     naive_solver.
   - move => ?.
-    apply: TraceStep; [by constructor| |done]. done.
+    apply: STraceStep; [by constructor| |done]. done.
 Qed.
 
 Inductive mod_nb_step {EV} : nat → option EV → (nat → Prop) → Prop :=
@@ -148,12 +148,12 @@ Definition mod_nb EV : module EV := {|
 |}.
 
 Lemma modnb_traces EV Pκs:
-  0 ~{mod_nb EV, Pκs}~> (λ _, True) ↔ Pκs [] ∧ Pκs [Nb].
+  0 ~{mod_nb EV, Pκs}~>ₛ (λ _, True) ↔ Pκs [] ∧ Pκs [Nb].
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
     invert_all @m_step.
-  - move => ?. by apply: TraceEnd.
+  - move => ?. by apply: STraceEnd.
 Qed.
 
 (*        1
@@ -175,7 +175,7 @@ Definition mod12_ang : module nat := {|
 |}.
 
 Lemma mod12_ang_traces Pκs:
-  0 ~{mod12_ang, Pκs}~> (λ _, True) ↔
+  0 ~{mod12_ang, Pκs}~>ₛ (λ _, True) ↔
      (Pκs [] ∧ Pκs [Nb])
   ∨ (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Nb] ∧ Pκs [Vis 2] ∧ Pκs [Vis 2; Nb] ).
 Proof.
@@ -194,102 +194,102 @@ Proof.
     inversion H; simplify_eq. 2: invert_all @m_step => //.
     naive_solver.
   - move => [?|[?[??]]].
-    + by apply: TraceEnd.
-    + apply: TraceStep; [by constructor| |done].
+    + by apply: STraceEnd.
+    + apply: STraceStep; [by constructor| |done].
       move => ? [?|?]; simplify_eq.
-      * apply: TraceStep; [by constructor | | naive_solver].
-        move => ? ->.  apply: TraceEnd; [done| naive_solver].
-      * apply: TraceStep; [by constructor | |naive_solver].
-        move => ? ->. apply: TraceEnd; [done| naive_solver].
+      * apply: STraceStep; [by constructor | | naive_solver].
+        move => ? ->.  apply: STraceEnd; [done| naive_solver].
+      * apply: STraceStep; [by constructor | |naive_solver].
+        move => ? ->. apply: STraceEnd; [done| naive_solver].
 Qed.
 
 Lemma mod1_refines_mod2 :
-  refines (MS mod1 0) (MS mod2 0).
+  srefines (MS mod1 0) (MS mod2 0).
 Proof.
   constructor => Pκs /= Hs.
-  inversion Hs; simplify_eq. 1: by apply: TraceEnd.
+  inversion Hs; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
   have H := (H0 _ ltac:(done)).
-  apply: TraceStep. { constructor. } 2: done.
+  apply: STraceStep. { constructor. } 2: done.
   move => ? ->.
-  inversion H; simplify_eq. 1: by apply: TraceEnd.
+  inversion H; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
 Qed.
 
 Lemma mod2_refines_mod3 :
-  refines (MS mod2 0) (MS mod3 0).
+  srefines (MS mod2 0) (MS mod3 0).
 Proof.
   constructor => Pκs /= Hs.
-  inversion Hs; simplify_eq. 1: by apply: TraceEnd.
+  inversion Hs; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
   have H := (H0 _ ltac:(done)).
-  apply: TraceStep. { constructor. } 2: done.
+  apply: STraceStep. { constructor. } 2: done.
   move => ? ->. simplify_eq.
-  inversion H; simplify_eq. 1: by apply: TraceEnd.
+  inversion H; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
   have {}H := (H3 _ ltac:(done)).
-  apply: TraceStep. { constructor. } 2: done.
+  apply: STraceStep. { constructor. } 2: done.
   move => ? ->. simplify_eq.
-  inversion H; simplify_eq. 1: by apply: TraceEnd.
+  inversion H; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
 Qed.
 
 Lemma mod2_refines_mod1_ub :
-  refines (MS mod2 0) (MS mod1_ub 0).
+  srefines (MS mod2 0) (MS mod1_ub 0).
 Proof.
   constructor => Pκs /= Hs.
-  inversion Hs; simplify_eq. 1: by apply: TraceEnd.
+  inversion Hs; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
   have H := (H0 _ ltac:(done)).
-  apply: TraceStep. { constructor. } 2: done.
+  apply: STraceStep. { constructor. } 2: done.
   move => ? ->. simplify_eq.
-  inversion H; simplify_eq. 1: by apply: TraceEnd.
-  apply: TraceStep. { constructor. } 2: naive_solver.
+  inversion H; simplify_eq. 1: by apply: STraceEnd.
+  apply: STraceStep. { constructor. } 2: naive_solver.
   done.
 Qed.
 
 Lemma mod2_refines_mod1 :
-  refines (MS mod2 0) (MS mod1 0).
+  srefines (MS mod2 0) (MS mod1 0).
 Proof.
   constructor => Pκs /= Hs.
-  inversion Hs; simplify_eq. 1: by apply: TraceEnd.
+  inversion Hs; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
   have H := (H0 _ ltac:(done)).
-  apply: TraceStep. { constructor. } 2: done.
+  apply: STraceStep. { constructor. } 2: done.
   move => ? ->. simplify_eq.
   inversion H; simplify_eq.
-  { simplify_eq/=. apply: TraceEnd; [done|].
+  { simplify_eq/=. apply: STraceEnd; [done|].
     done.
     (* split. 2: move => <-.  *)
   }
   invert_all @m_step => //.
   have {}H := (H0 _ ltac:(done)).
-  apply: TraceStep; [| | ]. Fail constructor.
-  (* Undo. Undo. apply: TraceEnd; [done|]. *)
+  apply: STraceStep; [| | ]. Fail constructor.
+  (* Undo. Undo. apply: STraceEnd; [done|]. *)
 Abort.
 
 
 Lemma mod12_ang_refines_mod1 :
-  refines (MS mod12_ang 0) (MS mod1 0).
+  srefines (MS mod12_ang 0) (MS mod1 0).
 Proof.
   constructor => Pκs /= Hs.
-  inversion Hs; simplify_eq. 1: by apply: TraceEnd.
+  inversion Hs; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
   have H := (H0 1 ltac:(naive_solver)).
-  inversion H; simplify_eq. 1: by apply: TraceEnd.
+  inversion H; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
   have {}H := (H3 _ ltac:(naive_solver)).
   inversion H; simplify_eq.
   2: invert_all @m_step => //.
-  apply: TraceStep; [by constructor| | naive_solver].
-  move => ?->. by apply: TraceEnd.
+  apply: STraceStep; [by constructor| | naive_solver].
+  move => ?->. by apply: STraceEnd.
 Qed.
 
 Lemma mod12_ang_refines_mod3' :
-  refines (MS mod12_ang 0) (MS mod3' 0).
+  srefines (MS mod12_ang 0) (MS mod3' 0).
 Proof.
   constructor => Pκs /= Hs.
-  inversion Hs; simplify_eq. 1: by apply: TraceEnd.
+  inversion Hs; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
   have H := (H0 1 ltac:(naive_solver)).
 Abort.
@@ -343,7 +343,7 @@ Definition mod_ang_comm2 : module nat := {|
 
 
 Lemma mod_ang_comm1_traces Pκs:
-  0 ~{mod_ang_comm1, Pκs}~> (λ _, True) ↔
+  0 ~{mod_ang_comm1, Pκs}~>ₛ (λ _, True) ↔
     Pκs [] ∧
   (Pκs [Nb] ∨
    (Pκs [Vis 1] ∧
@@ -371,20 +371,20 @@ Proof.
     have {}H := (H9 _ ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-  - move => [?[?|[? HP]]]. 1: by apply: TraceEnd.
-    apply: TraceStep; [by constructor| |done].
+  - move => [?[?|[? HP]]]. 1: by apply: STraceEnd.
+    apply: STraceStep; [by constructor| |done].
     move => /= ??; simplify_eq.
-    move: HP => [?|?]. 1: by apply: TraceEnd.
-    apply: TraceStep; [by constructor| |done].
+    move: HP => [?|?]. 1: by apply: STraceEnd.
+    apply: STraceStep; [by constructor| |done].
     move => /= ? [?|?]; simplify_eq.
-    + apply: TraceStep; [by constructor | |naive_solver].
-      move => /= ? ->. apply: TraceEnd; [done | naive_solver].
-    + apply: TraceStep; [by constructor | |naive_solver].
-      move => /= ? ->. apply: TraceEnd; [done | naive_solver].
+    + apply: STraceStep; [by constructor | |naive_solver].
+      move => /= ? ->. apply: STraceEnd; [done | naive_solver].
+    + apply: STraceStep; [by constructor | |naive_solver].
+      move => /= ? ->. apply: STraceEnd; [done | naive_solver].
 Qed.
 
 Lemma mod_ang_comm2_traces Pκs:
-  0 ~{mod_ang_comm2, Pκs}~> (λ _, True) ↔
+  0 ~{mod_ang_comm2, Pκs}~>ₛ (λ _, True) ↔
     Pκs [] ∧
   (Pκs [Nb] ∨
    (Pκs [Vis 1] ∧
@@ -415,21 +415,21 @@ Proof.
     have {}H := (H11 _ ltac:(naive_solver)).
     inversion H; simplify_eq. 2: invert_all @m_step => //.
     naive_solver.
-  - move => [?[?|[? HP]]]. 1: by apply: TraceEnd.
-    apply: TraceStep; [by constructor| |done].
+  - move => [?[?|[? HP]]]. 1: by apply: STraceEnd.
+    apply: STraceStep; [by constructor| |done].
     move => /= ?[?|?]; simplify_eq.
-    + apply: TraceStep; [by constructor| |done].
+    + apply: STraceStep; [by constructor| |done].
       move => /= ? ->.
-      move: HP => [?|?]. 1: by apply: TraceEnd.
-      apply: TraceStep; [by constructor | |naive_solver].
-      move => /= ? ->. apply: TraceEnd; [done | naive_solver].
-    + apply: TraceStep; [by constructor| |done].
+      move: HP => [?|?]. 1: by apply: STraceEnd.
+      apply: STraceStep; [by constructor | |naive_solver].
+      move => /= ? ->. apply: STraceEnd; [done | naive_solver].
+    + apply: STraceStep; [by constructor| |done].
       move => /= ? ->.
-      move: HP => [?|?]. 1: by apply: TraceEnd.
-      apply: TraceStep; [by constructor | |naive_solver].
-      move => /= ? ->. apply: TraceEnd; [done | naive_solver].
+      move: HP => [?|?]. 1: by apply: STraceEnd.
+      apply: STraceStep; [by constructor | |naive_solver].
+      move => /= ? ->. apply: STraceEnd; [done | naive_solver].
 Qed.
 
 Lemma mod_ang_comm_equiv:
-  MS mod_ang_comm1 0 ≡ MS mod_ang_comm2 0.
-Proof. apply: refines_equiv_equiv => ?. rewrite mod_ang_comm1_traces mod_ang_comm2_traces. done. Qed.
+  srefines_equiv (MS mod_ang_comm1 0) (MS mod_ang_comm2 0).
+Proof. apply: srefines_equiv_equiv => ?. rewrite mod_ang_comm1_traces mod_ang_comm2_traces. done. Qed.
