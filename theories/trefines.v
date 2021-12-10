@@ -48,6 +48,7 @@ Inductive subtrace {EV} : trace EV → trace EV → Prop :=
 .
 Global Instance trace_subseteq EV : SubsetEq (trace EV) := @subtrace EV.
 Global Instance trace_equiv EV : Equiv (trace EV) := λ x y, x ⊆ y ∧ y ⊆ x.
+Global Instance subtrace_rewrite {EV} : RewriteRelation (@subtrace EV) := {}.
 
 Global Instance subtrace_preorder EV : PreOrder (@subtrace EV).
 Proof.
@@ -139,6 +140,13 @@ Proof.
   - move => ?????????. econstructor. naive_solver.
 Qed.
 
+Global Instance tapp_proper {EV} :
+  Proper ((⊆) ==> (⊆) ==> (⊆)) (@tapp EV).
+Proof. move => ??????. by apply tapp_mono. Qed.
+Global Instance tapp_proper_flip {EV} :
+  Proper (flip (⊆) ==> flip (⊆) ==> (flip (⊆))) (@tapp EV).
+Proof. move => ??????. by apply tapp_mono. Qed.
+
 Lemma tapp_tnil_r {EV} (κs : trace EV) :
   tapp κs tnil = κs.
 Proof.
@@ -218,12 +226,22 @@ Proof.
   - move => *. eapply TTraceAll. naive_solver. by etrans.
 Qed.
 
+Global Instance thas_trace_proper_flip {EV} (m : module EV) :
+  Proper ((=) ==> (flip (⊆)) ==> (=) ==> flip impl) (thas_trace m).
+Proof. move => ?? -> ?? Hsub ?? -> /=. by rewrite Hsub. Qed.
+
 Lemma thas_trace_mono {EV} {m : module EV} κs' κs (Pσ2' Pσ2 : _ → Prop)  σ1 :
   σ1 ~{ m, κs' }~>ₜ Pσ2' →
   κs' ⊆ κs →
   (∀ σ, Pσ2' σ → Pσ2 σ) →
   σ1 ~{ m, κs }~>ₜ Pσ2.
 Proof. move => ???. by apply: thas_trace_proper. Qed.
+
+Lemma thas_trace_mono' {EV} {m : module EV} κs' κs (Pσ2 : _ → Prop)  σ1 :
+  σ1 ~{ m, κs' }~>ₜ Pσ2 →
+  κs' ⊆ κs →
+  σ1 ~{ m, κs }~>ₜ Pσ2.
+Proof. by move => ? <-. Qed.
 
 (* thas_trace_inv gives an induction hypothesis for tall. *)
 (* TODO: How useful is this? It cannot be used to replace the
@@ -258,25 +276,19 @@ Lemma thas_trace_trans {EV} κs1 κs2 (m : module EV) σ1 Pσ2 Pσ3 :
   σ1 ~{ m, tapp κs1 κs2 }~>ₜ Pσ3.
 Proof.
   elim.
-  - move => ??????.
-    apply: thas_trace_mono; [ naive_solver | |done].
-    etrans; [| by apply: tapp_mono]. done.
-  - move => ???????????.
-    apply: TTraceStep; [done| |].
-    + naive_solver.
-    + etrans; [| by apply: tapp_mono]. by rewrite assoc.
-  - move => *.
-    eapply TTraceAll. 2: {
-      etrans; [| by apply: tapp_mono].
-      simpl. done.
-    }
+  - move => ???? <- /= ?. naive_solver.
+  - move => ????????? <- ?. rewrite -assoc_L.
+    apply: TTraceStep; [done| |done].
+    naive_solver.
+  - move => ??????? <- ?.
+    eapply TTraceAll; [|simpl; done].
     naive_solver.
 Qed.
 
 Lemma thas_trace_ex {EV T} x f (m : module EV) σ Pσ:
   σ ~{ m, f x }~>ₜ Pσ →
   σ ~{ m, tex T f }~>ₜ Pσ.
-Proof. move => ?. apply: thas_trace_mono; [done| |done]. by econstructor. Qed.
+Proof. move => ?. apply: thas_trace_mono'; [done|]. by econstructor. Qed.
 
 Lemma thas_trace_all {EV T} f (m : module EV) σ Pσ:
   (∀ x, σ ~{ m, f x }~>ₜ Pσ) →
@@ -289,13 +301,10 @@ Lemma thas_trace_nil_inv' {EV} κs (m : module EV) σ1 Pσ3:
 Proof.
   elim.
   - move => *. by apply: TSTraceEnd.
-  - move => ??? κ ???? IH Hs1 Hs2.
-    pose proof (transitivity Hs1 Hs2) as Ht.
+  - move => ??? κ ???? IH <- Ht.
     destruct κ; simplify_eq/=. 1: by inversion Ht.
     apply: TSTraceStep; [done| move => ??; by apply: IH | done].
-  - move => ?????? IH Hs1 Hs2.
-    pose proof (transitivity Hs1 Hs2) as Ht.
-    inversion Ht; simplify_K. by apply: IH.
+  - move => ?????? IH <- Ht. inversion Ht; simplify_K. by apply: IH.
 Qed.
 
 Lemma thas_trace_nil_inv {EV} (m : module EV) σ1 Pσ3:
@@ -309,22 +318,17 @@ Lemma thas_trace_cons_inv' {EV} κs κs' κ (m : module EV) σ1 Pσ3:
 Proof.
   move => Hs.
   elim: Hs κ κs'.
-  - move => ?????  κ κs' ?.
-    have : tnil ⊆ tcons κ κs' by etrans.
-    easy.
-  - move => ??? κ' ???? IH Hs ?? Hsub.
+  - move => ???? Hnil κ κs'. rewrite -Hnil => ?. easy.
+  - move => ??? κ' ???? IH Hs ??. rewrite -Hs => Ht.
     destruct κ'; simplify_eq/=.
-    + pose proof (transitivity Hs Hsub) as Ht.
-      inversion Ht; simplify_eq.
+    + inversion Ht; simplify_eq.
       constructor; [|done].
       eexists _. split; [ done |]. move => ??.
       apply: thas_trace_mono; [ naive_solver | | naive_solver].
       done.
     + apply: TTraceStep; [ done | | by constructor].
-      move => ??. apply: IH; [done|].
-      etrans. done. done.
-  - move => ?????? IH Hsub ?? Hsub2.
-    pose proof (transitivity Hsub Hsub2) as [??]%subtrace_all_cons_inv.
+      move => ??. by apply: IH.
+  - move => ?????? IH Hsub ??. rewrite -Hsub => /(subtrace_all_cons_inv _ _)[??].
     naive_solver.
 Qed.
 

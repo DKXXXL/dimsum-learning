@@ -34,8 +34,8 @@ Proof.
   split.
   - move => Ht. thas_trace_inv Ht => //.
     1: { move => ?. by apply: (subtrace_all_l true). }
-    2: { move => ???. apply subtrace_all_r => ?. naive_solver. }
-    2: { move => ????. by etrans. }
+    2: { move => *. apply subtrace_all_r => ?. naive_solver. }
+    2: { move => ??? <-. done. }
     move => ????? Hnext. invert_all @m_step => //. apply: (subtrace_all_l false).
     constructor.
     have {}Hnext := (Hnext _ ltac:(done)).
