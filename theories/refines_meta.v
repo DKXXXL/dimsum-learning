@@ -178,11 +178,11 @@ Proof.
       constructor. naive_solver.
 Abort.
 
-Lemma refines_not_trefines:
+Lemma srefines_not_trefines:
   ¬ (∀ EV (m1 m2 : mod_state EV), srefines m1 m2 → trefines m1 m2).
 Proof.
-  move => Hr. apply: mod_ang_comm_not_refines. apply: Hr.
-  apply mod_ang_comm_equiv.
+  move => Hr. apply: mod_ang_comm_not_trefines. apply: Hr.
+  apply mod_ang_comm_sequiv.
 Qed.
 
 (*** Equivalence between refines and dem_refines *)
@@ -217,7 +217,7 @@ Proof.
   - move => ???? Hsub. constructor. by apply: Hsub.
 Qed.
 
-Lemma has_trace_dem_has_trace {EV} (m : dem_module EV) σ Pσ Pκs:
+Lemma shas_trace_dem_has_trace {EV} (m : dem_module EV) σ Pσ Pκs:
   σ ~{ m, Pκs }~>ₛ Pσ ↔ ∃ κs, dem_trace_to_set κs Pκs ∧ σ ~{ m, κs }~>ₘ Pσ.
 Proof.
   split.
@@ -248,10 +248,9 @@ Qed.
 
 Fixpoint events_to_set {EV} (κs : list (dem_event EV)) : list (event EV) → Prop :=
   match κs with
-  | [] => λ κs'', κs'' = []  ∨ κs'' = [Nb]
-  | DUb::_ => λ κs'', κs'' = []  ∨ κs'' = [Ub]
-  | DVis κ::κs' => λ κs'', (κs'' = [])
-      ∨ ∃ κs''', κs'' = Vis κ::κs''' ∧ events_to_set κs' κs'''
+  | [] => λ κs'', κs'' = [] ∨ κs'' = [Nb]
+  | DUb::_ => λ κs'', κs'' = [] ∨ κs'' = [Ub]
+  | DVis κ::κs' => λ κs'', (κs'' = []) ∨ ∃ κs''', κs'' = Vis κ::κs''' ∧ events_to_set κs' κs'''
   end.
 
 (* Compute events_to_set [Vis 1]. *)
@@ -295,10 +294,10 @@ Proof.
          eexists (_:: _) => /=. split; by apply: prefix_cons.
 Qed.
 
-Lemma dem_has_trace_has_trace {EV} (m : dem_module EV) σ Pσ κs:
+Lemma dem_has_trace_shas_trace {EV} (m : dem_module EV) σ Pσ κs:
   σ ~{ m, κs }~>ₘ Pσ ↔ σ ~{ m, events_to_set κs}~>ₛ Pσ.
 Proof.
-  rewrite has_trace_dem_has_trace.
+  rewrite shas_trace_dem_has_trace.
   split.
   - move => ?. eexists _. split; [|done]. apply: dem_trace_to_set_events.
   - move => [κs2[/dem_trace_to_set_inj[->//|[?[[?->][?->]]]]]].
@@ -306,17 +305,17 @@ Proof.
     by apply: dem_has_trace_trans.
 Qed.
 
-Lemma dem_refines_refines {EV} (m1 m2 : dem_mod_state EV):
+Lemma dem_refines_srefines {EV} (m1 m2 : dem_mod_state EV):
   dem_refines m1 m2 → srefines m1 m2.
 Proof.
-  move => [?]. constructor => ? /has_trace_dem_has_trace?.
-  apply/has_trace_dem_has_trace. naive_solver.
+  move => [?]. constructor => ? /shas_trace_dem_has_trace?.
+  apply/shas_trace_dem_has_trace. naive_solver.
 Qed.
 
-Lemma refines_dem_refines {EV} (m1 m2 : dem_mod_state EV):
+Lemma srefines_dem_refines {EV} (m1 m2 : dem_mod_state EV):
   srefines m1 m2 → dem_refines m1 m2.
 Proof.
   move => [?]. constructor => ?.
-  move => /dem_has_trace_has_trace?.
-  apply/dem_has_trace_has_trace. naive_solver.
+  move => /dem_has_trace_shas_trace?.
+  apply/dem_has_trace_shas_trace. naive_solver.
 Qed.

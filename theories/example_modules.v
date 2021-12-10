@@ -11,7 +11,7 @@ Inductive mod1_step : nat → option nat → (nat → Prop) → Prop :=
 
 Definition mod1 : module nat := Mod mod1_step.
 
-Lemma mod1_traces Pκs:
+Lemma mod1_straces Pκs:
   0 ~{mod1, Pκs}~>ₛ (λ _, True) ↔
   (Pκs [] ∧ Pκs [Nb]) ∨
   (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Nb]).
@@ -28,6 +28,28 @@ Proof.
     by apply: STraceEnd.
 Qed.
 
+Lemma mod1_ttraces κs:
+  0 ~{mod1, κs}~>ₜ (λ _, True) ↔ tnil ⊆ κs ∨ tcons 1 tnil ⊆ κs.
+Proof.
+  split.
+  - move => Ht. thas_trace_inv Ht => //.
+    1: naive_solver.
+    2: { move => ???. admit. }
+    2: { move => ?? -[?|?] ?; [left|right]; by etrans. }
+    move => ????? Hnext. invert_all @m_step => //. right.
+    constructor.
+    have {}Hnext := (Hnext _ ltac:(done)).
+    thas_trace_inv Hnext.
+    + done.
+    + move => ????. inversion 1.
+    + move => *. by apply subtrace_all_r.
+    + move => ????. by etrans.
+  - move => [?|?]. 1: by apply: TTraceEnd.
+    apply: TTraceStep; [by constructor| | naive_solver ].
+    move => ??. simplify_eq/=.
+    by apply: TTraceEnd.
+Abort.
+
 Inductive mod2_step : nat → option nat → (nat → Prop) → Prop :=
 | T2S0: mod2_step 0 (Some 1) (λ σ', σ' = 1)
 | T2S1: mod2_step 1 (Some 2) (λ σ', σ' = 2)
@@ -35,7 +57,7 @@ Inductive mod2_step : nat → option nat → (nat → Prop) → Prop :=
 
 Definition mod2 : module nat := Mod mod2_step.
 
-Lemma mod2_traces Pκs:
+Lemma mod2_straces Pκs:
   0 ~{mod2, Pκs}~>ₛ (λ _, True) ↔
      (Pκs [] ∧ Pκs [Nb])
   ∨ (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Nb])
@@ -83,7 +105,7 @@ Inductive mod1_ub_step : nat → option nat → (nat → Prop) → Prop :=
 
 Definition mod1_ub : module nat := Mod mod1_ub_step.
 
-Lemma mod1ub_traces Pκs:
+Lemma mod1ub_straces Pκs:
   0 ~{mod1_ub, Pκs}~>ₛ (λ _, True) ↔
      (Pκs [] ∧ Pκs [Nb])
   ∨ (Pκs [] ∧ Pκs [Vis 1]).
@@ -109,7 +131,7 @@ Inductive mod_ub_step {EV} : nat → option EV → (nat → Prop) → Prop :=
 
 Definition mod_ub EV : module EV := Mod mod_ub_step.
 
-Lemma modub_traces EV Pκs:
+Lemma modub_straces EV Pκs:
   (* Note that without [event EV], for EV not inhabited, this would be
   equivalent to the program that does not do anything (but does not
   have UB). *)
@@ -127,7 +149,7 @@ Inductive mod_nb_step {EV} : nat → option EV → (nat → Prop) → Prop :=
 
 Definition mod_nb EV : module EV := Mod mod_nb_step.
 
-Lemma modnb_traces EV Pκs:
+Lemma modnb_straces EV Pκs:
   0 ~{mod_nb EV, Pκs}~>ₛ (λ _, True) ↔ Pκs [] ∧ Pκs [Nb].
 Proof.
   split.
@@ -151,7 +173,7 @@ Inductive mod12_ang_step : nat → option nat → (nat → Prop) → Prop :=
 
 Definition mod12_ang : module nat := Mod mod12_ang_step.
 
-Lemma mod12_ang_traces Pκs:
+Lemma mod12_ang_straces Pκs:
   0 ~{mod12_ang, Pκs}~>ₛ (λ _, True) ↔
      (Pκs [] ∧ Pκs [Nb])
   ∨ (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Nb] ∧ Pκs [Vis 2] ∧ Pκs [Vis 2; Nb] ).
@@ -180,7 +202,7 @@ Proof.
         move => ? ->. apply: STraceEnd; [done| naive_solver].
 Qed.
 
-Lemma mod1_refines_mod2 :
+Lemma mod1_srefines_mod2 :
   srefines (MS mod1 0) (MS mod2 0).
 Proof.
   constructor => Pκs /= Hs.
@@ -193,7 +215,7 @@ Proof.
   invert_all @m_step => //.
 Qed.
 
-Lemma mod2_refines_mod3 :
+Lemma mod2_srefines_mod3 :
   srefines (MS mod2 0) (MS mod3 0).
 Proof.
   constructor => Pκs /= Hs.
@@ -211,7 +233,7 @@ Proof.
   invert_all @m_step => //.
 Qed.
 
-Lemma mod2_refines_mod1_ub :
+Lemma mod2_srefines_mod1_ub :
   srefines (MS mod2 0) (MS mod1_ub 0).
 Proof.
   constructor => Pκs /= Hs.
@@ -225,7 +247,7 @@ Proof.
   done.
 Qed.
 
-Lemma mod2_refines_mod1 :
+Lemma mod2_srefines_mod1 :
   srefines (MS mod2 0) (MS mod1 0).
 Proof.
   constructor => Pκs /= Hs.
@@ -246,7 +268,7 @@ Proof.
 Abort.
 
 
-Lemma mod12_ang_refines_mod1 :
+Lemma mod12_ang_srefines_mod1 :
   srefines (MS mod12_ang 0) (MS mod1 0).
 Proof.
   constructor => Pκs /= Hs.
@@ -262,7 +284,7 @@ Proof.
   move => ?->. by apply: STraceEnd.
 Qed.
 
-Lemma mod12_ang_refines_mod3' :
+Lemma mod12_ang_srefines_mod3' :
   srefines (MS mod12_ang 0) (MS mod3' 0).
 Proof.
   constructor => Pκs /= Hs.
@@ -312,7 +334,7 @@ Inductive mod_ang_comm2_step : nat → option nat → (nat → Prop) → Prop :=
 
 Definition mod_ang_comm2 : module nat := Mod mod_ang_comm2_step.
 
-Lemma mod_ang_comm1_traces Pκs:
+Lemma mod_ang_comm1_straces Pκs:
   0 ~{mod_ang_comm1, Pκs}~>ₛ (λ _, True) ↔
     Pκs [] ∧
   (Pκs [Nb] ∨
@@ -353,7 +375,7 @@ Proof.
       move => /= ? ->. apply: STraceEnd; [done | naive_solver].
 Qed.
 
-Lemma mod_ang_comm2_traces Pκs:
+Lemma mod_ang_comm2_straces Pκs:
   0 ~{mod_ang_comm2, Pκs}~>ₛ (λ _, True) ↔
     Pκs [] ∧
   (Pκs [Nb] ∨
@@ -400,11 +422,11 @@ Proof.
       move => /= ? ->. apply: STraceEnd; [done | naive_solver].
 Qed.
 
-Lemma mod_ang_comm_equiv:
+Lemma mod_ang_comm_sequiv:
   srefines_equiv (MS mod_ang_comm1 0) (MS mod_ang_comm2 0).
-Proof. apply: srefines_equiv_equiv => ?. rewrite mod_ang_comm1_traces mod_ang_comm2_traces. done. Qed.
+Proof. apply: srefines_equiv_equiv => ?. rewrite mod_ang_comm1_straces mod_ang_comm2_straces. done. Qed.
 
-Lemma mod_ang_comm_not_refines:
+Lemma mod_ang_comm_not_trefines:
   ¬ trefines (MS mod_ang_comm2 0) (MS mod_ang_comm1 0).
 Proof.
   move => [/=Hr]. feed pose proof (Hr (tex bool (λ b, if b then tcons 1 $ tcons 2 tnil else tcons 1 $ tcons 3 tnil))) as Hr2.

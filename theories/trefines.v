@@ -225,6 +225,33 @@ Lemma thas_trace_mono {EV} {m : module EV} κs' κs (Pσ2' Pσ2 : _ → Prop)  �
   σ1 ~{ m, κs }~>ₜ Pσ2.
 Proof. move => ???. by apply: thas_trace_proper. Qed.
 
+(* thas_trace_inv gives an induction hypothesis for tall. *)
+(* TODO: How useful is this? It cannot be used to replace the
+inductions in this file as it does not allow changing the state. *)
+Lemma thas_trace_inv {EV} (m : module EV) σ (Pσ : _ → Prop) (P : _ → Prop):
+  (Pσ σ → P tnil) →
+  (∀ κ κs' Pσ2 Pσ3,
+      m.(m_step) σ κ Pσ2 →
+      (∀ σ2, Pσ2 σ2 → σ2 ~{ m, κs' }~>ₜ Pσ3) →
+      P (tapp (option_trace κ) κs')) →
+  (∀ T f, (∀ x, P (f x)) → P (tall T f)) →
+  (∀ κs κs', P κs' → κs' ⊆ κs → P κs) →
+  ∀ κs, σ ~{ m, κs }~>ₜ Pσ → P κs.
+Proof.
+  move => HEnd HStep Hall Hsub κs Ht.
+  elim: Ht HEnd HStep Hall Hsub; clear.
+  - naive_solver.
+  - naive_solver.
+  - move => T f σ κs Pσ ? IH ? HEnd HStep Hall Hsub.
+    apply: (Hsub); [|done]. apply: (Hall) => ?.
+    apply: IH; naive_solver.
+Qed.
+Ltac thas_trace_inv H :=
+  lazymatch type of H with
+  | _ ~{ _, ?κs }~>ₜ _ => pattern κs
+  end;
+  apply: (thas_trace_inv _ _ _ _ _ _ _ _ _ H).
+
 Lemma thas_trace_trans {EV} κs1 κs2 (m : module EV) σ1 Pσ2 Pσ3 :
   σ1 ~{ m, κs1 }~>ₜ Pσ2 →
   (∀ σ2, Pσ2 σ2 → σ2 ~{ m, κs2 }~>ₜ Pσ3) →
