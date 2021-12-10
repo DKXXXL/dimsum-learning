@@ -29,14 +29,14 @@ Proof.
 Qed.
 
 Lemma mod1_ttraces κs:
-  0 ~{mod1, κs}~>ₜ (λ _, True) ↔ tnil ⊆ κs ∨ tcons 1 tnil ⊆ κs.
+  0 ~{mod1, κs}~>ₜ (λ _, True) ↔ tall bool (λ b, if b then tnil else tcons 1 tnil) ⊆ κs.
 Proof.
   split.
   - move => Ht. thas_trace_inv Ht => //.
-    1: naive_solver.
-    2: { move => ???. admit. }
-    2: { move => ?? -[?|?] ?; [left|right]; by etrans. }
-    move => ????? Hnext. invert_all @m_step => //. right.
+    1: { move => ?. by apply: (subtrace_all_l true). }
+    2: { move => ???. apply subtrace_all_r => ?. naive_solver. }
+    2: { move => ????. by etrans. }
+    move => ????? Hnext. invert_all @m_step => //. apply: (subtrace_all_l false).
     constructor.
     have {}Hnext := (Hnext _ ltac:(done)).
     thas_trace_inv Hnext.
@@ -44,11 +44,13 @@ Proof.
     + move => ????. inversion 1.
     + move => *. by apply subtrace_all_r.
     + move => ????. by etrans.
-  - move => [?|?]. 1: by apply: TTraceEnd.
+  - move => ?.
+    apply: (thas_trace_mono _ _ (const True)); [|done|done].
+    apply thas_trace_all => -[]. 1: by apply: TTraceEnd.
     apply: TTraceStep; [by constructor| | naive_solver ].
     move => ??. simplify_eq/=.
     by apply: TTraceEnd.
-Abort.
+Qed.
 
 Inductive mod2_step : nat → option nat → (nat → Prop) → Prop :=
 | T2S0: mod2_step 0 (Some 1) (λ σ', σ' = 1)
