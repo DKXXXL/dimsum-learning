@@ -336,7 +336,7 @@ Proof.
     apply: thas_trace_all. naive_solver.
 Qed.
 
-Lemma tmod_filter_refines {EV1 EV2} (R : EV1 → option EV2 → Prop) mi ms σi σs:
+Lemma mod_filter_trefines {EV1 EV2} (R : EV1 → option EV2 → Prop) mi ms σi σs:
   trefines (MS mi σi) (MS ms σs) →
   trefines (MS (mod_filter mi R) σi) (MS (mod_filter ms R) σs).
 Proof.

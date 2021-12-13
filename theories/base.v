@@ -29,6 +29,30 @@ Ltac destruct_hyps :=
       end; simplify_eq/=
     ).
 
+Tactic Notation "econs" := econstructor.
+Tactic Notation "econs" integer(n) := econstructor n.
+
+Tactic Notation "destruct_prod" "?" ident(H) :=
+  repeat match type of H with
+         | context [ match ?x with | (y, z) => _ end] =>
+             let y := fresh y in
+             let z := fresh z in
+             destruct x as [y z]
+         end.
+Tactic Notation "destruct_prod" "!" ident(H) := progress (destruct_prod? H).
+Tactic Notation "destruct_prod" "?" :=
+  repeat match goal with H : _ |- _ => progress (destruct_prod? H) end.
+Tactic Notation "destruct_prod" "!" :=
+  progress destruct_prod?.
+Tactic Notation "destruct_all" "?" :=
+  repeat first [
+      destruct_prod!
+      | destruct_and!
+      | destruct_or!
+      ].
+Tactic Notation "destruct_all" "!" :=
+  progress destruct_all?.
+
 Section theorems.
 Context `{FinMap K M}.
 Lemma map_disjoint_difference_l' {A} (m1 m2 : M A) : m2 ∖ m1 ##ₘ m1.

@@ -199,6 +199,27 @@ Inductive thas_trace {EV} (m : module EV) : m.(m_state) → trace EV → (m.(m_s
 .
 Notation " σ '~{' m , Pκs '}~>ₜ' P " := (thas_trace m σ Pκs P) (at level 40).
 
+Lemma TTraceStepNone {EV} (m : module EV) σ1 Pσ2 Pσ3 κs:
+  m_step m σ1 None Pσ2 →
+  (∀ σ2, Pσ2 σ2 → σ2 ~{ m, κs }~>ₜ Pσ3) →
+  σ1 ~{ m, κs }~>ₜ Pσ3.
+Proof. move => ??. by apply: TTraceStep. Qed.
+
+Lemma TTraceStepSome {EV} (m : module EV) σ1 Pσ2 Pσ3 e κs:
+  m_step m σ1 (Some e) Pσ2 →
+  (∀ σ2, Pσ2 σ2 → σ2 ~{ m, κs }~>ₜ Pσ3) →
+  σ1 ~{ m, tcons e κs }~>ₜ Pσ3.
+Proof. move => ??. by apply: TTraceStep. Qed.
+
+Ltac tstep_None :=
+  apply: TTraceStepNone.
+Ltac tstep_Some :=
+  apply: TTraceStepSome.
+Ltac tstep :=
+  apply: TTraceStep.
+Ltac tend :=
+  apply: TTraceEnd; [|try done].
+
 Inductive thas_trace_simple {EV} (m : module EV) : m.(m_state) → trace EV → (m.(m_state) → Prop) → Prop :=
 | TSTraceEnd σ (Pσ : _ → Prop) κs:
     Pσ σ →
@@ -218,9 +239,9 @@ Global Instance thas_trace_proper {EV} (m : module EV) :
 Proof.
   move => ?? -> κs1 κs2 Hκs Pσ1 Pσ2 HP Ht.
   elim: Ht κs2 Pσ2 Hκs HP.
-  - move => ???????? HP. apply: TTraceEnd. by apply: HP. by etrans.
+  - move => ???????? HP. tend; [ by apply: HP | by etrans].
   - move => ??????? IH Hnext ??? Hκs HP.
-    apply: TTraceStep; [done| |].
+    tstep; [done| |].
     + move => ??. naive_solver.
     + by etrans.
   - move => *. eapply TTraceAll. naive_solver. by etrans.
@@ -292,8 +313,7 @@ Proof.
   elim.
   - move => ???? <- /= ?. naive_solver.
   - move => ????????? <- ?. rewrite -assoc_L.
-    apply: TTraceStep; [done| |done].
-    naive_solver.
+    tstep; [done| |done]. naive_solver.
   - move => ??????? <- ?.
     eapply TTraceAll; [|simpl; done].
     naive_solver.
@@ -325,12 +345,11 @@ Proof.
   - move => ???? Hnil κ κs'. rewrite -Hnil => ?. easy.
   - move => ??? κ' ???? IH Hs ??. rewrite -Hs => Ht.
     destruct κ'; simplify_eq/=.
-    + inversion Ht; simplify_eq.
-      constructor; [|done].
+    + inversion Ht; simplify_eq. tend.
       eexists _. split; [ done |]. move => ??.
       apply: thas_trace_mono; [ naive_solver | | naive_solver].
       done.
-    + apply: TTraceStep; [ done | | by constructor].
+    + tstep; [ done | | by constructor].
       move => ??. by apply: IH.
   - move => ?????? IH Hsub ??. rewrite -Hsub => /(subtrace_all_cons_inv _ _)[??].
     naive_solver.
@@ -350,7 +369,7 @@ Proof.
   - move => ????? T f ?.
     have : tnil ⊆ tex T f by etrans.
     move => /subtrace_nil_ex_inv[??].
-    constructor; [|done]. eexists _. by constructor.
+    tend. eexists _. by constructor.
   - move => ??? κ ???? IH Hs ?? Hsub.
     destruct κ; simplify_eq/=.
     + pose proof (transitivity Hs Hsub) as Ht.
@@ -390,10 +409,10 @@ Lemma thas_trace_app_inv {EV} κs1 κs2 (m : module EV) σ1 Pσ3 :
   σ1 ~{ m, κs1 }~>ₜ (λ σ2, σ2 ~{ m, κs2 }~>ₜ Pσ3).
 Proof.
   elim: κs1 σ1 => /=.
-  - move => ??. by apply: TTraceEnd.
+  - move => ??. by tend.
   - move => ???? /(thas_trace_cons_inv _ _)?.
     apply: (thas_trace_trans tnil); [done| ].
-    move => ?[?[??]]. apply: TTraceStep; [done| |simpl; done].
+    move => ?[?[??]]. tstep; [done| |simpl; done].
     naive_solver.
   - move => ???? /thas_trace_ex_inv?.
     apply: (thas_trace_trans tnil); [done| ].
@@ -410,7 +429,7 @@ Proof.
   - naive_solver.
   - move => σ1 Pσ2 Pσ3 κ κs κs' ? ? IH ?.
     have [?|HF]:= EM (∀ σ2 : m_state m, Pσ2 σ2 → σ2 ~{ m, κs' }~>ₜ (λ _ : m_state m, False)).
-    + left. apply: TTraceStep; [done|done |done].
+    + left. by tstep.
     + have [?|?]:= EM (∃ σ2, Pσ2 σ2 ∧ ¬ σ2 ~{ m, κs' }~>ₜ (λ _ : m_state m, False)).
       naive_solver.
       exfalso. apply: HF => σ3?.

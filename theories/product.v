@@ -7,23 +7,26 @@ Require Import refframe.filter.
 (*** [product] *)
 Inductive product_step {EV1 EV2} (m1 : module EV1) (m2 : module EV2) :
   (m1.(m_state) * m2.(m_state)) → option (option EV1 * option EV2) → ((m1.(m_state) * m2.(m_state)) → Prop) → Prop :=
-| ProductStepL σ1 σ2 e Pσ:
+| ProductStepL e σ1 σ2 Pσ:
     m1.(m_step) σ1 e Pσ →
     product_step m1 m2 (σ1, σ2)
                  (if e is Some e' then Some (Some e', None) else None)
                  (λ '(σ1', σ2'), Pσ σ1' ∧ σ2 = σ2')
-| ProductStepR σ1 σ2 e Pσ:
+| ProductStepR e σ1 σ2 Pσ:
     m2.(m_step) σ2 e Pσ →
     product_step m1 m2 (σ1, σ2)
                  (if e is Some e' then Some (None, Some e') else None)
                  (λ '(σ1', σ2'), σ1 = σ1' ∧ Pσ σ2')
-| ProductStepBoth σ1 σ2 e1 e2 Pσ1 Pσ2:
+| ProductStepBoth e1 e2 σ1 σ2 Pσ1 Pσ2:
     m1.(m_step) σ1 (Some e1) Pσ1 →
     m2.(m_step) σ2 (Some e2) Pσ2 →
     product_step m1 m2 (σ1, σ2)
                  (Some (Some e1, Some e2))
                  (λ '(σ1', σ2'), Pσ1 σ1' ∧ Pσ2 σ2')
 .
+Arguments ProductStepL {_ _ _ _} _ _ _ _ _.
+Arguments ProductStepR {_ _ _ _} _ _ _ _ _.
+Arguments ProductStepBoth {_ _ _ _} _ _ _ _ _.
 
 Definition mod_product {EV1 EV2} (m1 : module EV1) (m2 : module EV2) : module (option EV1 * option EV2) :=
   Mod (product_step m1 m2).
@@ -184,25 +187,25 @@ Proof.
   inversion Himpl; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step.
 
-  apply: STraceStep. { econstructor. { apply ProductStepR. constructor. } done. } 2: done.
+  apply: STraceStep. { econstructor. { apply: ProductStepR. constructor. } done. } 2: done.
   move => [??] [?[?|?]]; simplify_eq.
   - have {}H := (H0 1 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: by apply: STraceEnd.
     invert_all @m_step => //.
 
-    apply: STraceStep. { econstructor. { apply ProductStepBoth; constructor. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply: ProductStepBoth; constructor. } naive_solver. }
     2: done. move => [??] [??]; simplify_eq/=.
-    apply: STraceStep. { econstructor. { apply ProductStepL. apply: PMAS11. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply: ProductStepL. apply: PMAS11. } naive_solver. }
     2: done. move => [??] [??]; simplify_eq/=.
-    apply: STraceStep. { econstructor. { apply ProductStepL. constructor. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply: ProductStepL. constructor. } naive_solver. }
     2: done. move => [??] [??]; simplify_eq/=.
-    apply: STraceStep. { econstructor. { apply ProductStepBoth; constructor. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply: ProductStepBoth; constructor. } naive_solver. }
     2: naive_solver. move => [??] [??]; simplify_eq/=.
 
     have {}H := (H3 _ ltac:(naive_solver)).
     inversion H; simplify_eq. 1: by apply: STraceEnd.
     invert_all @m_step => //.
-    apply: STraceStep. { econstructor. { apply ProductStepR. constructor. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply: ProductStepR. constructor. } naive_solver. }
     2: naive_solver. move => [??] [??]; simplify_eq/=.
     have {}H := (H5 _ ltac:(naive_solver)).
     inversion H; simplify_eq. 1: by apply: STraceEnd.
@@ -211,19 +214,19 @@ Proof.
     inversion H; simplify_eq. 1: by apply: STraceEnd.
     invert_all @m_step => //.
 
-    apply: STraceStep. { econstructor. { apply ProductStepBoth; constructor. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply: ProductStepBoth; constructor. } naive_solver. }
     2: done. move => [??] [??]; simplify_eq/=.
-    apply: STraceStep. { econstructor. { apply ProductStepL. apply: PMAS12. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply: ProductStepL. apply: PMAS12. } naive_solver. }
     2: done. move => [??] [??]; simplify_eq/=.
-    apply: STraceStep. { econstructor. { apply ProductStepL. constructor. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply: ProductStepL. constructor. } naive_solver. }
     2: done. move => [??] [??]; simplify_eq/=.
-    apply: STraceStep. { econstructor. { apply ProductStepBoth; constructor. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply: ProductStepBoth; constructor. } naive_solver. }
     2: naive_solver. move => [??] [??]; simplify_eq/=.
 
     have {}H := (H3 _ ltac:(naive_solver)).
     inversion H; simplify_eq. 1: by apply: STraceEnd.
     invert_all @m_step => //.
-    apply: STraceStep. { econstructor. { apply ProductStepR. constructor. } naive_solver. }
+    apply: STraceStep. { econstructor. { apply: ProductStepR. constructor. } naive_solver. }
     2: naive_solver. move => [??] [??]; simplify_eq/=.
     have {}H := (H5 _ ltac:(naive_solver)).
     inversion H; simplify_eq. 1: by apply: STraceEnd.
@@ -563,3 +566,12 @@ Proof.
   move => [/=Hr1] [/=Hr2]. constructor => κs /= /tmod_product_to_mods[κs1 [κs2 [/Hr1 ? /Hr2 ?]]].
   by apply: tmods_to_mod_product.
 Qed.
+
+(*** [mod_filter_mod] *)
+Definition mod_filter_mod {EV1 EV2} (m : module EV1) (f : module (EV1 * option EV2)) : module EV2 :=
+  mod_filter (mod_product m f) (λ e er, e.2 = (λ x, (x, er)) <$> e.1).
+
+Lemma mod_filter_mod_trefines {EV1 EV2} m1 m2 (f : module (EV1 * option EV2)) σ1 σ2 σf :
+  trefines (MS m1 σ1) (MS m2 σ2) →
+  trefines (MS (mod_filter_mod m1 f) (σ1, σf)) (MS (mod_filter_mod m2 f) (σ2, σf)).
+Proof. move => ?. apply mod_filter_trefines. by apply mod_product_trefines. Qed.

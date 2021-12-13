@@ -41,12 +41,10 @@ Proof.
     have {}Hnext := (Hnext _ ltac:(done)).
     thas_trace_inv Hnext; [done|].
     move => ????. inversion 1.
-  - move => ?.
-    apply: (thas_trace_mono _ _ (const True)); [|done|done].
-    apply thas_trace_all => -[]. 1: by apply: TTraceEnd.
-    apply: TTraceStep; [by constructor| | naive_solver ].
+  - move => <-. apply thas_trace_all => -[]. 1: by tend.
+    tstep_Some. { by econs. }
     move => ??. simplify_eq/=.
-    by apply: TTraceEnd.
+    by tend.
 Qed.
 
 Inductive mod2_step : nat → option nat → (nat → Prop) → Prop :=
@@ -218,15 +216,13 @@ Lemma mod1_trefines_mod2 :
   trefines (MS mod1 0) (MS mod2 0).
 Proof.
   constructor => κs /= Hs.
-  thas_trace_inv Hs. 1: move => ?; by apply: TTraceEnd.
+  thas_trace_inv Hs. 1: move => ?; by tend.
   move => ???? {}Hs Hnext.
   invert_all @m_step => //.
   have {}Hnext := (Hnext _ ltac:(done)).
-  apply: TTraceStep. { constructor. } 2: simpl; done.
-  move => ? ->.
-  thas_trace_inv Hnext. 1: move => ?; by apply: TTraceEnd.
-  move => *.
-  invert_all @m_step.
+  tstep_Some. { econs. } move => ? ->.
+  thas_trace_inv Hnext. 1: move => ?; by tend.
+  move => *. invert_all @m_step.
 Qed.
 
 Lemma mod2_srefines_mod3 :
@@ -445,16 +441,16 @@ Lemma mod_ang_comm_not_trefines:
   ¬ trefines (MS mod_ang_comm2 0) (MS mod_ang_comm1 0).
 Proof.
   move => [/=Hr]. feed pose proof (Hr (tex bool (λ b, if b then tcons 1 $ tcons 2 tnil else tcons 1 $ tcons 3 tnil))) as Hr2.
-  - apply: TTraceStep; [constructor| | simpl; done]. move => ?[->|->].
+  - tstep_None; [ constructor|]. move => ?[->|->].
     + apply: (thas_trace_ex true).
-      apply: TTraceStep; [constructor| | simpl; done]. move => ?->.
-      apply: TTraceStep; [constructor| | simpl; done]. move => ?->.
-      by apply: TTraceEnd.
+      tstep_Some; [constructor|] => ? ->.
+      tstep_Some; [constructor|] => ? ->.
+      by tend.
     + apply: (thas_trace_ex false).
-      apply: TTraceStep; [constructor| | simpl; done]. move => ?->.
-      apply: TTraceStep; [constructor| | simpl; done]. move => ?->.
-      by apply: TTraceEnd.
-  - move: Hr2 => /thas_trace_ex_inv/thas_trace_nil_inv{}Hr2.
+      tstep_Some; [constructor|] => ? ->.
+      tstep_Some; [constructor|] => ? ->.
+      by tend.
+  - move: Hr2 => /thas_trace_ex_inv/thas_trace_nil_inv Hr2.
     inversion Hr2; simplify_eq => //. 2: invert_all @m_step => //; easy.
     move: H => [[] {}Hr].
     all: move: Hr => /(thas_trace_cons_inv _ _ _)/thas_trace_nil_inv{}Hr.
