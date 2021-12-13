@@ -4,6 +4,7 @@ From iris.base_logic.lib Require Export fancy_updates.
 From iris.bi Require Export weakestpre.
 Require Export refframe.module.
 Require Import refframe.trefines.
+Set Default Proof Using "Type".
 
 Structure language := Language {
   expr : Type;
