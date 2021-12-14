@@ -30,7 +30,7 @@ Definition wp_pre `{!refirisGS Λ Σ}
     (state_interp (to_state Λ σ) σs ∗ Φ e1) ∨
     ∀ κ Pσ, ⌜(lang_module Λ).(m_step) σ κ Pσ⌝ ={E,∅}=∗
       ∃ Pσs, ⌜σs ~{spec_module, option_trace κ}~>ₜ Pσs⌝ ∗
-        ∀ σs', ⌜Pσs σs'⌝ ={∅, ⊤}=∗
+        ∀ σs', ⌜Pσs σs'⌝ ={∅, E}=∗
           ∃ σ', ⌜Pσ σ'⌝ ∗ state_interp (to_state Λ σ') σs' ∗ wp E (to_expr Λ σ') Φ)%I.
 
 Global Instance wp_pre_ne `{!refirisGS Λ Σ} n:

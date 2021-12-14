@@ -19,8 +19,7 @@ Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H1 _ ltac:(done)).
-    inversion H; simplify_eq. 1: naive_solver.
+    inversion H1; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
   - move => [?|[??]]. 1: by apply: STraceEnd.
     apply: STraceStep; [by constructor| | naive_solver ].
@@ -36,11 +35,10 @@ Proof.
   - move => Ht.
     thas_trace_inv Ht => //.
     1: { move => ?. by apply: (subtrace_all_l true). }
-    move => ????? Hnext. invert_all @m_step => //. apply: (subtrace_all_l false).
+    move => ???? Hnext. invert_all @m_step => //. apply: (subtrace_all_l false).
     constructor.
-    have {}Hnext := (Hnext _ ltac:(done)).
     thas_trace_inv Hnext; [done|].
-    move => ????. inversion 1.
+    move => ???. inversion 1.
   - move => <-. apply thas_trace_all => -[]. 1: by tend.
     tstep_Some. { by econs. }
     move => ??. simplify_eq/=.
@@ -63,11 +61,9 @@ Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H1 _ ltac:(done)).
-    inversion H; simplify_eq. 1: naive_solver.
+    inversion H1; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H3 _ ltac:(done)).
-    inversion H; simplify_eq. 1: naive_solver.
+    inversion H3; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
   - move => [?|[[??]|[?[??]]]].
     + by apply: STraceEnd.
@@ -110,8 +106,7 @@ Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H1 _ ltac:(done)).
-    inversion H; simplify_eq. 1: naive_solver.
+    inversion H1; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
     naive_solver.
   - move => [?|[??]].
@@ -181,13 +176,11 @@ Proof.
     have {}H := (H1 1 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H3 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 2: invert_all @m_step => //.
+    inversion H3; simplify_eq. 2: invert_all @m_step => //.
     have {}H := (H1 2 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H7 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 2: invert_all @m_step => //.
+    inversion H7; simplify_eq. 2: invert_all @m_step => //.
     naive_solver.
   - move => [?|[?[??]]].
     + by apply: STraceEnd.
@@ -205,10 +198,9 @@ Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
-  have H := (H0 _ ltac:(done)).
   apply: STraceStep. { constructor. } 2: done.
   move => ? ->.
-  inversion H; simplify_eq. 1: by apply: STraceEnd.
+  inversion H0; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
 Qed.
 
@@ -217,9 +209,8 @@ Lemma mod1_trefines_mod2 :
 Proof.
   constructor => κs /= Hs.
   thas_trace_inv Hs. 1: move => ?; by tend.
-  move => ???? {}Hs Hnext.
+  move => ??? {}Hs Hnext.
   invert_all @m_step => //.
-  have {}Hnext := (Hnext _ ltac:(done)).
   tstep_Some. { econs. } move => ? ->.
   thas_trace_inv Hnext. 1: move => ?; by tend.
   move => *. invert_all @m_step.
@@ -231,15 +222,13 @@ Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
-  have H := (H0 _ ltac:(done)).
   apply: STraceStep. { constructor. } 2: done.
   move => ? ->. simplify_eq.
-  inversion H; simplify_eq. 1: by apply: STraceEnd.
+  inversion H0; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
-  have {}H := (H3 _ ltac:(done)).
   apply: STraceStep. { constructor. } 2: done.
   move => ? ->. simplify_eq.
-  inversion H; simplify_eq. 1: by apply: STraceEnd.
+  inversion H2; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
 Qed.
 
@@ -249,10 +238,9 @@ Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
-  have H := (H0 _ ltac:(done)).
   apply: STraceStep. { constructor. } 2: done.
   move => ? ->. simplify_eq.
-  inversion H; simplify_eq. 1: by apply: STraceEnd.
+  inversion H0; simplify_eq. 1: by apply: STraceEnd.
   apply: STraceStep. { constructor. } 2: naive_solver.
   done.
 Qed.
@@ -263,16 +251,14 @@ Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
-  have H := (H0 _ ltac:(done)).
   apply: STraceStep. { constructor. } 2: done.
   move => ? ->. simplify_eq.
-  inversion H; simplify_eq.
+  inversion H0; simplify_eq.
   { simplify_eq/=. apply: STraceEnd; [done|].
     done.
     (* split. 2: move => <-.  *)
   }
   invert_all @m_step => //.
-  have {}H := (H0 _ ltac:(done)).
   apply: STraceStep; [| | ]. Fail constructor.
   (* Undo. Undo. apply: STraceEnd; [done|]. *)
 Abort.
@@ -287,8 +273,7 @@ Proof.
   have H := (H0 1 ltac:(naive_solver)).
   inversion H; simplify_eq. 1: by apply: STraceEnd.
   invert_all @m_step => //.
-  have {}H := (H3 _ ltac:(naive_solver)).
-  inversion H; simplify_eq.
+  inversion H3; simplify_eq.
   2: invert_all @m_step => //.
   apply: STraceStep; [by constructor| | naive_solver].
   move => ?->. by apply: STraceEnd.
@@ -357,21 +342,18 @@ Proof.
   - inversion 1; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
     split; [naive_solver|].
-    have {}H := (H1 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: naive_solver.
+    inversion H1; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
 
     have {}H := (H3 3 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H5 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 2: invert_all @m_step => //.
+    inversion H5; simplify_eq. 2: invert_all @m_step => //.
 
     have {}H := (H3 5 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H9 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: naive_solver.
+    inversion H9; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
   - move => [?[?|[? HP]]]. 1: by apply: STraceEnd.
     apply: STraceStep; [by constructor| |done].
@@ -402,20 +384,16 @@ Proof.
     have {}H := (H1 2 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H3 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: naive_solver.
+    inversion H3; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H5 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 2: invert_all @m_step => //.
+    inversion H5; simplify_eq. 2: invert_all @m_step => //.
 
     have {}H := (H1 5 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H9 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: naive_solver.
+    inversion H9; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H11 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 2: invert_all @m_step => //.
+    inversion H11; simplify_eq. 2: invert_all @m_step => //.
     naive_solver.
   - move => [?[?|[? HP]]]. 1: by apply: STraceEnd.
     apply: STraceStep; [by constructor| |done].
@@ -457,7 +435,6 @@ Proof.
     all: inversion Hr; simplify_K; [| invert_all @m_step => //; easy].
     all: move: H => [? [? {}Hr]].
     all: invert_all @m_step.
-    all: move: (Hr _ ltac:(done)) => {}Hr.
 
     all: move: Hr => /(thas_trace_cons_inv _ _ _)/thas_trace_nil_inv{}Hr.
     all: inversion Hr; simplify_K; [ move: H => [?[??]]; by invert_all @m_step|].

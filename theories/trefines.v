@@ -1,4 +1,5 @@
 Require Export refframe.module.
+Require Export refframe.trace_index.
 
 (** [trefines] is a weaker notion of refinement that does not allow commuting choices and externally visible events*)
 
@@ -198,6 +199,43 @@ Inductive thas_trace {EV} (m : module EV) : m.(m_state) → trace EV → (m.(m_s
     thas_trace m σ κs Pσ
 .
 Notation " σ '~{' m , Pκs '}~>ₜ' P " := (thas_trace m σ Pκs P) (at level 40).
+Notation " σ '~{' m , Pκs '}~>ₜ' - " := (thas_trace m σ Pκs (λ _, True)) (at level 40).
+
+Inductive thas_trace_simple {EV} (m : module EV) : m.(m_state) → trace EV → (m.(m_state) → Prop) → Prop :=
+| TSTraceEnd σ (Pσ : _ → Prop) κs:
+    Pσ σ →
+    tnil ⊆ κs →
+    thas_trace_simple m σ κs Pσ
+| TSTraceStep σ1 Pσ2 Pσ3 κ κs κs':
+    m.(m_step) σ1 κ Pσ2 →
+    (∀ σ2, Pσ2 σ2 → thas_trace_simple m σ2 κs' Pσ3) →
+    tapp (option_trace κ) κs' ⊆ κs →
+    (* VisNoUb m κ Pσ2 → *)
+    thas_trace_simple m σ1 κs Pσ3
+.
+Notation " σ '~{' m , Pκs '}~>ₜₛ' P " := (thas_trace_simple m σ Pκs P) (at level 40).
+Notation " σ '~{' m , Pκs '}~>ₜₛ' - " := (thas_trace_simple m σ Pκs (λ _, True)) (at level 40).
+
+Inductive tnhas_trace {EV} (m : module EV) : m.(m_state) → trace EV → trace_index → (m.(m_state) → Prop) → Prop :=
+| TNTraceEnd σ (Pσ : _ → Prop) κs n:
+    Pσ σ →
+    tnil ⊆ κs →
+    tnhas_trace m σ κs n Pσ
+| TNTraceStep Pσ2 fn σ1 Pσ3 κ κs κs' n:
+    m.(m_step) σ1 κ Pσ2 →
+    (∀ σ2 (H : Pσ2 σ2), tnhas_trace m σ2 κs' (fn (σ2 ↾ H)) Pσ3) →
+    (∀ x, fn x ⊂ n) →
+    tapp (option_trace κ) κs' ⊆ κs →
+    (* VisNoUb m κ Pσ2 → *)
+    tnhas_trace m σ1 κs n Pσ3
+| TNTraceAll T fn f σ κs Pσ n:
+    (∀ x, tnhas_trace m σ (f x) (fn x) Pσ) →
+    tall T f ⊆ κs →
+    (∀ x, fn x ⊆ n) →
+    tnhas_trace m σ κs n Pσ
+.
+Notation " σ '~{' m , Pκs , n '}~>ₜ' P " := (tnhas_trace m σ Pκs n P) (at level 40).
+Notation " σ '~{' m , Pκs , n '}~>ₜ' - " := (tnhas_trace m σ Pκs n (λ _, True)) (at level 40).
 
 Lemma TTraceStepNone {EV} (m : module EV) σ1 Pσ2 Pσ3 κs:
   m_step m σ1 None Pσ2 →
@@ -216,23 +254,18 @@ Ltac tstep_None :=
 Ltac tstep_Some :=
   apply: TTraceStepSome.
 Ltac tstep :=
-  apply: TTraceStep.
+  first [
+      apply: TTraceStep |
+      apply: TNTraceStep
+    ].
 Ltac tend :=
-  apply: TTraceEnd; [|try done].
-
-Inductive thas_trace_simple {EV} (m : module EV) : m.(m_state) → trace EV → (m.(m_state) → Prop) → Prop :=
-| TSTraceEnd σ (Pσ : _ → Prop) κs:
-    Pσ σ →
-    tnil ⊆ κs →
-    thas_trace_simple m σ κs Pσ
-| TSTraceStep σ1 Pσ2 Pσ3 κ κs κs':
-    m.(m_step) σ1 κ Pσ2 →
-    (∀ σ2, Pσ2 σ2 → thas_trace_simple m σ2 κs' Pσ3) →
-    tapp (option_trace κ) κs' ⊆ κs →
-    (* VisNoUb m κ Pσ2 → *)
-    thas_trace_simple m σ1 κs Pσ3
+  move => *;
+         first [
+             apply: TTraceEnd; [try done|try done]
+           |
+             apply: TNTraceEnd; try done
+           ]
 .
-Notation " σ '~{' m , Pκs '}~>ₜₛ' P " := (thas_trace_simple m σ Pκs P) (at level 40).
 
 Global Instance thas_trace_proper {EV} (m : module EV) :
   Proper ((=) ==> (⊆) ==> (pointwise_relation m.(m_state) impl) ==> impl) (thas_trace m).
@@ -279,9 +312,9 @@ Proof. move => ?. apply: thas_trace_mono'; [done|]. by econstructor. Qed.
 inductions in this file as it does not allow changing the state. *)
 Lemma thas_trace_inv {EV} (m : module EV) σ (Pσ : _ → Prop) (P : _ → Prop):
   (Pσ σ → P tnil) →
-  (∀ κ κs' Pσ2 Pσ3,
+  (∀ κ κs' Pσ2,
       m.(m_step) σ κ Pσ2 →
-      (∀ σ2, Pσ2 σ2 → σ2 ~{ m, κs' }~>ₜ Pσ3) →
+      (∀ σ2, Pσ2 σ2 → σ2 ~{ m, κs' }~>ₜ Pσ) →
       P (tapp (option_trace κ) κs')) →
   (∀ T f, (∀ x, P (f x)) → P (tall T f)) →
   (∀ κs κs', P κs' → κs' ⊆ κs → P κs) →
@@ -299,7 +332,7 @@ Ltac thas_trace_inv H :=
   lazymatch type of H with
   | _ ~{ _, ?κs }~>ₜ _ => pattern κs
   end;
-  apply: (thas_trace_inv _ _ _ _ _ _ _ _ _ H); [ | |
+  apply: (thas_trace_inv _ _ _ _ _ _ _ _ _ H); try clear H; [ | |
    try by [move => *; apply subtrace_all_r; naive_solver];
    try by [move => *; apply thas_trace_all; naive_solver] |
    try by [move => ??? <-]
@@ -440,11 +473,65 @@ Proof.
     have [|]:= EM (σ ~{ m, f x }~>ₜ (λ _ : m_state m, False)); naive_solver.
 Qed.
 
+(** tnhas_trace *)
+Global Instance tnhas_trace_proper {EV} (m : module EV) :
+  Proper ((=) ==> (⊆) ==> (⊆) ==> (pointwise_relation m.(m_state) impl) ==> impl) (tnhas_trace m).
+Proof.
+  move => ?? -> κs1 κs2 Hκs n1 n2 Hn Pσ1 Pσ2 HP Ht.
+  elim: Ht κs2 n2 Pσ2 Hκs Hn HP.
+  - move => ??????????? HP. tend; [ by apply: HP | by etrans].
+  - move => ?????????? IH ????????.
+    tstep; [done| | | by etrans].
+    + move => ??. naive_solver.
+    + move => ?. by apply: ti_lt_le.
+  - move => *. eapply TNTraceAll. naive_solver. by etrans. move => ?. etrans; [|done]. done.
+Qed.
+
+Global Instance tnhas_trace_proper_flip {EV} (m : module EV) :
+  Proper ((=) ==> (flip (⊆)) ==> (flip (⊆)) ==> (=) ==> flip impl) (tnhas_trace m).
+Proof. move => ?? -> ?? Hsub ?? Hsub2 ?? -> /=. by rewrite Hsub Hsub2. Qed.
+
+Lemma tnhas_trace_mono {EV} {m : module EV} κs' κs (Pσ2' Pσ2 : _ → Prop)  σ1 n n' :
+  σ1 ~{ m, κs', n' }~>ₜ Pσ2' →
+  κs' ⊆ κs →
+  n' ⊆ n →
+  (∀ σ, Pσ2' σ → Pσ2 σ) →
+  σ1 ~{ m, κs, n }~>ₜ Pσ2.
+Proof. move => ????. by apply: tnhas_trace_proper. Qed.
+
+Lemma thas_trace_n_1 {EV} (m : module EV) σ κs Pσ:
+  σ ~{m, κs}~>ₜ Pσ → ∃ n, σ ~{m, κs, n}~>ₜ Pσ.
+Proof.
+  elim.
+  - move => ?????. eexists tiO. tend.
+  - move => ???????? IH ?.
+    have [f Hf]:= CHOICE IH. eexists (tiS (tiChoice _ f)).
+    tstep; [done| | |done].
+    + move => ??. apply Hf.
+    + move => [??].
+      apply: ti_lt_le; [apply ti_lt_S|]. apply ti_le_S_S. by apply: ti_le_choice_r.
+  - move => ?????? IH ?.
+    have [f Hf]:= AxCHOICE _ _ _ IH. eexists (tiChoice _ f).
+    apply: TNTraceAll; [done|done|] => ?. by apply: ti_le_choice_r.
+Qed.
+
+Lemma thas_trace_n_2 {EV} (m : module EV) σ κs Pσ n:
+  σ ~{m, κs, n}~>ₜ Pσ → σ ~{m, κs}~>ₜ Pσ.
+Proof.
+  elim.
+  - tend.
+  - move => *. by tstep.
+  - move => *. by apply: TTraceAll.
+Qed.
+
+Lemma thas_trace_n {EV} (m : module EV) σ κs Pσ:
+  σ ~{m, κs}~>ₜ Pσ ↔ ∃ n, σ ~{m, κs, n}~>ₜ Pσ.
+Proof. split; [apply: thas_trace_n_1 | move => [??]; by apply: thas_trace_n_2]. Qed.
 
 Record trefines {EV} (mimpl mspec : mod_state EV) : Prop := {
   tref_subset:
-    ∀ κs, mimpl.(ms_state) ~{ mimpl, κs }~>ₜ (λ _, True) →
-          mspec.(ms_state) ~{ mspec, κs }~>ₜ (λ _, True)
+    ∀ κs, mimpl.(ms_state) ~{ mimpl, κs }~>ₜ - →
+          mspec.(ms_state) ~{ mspec, κs }~>ₜ -
 }.
 
 Global Instance trefines_preorder EV : PreOrder (@trefines EV).

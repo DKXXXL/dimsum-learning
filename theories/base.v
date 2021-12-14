@@ -18,6 +18,17 @@ Qed.
 
 Record wrap A := Wrap { a : A }.
 
+Ltac specialize_hyps :=
+  repeat match goal with
+  | H : ∀ x, @?P x → ?G |- _ =>
+      let i := open_constr:(_) in
+      let H' := fresh in
+      assert (P i) as H' by done;
+      assert_succeeds (clear; assert (∀ x, P x → x = i) by naive_solver);
+      specialize (H i H');
+      clear H'
+         end.
+
 Ltac destruct_hyps :=
   simplify_eq/=;
   repeat (
@@ -44,11 +55,21 @@ Tactic Notation "destruct_prod" "?" :=
   repeat match goal with H : _ |- _ => progress (destruct_prod? H) end.
 Tactic Notation "destruct_prod" "!" :=
   progress destruct_prod?.
+Tactic Notation "destruct_exist" "?" ident(H) :=
+  repeat match type of H with
+         | ∃ x, _ => let x := fresh x in destruct H as [x H]
+         end.
+Tactic Notation "destruct_exist" "!" ident(H) := progress (destruct_exist? H).
+Tactic Notation "destruct_exist" "?" :=
+  repeat match goal with H : _ |- _ => progress (destruct_exist? H) end.
+Tactic Notation "destruct_exist" "!" :=
+  progress destruct_exist?.
 Tactic Notation "destruct_all" "?" :=
   repeat first [
       destruct_prod!
       | destruct_and!
       | destruct_or!
+      | destruct_exist!
       ].
 Tactic Notation "destruct_all" "!" :=
   progress destruct_all?.
@@ -126,5 +147,5 @@ Ltac invert_all_tac f :=
          | H : f _ _ _ _ _ _ _ _ _|- _ => do_invert H
          end.
 
-Tactic Notation "invert_all" constr(f) := invert_all_tac f; simplify_eq/=.
+Tactic Notation "invert_all" constr(f) := invert_all_tac f; simplify_eq/=; specialize_hyps.
 Tactic Notation "invert_all'" constr(f) := invert_all_tac f.

@@ -43,21 +43,18 @@ Proof.
     split; [naive_solver|]. right.
     have [κ' ?]: ∃ κ', κ = Some κ' by naive_solver. subst.
     eexists κ'.
-    have {}H := (H1 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: naive_solver.
+    inversion H1; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
 
     have {}H := (H3 3 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H6 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 2: invert_all @m_step => //.
+    inversion H6; simplify_eq. 2: invert_all @m_step => //.
 
     have {}H := (H3 5 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
-    have {}H := (H11 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: naive_solver.
+    inversion H11; simplify_eq. 1: naive_solver.
     invert_all @m_step => //.
   - move => [?[?|[n [? [? HP]]]]]. 1: by apply: STraceEnd.
     apply: STraceStep. { apply: (FilterStep _ _ _ _ (Some n)). econstructor. naive_solver. }
@@ -105,29 +102,23 @@ Proof.
     eexists κ', κ''. split; [naive_solver|].
     split; [naive_solver|]. split; [naive_solver|]. split; [naive_solver|].
 
-    have {}H := (H3 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: {
+    inversion H3; simplify_eq. 1: {
       eexists true.
-      have {}H := (H5 _ ltac:(naive_solver)).
-      inversion H; simplify_eq. 1: eexists true; naive_solver.
+      inversion H5; simplify_eq. 1: eexists true; naive_solver.
       invert_all @m_step => //.
 
-      have {}H := (H11 _ ltac:(naive_solver)).
-      inversion H; simplify_eq. 2: invert_all @m_step => //.
+      inversion H11; simplify_eq. 2: invert_all @m_step => //.
       eexists false; naive_solver.
     }
     eexists false.
     invert_all @m_step => //.
 
-    have {}H := (H8 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 2: invert_all @m_step => //.
+    inversion H8; simplify_eq. 2: invert_all @m_step => //.
 
-    have {}H := (H5 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: eexists true; naive_solver.
+    inversion H5; simplify_eq. 1: eexists true; naive_solver.
     invert_all @m_step => //.
 
-    have {}H := (H14 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 2: invert_all @m_step => //.
+    inversion H14; simplify_eq. 2: invert_all @m_step => //.
     eexists false; naive_solver.
   - move => [?[?|[n1 [n2 [? [? [? [? [b1 [b2 [??]]]]]]]]]]]. 1: by apply: STraceEnd.
     apply: STraceStep. { econstructor; [constructor|]. naive_solver. } 2: naive_solver.

@@ -202,13 +202,11 @@ Proof.
     apply: STraceStep. { econstructor. { apply: ProductStepBoth; constructor. } naive_solver. }
     2: naive_solver. move => [??] [??]; simplify_eq/=.
 
-    have {}H := (H3 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: by apply: STraceEnd.
+    inversion H3; simplify_eq. 1: by apply: STraceEnd.
     invert_all @m_step => //.
     apply: STraceStep. { econstructor. { apply: ProductStepR. constructor. } naive_solver. }
     2: naive_solver. move => [??] [??]; simplify_eq/=.
-    have {}H := (H5 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: by apply: STraceEnd.
+    inversion H5; simplify_eq. 1: by apply: STraceEnd.
     invert_all @m_step => //.
   - have {}H := (H0 4 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: by apply: STraceEnd.
@@ -223,13 +221,11 @@ Proof.
     apply: STraceStep. { econstructor. { apply: ProductStepBoth; constructor. } naive_solver. }
     2: naive_solver. move => [??] [??]; simplify_eq/=.
 
-    have {}H := (H3 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: by apply: STraceEnd.
+    inversion H3; simplify_eq. 1: by apply: STraceEnd.
     invert_all @m_step => //.
     apply: STraceStep. { econstructor. { apply: ProductStepR. constructor. } naive_solver. }
     2: naive_solver. move => [??] [??]; simplify_eq/=.
-    have {}H := (H5 _ ltac:(naive_solver)).
-    inversion H; simplify_eq. 1: by apply: STraceEnd.
+    inversion H5; simplify_eq. 1: by apply: STraceEnd.
     invert_all @m_step => //.
 Qed.
 
@@ -418,7 +414,7 @@ Qed.
 
 Lemma tmod_product_to_mods {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ Pσ κs:
   σ ~{ mod_product m1 m2, κs }~>ₜ Pσ → ∃ κs', mod_product_rel κs κs'.1 κs'.2 ∧
-    σ.1 ~{ m1, κs'.1 }~>ₜ (λ _, True) ∧ σ.2 ~{ m2, κs'.2 }~>ₜ (λ _, True).
+    σ.1 ~{ m1, κs'.1 }~>ₜ - ∧ σ.2 ~{ m2, κs'.2 }~>ₜ -.
 Proof.
   elim.
   - move => [σ1 σ2] ????. eexists (tnil, tnil) => /=.
@@ -519,8 +515,8 @@ Qed.
 
 Lemma tmods_to_mod_product {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ κs κs1 κs2:
   mod_product_rel κs κs1 κs2 →
-  σ.1 ~{ m1, κs1 }~>ₜ (λ _, True) → σ.2 ~{ m2, κs2 }~>ₜ (λ _, True) →
-  σ ~{ mod_product m1 m2, κs }~>ₜ (λ _, True).
+  σ.1 ~{ m1, κs1 }~>ₜ - → σ.2 ~{ m2, κs2 }~>ₜ - →
+  σ ~{ mod_product m1 m2, κs }~>ₜ -.
 Proof.
   move => Hrel.
   elim: Hrel σ.
