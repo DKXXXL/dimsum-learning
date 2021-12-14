@@ -37,6 +37,7 @@ Inductive mod_itree_step EV S : (itree (moduleE EV S) unit * S) → option EV �
 Definition mod_itree EV S := Mod (mod_itree_step EV S).
 
 (** [Tau] *)
+(* TODO: Are all these lemmas necessary? *)
 Lemma tnhas_trace_Tau' {EV S} t t' n n' Pσ s κs:
   observe t = TauF t' →
   (t', s) ~{mod_itree EV S, κs, n}~>ₜ Pσ →
@@ -117,7 +118,6 @@ Lemma thas_trace_Ret_inv {EV S} x Pσ s κs:
   under_tall κs (λ κs, tnil ⊆ κs ∧ Pσ (Ret x, s)).
 Proof. by apply: thas_trace_Ret_inv'. Qed.
 
-
 Lemma thas_trace_eutt_mono {EV S} t t' s κs Pσ Pσ':
   (prod_relation (eutt eq) (=) ==> iff)%signature Pσ Pσ' →
   (t, s) ~{ mod_itree EV S, κs }~>ₜ Pσ →
@@ -140,7 +140,16 @@ Proof.
     apply: thas_trace_under_tall; [done..|] => ? /= [[??]|[?[??]]].
     + tend. eapply HP; [|done]. split => //=. by rewrite (itree_eta t) Hot tau_eutt REL.
     + apply: IHn; [done|done| |done]. by rewrite REL.
-  - admit.
+  - move => u e k1 k2 Hu t t' n κs IHn Ht Hot Hot'.
+    thas_trace_inv Ht. {
+      tend. eapply HP; [|done]. split; [|done] => /=. rewrite (itree_eta t) Hot (itree_eta t') Hot'.
+      apply eqit_Vis => v. move: (Hu v) => [|//]. done.
+    }
+    invert_all @m_step; rewrite ->Hot in *; simplify_eq; simplify_K.
+    + specialize (H1 _ ltac:(done)). rewrite -H0.
+      tstep_Some; [by econs|] => ? ->.
+      apply: IHn; [done|done| |done].
+      move: (Hu tt) => [|//]. done.
   - move => t1 ot2 ? REL IH t t' n κs IHn Ht Hot Hot'.
     move: Ht => /(tnhas_trace_Tau_inv' _ _ _ _ _ _)Ht. specialize (Ht _ ltac:(done)).
     apply: thas_trace_under_tall; [done..|] => ? /= [[??]|[?[??]]].
@@ -151,7 +160,7 @@ Proof.
   - move => ot1 t2 ? REL IH t t' n κs IHn Ht Hot Hot'.
     tstep_None; [by econs|] => ? ->. by apply: IH.
     Unshelve.
-Admitted.
+Qed.
 
 Global Instance mod_itree_proper EV S b1 b2:
   Proper ((prod_relation (eqit eq b1 b2) (=)) ==> (=) ==> (prod_relation (eutt eq) (=) ==> iff) ==> iff) (thas_trace (mod_itree EV S)).
