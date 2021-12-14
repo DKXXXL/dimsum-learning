@@ -1,3 +1,4 @@
+From Paco Require Import paco.
 From ITree Require Export ITree ITreeFacts.
 From ITree Require Export ITree.
 Require Export refframe.module.
@@ -35,6 +36,7 @@ Inductive mod_itree_step EV S : (itree (moduleE EV S) unit * S) → option EV �
 
 Definition mod_itree EV S := Mod (mod_itree_step EV S).
 
+(** [Tau] *)
 Lemma tnhas_trace_Tau' {EV S} t t' n n' Pσ s κs:
   observe t = TauF t' →
   (t', s) ~{mod_itree EV S, κs, n}~>ₜ Pσ →
@@ -43,12 +45,21 @@ Lemma tnhas_trace_Tau' {EV S} t t' n n' Pσ s κs:
 Proof.
   move => Htau Ht Hsub. apply: (TNTraceStep _ _ (λ _, n)); [by econs| |done|simpl; done] => /= ? ->. done.
 Qed.
+Lemma tnhas_trace_Tau {EV S} t n n' Pσ s κs:
+  (t, s) ~{mod_itree EV S, κs, n}~>ₜ Pσ →
+  n ⊂ n' →
+  (Tau t, s) ~{mod_itree EV S, κs, n'}~>ₜ Pσ.
+Proof. by apply tnhas_trace_Tau'. Qed.
 
 Lemma thas_trace_Tau' {EV S} t t' Pσ s κs:
   observe t = TauF t' →
   (t', s) ~{mod_itree EV S, κs}~>ₜ Pσ →
   (t, s) ~{mod_itree EV S, κs}~>ₜ Pσ.
 Proof. move => Htau Ht. tstep_None; [by econs|]. naive_solver. Qed.
+Lemma thas_trace_Tau {EV S} t Pσ s κs:
+  (t, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  (Tau t, s) ~{mod_itree EV S, κs}~>ₜ Pσ.
+Proof. by apply thas_trace_Tau'. Qed.
 
 Lemma tnhas_trace_Tau_inv' {EV S} t t' n Pσ s κs:
   observe t' = TauF t →
@@ -56,118 +67,56 @@ Lemma tnhas_trace_Tau_inv' {EV S} t t' n Pσ s κs:
   under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (t', s)) ∨
     ∃ n', n' ⊂ n ∧ (t, s) ~{ mod_itree _ _,  κs, n' }~>ₜ Pσ).
 Proof.
-  move => Htau /tnhas_trace_inv Ht. apply: under_tall_mono; [done..|] => {Ht} κs1 κs2 /= Hκs1 [[??]|?].
-  { left. split; [by etrans|done]. }
-  right. destruct_all!. invert_all @mod_itree_step; rewrite ->Htau in *; simplify_eq.
-  eexists _. split; [done|]. rewrite -Hκs1 -H0. naive_solver.
+  move => Htau Ht. thas_trace_inv Ht. { left. split; [by etrans|done]. }
+  right. invert_all @m_step; rewrite ->Htau in *; simplify_eq.
+  eexists _. split; [done|]. rewrite -Hsub -H0. naive_solver.
   Unshelve. done.
 Qed.
+Lemma tnhas_trace_Tau_inv {EV S} t n Pσ s κs:
+  (Tau t, s) ~{mod_itree EV S, κs, n}~>ₜ Pσ →
+  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (Tau t, s)) ∨
+    ∃ n', n' ⊂ n ∧ (t, s) ~{ mod_itree _ _,  κs, n' }~>ₜ Pσ).
+Proof. by apply tnhas_trace_Tau_inv'. Qed.
 
-(*
-Lemma tnhas_trace_Tau_inv' {EV S} t t' n Pσ s κs:
-  observe t' = TauF t →
-  (t', s) ~{mod_itree EV S, κs, n}~>ₜ Pσ →
-  (* (tnil ⊆ κs ∧ Pσ (t', s)) ∨ ∃ n', n' ⊂ n ∧ (t, s) ~{mod_itree EV S, κs, n'}~>ₜ Pσ *)
-  ∃ n', n' ⊂ n ∧ (t, s) ~{mod_itree EV S, κs, n'}~>ₜ Pσ.
-  (* (t, s) ~{mod_itree EV S, tnil, tiO}~>ₜ (λ σ, σ = (t, s) ∧ *)
-      (* ((tnil ⊆ κs ∧ Pσ (t', s)) ∨ ). *)
-Proof.
-  move => Htau. move Hσ: (t, s) => σ. move Hσ': (t', s) => σ' Ht.
-  elim: Ht t t' Hσ Hσ' Htau; clear.
-  - admit.
-    (* tend. naive_solver. *)
-  - move => ?????????? IH ? Hκs ???? Htau. simplify_eq. invert_all @m_step; rewrite ->Htau in *; simplify_eq.
-  (* tend. split; [done|]. right. eexists _. split. 2: { rewrite -Hκs. done. } done. *)
-    admit.
-  - move => ???????? IH Hκs??????. subst.
-    (* apply: TNTraceAll; [|done|done] => ?. by apply: IH. *)
-Abort.
-
-Lemma tnhas_trace_Tau_inv' {EV S} t t' n Pσ Pσ' s κs:
-  (prod_relation (eutt eq) (=) ==> iff)%signature Pσ Pσ' →
-  observe t' = TauF t →
-  (t', s) ~{mod_itree EV S, κs, n}~>ₜ Pσ →
-  (t, s) ~{mod_itree EV S, κs, n}~>ₜ Pσ'.
-Proof.
-  move => Hproper Htau. move Hσ: (t, s) => σ. move Hσ': (t', s) => σ' Ht.
-  elim: Ht t t' Hσ Hσ' Hproper Htau; clear.
-  - move => ?????? t t' ?? Hproper Htau. tend. subst. eapply Hproper; [|done]. split => //=.
-    by rewrite (itree_eta t') Htau tau_eutt.
-  - move => ?????????? IH ? Hκs ???? Hproper Htau. simplify_eq.
-    invert_all @m_step; rewrite ->Htau in *; simplify_eq.
-    apply: tnhas_trace_mono; [done|done| | ].
-    + by apply ti_lt_impl_le.
-    + move => ??. eapply Hproper; [|done]. done.
-  - move => ???????? IH Hκs???????. subst.
-    apply: TNTraceAll; [|done|done] => ?. by apply: IH.
-  Unshelve. done.
-Qed.
- *)
-
-Lemma thas_trace_Tau_inv' {EV S} t t' Pσ Pσ' s κs:
-  (prod_relation (eutt eq) (=) ==> iff)%signature Pσ Pσ' →
+Lemma thas_trace_Tau_inv' {EV S} t t' Pσ s κs:
   observe t' = TauF t →
   (t', s) ~{mod_itree EV S, κs}~>ₜ Pσ →
-  (t, s) ~{mod_itree EV S, κs}~>ₜ Pσ'.
+  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (t', s)) ∨ (t, s) ~{ mod_itree _ _,  κs }~>ₜ Pσ).
 Proof.
-  move => Hproper Htau /thas_trace_n[??].
-  apply thas_trace_n. eexists _.
-  (* by apply: tnhas_trace_Tau_inv'. *)
-(* Qed. *)
-Admitted.
-
-(*
-Lemma tnhas_trace_inv {EV} (m : module EV) σ (Pσ : _ → Prop) (P : _ → _ → Prop):
-  (∀ n, Pσ σ → P n tnil) →
-  (∀ κ κs' Pσ2 n f,
-      m.(m_step) σ κ Pσ2 →
-      (∀ σ2 (H:Pσ2 σ2), σ2 ~{ m, κs', f (σ2 ↾ H) }~>ₜ Pσ) →
-      (∀ x, f x ⊂ n) →
-      P n (tapp (option_trace κ) κs')) →
-  (∀ T f fn n, (∀ x, P (fn x) (f x)) → (∀ x, fn x ⊆ n) → P n (tall T f)) →
-  (∀ n κs κs', P n κs' → κs' ⊆ κs → P n κs) →
-  ∀ n κs, σ ~{ m, κs, n }~>ₜ Pσ → P n κs.
-Proof.
-  move => HEnd HStep Hall Hsub κs n Ht.
-  elim: Ht HEnd HStep Hall Hsub; clear.
-  - naive_solver.
-  - naive_solver.
-  - move => T f fn n σ κs Pσ ? IH ?? HEnd HStep Hall Hsub.
-    apply: (Hsub); [|done].
-    apply: (Hall) => ? //.
-    apply: IH; naive_solver.
+  move => Htau /thas_trace_n[? /(tnhas_trace_Tau_inv' _ _ _ _ _) Ht]. specialize (Ht _ ltac:(done)).
+  apply: under_tall_mono; [done..|] => {Ht} ?? Hκs [[??]|[?[??]]]. { left. split; [by etrans|done]. }
+  right. apply thas_trace_n. eexists _. by rewrite -Hκs.
 Qed.
-Ltac tnhas_trace_inv H :=
-  lazymatch type of H with
-  | _ ~{ _, ?κs, ?n }~>ₜ _ => pattern n; pattern κs
-  end;
-  lazymatch goal with
-  | |- (λ κs', (λ n', @?P n' κs') ?n) ?κs => change (P n κs)
-  end;
-  apply: (tnhas_trace_inv _ _ _ _ _ _ _ _ _ _ H); try clear H; [ | |
-     try by [move => *; apply subtrace_all_r; eauto];
-     try by [move => *; apply thas_trace_all; eauto] |
-     try by [move => ???? <-]
- ].
-*)
+Lemma thas_trace_Tau_inv {EV S} t Pσ s κs:
+  (Tau t, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (Tau t, s)) ∨ (t, s) ~{ mod_itree _ _,  κs }~>ₜ Pσ).
+Proof. by apply thas_trace_Tau_inv'. Qed.
 
+(** [Ret] *)
 Lemma tnhas_trace_Ret_inv' {EV S} t x n Pσ s κs:
   observe t = RetF x →
   (t, s) ~{mod_itree EV S, κs, n}~>ₜ Pσ →
   under_tall κs (λ κs, tnil ⊆ κs ∧ Pσ (t, s)).
 Proof.
-  move => Hret /tnhas_trace_inv Ht.
-  apply: under_tall_mono; [done..|] => {Ht} κs1 κs2 /= Hκs [[??]|]. { split => //. by rewrite -Hκs. }
-  move => ?. destruct_all!. invert_all @mod_itree_step; rewrite ->Hret in *; simplify_eq.
+  move => Hret. move => Ht.
+  thas_trace_inv Ht. { split => //. by rewrite -Hsub. }
+  invert_all @m_step; rewrite ->Hret in *; simplify_eq.
 Qed.
-(*
-Lemma thas_trace_Tau' {EV S} t t' Pσ s κs:
-  observe t = TauF t' →
-  (t', s) ~{mod_itree EV S, κs}~>ₜ Pσ →
-  (t, s) ~{mod_itree EV S, κs}~>ₜ Pσ.
-Proof. move => Htau Ht. tstep_None; [by econs|]. naive_solver. Qed.
-*)
-From Paco Require Import paco.
+Lemma tnhas_trace_Ret_inv {EV S} x n Pσ s κs:
+  (Ret x, s) ~{mod_itree EV S, κs, n}~>ₜ Pσ →
+  under_tall κs (λ κs, tnil ⊆ κs ∧ Pσ (Ret x, s)).
+Proof. by apply: tnhas_trace_Ret_inv'. Qed.
+
+Lemma thas_trace_Ret_inv' {EV S} t x Pσ s κs:
+  observe t = RetF x →
+  (t, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  under_tall κs (λ κs, tnil ⊆ κs ∧ Pσ (t, s)).
+Proof. move => Hret /thas_trace_n [? /(tnhas_trace_Ret_inv' _ _ _ _ _) Ht]. naive_solver. Qed.
+Lemma thas_trace_Ret_inv {EV S} x Pσ s κs:
+  (Ret x, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  under_tall κs (λ κs, tnil ⊆ κs ∧ Pσ (Ret x, s)).
+Proof. by apply: thas_trace_Ret_inv'. Qed.
+
 
 Lemma thas_trace_eutt_mono {EV S} t t' s κs Pσ Pσ':
   (prod_relation (eutt eq) (=) ==> iff)%signature Pσ Pσ' →
@@ -215,77 +164,6 @@ Proof.
   - symmetry. by apply: eqit_mon; [| | |done].
 Qed.
 
-(*
-(* TODO: add step index to thas_trace and make sure that this step
-index only goes down in calls to sim *)
-Lemma thas_trace_eqitF' {EV S} t t' s κs Pσ b1 b2 sim :
-  (go t, s) ~{ mod_itree EV S, κs }~>ₜ Pσ →
-  eqitF eq b1 b2 id sim t t' →
-  (∀ m1 m2 κs, (m1, s) ~{ mod_itree EV S, κs }~>ₜ Pσ → sim m1 m2 → (m2, s) ~{ mod_itree EV S, κs }~>ₜ Pσ) →
-  (∀ t1 t2 s, Pσ (t1, s) → t1 ≈ t2 → Pσ (t2, s)) →
-  (go t', s)  ~{ mod_itree EV S, κs }~>ₜ Pσ.
-Proof.
-  move => Ht Heq Hsim HRR.
-  induction Heq.
-  - thas_trace_inv Ht. subst. 2: intros; invert_all @m_step. tend.
-  - tstep_None; [by constructor|] => ? ->. apply: Hsim; [|done].
-    thas_trace_inv Ht. { tend. apply: HRR; [done|]. by rewrite tau_eutt. }
-    move => ?????. invert_all @m_step. done.
-  - thas_trace_inv Ht. { tend. apply: HRR; [done|]. admit. }
-    move => ???? IH. invert_all' @m_step; simplify_eq.
-    + simpl in H3; simplify_eq; simplify_K.
-      apply: Hsim.
-      * tstep; [ | |done].
-        admit.
-      * tstep; [ | |done].
-        admit.
-        (* => /= ??. apply: IH. *)
-      apply UIPM.inj_pair2 in H2.
-  - apply IHHeq. admit.
-  - admit.
-Admitted.
-
-Lemma thas_trace_eutt_mono'' {EV S} t t' s κs Pσ :
-  (go t, s) ~{ mod_itree EV S, κs }~>ₜ Pσ →
-  go t ≈ go t' →
-  (∀ t1 t2 s, Pσ (t1, s) → t1 ≈ t2 → Pσ (t2, s)) →
-  (go t', s) ~{ mod_itree EV S, κs }~>ₜ Pσ.
-Proof.
-  move => Ht Heq Hproper. punfold Heq.
-  apply: thas_trace_eqitF'; [done|done| |].
-  - move => ??? [Heq2 | //].
-
-  Lemma thas_trace_eutt_mono' {EV S} σ1 σ2 κs Pσ :
-  σ1 ~{ mod_itree EV S, κs }~>ₜ Pσ →
-  σ1.1 ≈ σ2.1 →
-  σ1.2 = σ2.2 →
-  (∀ t1 t2 s, Pσ (t1, s) → t1 ≈ t2 → Pσ (t2, s)) →
-  σ2 ~{ mod_itree EV S, κs }~>ₜ Pσ.
-Proof.
-  move => Ht Heq1 Heq2 Hproper.
-  destruct σ1 as [t s], σ2 as [t' s']. simplify_eq/=. punfold Heq1.
-
-  apply thas_trace_eqitF'.
-  induction Heq1; simplify_eq.
-  elim: Heq1.
-
-  elim: Ht σ2 Heq1 Heq2 Hproper.
-  - move => [??] ???? [??] /= ??. subst. tend. naive_solver.
-  - move => [t1 ?] ??????? IH Hκs [??]/= Heq ??. subst. rewrite -Hκs. invert_all @m_step.
-    + apply IH => /=; [|done..]. rewrite -Heq (itree_eta t1) H3. rewrite tau_eutt. done.
-    + tstep_Some.
-      * apply IVisS.
-  - move => ?????? IH Hκs ????. rewrite -Hκs. apply thas_trace_all => ?. by apply IH.
-Qed.
-
-Lemma thas_trace_eutt_mono {EV S} t t' s κs Pσ :
-  (t, s) ~{ mod_itree EV S, κs }~>ₜ Pσ →
-  t ≈ t' →
-  (∀ t1 t2 s, Pσ (t1, s) → t1 ≈ t2 → Pσ (t2, s)) →
-  (t', s) ~{ mod_itree EV S, κs }~>ₜ Pσ.
-Proof. move => ???. by apply: thas_trace_eutt_mono'. Qed.
-*)
-
 Require refframe.example_modules.
 Module itree_examples.
 Import refframe.example_modules.
@@ -297,15 +175,12 @@ Proof. constructor => /= ?. rewrite tau_eutt. done. Qed.
 Lemma mod1_trefines_itree :
   trefines (MS mod1 0) (MS (mod_itree nat unit) ((_ ← trigger (IVis 1) ;;; Ret tt), tt)).
 Proof.
-  constructor => /= ? /thas_trace_inv Ht.
-  apply: thas_trace_under_tall; [done..|] => ? [[??]|?]. { tend. }
-  destruct_all!. invert_all @m_step.
-  revert select (_ ⊆ _) => <-.
-  rewrite bind_trigger.
-  tstep_Some; [by econs|] => ? ->.
-  revert select (_ ~{ _, _ }~>ₜ _) => /thas_trace_inv {} Ht.
-  apply: thas_trace_under_tall; [done..|] => ? [[??]|?]. { tend. }
-  destruct_all!. invert_all @m_step.
+  constructor => /= ? Ht.
+  thas_trace_inv Ht. { tend. }
+  invert_all @m_step. revert select (_ ⊆ _) => <-.
+  rewrite bind_trigger. tstep_Some; [by econs|] => ? ->.
+  thas_trace_inv. { tend. }
+  invert_all @m_step.
 Qed.
 
 Lemma itree_trefines_mod1 :
