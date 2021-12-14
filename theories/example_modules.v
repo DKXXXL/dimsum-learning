@@ -32,13 +32,14 @@ Lemma mod1_ttraces κs:
     tall bool (λ b, if b then tnil else tcons 1 tnil) ⊆ κs.
 Proof.
   split.
-  - move => Ht.
-    thas_trace_inv Ht => //.
-    1: { move => ?. by apply: (subtrace_all_l true). }
-    move => ???? Hnext. invert_all @m_step => //. apply: (subtrace_all_l false).
-    constructor.
-    thas_trace_inv Hnext; [done|].
-    move => ???. inversion 1.
+  - move => /thas_trace_inv Ht.
+    apply: subtrace_under_tall; [done..|] => {Ht} ? [[??]|?].
+    { by apply: (subtrace_all_l true). }
+    destruct_all!. invert_all @m_step => //. apply: (subtrace_all_l false).
+    revert select (_ ⊆ _) => <-. constructor.
+    revert select (_ ~{ _, _ }~>ₜ _) => /thas_trace_inv Ht.
+    apply: subtrace_under_tall; [done..|] => {Ht} ? [[?? //]|?].
+    destruct_all!. invert_all @m_step.
   - move => <-. apply thas_trace_all => -[]. 1: by tend.
     tstep_Some. { by econs. }
     move => ??. simplify_eq/=.
@@ -207,13 +208,14 @@ Qed.
 Lemma mod1_trefines_mod2 :
   trefines (MS mod1 0) (MS mod2 0).
 Proof.
-  constructor => κs /= Hs.
-  thas_trace_inv Hs. 1: move => ?; by tend.
-  move => ??? {}Hs Hnext.
-  invert_all @m_step => //.
+  constructor => κs /= /thas_trace_inv Hs.
+  apply: thas_trace_under_tall; [done..|] => ? {Hs} [[??]|?]. { tend. }
+  destruct_all!. invert_all @m_step => //.
+  revert select (_ ⊆ _) => <-.
   tstep_Some. { econs. } move => ? ->.
-  thas_trace_inv Hnext. 1: move => ?; by tend.
-  move => *. invert_all @m_step.
+  revert select (_ ~{ _, _ }~>ₜ _) => /thas_trace_inv Ht.
+  apply: thas_trace_under_tall; [done..|] => {Ht} ? [[?? //]|?]. { tend. }
+  destruct_all!. invert_all @m_step.
 Qed.
 
 Lemma mod2_srefines_mod3 :

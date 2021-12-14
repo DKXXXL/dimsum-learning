@@ -176,6 +176,41 @@ Lemma tex_unit EV (f : _ → trace EV):
   tex () f ≡ f tt.
 Proof. split; econstructor; [case|]; done. Qed.
 
+(** * under_tall *)
+Inductive under_tall {EV} : trace EV → (trace EV → Prop) → Prop :=
+| UTEnd κs (P : _ → Prop):
+  P κs →
+  under_tall κs P
+| UTAll T f κs (P : _ → Prop):
+  (∀ x, under_tall (f x) P) →
+  tall T f ⊆ κs →
+  under_tall κs P.
+
+Lemma under_tall_mono {EV} (κs1 κs2 : trace EV) (P1 P2 : _ → Prop):
+  under_tall κs1 P1 →
+  κs1 ⊆ κs2 →
+  (∀ κs1' κs2', κs1' ⊆ κs2' → P1 κs1' → P2 κs2') →
+  under_tall κs2 P2.
+Proof.
+  move => Hall. elim: Hall κs2.
+  - move => ????? HP. econs. apply: HP; [..|done] => //.
+  - move => ????? IH ??? HP. apply: UTAll; [|by etrans]. move => ?. apply: IH; [done|].
+    done.
+Qed.
+
+Global Instance under_tall_proper {EV} :
+  Proper ((⊆) ==> ((⊆) ==> impl) ==> impl) (@under_tall EV).
+Proof. move => κs1 κs2 Hsub ?? HP Hall. by apply: under_tall_mono. Qed.
+
+Lemma subtrace_under_tall {EV} (κs κs1 : trace EV) (P1 : _ → Prop):
+  under_tall κs1 P1 →
+  (∀ κs', P1 κs' → κs ⊆ κs') →
+  κs ⊆ κs1.
+Proof.
+  move => Hall. elim: Hall.
+  - move => ??? HP. by apply: HP.
+  - move => ????????. etrans; [|done]. econs => ?. naive_solver.
+Qed.
 
 (** * trefines *)
 
@@ -297,6 +332,17 @@ Lemma thas_trace_mono' {EV} {m : module EV} κs' κs (Pσ2 : _ → Prop)  σ1 :
   σ1 ~{ m, κs }~>ₜ Pσ2.
 Proof. by move => ? <-. Qed.
 
+Lemma thas_trace_under_tall {EV} m (κs1 κs2 : trace EV) (P1 Pσ : _ → Prop) σ:
+  under_tall κs1 P1 →
+  κs1 ⊆ κs2 →
+  (∀ κs', P1 κs' → σ ~{ m, κs' }~>ₜ Pσ) →
+  σ ~{ m, κs2 }~>ₜ Pσ.
+Proof.
+  move => Hall. elim: Hall κs2.
+  - move => ???? <- HP. by apply: HP.
+  - move => ????? IH Hκ ?? HP. apply: TTraceAll; [|by etrans]. naive_solver.
+Qed.
+
 Lemma thas_trace_all {EV T} f (m : module EV) σ Pσ:
   (∀ x, σ ~{ m, f x }~>ₜ Pσ) →
   σ ~{ m, tall T f }~>ₜ Pσ.
@@ -307,6 +353,18 @@ Lemma thas_trace_ex {EV T} x f (m : module EV) σ Pσ:
   σ ~{ m, tex T f }~>ₜ Pσ.
 Proof. move => ?. apply: thas_trace_mono'; [done|]. by econstructor. Qed.
 
+Lemma thas_trace_inv {EV} (m : module EV) κs (Pσ : _ → Prop) σ:
+  σ ~{ m, κs }~>ₜ Pσ →
+  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ σ) ∨
+    ∃ κ κs' Pσ2, m_step m σ κ Pσ2 ∧ (∀ σ2, Pσ2 σ2 → σ2 ~{ m, κs' }~>ₜ Pσ) ∧ tapp (option_trace κ) κs' ⊆ κs).
+Proof.
+  elim.
+  - move => ?????. econs. naive_solver.
+  - move => *. econs. naive_solver.
+  - move => ?????? IH ?. apply: UTAll; [|done]. done.
+Qed.
+
+(*
 (* thas_trace_inv gives an induction hypothesis for tall. *)
 (* TODO: How useful is this? It cannot be used to replace the
 inductions in this file as it does not allow changing the state. *)
@@ -337,7 +395,7 @@ Ltac thas_trace_inv H :=
    try by [move => *; apply thas_trace_all; naive_solver] |
    try by [move => ??? <-]
  ].
-
+*)
 Lemma thas_trace_trans {EV} κs1 κs2 (m : module EV) σ1 Pσ2 Pσ3 :
   σ1 ~{ m, κs1 }~>ₜ Pσ2 →
   (∀ σ2, Pσ2 σ2 → σ2 ~{ m, κs2 }~>ₜ Pσ3) →
@@ -498,6 +556,34 @@ Lemma tnhas_trace_mono {EV} {m : module EV} κs' κs (Pσ2' Pσ2 : _ → Prop)  
   (∀ σ, Pσ2' σ → Pσ2 σ) →
   σ1 ~{ m, κs, n }~>ₜ Pσ2.
 Proof. move => ????. by apply: tnhas_trace_proper. Qed.
+
+Lemma tnhas_trace_under_tall {EV} m (κs1 κs2 : trace EV) (P1 Pσ : _ → Prop) σ n:
+  under_tall κs1 P1 →
+  κs1 ⊆ κs2 →
+  (∀ κs', P1 κs' → σ ~{ m, κs', n }~>ₜ Pσ) →
+  σ ~{ m, κs2, n }~>ₜ Pσ.
+Proof.
+  move => Hall. elim: Hall κs2.
+  - move => ???? <- HP. by apply: HP.
+  - move => ????? IH Hκ ?? HP. apply: TNTraceAll; [|by etrans |]. naive_solver. done.
+Qed.
+
+Lemma tnhas_trace_inv {EV} (m : module EV) κs (Pσ : _ → Prop) σ n:
+  σ ~{ m, κs, n }~>ₜ Pσ →
+  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ σ) ∨
+    ∃ κ κs' Pσ2 fn, m_step m σ κ Pσ2 ∧ (∀ σ2 (H : Pσ2 σ2), σ2 ~{ m, κs', fn (σ2 ↾ H) }~>ₜ Pσ)
+      ∧ tapp (option_trace κ) κs' ⊆ κs ∧ (∀ x, fn x ⊂ n)).
+Proof.
+  elim.
+  - move => ??????. econs. naive_solver.
+  - move => *. econs. right. naive_solver.
+  - move => ???????? IH ??. apply: UTAll; [|done].
+    move => ?. apply: under_tall_mono; [done..|].
+    move => ?? Hκ [[??]|?]; [left|right].
+    + split; [|done]. by rewrite -Hκ.
+    + destruct_all?. eexists _, _, _, _. split_and! => //. { by etrans. } move => ?.
+      by apply: ti_lt_le.
+Qed.
 
 Lemma thas_trace_n_1 {EV} (m : module EV) σ κs Pσ:
   σ ~{m, κs}~>ₜ Pσ → ∃ n, σ ~{m, κs, n}~>ₜ Pσ.
