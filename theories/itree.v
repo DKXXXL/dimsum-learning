@@ -34,6 +34,7 @@ Inductive mod_itree_step EV S : (itree (moduleE EV S) unit * S) → option EV �
 .
 
 Definition mod_itree EV S := Mod (mod_itree_step EV S).
+
 Inductive under_tall {EV} : trace EV → (trace EV → Prop) → Prop :=
 | UTEnd κs (P : _ → Prop):
   P κs →
@@ -253,23 +254,26 @@ Proof.
   move => n IHn κs t t' s Ht Heq HP.
   punfold Heq. unfold eqit_ in Heq at 1.
   move: Heq. move Hot: (observe t) => ot. move Hot': (observe t') => ot' Heq.
-  elim: Heq t t' n IHn Ht Hot Hot'.
-  - move => ?? -> t t' n IHn Ht Hot Hot'.
+  elim: Heq t t' n κs IHn Ht Hot Hot'.
+  - move => ?? -> t t' n κs IHn Ht Hot Hot'.
     move: Ht => /(tnhas_trace_Ret_inv' _ _ _ _ _)Ht. specialize (Ht _ ltac:(done)).
     apply: thas_trace_under_tall; [done..|] => ? [??]. tend.
     eapply HP; [|done]. split; [|done] => /=. rewrite (itree_eta t) Hot (itree_eta t') Hot'. done.
-  - move => m1 m2 [REL|//] t t' n IHn Ht Hot Hot'. rewrite -/(eqit _ _ _) in REL.
-    apply: thas_trace_Tau'; [done|]. revert IHn.
-    tnhas_trace_inv Ht. { tend. eapply HP; [|done]. split => //=. by rewrite (itree_eta t) Hot tau_eutt REL. }
-    2: { move => ???? IH ? IHn. apply thas_trace_all => ?. apply: IH => *. apply: IHn => //. by apply: ti_lt_le. }
-    move => ?????? Ht Hlt IHn. invert_all @m_step; rewrite -> Hot in *; simplify_eq.
-    specialize (Ht _ ltac:(done)).
-    apply: IHn; [done|done| |done]. by rewrite REL.
+  - move => m1 m2 [REL|//] t t' n κs IHn Ht Hot Hot'. rewrite -/(eqit _ _ _) in REL.
+    apply: thas_trace_Tau'; [done|].
+    move: Ht => /(tnhas_trace_Tau_inv' _ _ _ _ _)Ht. specialize (Ht _ ltac:(done)).
+    apply: thas_trace_under_tall; [done..|] => ? /= [[??]|[?[??]]].
+    + tend. eapply HP; [|done]. split => //=. by rewrite (itree_eta t) Hot tau_eutt REL.
+    + apply: IHn; [done|done| |done]. by rewrite REL.
   - admit.
-  - move => t1 ot2 ? REL IH t t' n IHn Ht Hot Hot'.
-    move: Ht => /(tnhas_trace_Tau_inv' _ _ _ _ _ _)Ht. specialize (Ht _ _ ltac:(done) ltac:(done)).
-    apply: IH => //. apply: tnhas_trace_mono; [done..|] => ??. eapply HP; [|done]. done.
-  - move => ot1 t2 ? REL IH t t' n IHn Ht Hot Hot'.
+  - move => t1 ot2 ? REL IH t t' n κs IHn Ht Hot Hot'.
+    move: Ht => /(tnhas_trace_Tau_inv' _ _ _ _ _ _)Ht. specialize (Ht _ ltac:(done)).
+    apply: thas_trace_under_tall; [done..|] => ? /= [[??]|[?[??]]].
+    + tend. eapply HP; [|done]. split; [|done] => /=. subst.
+      move: REL => /fold_eqitF REL. specialize (REL _ _ ltac:(done) ltac:(done)). rewrite -REL.
+      by rewrite (itree_eta t) Hot tau_eutt.
+    + apply: IH => //. apply: tnhas_trace_mono; [done..| by apply: ti_lt_impl_le |done].
+  - move => ot1 t2 ? REL IH t t' n κs IHn Ht Hot Hot'.
     tstep_None; [by econs|] => ? ->. by apply: IH.
     Unshelve.
 Admitted.
