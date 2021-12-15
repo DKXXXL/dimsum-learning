@@ -13,36 +13,36 @@ Notation "y ;;;; z" := (ITree.bind y (λ _, z))
 
 
 Inductive moduleE (EV S : Type) : Type → Type :=
-| IVis (e : EV) : moduleE EV S unit
-| IAll (T : Type) : moduleE EV S T
-| IExist (T : Type) : moduleE EV S T
-| IGet : moduleE EV S S
-| IPut (s : S) : moduleE EV S unit
+| EVis (e : EV) : moduleE EV S unit
+| EAll (T : Type) : moduleE EV S T
+| EExist (T : Type) : moduleE EV S T
+| EGet : moduleE EV S S
+| EPut (s : S) : moduleE EV S unit
 .
-Arguments IVis {_ _}.
-Arguments IAll {_ _}.
-Arguments IExist {_ _}.
-Arguments IGet {_ _}.
-Arguments IPut {_ _}.
+Arguments EVis {_ _}.
+Arguments EAll {_ _}.
+Arguments EExist {_ _}.
+Arguments EGet {_ _}.
+Arguments EPut {_ _}.
 
 Inductive mod_itree_step EV S : (itree (moduleE EV S) unit * S) → option EV → ((itree (moduleE EV S) unit * S) → Prop) → Prop :=
 | ITauS t t' s:
   observe t = TauF t' →
   mod_itree_step EV S (t, s) None (λ σ', σ' = (t', s))
 | IVisS t t' s e:
-  observe t = VisF (IVis e) t' →
+  observe t = VisF (EVis e) t' →
   mod_itree_step EV S (t, s) (Some e) (λ σ', σ' = (t' tt, s))
 | IAllS T t t' s:
-  observe t = VisF (IAll T) t' →
+  observe t = VisF (EAll T) t' →
   mod_itree_step EV S (t, s) None (λ σ', ∃ x, σ' = (t' x, s))
 | IExistS T x t t' s:
-  observe t = VisF (IExist T) t' →
+  observe t = VisF (EExist T) t' →
   mod_itree_step EV S (t, s) None (λ σ', σ' = (t' x, s))
 | IGetS t t' s:
-  observe t = VisF (IGet) t' →
+  observe t = VisF (EGet) t' →
   mod_itree_step EV S (t, s) None (λ σ', σ' = (t' s, s))
 | IPutS t t' s s':
-  observe t = VisF (IPut s') t' →
+  observe t = VisF (EPut s') t' →
   mod_itree_step EV S (t, s) None (λ σ', σ' = (t' (), s'))
 .
 
@@ -136,8 +136,8 @@ Proof. by apply: thas_trace_Ret_inv'. Qed.
 
 (** [Vis] *)
 Lemma thas_trace_Vis_inv {EV S} e k Pσ s κs:
-  (vis (IVis e) k, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
-  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (vis (IVis e) k, s)) ∨
+  (vis (EVis e) k, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (vis (EVis e) k, s)) ∨
    ∃ κs', tcons e κs' ⊆ κs ∧ (k (), s) ~{ mod_itree EV S, κs' }~>ₜ Pσ ).
 Proof.
   move => Ht. thas_trace_inv Ht; [naive_solver|].
@@ -147,13 +147,13 @@ Qed.
 
 Lemma thas_trace_Vis {EV S} e k Pσ s κs:
   (k tt, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
-  (vis (IVis e) k, s) ~{mod_itree EV S, tcons e κs}~>ₜ Pσ.
+  (vis (EVis e) k, s) ~{mod_itree EV S, tcons e κs}~>ₜ Pσ.
 Proof. move => Ht. tstep_Some; [by econs|] => ? ->. done. Qed.
 
 (** [All] *)
 Lemma thas_trace_All_inv {EV S} T k Pσ s κs:
-  (vis (IAll T) k, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
-  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (vis (IAll T) k, s)) ∨
+  (vis (EAll T) k, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (vis (EAll T) k, s)) ∨
    ∀ x, (k x, s) ~{ mod_itree EV S, κs }~>ₜ Pσ ).
 Proof.
   move => Ht. thas_trace_inv Ht; [naive_solver|].
@@ -162,13 +162,13 @@ Proof.
 Qed.
 Lemma thas_trace_All {EV S} T k Pσ s κs:
   (∀ x, (k x, s) ~{mod_itree EV S, κs}~>ₜ Pσ) →
-  (vis (IAll T) k, s) ~{mod_itree EV S, κs}~>ₜ Pσ.
+  (vis (EAll T) k, s) ~{mod_itree EV S, κs}~>ₜ Pσ.
 Proof. move => Ht. tstep_None; [by apply: IAllS|] => ? [? ->]. done. Qed.
 
 (** [Exist] *)
 Lemma thas_trace_Exist_inv {EV S} T k Pσ s κs:
-  (vis (IExist T) k, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
-  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (vis (IExist T) k, s)) ∨
+  (vis (EExist T) k, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (vis (EExist T) k, s)) ∨
    ∃ x, (k x, s) ~{ mod_itree EV S, κs }~>ₜ Pσ ).
 Proof.
   move => Ht. thas_trace_inv Ht; [naive_solver|].
@@ -177,13 +177,13 @@ Proof.
 Qed.
 Lemma thas_trace_Exist {EV S} T x k Pσ s κs:
   (k x, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
-  (vis (IExist T) k, s) ~{mod_itree EV S, κs}~>ₜ Pσ.
+  (vis (EExist T) k, s) ~{mod_itree EV S, κs}~>ₜ Pσ.
 Proof. move => Ht. tstep_None; [by apply: (IExistS _ _ _ x)|] => ? ->. done. Qed.
 
 (** [Get] *)
 Lemma thas_trace_Get_inv {EV S} k Pσ s κs:
-  (vis IGet k, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
-  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (vis IGet k, s)) ∨
+  (vis EGet k, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (vis EGet k, s)) ∨
    (k s, s) ~{ mod_itree EV S, κs }~>ₜ Pσ ).
 Proof.
   move => Ht. thas_trace_inv Ht; [naive_solver|].
@@ -192,13 +192,13 @@ Proof.
 Qed.
 Lemma thas_trace_Get {EV S} k Pσ s κs:
   (k s, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
-  (vis IGet k, s) ~{mod_itree EV S, κs}~>ₜ Pσ.
+  (vis EGet k, s) ~{mod_itree EV S, κs}~>ₜ Pσ.
 Proof. move => Ht. tstep_None; [by apply: IGetS|] => ? ->. done. Qed.
 
 (** [Put] *)
 Lemma thas_trace_Put_inv {EV S} k Pσ s s' κs:
-  (vis (IPut s') k, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
-  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (vis (IPut s') k, s)) ∨
+  (vis (EPut s') k, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (vis (EPut s') k, s)) ∨
    (k (), s') ~{ mod_itree EV S, κs }~>ₜ Pσ ).
 Proof.
   move => Ht. thas_trace_inv Ht; [naive_solver|].
@@ -207,7 +207,7 @@ Proof.
 Qed.
 Lemma thas_trace_Put {EV S} k Pσ s s' κs:
   (k tt, s') ~{mod_itree EV S, κs}~>ₜ Pσ →
-  (vis (IPut s') k, s) ~{mod_itree EV S, κs}~>ₜ Pσ.
+  (vis (EPut s') k, s) ~{mod_itree EV S, κs}~>ₜ Pσ.
 Proof. move => Ht. tstep_None; [by econs|] => ? ->. done. Qed.
 
 (** eutt mono *)
@@ -283,6 +283,45 @@ Proof.
   - symmetry. by apply: eqit_mon; [| | |done].
 Qed.
 
+Definition itree_rel {E R S} (P : itree E R * S → Prop) (t : itree E R * S) : Prop :=
+  ∀ t', t.1 ≈ t' → P (t', t.2).
+Global Instance itree_rel_proper E R S P:
+    Proper ((prod_relation (eutt eq) (=) ==> iff)) (@itree_rel E R S P).
+Proof.
+  move => [??] [??] [Heq ?]. simplify_eq/=. rewrite /itree_rel /=.
+  split => ??; [rewrite -Heq|rewrite Heq]; naive_solver.
+Qed.
+Typeclasses Opaque itree_rel.
+
+Lemma itree_rel_intro EV S σ κs P:
+  σ ~{mod_itree EV S, κs }~>ₜ itree_rel P →
+  σ ~{mod_itree EV S, κs }~>ₜ P.
+Proof. move => Ht. apply: thas_trace_mono; [done|done|] => -[??] Hp. by apply: Hp. Qed.
+
+(** * Derived notions *)
+Definition TVis {EV S} (e : EV) : itree (moduleE EV S) unit :=
+  trigger (EVis e).
+
+Definition TAll {EV S} T : itree (moduleE EV S) T :=
+  trigger (EAll T).
+Definition TExist {EV S} T : itree (moduleE EV S) T :=
+  trigger (EExist T).
+
+Definition TUb {EV S R} : itree (moduleE EV S) R :=
+  x ← TAll void;;; match (x : void) with end.
+Definition TNb {EV S R} : itree (moduleE EV S) R :=
+  x ← TExist void;;; match (x : void) with end.
+
+Definition TAssume {EV S} (P : Prop) : itree (moduleE EV S) unit :=
+  TAll ({ x : unit | P });;;; Ret ().
+Definition TAssert {EV S} (P : Prop) : itree (moduleE EV S) unit :=
+  TExist ({ x : unit | P });;;; Ret ().
+
+Definition TGet {EV S} : itree (moduleE EV S) S :=
+  trigger EGet.
+Definition TPut {EV S} (s : S) : itree (moduleE EV S) unit :=
+  trigger (EPut s).
+
 Require refframe.example_modules.
 Module itree_examples.
 Import refframe.example_modules.
@@ -292,7 +331,7 @@ Lemma itree_trefines_tau_l :
 Proof. constructor => /= ?. rewrite tau_eutt. done. Qed.
 
 Lemma mod1_trefines_itree :
-  trefines (MS mod1 0) (MS (mod_itree nat unit) ((_ ← trigger (IVis 1) ;;; Ret tt), tt)).
+  trefines (MS mod1 0) (MS (mod_itree nat unit) ((_ ← trigger (EVis 1) ;;; Ret tt), tt)).
 Proof.
   constructor => /= ? Ht.
   thas_trace_inv Ht. { tend. }
@@ -303,7 +342,7 @@ Proof.
 Qed.
 
 Lemma itree_trefines_mod1 :
-  trefines (MS (mod_itree nat unit) ((trigger (IVis 1);;;; Ret tt), tt)) (MS mod1 0).
+  trefines (MS (mod_itree nat unit) ((trigger (EVis 1);;;; Ret tt), tt)) (MS mod1 0).
 Proof.
   constructor => /= ?. rewrite bind_trigger => /(thas_trace_Vis_inv _ _ _ _)Ht.
   apply: thas_trace_under_tall; [done..|] => {Ht} ? [?|?]; destruct_all?. { tend. }

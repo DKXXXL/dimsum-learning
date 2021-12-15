@@ -262,33 +262,17 @@ Module asm_examples.
 
   Definition itree_mul : itree (moduleE asm_event unit) unit :=
     ITree.forever (
-       pc ← trigger (IExist Z);;;
-       rs ← trigger (IExist _);;;
-       trigger (IVis (ERecvJump pc rs));;;;
+       pc ← TExist Z;;;
+       rs ← TExist _;;;
+       TVis (ERecvJump pc rs);;;;
        if bool_decide (pc = 100) then
          Ret ()
        else if bool_decide (pc = 104) then
-         x ← trigger (IAll void);;; match (x : void) with end
+         TUb
        else
-         x ← trigger (IExist void);;; match (x : void) with end
+         TNb
     ).
 
-  Definition itree_rel {E R S} (P : itree E R * S → Prop) (t : itree E R * S) : Prop :=
-    ∀ t', t.1 ≈ t' → P (t', t.2).
-  Global Instance itree_rel_proper E R S P:
-    Proper ((prod_relation (eutt eq) (=) ==> iff)) (@itree_rel E R S P).
-  Proof. Admitted.
-    (* move => ?? Heq ?? ->. rewrite /itree_rel. *)
-    (* split => ??. *)
-    (* - rewrite -Heq; naive_solver.  *)
-    (* - rewrite Heq; naive_solver. *)
-  (* Qed. *)
-  Typeclasses Opaque itree_rel.
-
-  Lemma itree_rel_intro EV S σ κs P:
-    σ ~{mod_itree EV S, κs }~>ₜ itree_rel P →
-    σ ~{mod_itree EV S, κs }~>ₜ P.
-  Proof. move => Ht. apply: thas_trace_mono; [done|done|] => -[??] Hp. by apply: Hp. Qed.
 
   Lemma asm_mul_refines_itree :
     trefines (MS asm_module (initial_asm_state asm_mul)) (MS (mod_itree _ _) (itree_mul, tt)).
