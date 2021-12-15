@@ -7,8 +7,6 @@ Inductive trace_index : Type :=
 Inductive ti_le : trace_index → trace_index → Prop :=
 | ti_le_O n : ti_le tiO n
 | ti_le_S_S n1 n2 : ti_le n1 n2 → ti_le (tiS n1) (tiS n2)
-(* | ti_le_choice_r T f n : (∀ x, ti_le n (f x)) → ti_le n (tiChoice T f) *)
-(* | ti_le_choice_l T f n x : ti_le (f x) n → ti_le (tiChoice T f) n *)
 | ti_le_choice_l T f n : (∀ x, ti_le (f x) n) → ti_le (tiChoice T f) n
 | ti_le_choice_r T f n x : ti_le n (f x) → ti_le n (tiChoice T f)
 .
@@ -44,6 +42,35 @@ Proof.
   - move => ?? [??]. done.
   - move => ??? [??] [??]. by split; etrans.
 Qed.
+
+Inductive ti_lt_alt : trace_index → trace_index → Prop :=
+| ti_lt_O_S n : ti_lt_alt tiO (tiS n)
+| ti_lt_S_S n1 n2 : ti_lt_alt n1 n2 → ti_lt_alt (tiS n1) (tiS n2)
+| ti_lt_choice_l T f n : (∀ x, ti_lt_alt (f x) n) → ti_lt_alt (tiChoice T f) n
+| ti_lt_choice_r T f n x : ti_lt_alt n (f x) → ti_lt_alt n (tiChoice T f)
+.
+
+Lemma ti_lt_alt_equiv n1 n2:
+  n1 ⊂ n2 ↔ ti_lt_alt n1 n2.
+Proof.
+  split.
+  - move => [Hle Hnle]. elim: Hle Hnle.
+    + elim.
+      * done.
+      * econs.
+      * move => ?? IH Hnle. admit.
+    + move => ??? IH Hnle. econstructor. apply: IH. contradict Hnle. by constructor.
+    + move => ???? IH Hnle. econs => ?. apply: IH. contradict Hnle. by econs.
+    + move => ????? IH Hnle.
+      (* TODO: the negation causes problems *)
+  (* econs. apply: IH. contradict Hnle. econs. *)
+      admit.
+  - elim.
+    + move => ?. split; [by econs| ] => Ht. inversion Ht.
+    + move => ??? [IHle IHnle]. split; [by econs|] => Hs. inversion Hs; simplify_eq. naive_solver.
+    + move => ???? IH. split. { econs. admit. } move => ?. admit.
+    +
+Admitted.
 
 Lemma ti_lt_impl_le (n1 n2 : trace_index):
   n1 ⊂ n2 →
@@ -82,6 +109,17 @@ Proof.
   - move => ? IH ? [Hle ?]. inversion Hle; simplify_eq. admit.
   - move => ?? IH ? [Hle Hnle]. inversion Hle; simplify_K. constructor => ?.
     apply: IH. split; [naive_solver|]. move => ?. apply: Hnle. by econs.
+Admitted.
+
+Lemma ti_le_lt_S' n1 n2:
+  ti_lt_alt n1 n2 →
+  tiS n1 ⊆ n2.
+Proof.
+  elim.
+  - move => ?. econs. econs.
+  - move => ????. by econs.
+  - move => ?? n _. elim: n.
+    (* This is not provable! *)
 Admitted.
 
 Lemma ti_lt_le (n1 n2 n3 : trace_index):

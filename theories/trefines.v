@@ -198,6 +198,16 @@ Proof.
     done.
 Qed.
 
+Lemma under_tall_mono' {EV} (κs : trace EV) (P1 P2 : _ → Prop):
+  under_tall κs P1 →
+  (∀ κs', P1 κs' → P2 κs') →
+  under_tall κs P2.
+Proof.
+  elim.
+  - move => *. econs. naive_solver.
+  - move => ????? IH ? HP. apply: UTAll; [|by etrans]. move => ?. by apply: IH.
+Qed.
+
 Global Instance under_tall_proper {EV} :
   Proper ((⊆) ==> ((⊆) ==> impl) ==> impl) (@under_tall EV).
 Proof. move => κs1 κs2 Hsub ?? HP Hall. by apply: under_tall_mono. Qed.
@@ -604,8 +614,7 @@ Tactic Notation "thas_trace_inv" ident(H) :=
   end;
   lazymatch goal with
   | |- under_tall _ _ =>
-      let Hsub := fresh "Hsub" in
-      apply (under_tall_mono _ _ _ _ H); [done|] => {H} ?? Hsub [H|H]; destruct_all?
+      apply (under_tall_mono' _ _ _ H) => {H} ? [H|H]; destruct_all?
   | |- _ ~{ _, _ }~>ₜ _ =>
       apply (thas_trace_under_tall _ _ _ _ _ _ H); [done|] => {H} ? [H|H]; destruct_all?
   | |- _ ⊆@{trace _} _ =>

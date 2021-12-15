@@ -32,6 +32,18 @@ Inductive mod_itree_step EV S : (itree (moduleE EV S) unit * S) → option EV �
 | IVisS t t' s e:
   observe t = VisF (IVis e) t' →
   mod_itree_step EV S (t, s) (Some e) (λ σ', σ' = (t' tt, s))
+| IAllS T t t' s:
+  observe t = VisF (IAll T) t' →
+  mod_itree_step EV S (t, s) None (λ σ', ∃ x, σ' = (t' x, s))
+| IExistS T x t t' s:
+  observe t = VisF (IExist T) t' →
+  mod_itree_step EV S (t, s) None (λ σ', σ' = (t' x, s))
+| IGetS t t' s:
+  observe t = VisF (IGet) t' →
+  mod_itree_step EV S (t, s) None (λ σ', σ' = (t' s, s))
+| IPutS t t' s s':
+  observe t = VisF (IPut s') t' →
+  mod_itree_step EV S (t, s) None (λ σ', σ' = (t' (), s'))
 .
 
 Definition mod_itree EV S := Mod (mod_itree_step EV S).
@@ -68,9 +80,9 @@ Lemma tnhas_trace_Tau_inv' {EV S} t t' n Pσ s κs:
   under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (t', s)) ∨
     ∃ n', n' ⊂ n ∧ (t, s) ~{ mod_itree _ _,  κs, n' }~>ₜ Pσ).
 Proof.
-  move => Htau Ht. thas_trace_inv Ht. { left. split; [by etrans|done]. }
+  move => Htau Ht. thas_trace_inv Ht. { naive_solver. }
   right. invert_all @m_step; rewrite ->Htau in *; simplify_eq.
-  eexists _. split; [done|]. rewrite -Hsub -H0. naive_solver.
+  eexists _. split; [done|]. rewrite -H0. naive_solver.
   Unshelve. done.
 Qed.
 Lemma tnhas_trace_Tau_inv {EV S} t n Pσ s κs:
@@ -85,8 +97,8 @@ Lemma thas_trace_Tau_inv' {EV S} t t' Pσ s κs:
   under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (t', s)) ∨ (t, s) ~{ mod_itree _ _,  κs }~>ₜ Pσ).
 Proof.
   move => Htau /thas_trace_n[? /(tnhas_trace_Tau_inv' _ _ _ _ _) Ht]. specialize (Ht _ ltac:(done)).
-  apply: under_tall_mono; [done..|] => {Ht} ?? Hκs [[??]|[?[??]]]. { left. split; [by etrans|done]. }
-  right. apply thas_trace_n. eexists _. by rewrite -Hκs.
+  apply: under_tall_mono'; [done..|] => {Ht} ? [[??]|[?[??]]]. { naive_solver. }
+  right. apply thas_trace_n. naive_solver.
 Qed.
 Lemma thas_trace_Tau_inv {EV S} t Pσ s κs:
   (Tau t, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
@@ -100,7 +112,7 @@ Lemma tnhas_trace_Ret_inv' {EV S} t x n Pσ s κs:
   under_tall κs (λ κs, tnil ⊆ κs ∧ Pσ (t, s)).
 Proof.
   move => Hret. move => Ht.
-  thas_trace_inv Ht. { split => //. by rewrite -Hsub. }
+  thas_trace_inv Ht; [done|].
   invert_all @m_step; rewrite ->Hret in *; simplify_eq.
 Qed.
 Lemma tnhas_trace_Ret_inv {EV S} x n Pσ s κs:
@@ -118,6 +130,83 @@ Lemma thas_trace_Ret_inv {EV S} x Pσ s κs:
   under_tall κs (λ κs, tnil ⊆ κs ∧ Pσ (Ret x, s)).
 Proof. by apply: thas_trace_Ret_inv'. Qed.
 
+(** [Vis] *)
+Lemma thas_trace_Vis_inv {EV S} e k Pσ s κs:
+  (vis (IVis e) k, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (vis (IVis e) k, s)) ∨
+   ∃ κs', tcons e κs' ⊆ κs ∧ (k (), s) ~{ mod_itree EV S, κs' }~>ₜ Pσ ).
+Proof.
+  move => Ht. thas_trace_inv Ht; [naive_solver|].
+  invert_all' @m_step; simpl in *; simplify_eq; simplify_K; specialize_hyps.
+  naive_solver.
+Qed.
+
+Lemma thas_trace_Vis {EV S} e k Pσ s κs:
+  (k tt, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  (vis (IVis e) k, s) ~{mod_itree EV S, tcons e κs}~>ₜ Pσ.
+Proof. move => Ht. tstep_Some; [by econs|] => ? ->. done. Qed.
+
+(** [All] *)
+Lemma thas_trace_All_inv {EV S} T k Pσ s κs:
+  (vis (IAll T) k, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (vis (IAll T) k, s)) ∨
+   ∀ x, (k x, s) ~{ mod_itree EV S, κs }~>ₜ Pσ ).
+Proof.
+  move => Ht. thas_trace_inv Ht; [naive_solver|].
+  invert_all' @m_step; simpl in *; simplify_eq; simplify_K; specialize_hyps.
+  right => ?. revert select (_ ⊆ _) => <- /=. naive_solver.
+Qed.
+Lemma thas_trace_All {EV S} T k Pσ s κs:
+  (∀ x, (k x, s) ~{mod_itree EV S, κs}~>ₜ Pσ) →
+  (vis (IAll T) k, s) ~{mod_itree EV S, κs}~>ₜ Pσ.
+Proof. move => Ht. tstep_None; [by apply: IAllS|] => ? [? ->]. done. Qed.
+
+(** [Exist] *)
+Lemma thas_trace_Exist_inv {EV S} T k Pσ s κs:
+  (vis (IExist T) k, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (vis (IExist T) k, s)) ∨
+   ∃ x, (k x, s) ~{ mod_itree EV S, κs }~>ₜ Pσ ).
+Proof.
+  move => Ht. thas_trace_inv Ht; [naive_solver|].
+  invert_all' @m_step; simpl in *; simplify_eq; simplify_K; specialize_hyps.
+  right. eexists _. revert select (_ ⊆ _) => <- /=. naive_solver.
+Qed.
+Lemma thas_trace_Exist {EV S} T x k Pσ s κs:
+  (k x, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  (vis (IExist T) k, s) ~{mod_itree EV S, κs}~>ₜ Pσ.
+Proof. move => Ht. tstep_None; [by apply: (IExistS _ _ _ x)|] => ? ->. done. Qed.
+
+(** [Get] *)
+Lemma thas_trace_Get_inv {EV S} k Pσ s κs:
+  (vis IGet k, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (vis IGet k, s)) ∨
+   (k s, s) ~{ mod_itree EV S, κs }~>ₜ Pσ ).
+Proof.
+  move => Ht. thas_trace_inv Ht; [naive_solver|].
+  invert_all' @m_step; simpl in *; simplify_eq; simplify_K; specialize_hyps.
+  right. revert select (_ ⊆ _) => <- /=. naive_solver.
+Qed.
+Lemma thas_trace_Get {EV S} k Pσ s κs:
+  (k s, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  (vis IGet k, s) ~{mod_itree EV S, κs}~>ₜ Pσ.
+Proof. move => Ht. tstep_None; [by apply: IGetS|] => ? ->. done. Qed.
+
+(** [Put] *)
+Lemma thas_trace_Put_inv {EV S} k Pσ s s' κs:
+  (vis (IPut s') k, s) ~{mod_itree EV S, κs}~>ₜ Pσ →
+  under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (vis (IPut s') k, s)) ∨
+   (k (), s') ~{ mod_itree EV S, κs }~>ₜ Pσ ).
+Proof.
+  move => Ht. thas_trace_inv Ht; [naive_solver|].
+  invert_all' @m_step; simpl in *; simplify_eq; simplify_K; specialize_hyps.
+  right. revert select (_ ⊆ _) => <- /=. naive_solver.
+Qed.
+Lemma thas_trace_Put {EV S} k Pσ s s' κs:
+  (k tt, s') ~{mod_itree EV S, κs}~>ₜ Pσ →
+  (vis (IPut s') k, s) ~{mod_itree EV S, κs}~>ₜ Pσ.
+Proof. move => Ht. tstep_None; [by econs|] => ? ->. done. Qed.
+
+(** eutt mono *)
 Lemma thas_trace_eutt_mono {EV S} t t' s κs Pσ Pσ':
   (prod_relation (eutt eq) (=) ==> iff)%signature Pσ Pσ' →
   (t, s) ~{ mod_itree EV S, κs }~>ₜ Pσ →
@@ -129,37 +218,49 @@ Proof.
   move => n IHn κs t t' s Ht Heq HP.
   punfold Heq. unfold eqit_ in Heq at 1.
   move: Heq. move Hot: (observe t) => ot. move Hot': (observe t') => ot' Heq.
-  elim: Heq t t' n κs IHn Ht Hot Hot'.
-  - move => ?? -> t t' n κs IHn Ht Hot Hot'.
+  elim: Heq t t' n κs s IHn Ht Hot Hot'.
+  - move => ?? -> t t' n κs s IHn Ht Hot Hot'.
     move: Ht => /(tnhas_trace_Ret_inv' _ _ _ _ _)Ht. specialize (Ht _ ltac:(done)).
     apply: thas_trace_under_tall; [done..|] => ? [??]. tend.
     eapply HP; [|done]. split; [|done] => /=. rewrite (itree_eta t) Hot (itree_eta t') Hot'. done.
-  - move => m1 m2 [REL|//] t t' n κs IHn Ht Hot Hot'. rewrite -/(eqit _ _ _) in REL.
+  - move => m1 m2 [REL|//] t t' n κs s IHn Ht Hot Hot'. rewrite -/(eqit _ _ _) in REL.
     apply: thas_trace_Tau'; [done|].
     move: Ht => /(tnhas_trace_Tau_inv' _ _ _ _ _)Ht. specialize (Ht _ ltac:(done)).
     apply: thas_trace_under_tall; [done..|] => ? /= [[??]|[?[??]]].
     + tend. eapply HP; [|done]. split => //=. by rewrite (itree_eta t) Hot tau_eutt REL.
     + apply: IHn; [done|done| |done]. by rewrite REL.
-  - move => u e k1 k2 Hu t t' n κs IHn Ht Hot Hot'.
+  - move => u e k1 k2 Hu t t' n κs s IHn Ht Hot Hot'.
     thas_trace_inv Ht. {
       tend. eapply HP; [|done]. split; [|done] => /=. rewrite (itree_eta t) Hot (itree_eta t') Hot'.
       apply eqit_Vis => v. move: (Hu v) => [|//]. done.
     }
+    revert select (_ ⊆ _) => <-.
     invert_all @m_step; rewrite ->Hot in *; simplify_eq; simplify_K.
-    + specialize (H1 _ ltac:(done)). rewrite -H0.
+    + specialize (H1 _ ltac:(done)).
       tstep_Some; [by econs|] => ? ->.
       apply: IHn; [done|done| |done].
       move: (Hu tt) => [|//]. done.
-  - move => t1 ot2 ? REL IH t t' n κs IHn Ht Hot Hot'.
+    + tstep_None; [ by apply IAllS|] => ? [x ->].
+      apply: IHn; [done |unshelve done; naive_solver| |done].
+      move: (Hu x) => [|//]. done.
+    + tstep_None; [ by apply IExistS|] => ? ->.
+      apply: IHn; [done|unshelve done; naive_solver| |done].
+      move: (Hu x) => [|//]. done.
+    + tstep_None; [by apply IGetS|] => ? ->.
+      apply: IHn; [done | unshelve done; naive_solver| |done].
+      move: (Hu s) => [|//]. done.
+    + tstep_None; [by apply IPutS|] => ? ->.
+      apply: IHn; [done | unshelve done; naive_solver| |done].
+      move: (Hu tt) => [|//]. done.
+  - move => t1 ot2 ? REL IH t t' n κs s IHn Ht Hot Hot'.
     move: Ht => /(tnhas_trace_Tau_inv' _ _ _ _ _ _)Ht. specialize (Ht _ ltac:(done)).
     apply: thas_trace_under_tall; [done..|] => ? /= [[??]|[?[??]]].
     + tend. eapply HP; [|done]. split; [|done] => /=. subst.
       move: REL => /fold_eqitF REL. specialize (REL _ _ ltac:(done) ltac:(done)). rewrite -REL.
       by rewrite (itree_eta t) Hot tau_eutt.
     + apply: IH => //. apply: tnhas_trace_mono; [done..| by apply: ti_lt_impl_le |done].
-  - move => ot1 t2 ? REL IH t t' n κs IHn Ht Hot Hot'.
+  - move => ot1 t2 ? REL IH t t' n κs s IHn Ht Hot Hot'.
     tstep_None; [by econs|] => ? ->. by apply: IH.
-    Unshelve.
 Qed.
 
 Global Instance mod_itree_proper EV S b1 b2:
@@ -187,7 +288,7 @@ Proof.
   constructor => /= ? Ht.
   thas_trace_inv Ht. { tend. }
   invert_all @m_step. revert select (_ ⊆ _) => <-.
-  rewrite bind_trigger. tstep_Some; [by econs|] => ? ->.
+  rewrite bind_trigger. apply thas_trace_Vis.
   thas_trace_inv. { tend. }
   invert_all @m_step.
 Qed.
@@ -195,7 +296,12 @@ Qed.
 Lemma itree_trefines_mod1 :
   trefines (MS (mod_itree nat unit) ((trigger (IVis 1);;;; Ret tt), tt)) (MS mod1 0).
 Proof.
-  constructor => /= ?. rewrite bind_trigger.
-Abort.
+  constructor => /= ?. rewrite bind_trigger => /(thas_trace_Vis_inv _ _ _ _)Ht.
+  apply: thas_trace_under_tall; [done..|] => {Ht} ? [?|?]; destruct_all?. { tend. }
+  revert select (_ ⊆ _) => <-.
+  tstep_Some; [by econs|] => ? ->.
+  move: H0 => /(thas_trace_Ret_inv _ _ _ _)Ht.
+  apply: thas_trace_under_tall; [done..|] => {Ht} ?/=?; destruct_all?. tend.
+Qed.
 
 End itree_examples.
