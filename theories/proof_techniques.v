@@ -113,6 +113,58 @@ Proof.
 Abort.
 *)
 
+(** * [wp] *)
+Inductive wp {EV} (m1 m2 : module EV) : trace_index → m1.(m_state) -> m2.(m_state) -> Prop :=
+| Wp_step' σi1 σs1 n:
+    (∀ Pσi2 κ n', tiS n' ⊆ n → m_step m1 σi1 κ Pσi2 -> ∃ Pσ2,
+      σs1 ~{ m2, option_trace κ }~>ₜ Pσ2 ∧
+      ∀ σs2, Pσ2 σs2 → ∃ σi2, Pσi2 σi2 ∧ wp m1 m2 n' σi2 σs2) ->
+    wp m1 m2 n σi1 σs1
+.
+
+Lemma Wp_step {EV} (m1 m2 : module EV) σi1 σs1 n:
+  (∀ Pσi2 n' κ, tiS n' ⊆ n → m_step m1 σi1 κ Pσi2 ->
+      σs1 ~{ m2, option_trace κ }~>ₜ (λ σs2, ∃ σi2, Pσi2 σi2 ∧ wp m1 m2 n' σi2 σs2)) ->
+    wp m1 m2 n σi1 σs1
+.
+Proof. move => ?. constructor. naive_solver. Qed.
+
+Lemma wp_mono {EV} (m1 m2 : module EV) n1 n2 σi σs:
+  wp m1 m2 n1 σi σs →
+  n2 ⊆ n1 →
+  wp m1 m2 n2 σi σs.
+Proof.
+  move => Hwp Hle.
+  constructor => ?????.
+  inversion_clear Hwp as [??? Hwp2]; subst.
+  have {Hwp2}[?[? Hwp]]:= Hwp2 _ _ _ ltac:(by etrans) ltac:(done).
+  eexists _. split; [done|] => ??.
+  have {Hwp}[?[? Hwp]]:= Hwp _ ltac:(done).
+  by eexists _.
+Qed.
+
+Lemma wp_implies_refines {EV} (m1 m2 : mod_state EV):
+  (∀ n, wp m1 m2 n m1.(ms_state) m2.(ms_state)) →
+  trefines m1 m2.
+Proof.
+  destruct m1 as [m1 σi1]. destruct m2 as [m2 σs1]. move => /= Hwp.
+  constructor => κs /= /thas_trace_n [n Hsteps].
+  elim: Hsteps σs1 {Hwp}(Hwp n); clear.
+  - move => ????????. tend.
+  - move => Pσ2 fn σ1 Pσ3 κ κs κs' n Hstep ? IH Hlt Hκs σs1 Hwp. rewrite -Hκs.
+    inversion_clear Hwp as [??? Hwp2]; subst.
+    have {Hwp2}[?[? Hwp]]:= Hwp2 _ _ _ ltac:(done) ltac:(done).
+    apply: thas_trace_trans; [done|] => ??.
+    have {Hwp}[?[? Hwp]]:= Hwp _ ltac:(done).
+    apply: IH; [done|] => ?.
+    apply: wp_mono; [done|]. by econs.
+  - move => T fn f σ κs Pσ n ? IH Hκs Hle σs1 Hwp. rewrite -Hκs.
+    apply thas_trace_all => ?. apply: IH.
+    apply: wp_mono; [done|]. etrans; [|done]. by econs.
+Qed.
+
+(** * proving a refinement based on another refinement *)
+
 Lemma forall_to_ex1 A B (P1 : A → Prop)  P2 (Q : B → Prop):
  (∃ n : A, P1 n ∧ (∀ y, P2 n y → Q y)) -> (∀ y, (∀ n : A, P1 n → P2 n y) → Q y).
 Proof. naive_solver. Qed.

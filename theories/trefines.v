@@ -269,14 +269,14 @@ Inductive tnhas_trace {EV} (m : module EV) : m.(m_state) → trace EV → trace_
 | TNTraceStep Pσ2 fn σ1 Pσ3 κ κs κs' n:
     m.(m_step) σ1 κ Pσ2 →
     (∀ σ2 (H : Pσ2 σ2), tnhas_trace m σ2 κs' (fn (σ2 ↾ H)) Pσ3) →
-    (∀ x, fn x ⊂ n) →
+    tiS (tiChoice _ fn) ⊆ n →
     tapp (option_trace κ) κs' ⊆ κs →
     (* VisNoUb m κ Pσ2 → *)
     tnhas_trace m σ1 κs n Pσ3
 | TNTraceAll T fn f σ κs Pσ n:
     (∀ x, tnhas_trace m σ (f x) (fn x) Pσ) →
     tall T f ⊆ κs →
-    (∀ x, fn x ⊆ n) →
+    tiChoice _ fn ⊆ n →
     tnhas_trace m σ κs n Pσ
 .
 Notation " σ '~{' m , Pκs , n '}~>ₜ' P " := (tnhas_trace m σ Pκs n P) (at level 40).
@@ -519,8 +519,8 @@ Proof.
   - move => ?????????? IH ????????.
     tstep; [done| | | by etrans].
     + move => ??. naive_solver.
-    + move => ?. by apply: ti_lt_le.
-  - move => *. eapply TNTraceAll. naive_solver. by etrans. move => ?. etrans; [|done]. done.
+    + by etrans; [|done].
+  - move => *. eapply TNTraceAll. naive_solver. by etrans. etrans; [|done]. done.
 Qed.
 
 Global Instance tnhas_trace_proper_flip {EV} (m : module EV) :
@@ -543,14 +543,15 @@ Lemma tnhas_trace_under_tall {EV} m (κs1 κs2 : trace EV) (P1 Pσ : _ → Prop)
 Proof.
   move => Hall. elim: Hall κs2.
   - move => ???? <- HP. by apply: HP.
-  - move => ????? IH Hκ ?? HP. apply: TNTraceAll; [|by etrans |]. naive_solver. done.
+  - move => ????? IH Hκ ?? HP.
+    apply: TNTraceAll; [|by etrans |]. naive_solver. econs. done.
 Qed.
 
 Lemma tnhas_trace_inv {EV} (m : module EV) κs (Pσ : _ → Prop) σ n:
   σ ~{ m, κs, n }~>ₜ Pσ →
   under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ σ) ∨
     ∃ κ κs' Pσ2 fn, m_step m σ κ Pσ2 ∧ (∀ σ2 (H : Pσ2 σ2), σ2 ~{ m, κs', fn (σ2 ↾ H) }~>ₜ Pσ)
-      ∧ tapp (option_trace κ) κs' ⊆ κs ∧ (∀ x, fn x ⊂ n)).
+      ∧ tapp (option_trace κ) κs' ⊆ κs ∧ tiS (tiChoice _ fn) ⊆ n).
 Proof.
   elim.
   - move => ??????. econs. naive_solver.
@@ -559,8 +560,8 @@ Proof.
     move => ?. apply: under_tall_mono; [done..|].
     move => ?? Hκ [[??]|?]; [left|right].
     + split; [|done]. by rewrite -Hκ.
-    + destruct_all?. eexists _, _, _, _. split_and! => //. { by etrans. } move => ?.
-      by apply: ti_lt_le.
+    + destruct_all?. eexists _, _, _, _. split_and! => //. { by etrans. }
+      etrans; [done|]. etrans; [|done]. by econs.
 Qed.
 
 Lemma thas_trace_n_1 {EV} (m : module EV) σ κs Pσ:
@@ -570,13 +571,11 @@ Proof.
   - move => ?????. eexists tiO. tend.
   - move => ???????? IH ?.
     have [f Hf]:= CHOICE IH. eexists (tiS (tiChoice _ f)).
-    tstep; [done| | |done].
-    + move => ??. apply Hf.
-    + move => [??].
-      apply: ti_lt_le; [apply ti_lt_S|]. apply ti_le_S_S. by apply: ti_le_choice_r.
+    tstep; [done| |done|done].
+    move => ??. apply Hf.
   - move => ?????? IH ?.
     have [f Hf]:= AxCHOICE _ _ _ IH. eexists (tiChoice _ f).
-    apply: TNTraceAll; [done|done|] => ?. by apply: ti_le_choice_r.
+    by apply: TNTraceAll.
 Qed.
 
 Lemma thas_trace_n_2 {EV} (m : module EV) σ κs Pσ n:

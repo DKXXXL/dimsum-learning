@@ -4,6 +4,7 @@ Require Import refframe.filter.
 Require Import refframe.product.
 Require Import refframe.proof_techniques.
 
+Local Open Scope Z_scope.
 (** * Assembly language *)
 Inductive asm_instr_event :=
 | WriteReg (r : string) (f : gmap string Z → Z).
@@ -37,6 +38,7 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
   instrs !! pc = None →
   asm_step (AsmState (Some []) regs instrs) (Some (EJump pc regs)) (λ σ', σ' = AsmState None regs instrs)
 | SRecvJump regs regs' instrs pc es :
+  regs' !! "PC" = Some pc →
   instrs !! pc = Some es →
   asm_step (AsmState None regs instrs) (Some (ERecvJump pc regs')) (λ σ', σ' = AsmState (Some es) regs' instrs)
 .
@@ -80,11 +82,13 @@ Inductive asm_prod_filter_step (ins1 ins2 : gset Z) :
 | APFRecvJumpL pc rs:
   pc ∈ ins1 →
   pc ∉ ins2 →
+  rs !! "PC" = Some pc →
   asm_prod_filter_step ins1 ins2
     APFNone (Some ((Some (ERecvJump pc rs), None), Some (ERecvJump pc rs))) (λ σ, σ = APFLeft)
 | APFRecvJumpR pc rs:
   pc ∉ ins1 →
   pc ∈ ins2 →
+  rs !! "PC" = Some pc →
   asm_prod_filter_step ins1 ins2
     APFNone (Some ((None, Some (ERecvJump pc rs)), Some (ERecvJump pc rs))) (λ σ, σ = APFRight)
 .
@@ -221,9 +225,9 @@ Proof.
     move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _). naive_solver.
   - tstep_Some. { apply: SJumpExternal; [done|]. apply lookup_union_None. by split; apply not_elem_of_dom. }
     move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _). naive_solver.
-  - tstep_Some. { apply: SRecvJump. by apply lookup_union_Some_l. }
+  - tstep_Some. { apply: SRecvJump; [done|]. by apply lookup_union_Some_l. }
     move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _). naive_solver.
-  - tstep_Some. { apply: SRecvJump. by apply lookup_union_Some_r. }
+  - tstep_Some. { apply: SRecvJump; [done|]. by apply lookup_union_Some_r. }
     move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _). naive_solver.
 Qed.
 
@@ -241,3 +245,68 @@ Proof.
   - apply: Href.
   - erewrite map_difference_eq_dom_L => //. apply _.
 Qed.
+
+Require refframe.itree.
+Module asm_examples.
+  Import refframe.itree.
+  Local Open Scope Z_scope.
+  Definition asm_mul : gmap Z asm_instr :=
+    <[ 100 := [
+          WriteReg "R3" (λ rs, rs !!! "R1" * rs !!! "R2");
+          WriteReg "PC" (λ rs, rs !!! "PC" + 4)
+      ] ]> $
+    <[ 104 := [
+          (* Dummy instruction such that we have two instructions *)
+          WriteReg "PC" (λ rs, rs !!! "PC" + 4)
+      ] ]> $ ∅.
+
+  Definition itree_mul : itree (moduleE asm_event unit) unit :=
+    ITree.forever (
+       pc ← trigger (IExist Z);;;
+       rs ← trigger (IExist _);;;
+       trigger (IVis (ERecvJump pc rs));;;;
+       if bool_decide (pc = 100) then
+         Ret ()
+       else if bool_decide (pc = 104) then
+         x ← trigger (IAll void);;; match (x : void) with end
+       else
+         x ← trigger (IExist void);;; match (x : void) with end
+    ).
+
+  Definition itree_rel {E R S} (P : itree E R * S → Prop) (t : itree E R * S) : Prop :=
+    ∀ t', t.1 ≈ t' → P (t', t.2).
+  Global Instance itree_rel_proper E R S P:
+    Proper ((prod_relation (eutt eq) (=) ==> iff)) (@itree_rel E R S P).
+  Proof. Admitted.
+    (* move => ?? Heq ?? ->. rewrite /itree_rel. *)
+    (* split => ??. *)
+    (* - rewrite -Heq; naive_solver.  *)
+    (* - rewrite Heq; naive_solver. *)
+  (* Qed. *)
+  Typeclasses Opaque itree_rel.
+
+  Lemma itree_rel_intro EV S σ κs P:
+    σ ~{mod_itree EV S, κs }~>ₜ itree_rel P →
+    σ ~{mod_itree EV S, κs }~>ₜ P.
+  Proof. move => Ht. apply: thas_trace_mono; [done|done|] => -[??] Hp. by apply: Hp. Qed.
+
+  Lemma asm_mul_refines_itree :
+    trefines (MS asm_module (initial_asm_state asm_mul)) (MS (mod_itree _ _) (itree_mul, tt)).
+  Proof.
+    apply wp_implies_refines => n /=. rewrite /initial_asm_state.
+    move: (∅) => rs.
+    elim/ti_lt_ind: n rs => n Hloop rs.
+    apply Wp_step => ?????. invert_all @m_step.
+    apply: itree_rel_intro. rewrite /itree_mul unfold_forever !bind_bind.
+    rewrite {1}bind_trigger. eapply thas_trace_Exist.
+    rewrite !bind_bind {1}bind_trigger. eapply thas_trace_Exist.
+    rewrite !bind_bind {1}bind_trigger. eapply thas_trace_Vis.
+    revert select (asm_mul !! _ = Some _) => /lookup_insert_Some[[??]|[? /lookup_insert_Some[[??]|[?/(lookup_empty_Some _ _) ?//]]]]; simplify_eq.
+    2: {
+      rewrite bool_decide_false // bool_decide_true //.
+      rewrite !bind_bind {1}bind_trigger. by eapply thas_trace_All.
+    }
+    rewrite bool_decide_true //.
+  Admitted.
+
+End asm_examples.

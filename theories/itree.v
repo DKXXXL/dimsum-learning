@@ -53,14 +53,16 @@ Definition mod_itree EV S := Mod (mod_itree_step EV S).
 Lemma tnhas_trace_Tau' {EV S} t t' n n' Pσ s κs:
   observe t = TauF t' →
   (t', s) ~{mod_itree EV S, κs, n}~>ₜ Pσ →
-  n ⊂ n' →
+  tiS n ⊆ n' →
   (t, s) ~{mod_itree EV S, κs, n'}~>ₜ Pσ.
 Proof.
-  move => Htau Ht Hsub. apply: (TNTraceStep _ _ (λ _, n)); [by econs| |done|simpl; done] => /= ? ->. done.
+  move => Htau Ht Hsub. apply: (TNTraceStep _ _ (λ _, n)); [by econs| | |simpl; done].
+  - move => /= ? ->. done.
+  - etrans; [|done]. econs. by econs.
 Qed.
 Lemma tnhas_trace_Tau {EV S} t n n' Pσ s κs:
   (t, s) ~{mod_itree EV S, κs, n}~>ₜ Pσ →
-  n ⊂ n' →
+  tiS n ⊆ n' →
   (Tau t, s) ~{mod_itree EV S, κs, n'}~>ₜ Pσ.
 Proof. by apply tnhas_trace_Tau'. Qed.
 
@@ -78,17 +80,19 @@ Lemma tnhas_trace_Tau_inv' {EV S} t t' n Pσ s κs:
   observe t' = TauF t →
   (t', s) ~{mod_itree EV S, κs, n}~>ₜ Pσ →
   under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (t', s)) ∨
-    ∃ n', n' ⊂ n ∧ (t, s) ~{ mod_itree _ _,  κs, n' }~>ₜ Pσ).
+    ∃ n', tiS n' ⊆ n ∧ (t, s) ~{ mod_itree _ _,  κs, n' }~>ₜ Pσ).
 Proof.
   move => Htau Ht. thas_trace_inv Ht. { naive_solver. }
   right. invert_all @m_step; rewrite ->Htau in *; simplify_eq.
-  eexists _. split; [done|]. rewrite -H0. naive_solver.
+  eexists _. split; last first.
+  - rewrite -H0. naive_solver.
+  - etrans; [|done]. econs. by econs.
   Unshelve. done.
 Qed.
 Lemma tnhas_trace_Tau_inv {EV S} t n Pσ s κs:
   (Tau t, s) ~{mod_itree EV S, κs, n}~>ₜ Pσ →
   under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (Tau t, s)) ∨
-    ∃ n', n' ⊂ n ∧ (t, s) ~{ mod_itree _ _,  κs, n' }~>ₜ Pσ).
+    ∃ n', tiS n' ⊆ n ∧ (t, s) ~{ mod_itree _ _,  κs, n' }~>ₜ Pσ).
 Proof. by apply tnhas_trace_Tau_inv'. Qed.
 
 Lemma thas_trace_Tau_inv' {EV S} t t' Pσ s κs:
@@ -214,7 +218,7 @@ Lemma thas_trace_eutt_mono {EV S} t t' s κs Pσ Pσ':
   (t', s) ~{ mod_itree EV S, κs }~>ₜ Pσ'.
 Proof.
   move => HP /thas_trace_n[n Ht] Heq.
-  elim/(well_founded_ind ti_lt_wf): n κs t t' s Ht Heq HP.
+  elim/ti_lt_ind: n κs t t' s Ht Heq HP.
   move => n IHn κs t t' s Ht Heq HP.
   punfold Heq. unfold eqit_ in Heq at 1.
   move: Heq. move Hot: (observe t) => ot. move Hot': (observe t') => ot' Heq.
@@ -234,24 +238,29 @@ Proof.
       tend. eapply HP; [|done]. split; [|done] => /=. rewrite (itree_eta t) Hot (itree_eta t') Hot'.
       apply eqit_Vis => v. move: (Hu v) => [|//]. done.
     }
-    revert select (_ ⊆ _) => <-.
+    revert select (_ ⊆@{trace _} _) => <-.
     invert_all @m_step; rewrite ->Hot in *; simplify_eq; simplify_K.
     + specialize (H1 _ ltac:(done)).
       tstep_Some; [by econs|] => ? ->.
-      apply: IHn; [done|done| |done].
-      move: (Hu tt) => [|//]. done.
+      apply: IHn; [ |done| |done].
+      * etrans; [|done]. econs. by econs.
+      * move: (Hu tt) => [|//]. done.
     + tstep_None; [ by apply IAllS|] => ? [x ->].
-      apply: IHn; [done |unshelve done; naive_solver| |done].
-      move: (Hu x) => [|//]. done.
+      apply: IHn; [ |unshelve done; naive_solver| |done].
+      * etrans; [|done]. econs. by econs.
+      * move: (Hu x) => [|//]. done.
     + tstep_None; [ by apply IExistS|] => ? ->.
-      apply: IHn; [done|unshelve done; naive_solver| |done].
-      move: (Hu x) => [|//]. done.
+      apply: IHn; [ |unshelve done; naive_solver| |done].
+      * etrans; [|done]. econs. by econs.
+      * move: (Hu x) => [|//]. done.
     + tstep_None; [by apply IGetS|] => ? ->.
-      apply: IHn; [done | unshelve done; naive_solver| |done].
-      move: (Hu s) => [|//]. done.
+      apply: IHn; [ | unshelve done; naive_solver| |done].
+      * etrans; [|done]. econs. by econs.
+      * move: (Hu s) => [|//]. done.
     + tstep_None; [by apply IPutS|] => ? ->.
-      apply: IHn; [done | unshelve done; naive_solver| |done].
-      move: (Hu tt) => [|//]. done.
+      apply: IHn; [ | unshelve done; naive_solver| |done].
+      * etrans; [|done]. econs. by econs.
+      * move: (Hu tt) => [|//]. done.
   - move => t1 ot2 ? REL IH t t' n κs s IHn Ht Hot Hot'.
     move: Ht => /(tnhas_trace_Tau_inv' _ _ _ _ _ _)Ht. specialize (Ht _ ltac:(done)).
     apply: thas_trace_under_tall; [done..|] => ? /= [[??]|[?[??]]].

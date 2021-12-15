@@ -43,6 +43,7 @@ Proof.
   - move => ??? [??] [??]. by split; etrans.
 Qed.
 
+(*
 Inductive ti_lt_alt : trace_index → trace_index → Prop :=
 | ti_lt_O_S n : ti_lt_alt tiO (tiS n)
 | ti_lt_S_S n1 n2 : ti_lt_alt n1 n2 → ti_lt_alt (tiS n1) (tiS n2)
@@ -71,7 +72,7 @@ Proof.
     + move => ???? IH. split. { econs. admit. } move => ?. admit.
     +
 Admitted.
-
+*)
 Lemma tiChoice_mono T f1 f2:
   (∀ x, f1 x ⊆ f2 x) →
   tiChoice T f1 ⊆ tiChoice T f2.
@@ -231,11 +232,6 @@ Lemma ti_min_id n:
   ti_min n n ≡ n.
 Proof. by apply ti_min_l. Qed.
 
-Lemma ti_lt_impl_le (n1 n2 : trace_index):
-  n1 ⊂ n2 →
-  n1 ⊆ n2.
-Proof. move => [??]. done. Qed.
-
 Lemma ti_le_S n:
   n ⊆ tiS n.
 Proof.
@@ -244,6 +240,11 @@ Proof.
   - by econs.
   - move => ?? IH. constructor => ?. etrans; [apply: IH|]. econs. by econs.
 Qed.
+
+Lemma ti_lt_impl_le (n1 n2 : trace_index):
+  tiS n1 ⊆ n2 →
+  n1 ⊆ n2.
+Proof. move => <-. apply ti_le_S. Qed.
 
 Lemma ti_not_le_S n:
   tiS n ⊈ n.
@@ -259,6 +260,7 @@ Lemma ti_lt_S n:
   n ⊂ tiS n.
 Proof. split; [apply: ti_le_S | apply: ti_not_le_S]. Qed.
 
+(*
 Lemma ti_le_lt_S n1 n2:
   n1 ⊂ tiS n2 →
   n1 ⊆ n2.
@@ -280,11 +282,13 @@ Proof.
   - move => ?? n _. elim: n.
     (* This is not provable! *)
 Admitted.
-
+ *)
+(*
 Lemma ti_lt_le (n1 n2 n3 : trace_index):
   n1 ⊂ n2 → n2 ⊆ n3 → n1 ⊂ n3.
 Proof. move => [Hle1 Hnle] Hle. split; [by etrans|]. move => ?. apply: Hnle. by etrans. Qed.
-
+ *)
+(*
 Lemma ti_lt_wf : wf (⊂@{trace_index}).
 Proof.
   have H : forall n a : trace_index, a ⊂ n -> Acc (⊂) a; last first.
@@ -298,3 +302,16 @@ Proof.
     (* + admit. *)
     (* + apply: IH. split; [done|]. contradict Hnle. constructor => ?. *)
 Admitted.
+*)
+Lemma ti_lt_ind (P : trace_index → Prop):
+  (∀ x : trace_index, (∀ y : trace_index, tiS y ⊆ x → P y) → P x) → ∀ a, P a.
+Proof.
+  move => HP.
+  have : ∀ a n : trace_index, tiS n ⊆ a → P n; last first.
+  { move => Ha a. apply: HP => ??. by apply: Ha. }
+  elim.
+  - move => ?. inversion 1.
+  - move => n IH n'. inversion 1; simplify_eq. apply: HP. move => ??. apply: IH. etrans; [done|]. done.
+  - move => ?? IH n. inversion 1; simplify_eq; simplify_K. apply: HP => ??. apply: IH.
+    etrans; [|done]. etrans; [done|]. apply ti_le_S.
+Qed.

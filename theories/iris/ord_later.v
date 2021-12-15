@@ -41,7 +41,7 @@ Section definitions.
   Definition ord_later_ctx_eq : @ord_later_ctx = @ord_later_ctx_def := ord_later_ctx_aux.(seal_eq).
 
   Definition ord_later_def (P : iProp Σ) : iProp Σ :=
-    ∀ n, ord_later_auth n -∗ ord_later_auth n ∗ (∀ n', ⌜n' ⊂ n⌝ -∗ ord_later_auth n' -∗ ord_later_auth n' ∗ P).
+    ∀ n, ord_later_auth n -∗ ord_later_auth n ∗ (∀ n', ⌜tiS n' ⊆ n⌝ -∗ ord_later_auth n' -∗ ord_later_auth n' ∗ P).
   Definition ord_later_aux : seal (@ord_later_def). Proof. by eexists. Qed.
   Definition ord_later := ord_later_aux.(unseal).
   Definition ord_later_eq : @ord_later = @ord_later_def := ord_later_aux.(seal_eq).
@@ -131,19 +131,19 @@ Section lemmas.
     P.
   Proof.
     unseal. iDestruct 1 as (n) "Hub". iIntros "#Hl".
-    iInduction n as [] "IH" using (well_founded_induction ti_lt_wf).
+    iInduction n as [] "IH" using ti_lt_ind.
     iApply "Hl".
     iIntros (n') "Hn'".
     iDestruct (own_valid_2 with "Hn' Hub") as %[_ ?]%mono_ord_both_frac_valid.
     iFrame. iIntros (n'' ?) "Ha".
     rewrite {1}mono_ord_auth_ub_op. iDestruct "Ha" as "[Ha Hn'']". iFrame.
-    iApply ("IH" with "[] Hn''"). iPureIntro. by apply: ti_lt_le.
+    iApply ("IH" with "[] Hn''"). iPureIntro. by etrans.
   Qed.
 
   Lemma ord_later_elim P Q n:
     ▷ₒ P -∗
     ord_later_auth n -∗
-    (ord_later_auth n ==∗ ∃ n', ⌜n' ⊂ n⌝ ∗ ord_later_auth n' ∗ (ord_later_auth n' -∗ P ==∗ Q)) -∗
+    (ord_later_auth n ==∗ ∃ n', ⌜tiS n' ⊆ n⌝ ∗ ord_later_auth n' ∗ (ord_later_auth n' -∗ P ==∗ Q)) -∗
     |==> Q.
   Proof.
     unseal. iIntros "HP Ha Hwand".

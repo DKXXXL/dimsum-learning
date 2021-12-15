@@ -35,10 +35,10 @@ Definition wp_pre `{!refirisGS Λ Σ}
     leibnizO coPset -d> exprO -d> (exprO -d> iPropO Σ) -d> iPropO Σ := λ E e1 Φ,
   (∀ σ σs, ⌜e1 = to_expr Λ σ⌝ -∗ ord_later_ctx -∗ state_interp (to_state Λ σ) σs ={E}=∗
     (state_interp (to_state Λ σ) σs ∗ Φ e1) ∨
-    ∀ κ Pσ, ⌜(lang_module Λ).(m_step) σ κ Pσ⌝ ={E,∅}=∗
+    ∀ κ Pσ, ⌜(lang_module Λ).(m_step) σ κ Pσ⌝ ={E,∅}=∗ ▷ₒ
       ∃ Pσs, ⌜σs ~{spec_module, option_trace κ}~>ₜ Pσs⌝ ∗
         ∀ σs', ⌜Pσs σs'⌝ ={∅, E}=∗
-          ∃ σ', ⌜Pσ σ'⌝ ∗ ▷ₒ (state_interp (to_state Λ σ') σs' ∗ wp E (to_expr Λ σ') Φ))%I.
+          ∃ σ', ⌜Pσ σ'⌝ ∗ (state_interp (to_state Λ σ') σs' ∗ wp E (to_expr Λ σ') Φ))%I.
 
 Global Instance wp_pre_ne `{!refirisGS Λ Σ} n:
   Proper ((dist n ==> dist n ==> dist n ==> dist n) ==> dist n ==> dist n ==> dist n ==> dist n) wp_pre.
@@ -53,10 +53,10 @@ Lemma wp_pre_mono `{!refirisGS Λ Σ} wp1 wp2:
 Proof.
   iIntros "#Hinner" (E e Φ) "Hwp".
   iIntros (σ σs ?) "#? Hσ". iMod ("Hwp" with "[//] [//] Hσ") as "[Hwp|Hwp]"; [by iLeft|iRight]. iModIntro.
-  iIntros (κ Pσ ?). iMod ("Hwp" with "[//]") as (??) "Hwp". iModIntro.
+  iIntros (κ Pσ ?). iMod ("Hwp" with "[//]") as "Hwp". iModIntro. iMod "Hwp" as (??) "Hwp".
   iExists _. iSplit; [done|].
-  iIntros (??). iMod ("Hwp" with "[//]") as (??) "Hwp". iModIntro. iExists _. iSplit; [done|].
-  iMod "Hwp" as "[$ ?]". by iApply "Hinner".
+  iIntros (??). iMod ("Hwp" with "[//]") as (??) "[? ?]". iModIntro. iExists _. iSplit; [done|].
+  iFrame. by iApply "Hinner".
 Qed.
 
 Local Instance wp_pre_monotone `{!refirisGS Λ Σ} :
@@ -131,9 +131,10 @@ Proof.
   rewrite wp_unfold. iIntros (???) "#? Hσ".
   iMod ("Hwp" with "[//] [//] Hσ") as "[[? ?]|Hwp]".
   - iDestruct ("Hc" with "[$]") as "Hc". rewrite wp_unfold. by iApply "Hc".
-  - iModIntro. iRight. iIntros (???). iMod ("Hwp" with "[//]") as (??) "Hwp". iModIntro.
-    iExists _. iSplit; [done|]. iIntros (??). iMod ("Hwp" with "[//]") as (??) "HF". iModIntro.
-    iExists _. iSplit; [done|]. iMod "HF" as "[$ HF]".  by iApply "HF".
+  - iModIntro. iRight. iIntros (???). iMod ("Hwp" with "[//]") as "Hwp". iModIntro.
+    iMod "Hwp" as (??) "Hwp".
+    iExists _. iSplit; [done|]. iIntros (??). iMod ("Hwp" with "[//]") as (??) "[? HF]". iModIntro.
+    iExists _. iSplit; [done|]. iFrame. by iApply "HF".
 Qed.
 
 End wp.
@@ -155,15 +156,18 @@ Proof.
   - rewrite -Hκs. iApply fupd_mask_intro; [done|]. iIntros "HE". iPureIntro. by econstructor.
   - rewrite -Hκs. setoid_rewrite wp_unfold at 2.
     iMod ("Hwp" with "[//] [//] Hσ") as "[[? Hwp]|Hwp]". { by iMod "Hwp". }
-    iMod ("Hwp" with "[//]") as (? Ht) "Hwp".
-    iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. by apply thas_trace_trans. }
-    iIntros (??).
-    iMod ("Hwp" with "[//]") as (σi' ?) "Hwp".
+    iMod ("Hwp" with "[//]") as "Hwp".
     iMod (ord_later_elim with "Hwp Ha [-]"); [|done]. iIntros "Ha".
-    iMod (ord_later_update with "Ha"). { unshelve apply Hlt. by econstructor. }
-    iModIntro. iExists _. iFrame. iSplit; [done|]. iIntros "Ha [Hstate Hwp]".
+    iMod (ord_later_update with "Ha"); [shelve|].
+    iModIntro. iExists _. iFrame. iSplit; [done|]. iIntros "Ha".
+    iDestruct 1 as (? Ht) "Hwp".
+    iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. by apply thas_trace_trans. }
+    iModIntro. iIntros (??).
+    iMod ("Hwp" with "[//]") as (σi' ?) "[Hstate Hwp]".
+    iMod (ord_later_update with "Ha") as "Ha"; [by apply: ti_le_choice_r|].
     iApply ("IH" with "Ha Hstate Hwp").
+    Unshelve. { by apply ti_lt_impl_le. } { done. }
   - rewrite -Hκs. iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. apply thas_trace_all. }
-    iIntros (?). iMod (ord_later_update with "Ha") as "Ha". { apply Hle. }
+    iIntros (?). iMod (ord_later_update with "Ha") as "Ha". { etrans; [|done]. by apply: ti_le_choice_r. }
     iApply ("IH" with "Ha Hσ Hwp").
 Qed.
