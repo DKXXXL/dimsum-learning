@@ -4,6 +4,7 @@ From iris.base_logic.lib Require Export fancy_updates.
 From iris.bi Require Export weakestpre.
 Require Export refframe.module.
 Require Import refframe.trefines.
+Require Export refframe.iris.ord_later.
 Set Default Proof Using "Type".
 
 Structure language := Language {
@@ -16,8 +17,14 @@ Structure language := Language {
 }.
 Definition exprO {Λ : language} := leibnizO (expr Λ).
 
-Class refirisGS (Λ : language) (Σ : gFunctors) := RefirisG {
+Class refirisPreG (Σ : gFunctors) := RefirisPreG {
+  refiris_pre_invG :> invGpreS Σ;
+  refiris_pre_ord_laterG :> ord_laterPreG Σ;
+}.
+
+Class refirisGS (Λ : language) (Σ : gFunctors) := RefirisGS {
   refiris_invGS :> invGS Σ;
+  refiris_ord_laterGS :> ord_laterGS Σ;
   spec_module : module (events Λ);
   state_interp : state Λ → spec_module.(m_state) → iProp Σ;
 }.
@@ -26,12 +33,12 @@ Global Opaque refiris_invGS.
 Definition wp_pre `{!refirisGS Λ Σ}
     (wp : leibnizO coPset -d> exprO -d> (exprO -d> iPropO Σ) -d> iPropO Σ) :
     leibnizO coPset -d> exprO -d> (exprO -d> iPropO Σ) -d> iPropO Σ := λ E e1 Φ,
-  (∀ σ σs, ⌜e1 = to_expr Λ σ⌝ -∗ state_interp (to_state Λ σ) σs ={E}=∗
+  (∀ σ σs, ⌜e1 = to_expr Λ σ⌝ -∗ ord_later_ctx -∗ state_interp (to_state Λ σ) σs ={E}=∗
     (state_interp (to_state Λ σ) σs ∗ Φ e1) ∨
     ∀ κ Pσ, ⌜(lang_module Λ).(m_step) σ κ Pσ⌝ ={E,∅}=∗
       ∃ Pσs, ⌜σs ~{spec_module, option_trace κ}~>ₜ Pσs⌝ ∗
         ∀ σs', ⌜Pσs σs'⌝ ={∅, E}=∗
-          ∃ σ', ⌜Pσ σ'⌝ ∗ state_interp (to_state Λ σ') σs' ∗ wp E (to_expr Λ σ') Φ)%I.
+          ∃ σ', ⌜Pσ σ'⌝ ∗ ▷ₒ (state_interp (to_state Λ σ') σs' ∗ wp E (to_expr Λ σ') Φ))%I.
 
 Global Instance wp_pre_ne `{!refirisGS Λ Σ} n:
   Proper ((dist n ==> dist n ==> dist n ==> dist n) ==> dist n ==> dist n ==> dist n ==> dist n) wp_pre.
@@ -45,10 +52,11 @@ Lemma wp_pre_mono `{!refirisGS Λ Σ} wp1 wp2:
   → ∀ E e Φ , wp_pre wp1 E e Φ -∗ wp_pre wp2 E e Φ.
 Proof.
   iIntros "#Hinner" (E e Φ) "Hwp".
-  iIntros (σ σs ?) "Hσ". iMod ("Hwp" with "[//] Hσ") as "[Hwp|Hwp]"; [by iLeft|iRight]. iModIntro.
-  iIntros (κ Pσ ?). iMod ("Hwp" with "[//]") as (??) "Hwp". iModIntro. iExists _. iSplit; [done|].
-  iIntros (??). iMod ("Hwp" with "[//]") as (??) "[??]". iModIntro. iExists _. iSplit; [done|]. iFrame.
-  by iApply "Hinner".
+  iIntros (σ σs ?) "#? Hσ". iMod ("Hwp" with "[//] [//] Hσ") as "[Hwp|Hwp]"; [by iLeft|iRight]. iModIntro.
+  iIntros (κ Pσ ?). iMod ("Hwp" with "[//]") as (??) "Hwp". iModIntro.
+  iExists _. iSplit; [done|].
+  iIntros (??). iMod ("Hwp" with "[//]") as (??) "Hwp". iModIntro. iExists _. iSplit; [done|].
+  iMod "Hwp" as "[$ ?]". by iApply "Hinner".
 Qed.
 
 Local Instance wp_pre_monotone `{!refirisGS Λ Σ} :
@@ -105,7 +113,7 @@ Qed.
 
 Lemma wp_stop' E e Φ:
   (|={E}=> Φ e) -∗ WP e @ E {{ Φ }}.
-Proof. rewrite wp_unfold. iIntros "HΦ" (σ σs ?) "Hσ". iLeft. iFrame. Qed.
+Proof. rewrite wp_unfold. iIntros "HΦ" (σ σs ?) "? Hσ". iLeft. iFrame. Qed.
 Lemma wp_stop E e Φ:
   Φ e -∗ WP e @ E {{ Φ }}.
 Proof. iIntros "HΦ". iApply wp_stop'. by iFrame. Qed.
@@ -120,38 +128,42 @@ Proof.
   iIntros (?) "HWP".
   iApply (wp_ind with "[] HWP"). { solve_proper. }
   iIntros "!>" (???) "Hwp". iIntros (?) "Hc".
-  rewrite wp_unfold. iIntros (???) "Hσ".
-  iMod ("Hwp" with "[//] Hσ") as "[[? ?]|Hwp]".
+  rewrite wp_unfold. iIntros (???) "#? Hσ".
+  iMod ("Hwp" with "[//] [//] Hσ") as "[[? ?]|Hwp]".
   - iDestruct ("Hc" with "[$]") as "Hc". rewrite wp_unfold. by iApply "Hc".
   - iModIntro. iRight. iIntros (???). iMod ("Hwp" with "[//]") as (??) "Hwp". iModIntro.
-    iExists _. iSplit; [done|]. iIntros (??). iMod ("Hwp" with "[//]") as (??) "[? HF]". iModIntro.
-    iExists _. iSplit; [done|]. iFrame. by iApply "HF".
+    iExists _. iSplit; [done|]. iIntros (??). iMod ("Hwp" with "[//]") as (??) "HF". iModIntro.
+    iExists _. iSplit; [done|]. iMod "HF" as "[$ HF]".  by iApply "HF".
 Qed.
 
 End wp.
 
-Theorem wp_adequacy Σ Λ `{!invGpreS Σ} mspec σi σs :
-  (∀ `{Hinv : !invGS Σ},
+Theorem wp_adequacy Σ Λ `{!refirisPreG Σ} mspec σi σs :
+  (∀ `{Hinv : !invGS Σ} `{Hord : !ord_laterGS Σ},
     ⊢ |={⊤}=> ∃ (stateI : state Λ → mspec.(m_state) → iProp Σ),
-       let _ : refirisGS Λ Σ := RefirisG _ _ _ mspec stateI
+       let _ : refirisGS Λ Σ := RefirisGS _ _ _ _ mspec stateI
        in
        stateI (to_state Λ σi) σs ∗
        WP (to_expr Λ σi) @ ⊤ {{ _, |={⊤, ∅}=> False }}) →
   trefines (MS (lang_module Λ) σi) (MS mspec σs).
 Proof.
-  intros Hwp. constructor => κs Htrace.
+  intros Hwp. constructor => κs /thas_trace_n [n Htrace].
   apply (step_fupdN_soundness _ 0) => ? /=. simpl in *.
+  iMod (ord_later_alloc n) as (?) "Ha". iDestruct (ord_later_ctx_alloc with "Ha") as "#?".
   iMod Hwp as (stateI) "(Hσ & Hwp)". clear Hwp.
-  iInduction Htrace as [???? Hκs|?????? Hstep ?? Hκs|??????? Hκs] "IH" forall (σs).
+  iInduction Htrace as [????? Hκs|???????? Hstep ?? Hlt Hκs|????????? Hκs Hle] "IH" forall (σs).
   - rewrite -Hκs. iApply fupd_mask_intro; [done|]. iIntros "HE". iPureIntro. by econstructor.
   - rewrite -Hκs. setoid_rewrite wp_unfold at 2.
-    iMod ("Hwp" with "[//] Hσ") as "[[? Hwp]|Hwp]". { by iMod "Hwp". }
+    iMod ("Hwp" with "[//] [//] Hσ") as "[[? Hwp]|Hwp]". { by iMod "Hwp". }
     iMod ("Hwp" with "[//]") as (? Ht) "Hwp".
     iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. by apply thas_trace_trans. }
     iIntros (??).
-    iMod ("Hwp" with "[//]") as (σi' ?) "[Hstate Hwp]".
-    iApply ("IH" with "[//] Hstate Hwp").
-  - rewrite -Hκs.
-    iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. apply thas_trace_all. }
-    iIntros (?). iApply ("IH" with "Hσ Hwp").
+    iMod ("Hwp" with "[//]") as (σi' ?) "Hwp".
+    iMod (ord_later_elim with "Hwp Ha [-]"); [|done]. iIntros "Ha".
+    iMod (ord_later_update with "Ha"). { unshelve apply Hlt. by econstructor. }
+    iModIntro. iExists _. iFrame. iSplit; [done|]. iIntros "Ha [Hstate Hwp]".
+    iApply ("IH" with "Ha Hstate Hwp").
+  - rewrite -Hκs. iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. apply thas_trace_all. }
+    iIntros (?). iMod (ord_later_update with "Ha") as "Ha". { apply Hle. }
+    iApply ("IH" with "Ha Hσ Hwp").
 Qed.
