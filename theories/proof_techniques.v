@@ -163,6 +163,117 @@ Proof.
     apply: wp_mono; [done|]. etrans; [|done]. by econs.
 Qed.
 
+(** * tsim *)
+Definition tsim {EV} (mi ms : module EV) (σi : mi.(m_state)) (κss : trace EV) (σs : ms.(m_state)) (Is : list (bool * (mi.(m_state) * ms.(m_state) → Prop))) :=
+  ∀ κs n,
+    Forall (λ '(b, Pσ), ∀ κs n' σi' σs',
+      (if b then n' ⊆ n else tiS n' ⊆ n) →
+      (Pσ : _ → Prop) (σi', σs') →
+      σi' ~{ mi, κs, n' }~>ₜ - →
+      σs' ~{ ms, κs }~>ₜ -) Is →
+    σi ~{ mi, κs, n }~>ₜ - →
+    σs ~{ ms, tapp κss κs }~>ₜ -.
+
+
+Lemma tsim_implies_trefines {EV} (mi ms : mod_state EV) :
+  tsim mi ms (mi.(ms_state)) tnil (ms.(ms_state)) [] →
+  trefines mi ms.
+Proof. move => Hsim. constructor => ? /thas_trace_n [??]. by apply: Hsim; [econs|]. Qed.
+
+Lemma tsim_remember {EV} {mi ms : module EV} (Pσ : _ → Prop) σi σs Is :
+  Pσ (σi, σs) →
+  (∀ σi σs, Pσ (σi, σs) → tsim mi ms σi tnil σs ((false, Pσ)::Is)) →
+  tsim mi ms σi tnil σs Is.
+Proof.
+  move => HP Hsim κs' n Hall Ht /=.
+  elim/ti_lt_ind: n κs' σi σs Hall Ht HP.
+  move => n IHn κs' σi σs Hall Ht HP. apply: Hsim; [done| |done].
+  econs; [|done]. move => ???????.
+  apply: IHn; [done| |done|done].
+  apply: Forall_impl; [done|] => -[b ?] Hb ?????. apply: Hb.
+  destruct b. all: etrans; [done|]; by apply ti_lt_impl_le.
+Qed.
+
+Lemma tsim_remember_all {EV A} {mi ms : module EV} σi σs Is :
+  (∀ x, tsim mi ms (σi x) tnil (σs x) ((false, λ σ, ∃ x, σ = (σi x, σs x))::Is)) →
+  ∀ x : A, tsim mi ms (σi x) tnil (σs x) Is.
+Proof.
+  move => Hsim x. apply: (tsim_remember (λ σ, ∃ x, σ = (σi x, σs x))). { naive_solver. }
+  move => ?? [?[??]]. subst. apply: Hsim.
+Qed.
+
+Lemma tsim_close_loop {EV} {mi ms : module EV} σi σs Is :
+  Exists (λ '(b, P), b = true ∧ P (σi, σs)) Is →
+  tsim mi ms σi tnil σs Is.
+Proof.
+  move => /Exists_exists [[??][?[??]]] κs n /Forall_forall Hall. subst.
+  apply: (Hall (_, _)); [done| simpl; done |done].
+Qed.
+
+Lemma tsim_step_l {EV} {mi ms : module EV} σi σs Is :
+  (∀ κ Pσi,
+      mi.(m_step) σi κ Pσi →
+      ∃ σi', Pσi σi' ∧ tsim mi ms σi' (option_trace κ) σs ((prod_map (const true) id) <$> Is)) →
+  tsim mi ms σi tnil σs Is.
+Proof.
+  move => Hsim κs' n HIs /tnhas_trace_inv Ht.
+  apply: thas_trace_under_tall; [done..|] => {Ht} κs [[??]|[?[?[?[?[?[?[<- ?]]]]]]]]. { tend. }
+  have [?[? {}Hsim]]:= Hsim _ _ ltac:(done).
+  apply: Hsim. 2: { naive_solver. }
+  eapply Forall_fmap, Forall_impl; [done|] => -[b ?] /= Hall ?????. apply: Hall.
+  destruct b.
+  - etrans; [done|]. apply ti_lt_impl_le. etrans; [|done]. econs. by econs.
+  - etrans; [|done]. econs. etrans; [done|]. by econs.
+    Unshelve. done.
+Qed.
+
+Lemma tsim_step_r {EV} {mi ms : module EV} σi σs Is κs κs' κs'' :
+  κs = tapp κs' κs'' →
+  σs ~{ ms, κs' }~>ₜ (λ σs', tsim mi ms σi κs'' σs' Is) →
+  tsim mi ms σi κs σs Is.
+Proof.
+  move => -> Hsim κss n HIs Ht. rewrite -assoc_L. apply: thas_trace_trans; [done|] => ? {}Hsim.
+  by apply: Hsim.
+Qed.
+
+Create HintDb tsim discriminated.
+Global Hint Constants Opaque : tsim.
+Global Hint Variables Opaque : tsim.
+Class TSimStepI {EV} (mi : module EV) (σi : mi.(m_state)) (P : (option EV → mi.(m_state) → Prop) → Prop) : Prop := {
+  tsim_stepi_proof ms σs Is κ Pσi:
+    mi.(m_step) σi κ Pσi →
+    P (λ κ σi', tsim mi ms σi' (option_trace κ) σs Is) →
+    ∃ σi', Pσi σi' ∧ tsim mi ms σi' (option_trace κ) σs Is
+}.
+Global Hint Mode TSimStepI + + ! - : tsim.
+
+Lemma tsim_step_i {EV} (mi : module EV) σi P `{!TSimStepI mi σi P} ms σs Is :
+  P (λ κ σi', tsim mi ms σi' (option_trace κ) σs (prod_map (const true) id <$> Is)) →
+  tsim mi ms σi tnil σs Is.
+Proof. move => HP. apply tsim_step_l => ???. by apply tsim_stepi_proof. Qed.
+
+Class TSimStepS {EV} (ms : module EV) (σs : ms.(m_state)) (κs : trace EV)
+      (P : (trace EV → ms.(m_state) → Prop) → Prop) : Prop := {
+  tsim_steps_proof mi σi Is:
+    P (λ κs' σs', tsim mi ms σi κs' σs' Is) →
+    ∃ κs' κs'', κs = tapp κs' κs'' ∧ σs ~{ ms, κs' }~>ₜ (λ σs', tsim mi ms σi κs'' σs' Is)
+}.
+Global Hint Mode TSimStepS + + ! + - : tsim.
+
+Lemma tsim_step_s {EV} (ms : module EV) σs κs P `{!TSimStepS ms σs κs P} mi σi Is :
+  P (λ κs' σs', tsim mi ms σi κs' σs' Is) →
+  tsim mi ms σi κs σs Is.
+Proof.
+  revert select (TSimStepS _ _ _ _) => -[Hproof]. move => /Hproof [?[?[??]]]. subst.
+  by apply: tsim_step_r.
+Qed.
+
+Ltac tsim_step_s :=
+  notypeclasses refine (tsim_step_s _ _ _ _ _ _ _ _); [solve [typeclasses eauto with tsim]|]; simpl.
+Ltac tsim_step_i :=
+  notypeclasses refine (tsim_step_i _ _ _ _ _ _ _); [solve [typeclasses eauto with tsim]|]; simpl.
+
+
 (** * proving a refinement based on another refinement *)
 
 Lemma forall_to_ex1 A B (P1 : A → Prop)  P2 (Q : B → Prop):

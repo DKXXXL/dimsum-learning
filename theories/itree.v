@@ -3,6 +3,7 @@ From ITree Require Export ITree ITreeFacts.
 From ITree Require Export ITree.
 Require Export refframe.module.
 Require Import refframe.trefines.
+Require Import refframe.proof_techniques.
 
 Notation "' x ← y ;;; z" := (ITree.bind y (λ x : _, z))
   (at level 20, x pattern, y at level 100, z at level 200) : stdpp_scope.
@@ -47,6 +48,20 @@ Inductive mod_itree_step EV S : (itree (moduleE EV S) unit * S) → option EV �
 .
 
 Definition mod_itree EV S := Mod (mod_itree_step EV S).
+
+
+(* Section test. *)
+(* Polymorphic Universe u v w x y. *)
+(* Set Printing Universes. *)
+(*     Lemma itree_step_interp_translate_s EV S R (F : Type@{x} → Type@{y}) (E : Type@{v} → Type@{w}) (f : ∀ T : Type@{u}, E T -> F T) *)
+(*           (g : ∀ T: Type, F T → itree (moduleE EV S) T) (t : itree E R) s κs: *)
+(*       TSimStepS (mod_itree EV S) (interp f (translate g t), s) κs *)
+(*             (λ G, G κs ((interp (λ _ e, g _ (f _ e)), s), s)). *)
+(*     Proof. *)
+(*       constructor => ????. eexists tnil, _. split; [done|]. *)
+(*       apply itree_rel_intro. rewrite interp_bind bind_bind. tend => ? <-. done. *)
+(*     Qed. *)
+(*     Global Hint Resolve itree_step_interp_bind_s : tsim. *)
 
 (** [Tau] *)
 (* TODO: Are all these lemmas necessary? *)
@@ -317,10 +332,124 @@ Definition TAssume {EV S} (P : Prop) : itree (moduleE EV S) unit :=
 Definition TAssert {EV S} (P : Prop) : itree (moduleE EV S) unit :=
   TExist ({ x : unit | P });;;; Ret ().
 
+Definition TAssumeOpt {EV S A} (o : option A) : itree (moduleE EV S) A :=
+  x ← TAll ({ x : A | o = Some x });;; Ret (proj1_sig x).
+Definition TAssertOpt {EV S A} (o : option A) : itree (moduleE EV S) A :=
+  x ← TExist ({ x : A | o = Some x });;; Ret (proj1_sig x).
+
 Definition TGet {EV S} : itree (moduleE EV S) S :=
   trigger EGet.
 Definition TPut {EV S} (s : S) : itree (moduleE EV S) unit :=
   trigger (EPut s).
+
+(** * tsim *)
+
+Global Instance tsim_itree_r_proper EV S m1 b:
+  Proper ((=) ==> (=) ==> (prod_relation (eqit eq b b) (=)) ==> (=) ==> iff) (tsim m1 (mod_itree EV S)).
+Proof.
+  move => ?? -> ?? -> [??] [??] [/=Heq ->] ?? ->.
+  split => Hsim ????. { rewrite -Heq. by eapply Hsim. } { rewrite Heq. by eapply Hsim. }
+Qed.
+
+Lemma itree_step_bind_s EV S A B (t : itree _ A) (k : A → itree _ B) h s κs:
+  TSimStepS (mod_itree EV S) (ITree.bind (ITree.bind t k) h, s) κs
+            (λ G, G κs ((ITree.bind t (fun r => ITree.bind (k r) h)), s)).
+Proof.
+  constructor => ????. eexists tnil, _. split; [done|].
+  apply itree_rel_intro. rewrite bind_bind. tend => ? <-. done.
+Qed.
+Global Hint Resolve itree_step_bind_s : tsim.
+
+Lemma itree_step_Ret_s EV S A (x : A) h s κs:
+  TSimStepS (mod_itree EV S) (ITree.bind (Ret x) h, s) κs (λ G, G κs (h x, s)).
+Proof.
+  constructor => ????. eexists tnil, _. split; [done|].
+  apply itree_rel_intro. rewrite bind_ret_l. tend => ? <-. done.
+Qed.
+Global Hint Resolve itree_step_Ret_s : tsim.
+
+Lemma itree_step_Tau_s EV S t s κs:
+  TSimStepS (mod_itree EV S) (Tau t, s) κs (λ G, G κs (t, s)).
+Proof.
+  constructor => ????. eexists tnil, _. split; [done|].
+  apply itree_rel_intro. rewrite tau_eutt. tend => ? <-. done.
+Qed.
+Global Hint Resolve itree_step_Tau_s : tsim.
+
+Lemma itree_step_Vis_s EV S k s κs e e':
+  TSimStepS (mod_itree EV S) (TVis e;;;; k, s) (tcons e' κs) (λ G, e = e' ∧ G κs (k, s)).
+Proof.
+  constructor => ??? [??]. subst. eexists (tcons e' tnil), _. split; [done|].
+  apply itree_rel_intro. rewrite bind_trigger.
+  apply: thas_trace_Vis. tend => ? <-. done.
+Qed.
+Global Hint Resolve itree_step_Vis_s : tsim.
+
+Lemma itree_step_All_s EV S T k s κs:
+  TSimStepS (mod_itree EV S) (x ← TAll T;;; k x, s) κs
+            (λ G, ∀ x, G κs (k x, s)).
+Proof.
+  constructor => ????. eexists tnil, _. split; [done|].
+  apply itree_rel_intro. rewrite bind_trigger.
+  apply: thas_trace_All. tend => ? <-. naive_solver.
+Qed.
+Global Hint Resolve itree_step_All_s : tsim.
+
+Lemma itree_step_Exist_s EV S T k s κs:
+  TSimStepS (mod_itree EV S) (x ← TExist T;;; k x, s) κs
+            (λ G, ∃ x, G κs (k x, s)).
+Proof.
+  constructor => ??? [??]. eexists tnil, _. split; [done|].
+  apply itree_rel_intro. rewrite bind_trigger.
+  apply: thas_trace_Exist. tend => ? <-. done.
+Qed.
+Global Hint Resolve itree_step_Exist_s : tsim.
+
+Lemma itree_step_Ub_s EV S T (k : T → _) s κs:
+  TSimStepS (mod_itree EV S) (x ← TUb;;; k x, s) κs (λ G, True).
+Proof.
+  constructor => ????. eexists tnil, _. split; [done|].
+  apply itree_rel_intro. rewrite /TUb bind_bind bind_trigger.
+  apply: thas_trace_All. case.
+Qed.
+Global Hint Resolve itree_step_Ub_s : tsim.
+
+Lemma itree_step_Assume_s EV S P k s κs:
+  TSimStepS (mod_itree EV S) (TAssume P;;;; k, s) κs (λ G, P → G κs (k, s)).
+Proof.
+  constructor => ????. eexists tnil, _. split; [done|].
+  apply itree_rel_intro. rewrite /TAssume bind_bind bind_trigger.
+  apply: thas_trace_All => -[??]. rewrite bind_ret_l. tend => ? <-. naive_solver.
+Qed.
+Global Hint Resolve itree_step_Assume_s : tsim.
+
+Lemma itree_step_Assert_s EV S P k s κs:
+  TSimStepS (mod_itree EV S) (TAssert P;;;; k, s) κs (λ G, P ∧ G κs (k, s)).
+Proof.
+  constructor => ??? [??]. eexists tnil, _. split; [done|].
+  apply itree_rel_intro. rewrite /TAssert bind_bind bind_trigger.
+  apply: thas_trace_Exist. { by constructor. } rewrite bind_ret_l. tend => ? <-. naive_solver.
+Qed.
+Global Hint Resolve itree_step_Assert_s : tsim.
+
+Lemma itree_step_AssumeOpt_s EV S A (o : option A) k s κs:
+  TSimStepS (mod_itree EV S) (x ← TAssumeOpt o;;; k x, s) κs (λ G, ∀ x, (o = Some x) → G κs (k x, s)).
+Proof.
+  constructor => ????. eexists tnil, _. split; [done|].
+  apply itree_rel_intro. rewrite /TAssume bind_bind bind_trigger.
+  apply: thas_trace_All => -[??]. rewrite bind_ret_l. tend => ? <-. naive_solver.
+Qed.
+Global Hint Resolve itree_step_AssumeOpt_s : tsim.
+
+Lemma itree_step_AssertOpt_s EV S A (o : option A) k s κs:
+  TSimStepS (mod_itree EV S) (x ← TAssertOpt o;;; k x, s) κs (λ G, ∃ x, o = Some x ∧ G κs (k x, s)).
+Proof.
+  constructor => ??? [?[??]]. subst. eexists tnil, _. split; [done|].
+  apply itree_rel_intro. rewrite /TAssert bind_bind bind_trigger.
+  apply: (thas_trace_Exist _ (exist _ _ _)); [done|] => ?. rewrite bind_ret_l. tend => ? <-. naive_solver.
+Qed.
+Global Hint Resolve itree_step_AssertOpt_s : tsim.
+
 
 Require refframe.example_modules.
 Module itree_examples.
