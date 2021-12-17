@@ -278,6 +278,8 @@ Proof. constructor => ?????? HG. invert_all @m_step. naive_solver. Qed.
 Global Hint Resolve asm_step_None_i : tsim.
 
 Require Import refframe.itree.
+(* TODO: Get rid of Some in recursive call (maybe by passing an itree to t instead of the +'? ) *)
+(* TODO: prove merging of two asm loops (should just be all choice between the two implementations ) *)
 Definition asm_loop (ins : list Z)
    (t : Z → gmap string Z → itree (callE
      (option (Z * gmap string Z)) (Z * gmap string Z) +' moduleE asm_event unit) (Z * gmap string Z))
@@ -440,7 +442,7 @@ Module asm_examples.
     tsim_step_s. tsim_step_s => r1 HR1.
     tsim_step_s. tsim_step_s => r2 HR2.
     tsim_step_s. tsim_step_s => r30 HR30.
-    tsim_step_s. 
+    tsim_step_s.
     tsim_step_i. split. { by simplify_map_eq. }
     erewrite lookup_total_correct; [|done]. erewrite lookup_total_correct; [|done].
     tsim_step_i. split. { by simplify_map_eq. }
