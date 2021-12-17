@@ -277,9 +277,125 @@ Lemma asm_step_None_i rs ins:
 Proof. constructor => ?????? HG. invert_all @m_step. naive_solver. Qed.
 Global Hint Resolve asm_step_None_i : tsim.
 
-Require refframe.itree.
+Require Import refframe.itree.
+Definition asm_loop (ins : list Z)
+   (t : Z → gmap string Z → itree (callE
+     (option (Z * gmap string Z)) (Z * gmap string Z) +' moduleE asm_event unit) (Z * gmap string Z))
+  : itree (moduleE asm_event unit) unit :=
+  rec (λ a,
+    '(pc, rs) ← (
+       if a is Some (npc, nrs) then
+         if bool_decide (npc ∈ ins) then
+           Ret (npc, nrs)
+         else
+           translate (inr_) (TVis (EJump npc nrs));;;;
+           pc ← translate (inr_) (TExist Z);;;
+           rs ← translate (inr_) (TExist _);;;
+           translate (inr_) (TVis (ERecvJump pc rs));;;;
+           Ret (pc, rs)
+        else
+          pc ← translate (inr_) (TExist Z);;;
+          rs ← translate (inr_) (TExist _);;;
+          translate (inr_) (TVis (ERecvJump pc rs));;;;
+          Ret (pc, rs)
+     );;;
+    translate (inr_) (TAssert (pc ∈ ins));;;;
+    (* The env can choose if this call should be treated as a call or a return. *)
+    b ← translate (inr_) (TAll bool);;;
+    if b then Ret (pc, rs) else
+      r ← t pc rs;;;
+      call (Some r)
+    ) None;;;; TUb.
+
+Lemma tsim_asm_loop n b rs ins t insaddrs:
+  (∀ z, z ∈ insaddrs ↔ is_Some (ins !! z)) →
+  (∀ n rc pc' rs' i k,
+      rs' !! "PC" = Some pc' →
+      ins !! pc' = Some i →
+      (∀ pc'' rs1'' rs2'' h',
+         rs1'' = rs2'' →
+         rs1'' !! "PC" = Some pc'' →
+          (∀ pc''' rs''' i,
+              rs''' !! "PC" = Some pc''' → ins !! pc''' = Some i →
+             tsim n b asm_module (mod_itree asm_event ()) (AsmState (Some i) rs''' ins) tnil
+                 (h' (pc''', rs'''), ()))
+          → tsim n true asm_module (mod_itree asm_event ())
+              (AsmState (Some []) rs1'' ins) tnil (y ← rec rc (Some (pc'', rs2''));;; h' y, ())) →
+      (∀ pc rs1 rs2,
+          rs1 = rs2 →
+          rs1 !! "PC" = Some pc →
+          tsim n true asm_module (mod_itree asm_event ()) (AsmState (Some []) rs1 ins) tnil (k (pc, rs2), ())) →
+    tsim n true asm_module (mod_itree asm_event ()) (AsmState (Some i) rs' ins) tnil
+       (r ← interp (recursive rc) (t pc' rs');;; k r, ())) →
+  (** Then we can prove an asm_loop *)
+  tsim n b asm_module (mod_itree asm_event ()) (AsmState None rs ins) tnil (asm_loop insaddrs t, ()).
+Proof.
+  rewrite /asm_loop => Hins Hl. set rc := (X in (rec X)).
+  apply (tsim_remember_rec (mi:=asm_module)
+   (λ a σi s,
+     if a is Some (pc, rs) then
+       σi = AsmState (Some []) rs ins ∧ rs !! "PC" = Some pc
+     else
+       ∃ rs, σi = AsmState None rs ins
+   )
+   (λ σi '(pc, rs) s', ∃ i, σi = AsmState (Some i) rs ins ∧ rs !! "PC" = Some pc ∧ ins !! pc = Some i)).
+  { naive_solver. }
+  { move => ????. rewrite -(bind_ret_r TUb). by tsim_step_s. }
+  move => {}n Hloop σi [] CONT a Ha HCONT.
+  destruct a as [[pc' rs']|]. 2: {
+    move: Ha => [{}rs ?]. subst.
+    tsim_step_i => pc i {}rs HPC Hi.
+    rewrite {1}rec_as_interp {2}/rc.
+    rewrite bind_bind.
+    tsim_step_s. tsim_step_s. eexists _. rewrite bind_bind.
+    tsim_step_s. tsim_step_s. eexists _. rewrite bind_bind.
+    tsim_step_s. tsim_step_s. split; [done|]. rewrite bind_ret_l.
+    tsim_step_s. tsim_step_s. split. { apply Hins. naive_solver. }
+    tsim_step_s. tsim_step_s => -[].
+    { tsim_step_s. apply: tsim_mono_b. apply HCONT. naive_solver. }
+    rewrite interp_bind bind_bind.
+    apply: Hl; [done..| |].
+    - move => ???????. subst. apply Hloop; [done|].
+      move => ? [rs' pc'] []. naive_solver.
+    - move => ?????. rewrite interp_recursive_call.
+      apply Hloop. { naive_solver. }
+      move => ? [??] [] [?[??]]. apply: HCONT. naive_solver.
+  }
+  destruct Ha. simplify_eq.
+  tsim_step_i => pc HPC. simplify_eq.
+  case_match.
+  - rewrite {1}rec_as_interp {2}/rc. rewrite bool_decide_true. { apply Hins. naive_solver. }
+    rewrite bind_ret_l.
+    tsim_step_s. tsim_step_s. split. { apply Hins. naive_solver. }
+    tsim_step_s. tsim_step_s => -[].
+    { tsim_step_s. apply: tsim_mono_b. apply HCONT. naive_solver. }
+    rewrite interp_bind bind_bind.
+    apply: Hl; [done..| |].
+    + move => ???????. subst. apply Hloop; [done|].
+      move => ? [? ?] []. naive_solver.
+    + move => ?????. rewrite interp_recursive_call.
+      apply Hloop. { naive_solver. }
+      move => ? [??] [] [?[??]]. apply: HCONT. naive_solver.
+  - rewrite {1}rec_as_interp {2}/rc. rewrite bool_decide_false. { move => /Hins[??]. naive_solver. }
+    rewrite bind_bind.
+    tsim_step_s. tsim_step_s. split; [done|]. rewrite bind_bind.
+    tsim_step_i => pc i {}rs HPC Hi.
+    tsim_step_s. tsim_step_s. eexists _. rewrite bind_bind.
+    tsim_step_s. tsim_step_s. eexists _. rewrite bind_bind.
+    tsim_step_s. tsim_step_s. split; [done|]. rewrite bind_ret_l.
+    tsim_step_s. tsim_step_s. split. { apply Hins. naive_solver. }
+    tsim_step_s. tsim_step_s => -[].
+    { tsim_step_s. apply: tsim_mono_b. apply HCONT. naive_solver. }
+    rewrite interp_bind bind_bind.
+    apply: Hl; [done..| |].
+    + move => ???????. subst. apply Hloop; [done|].
+      move => ? [? ?] []. naive_solver.
+    + move => ?????. rewrite interp_recursive_call.
+      apply Hloop. { naive_solver. }
+      move => ? [??] [] [?[??]]. apply: HCONT. naive_solver.
+Qed.
+
 Module asm_examples.
-  Import refframe.itree.
   Local Open Scope Z_scope.
   Definition asm_mul : gmap Z asm_instr :=
     <[ 100 := [
@@ -292,50 +408,39 @@ Module asm_examples.
           WriteReg "PC" (λ rs, rs !!! "R30")
       ] ]> $ ∅.
 
-  (* For supporting recursion, we probably want to be able to
-  non-deterministically break out of the loop. Breaking out at the top
-  level would cause UB (or NB?) but it would be useful for the
-  recursive call *)
   Definition itree_mul : itree (moduleE asm_event unit) unit :=
-    ITree.forever (
-       pc ← TExist Z;;;
-       rs ← TExist _;;;
-       TVis (ERecvJump pc rs);;;;
+    asm_loop [100; 104] (λ pc rs,
        if bool_decide (pc = 100) then
-         r1 ← TAssumeOpt (rs !! "R1");;;
-         r2 ← TAssumeOpt (rs !! "R2");;;
-         r30 ← TAssumeOpt (rs !! "R30");;;
-         TAssume (r30 ≠ 100 ∧ r30 ≠ 104);;;;
-         TVis (EJump r30 (<["PC":=r30]> $ <["R1":=r1 * r2]> $ rs));;;;
-         Ret ()
+         r1 ← translate (inr_) (TAssumeOpt (rs !! "R1"));;;
+         r2 ← translate (inr_) (TAssumeOpt (rs !! "R2"));;;
+         r30 ← translate (inr_) (TAssumeOpt (rs !! "R30"));;;
+         Ret (r30, (<["PC":=r30]> $ <["R1":=r1 * r2]> $ rs))
        else if bool_decide (pc = 104) then
-         TUb
+         translate (inr_) TUb
        else
-         TNb
+         translate (inr_) TNb
     ).
 
 
   Lemma asm_mul_refines_itree :
     trefines (MS asm_module (initial_asm_state asm_mul)) (MS (mod_itree _ _) (itree_mul, tt)).
   Proof.
-    apply tsim_implies_trefines => /= n. rewrite /initial_asm_state. move: (∅) => rs.
-    move: rs. apply tsim_remember_all => {}n Hloop rs.
-    tsim_step_i => pc i rs' HPC Hi.
-    rewrite {1}/itree_mul. rewrite unfold_forever. rewrite -/itree_mul.
-
-    tsim_step_s.
-    tsim_step_s. eexists _.
-    tsim_step_s.
-    tsim_step_s. eexists _.
-    tsim_step_s.
-    tsim_step_s. split; [done|].
+    apply tsim_implies_trefines => /= n. rewrite /initial_asm_state.
+    rewrite {1}/itree_mul.
+    apply tsim_asm_loop. {
+      move => z. rewrite !elem_of_cons elem_of_nil.
+      rewrite !lookup_insert_is_Some' lookup_empty -not_eq_None_Some.
+      naive_solver.
+    }
+    move => {}n rc pc rs i CONT HPC Hi Hloop HCONT.
     move: Hi. rewrite !lookup_insert_Some !lookup_empty => Hi. destruct_all!; simplify_eq.
     all: repeat (rewrite bool_decide_false; [done|]); rewrite bool_decide_true //.
-    all: try by tsim_step_s.
+    all: try by tsim_step_s; tsim_step_s.
+
     tsim_step_s. tsim_step_s => r1 HR1.
     tsim_step_s. tsim_step_s => r2 HR2.
     tsim_step_s. tsim_step_s => r30 HR30.
-    tsim_step_s. tsim_step_s => -[??].
+    tsim_step_s. 
     tsim_step_i. split. { by simplify_map_eq. }
     erewrite lookup_total_correct; [|done]. erewrite lookup_total_correct; [|done].
     tsim_step_i. split. { by simplify_map_eq. }
@@ -343,10 +448,7 @@ Module asm_examples.
     tsim_step_i => ??. simplify_map_eq.
     tsim_step_i. split. { by simplify_map_eq. }
     erewrite lookup_total_correct; [|by simplify_map_eq].
-    tsim_step_i => ??. rewrite {1}/asm_mul. simplify_map_eq.
-    tsim_step_s. tsim_step_s. split. { by rewrite insert_insert. }
-    tsim_step_s. tsim_step_s.
-    apply Hloop.
+    apply HCONT; simplify_map_eq => //. by rewrite insert_insert.
   Qed.
 
   Definition asm_mul_client : gmap Z asm_instr :=
@@ -376,72 +478,23 @@ Module asm_examples.
           WriteReg "PC" (λ rs, rs !!! "R30")
       ] ]> $ ∅.
 
-  Definition asm_loop
-      (t : Z → gmap string Z → itree (callE unit (Z * gmap string Z) +' moduleE asm_event unit) unit)
-    : itree (moduleE asm_event unit) unit :=
-    rec (λ _,
-       pc ← translate (inr_) (TExist Z);;;
-       rs ← translate (inr_) (TExist _);;;
-       translate (inr_) (TVis (ERecvJump pc rs));;;;
-       (* The env can choose if this call should be treated as a call or a return. *)
-       b ← translate (inr_) (TAll bool);;;
-       if b then Ret (pc, rs) else
-         t pc rs;;;;
-         call ()
-        ) ();;;; TUb.
-
-  Lemma tsim_asm_loop n b rs ins t:
-    (∀ n rc pc' rs' i k,
-        rs' !! "PC" = Some pc' →
-        ins !! pc' = Some i →
-        (∀ rs'' h',
-            (∀ pc''' rs''' i,
-                rs''' !! "PC" = Some pc''' → ins !! pc''' = Some i →
-               tsim n b asm_module (mod_itree asm_event ()) (AsmState (Some i) rs''' ins) tnil
-                   (h' (pc''', rs'''), ()))
-            → tsim n true asm_module (mod_itree asm_event ())
-                (AsmState None rs'' ins) tnil (y ← rec rc ();;; h' y, ())) →
-        (∀ rs, tsim n true asm_module (mod_itree asm_event ()) (AsmState None rs ins) tnil (k, ())) →
-      tsim n true asm_module (mod_itree asm_event ()) (AsmState (Some i) rs' ins) tnil
-         (interp (recursive rc) (t pc' rs');;;; k, ())) →
-    tsim n b asm_module (mod_itree asm_event ()) (AsmState None rs ins) tnil (asm_loop t, ()).
-  Proof.
-    rewrite /asm_loop => Hl. set rc := (X in (rec X)). move: rs.
-    apply (tsim_remember_rec (mi:=asm_module) (λ σi '(pc, rs) s',
-          ∃ i, σi = AsmState (Some i) rs ins ∧ rs !! "PC" = Some pc ∧ ins !! pc = Some i)).
-    { move => ????. rewrite -(bind_ret_r TUb). by tsim_step_s. }
-    move => {}n Hloop rs CONT HCONT.
-    rewrite {1}rec_as_interp {2}/rc.
-    tsim_step_i => pc i rs' HPC Hi.
-    tsim_step_s. tsim_step_s. eexists _.
-    tsim_step_s. tsim_step_s. eexists _.
-    tsim_step_s. tsim_step_s. split; [done|].
-    tsim_step_s. tsim_step_s => -[].
-    { tsim_step_s. apply: tsim_mono_b. apply HCONT. naive_solver. }
-    rewrite interp_bind bind_bind.
-    apply: Hl; [done..| |].
-    - move => ???. apply: Hloop => ? [??] []. naive_solver.
-    - move => ?. rewrite interp_recursive_call.
-      apply Hloop => ???. apply HCONT.
-  Qed.
-
   Definition itree_mul_client : itree (moduleE asm_event unit) unit :=
-    asm_loop (λ pc rs,
+    asm_loop [200; 204; 208; 212; 216] (λ pc rs,
        if bool_decide (pc = 200) then
          translate (inr_) (TAssume (is_Some (rs !! "R1")));;;;
          translate (inr_) (TAssume (is_Some (rs !! "R2")));;;;
          translate (inr_) (TAssume (is_Some (rs !! "R29")));;;;
          r30 ← translate (inr_) (TAssumeOpt (rs !! "R30"));;;
          r29' ← translate (inr_) (TExist Z);;;
-         translate (inr_) (TVis (EJump 100 (<["PC":=100]> $ <["R30":= 212]> $ <["R29":= r29']> $ <["R2":= 2]> $ <["R1":= 2]> $ rs)));;;;
-         '(pc', rs') ← call ();;;
+         (* translate (inr_) (TVis (EJump 100 (<["PC":=100]> $ <["R30":= 212]> $ <["R29":= r29']> $ <["R2":= 2]> $ <["R1":= 2]> $ rs)));;;; *)
+         '(pc', rs') ← call (Some (100, (<["PC":=100]> $ <["R30":= 212]> $ <["R29":= r29']> $ <["R2":= 2]> $ <["R1":= 2]> $ rs)));;;
          translate (inr_) (TAssume (pc' = 212));;;;
          translate (inr_) (TAssume (is_Some (rs' !! "R30")));;;;
          translate (inr_) (TAssume (rs' !! "R29" = Some r29'));;;;
          translate (inr_) (TAssume (r30 ≠ 200 ∧ r30 ≠ 204 ∧ r30 ≠ 208 ∧ r30 ≠ 212 ∧ r30 ≠ 216));;;;
          r30' ← translate (inr_) (TExist Z);;;
-         translate (inr_) (TVis (EJump r30 (<["PC":= r30]> $ <["R30":= r30']> rs')));;;;
-         Ret ()
+         (* translate (inr_) (TVis (EJump r30 (<["PC":= r30]> $ <["R30":= r30']> rs')));;;; *)
+         Ret (r30, (<["PC":= r30]> $ <["R30":= r30']> rs'))
        else if bool_decide (pc = 204) then translate (inr_) TUb
        else if bool_decide (pc = 208) then translate (inr_) TUb
        else if bool_decide (pc = 212) then translate (inr_) TUb
@@ -455,7 +508,12 @@ Module asm_examples.
   Proof.
     apply tsim_implies_trefines => /= n. rewrite /initial_asm_state.
     rewrite {1}/itree_mul_client.
-    apply tsim_asm_loop => {}n rc pc rs i CONT HPC Hi Hloop HCONT.
+    apply tsim_asm_loop. {
+      move => z. rewrite !elem_of_cons elem_of_nil.
+      rewrite !lookup_insert_is_Some' lookup_empty -not_eq_None_Some.
+      naive_solver.
+    }
+    move=> {}n rc pc rs i CONT HPC Hi Hloop HCONT.
     move: Hi. rewrite !lookup_insert_Some !lookup_empty => Hi. destruct_all!; simplify_eq.
     all: repeat (rewrite bool_decide_false; [done|]); rewrite bool_decide_true //.
     all: try by tsim_step_s; tsim_step_s.
@@ -478,14 +536,14 @@ Module asm_examples.
     erewrite lookup_total_correct; [|by simplify_map_eq].
     tsim_step_i. split; [ by simplify_map_eq|].
     rewrite insert_commute // insert_insert (insert_commute _ "PC") // insert_insert.
-    tsim_step_i => ??. simplify_map_eq.
+    (* tsim_step_i => ??. simplify_map_eq. *)
     tsim_step_s. tsim_step_s. eexists r30.
-    tsim_step_s. tsim_step_s. split. {
-      f_equal. apply map_eq => i. apply option_eq => ?.
+    tsim_step_s.
+    apply Hloop. {
+      apply map_eq => i. apply option_eq => ?.
       rewrite !lookup_insert_Some. naive_solver.
-    }
-
-    tsim_step_s. apply Hloop => pc' rs'' i HPC' Hi'.
+    } { by simplify_map_eq. }
+    move => pc' rs'' i HPC' Hi'.
     tsim_step_s. tsim_step_s => ?.
     unfold asm_mul_client in Hi'. simplify_map_eq.
     tsim_step_s. tsim_step_s => -[r30'' HR30''].
@@ -498,9 +556,7 @@ Module asm_examples.
     tsim_step_i => ??. simplify_map_eq.
     tsim_step_i. split; [ by simplify_map_eq|].
     erewrite lookup_total_correct; [|by simplify_map_eq].
-    tsim_step_i => ??. rewrite {1}/asm_mul_client. simplify_map_eq.
     tsim_step_s. tsim_step_s. eexists _.
-    tsim_step_s. tsim_step_s. split. { f_equal. by rewrite insert_insert. }
-    tsim_step_s. apply HCONT.
+    tsim_step_s. apply HCONT. { by rewrite insert_insert. } { by simplify_map_eq. }
   Qed.
 End asm_examples.

@@ -491,21 +491,23 @@ Qed.
 Global Hint Resolve itree_step_interp_ret_s : tsim.
 
 
-Lemma tsim_remember_rec {EV S A B} {mi : module EV} (POST : _ → _ → _ → Prop) σi r (h : B → _) s n b:
+Lemma tsim_remember_rec {EV S A B} {mi : module EV} (PRE : _ → _ → _ → Prop)
+      (POST : _ → _ → _ → Prop) (a : A) σi r (h : B → _) s n b:
+  PRE a σi s →
   (∀ σi' y s', POST σi' y s' → tsim n b mi (mod_itree EV S) σi' tnil (h y, s')) →
-  (∀ n, Plater (λ b', ∀ x h',
+  (∀ n, Plater (λ b', ∀ σi s h' a, PRE a σi s →
          (∀ σi' y s', POST σi' y s' → tsim n b mi (mod_itree EV S) σi' tnil (h' y, s')) →
-         tsim n b' mi (mod_itree EV S) (σi x) tnil ((y ← rec r ();;; h' y), (s x)))) →
-  ∀ x : A, tsim n b mi (mod_itree EV S) (σi x) tnil ((y ← rec r ();;; h y), s x).
+         tsim n b' mi (mod_itree EV S) σi tnil ((y ← rec r a;;; h' y), s))) →
+  tsim n b mi (mod_itree EV S) σi tnil ((y ← rec r a;;; h y), s).
 Proof.
-  move => Hh Hsim x.
+  move => ? Hh Hsim x.
   eapply (tsim_remember (ms:=mod_itree _ _)
-    (λ n σ, ∃ x h', σ = (σi x, ((y ← rec r ();;; h' y), s x)) ∧
+    (λ n '(σi, (σt, s)), ∃ a h', PRE a σi s ∧ σt = (y ← rec r a;;; h' y) ∧
       ∀ σi' y s', POST σi' y s' → tsim n b mi (mod_itree EV S) σi' tnil (h' y, s'))). { naive_solver. }
-  { move => ????? [?[?[[??] {}Hh]]]. simplify_eq. eexists _, _. split; [done|] => ????.
+  { move => ???[??]? [?[?[?[?{}Hh]]]]. simplify_eq. eexists _, _. split_and!; [done..|] => ????.
     apply: tsim_mono; [naive_solver|]. by apply ti_lt_impl_le. }
-  move => n' IH ?? [?[?[[??]?]]]. simplify_eq.
-  apply: Hsim; [|done].
+  move => n' IH ?[??] [?[?[?[??]]]]. simplify_eq.
+  apply: Hsim; [|done..].
   naive_solver.
 Qed.
 
