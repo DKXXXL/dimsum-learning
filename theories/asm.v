@@ -2,6 +2,7 @@ Require Export refframe.module.
 Require Import refframe.trefines.
 Require Import refframe.filter.
 Require Import refframe.product.
+Require Import refframe.seq_product.
 Require Import refframe.proof_techniques.
 
 Local Open Scope Z_scope.
@@ -58,107 +59,141 @@ Definition asm_ctx_refines (instrsi instrss : gmap Z asm_instr) :=
 
 (** * semantic linking *)
 Inductive asm_prod_filter_state :=
-| APFLeft | APFRight | APFNone.
+| APFLeft | APFRight | APFNone
+| APFRecvL (pc : Z) (rs : gmap string Z) | APFRecvR (pc : Z) (rs : gmap string Z).
 
-Inductive asm_prod_filter_step (ins1 ins2 : gset Z) :
-  asm_prod_filter_state → (option asm_event * option asm_event) → option asm_event → asm_prod_filter_state →  Prop :=
+Inductive asm_prod_filter (ins1 ins2 : gset Z) :
+  asm_prod_filter_state → (seq_product_event asm_event asm_event) → option asm_event → asm_prod_filter_state →  Prop :=
 | APFJumpRecvL pc rs:
   pc ∉ ins1 →
   pc ∈ ins2 →
-  asm_prod_filter_step ins1 ins2 APFLeft (Some (EJump pc rs), Some (ERecvJump pc rs)) None APFRight
+  asm_prod_filter ins1 ins2 APFLeft (SPELeft (EJump pc rs) SPRight) None (APFRecvR pc rs)
+| APFJumpRecvL2 pc rs:
+  asm_prod_filter ins1 ins2 (APFRecvR pc rs) (SPERight (ERecvJump pc rs) SPRight) None APFRight
 | APFJumpRecvR pc rs:
   pc ∈ ins1 →
   pc ∉ ins2 →
-  asm_prod_filter_step ins1 ins2 APFRight (Some (ERecvJump pc rs), Some (EJump pc rs)) None APFLeft
+  asm_prod_filter ins1 ins2 APFRight (SPERight (EJump pc rs) SPLeft) None (APFRecvL pc rs)
+| APFJumpRecvR2 pc rs:
+  asm_prod_filter ins1 ins2 (APFRecvL pc rs) (SPELeft (ERecvJump pc rs) SPLeft) None APFLeft
 | APFJumpExtL pc rs:
   pc ∉ ins1 →
   pc ∉ ins2 →
-  asm_prod_filter_step ins1 ins2 APFLeft (Some (EJump pc rs), None) (Some (EJump pc rs)) APFNone
+  asm_prod_filter ins1 ins2 APFLeft (SPELeft (EJump pc rs) SPNone) (Some (EJump pc rs)) APFNone
 | APFJumpExtR pc rs:
   pc ∉ ins1 →
   pc ∉ ins2 →
-  asm_prod_filter_step ins1 ins2 APFRight (None, Some (EJump pc rs)) (Some (EJump pc rs)) APFNone
+  asm_prod_filter ins1 ins2 APFRight (SPERight (EJump pc rs) SPNone) (Some (EJump pc rs)) APFNone
 | APFRecvJumpL pc rs:
   pc ∈ ins1 →
   pc ∉ ins2 →
   rs !! "PC" = Some pc →
-  asm_prod_filter_step ins1 ins2 APFNone (Some (ERecvJump pc rs), None) (Some (ERecvJump pc rs)) APFLeft
+  asm_prod_filter ins1 ins2 APFNone (SPENone SPLeft) (Some (ERecvJump pc rs)) (APFRecvL pc rs)
 | APFRecvJumpR pc rs:
   pc ∉ ins1 →
   pc ∈ ins2 →
   rs !! "PC" = Some pc →
-  asm_prod_filter_step ins1 ins2 APFNone (None, Some (ERecvJump pc rs)) (Some (ERecvJump pc rs)) APFRight
+  asm_prod_filter ins1 ins2 APFNone (SPENone SPRight) (Some (ERecvJump pc rs)) (APFRecvR pc rs)
 .
 
 Definition asm_prod (ins1 ins2 : gset Z) (m1 m2 : module asm_event) : module asm_event :=
-  mod_map (mod_product m1 m2) (asm_prod_filter_step ins1 ins2).
+  mod_map (mod_seq_product m1 m2) (asm_prod_filter ins1 ins2).
 
-Definition asm_link_prod_inv (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_module.(m_state)) (σ2 : (asm_state * asm_state * asm_prod_filter_state)) : Prop :=
+Definition asm_link_prod_inv (b : bool) (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_module.(m_state)) (σ2 : ((seq_product_state * asm_state * asm_state) * asm_prod_filter_state)) : Prop :=
   let 'AsmState i1 rs1 ins1' := σ1 in
-  let '(AsmState il rsl insl, AsmState ir rsr insr, σf) := σ2 in
+  let '((σsp, AsmState il rsl insl, AsmState ir rsr insr), σf) := σ2 in
   ins1' = ins1 ∪ ins2 ∧
   insl = ins1 ∧
   insr = ins2 ∧
   match σf with
-  | APFLeft => is_Some i1 ∧ il = i1 ∧ rsl = rs1 ∧ ir = None
-  | APFRight => is_Some i1 ∧ ir = i1 ∧ rsr = rs1 ∧ il = None
-  | APFNone => i1 = None ∧ ir = None ∧ il = None
+  | APFLeft => σsp = SPLeft ∧ is_Some i1 ∧ il = i1 ∧ rsl = rs1 ∧ ir = None
+  | APFRight => σsp = SPRight ∧ is_Some i1 ∧ ir = i1 ∧ rsr = rs1 ∧ il = None
+  | APFNone => σsp = SPNone ∧ i1 = None ∧ ir = None ∧ il = None
+  | APFRecvL pc rs =>
+      if b then
+        ∃ es, ins1 !! pc = Some es ∧ σsp = SPLeft ∧ i1 = (Some es) ∧ rs1 = rs ∧ ir = None ∧ il = None
+      else False
+  | APFRecvR pc rs =>
+      if b then
+        ∃ es, ins2 !! pc = Some es ∧ σsp = SPRight ∧ i1 = (Some es) ∧ rs1 = rs ∧ ir = None ∧ il = None
+      else False
   end.
 
 
 Lemma asm_link_refines_prod ins1 ins2:
   ins1 ##ₘ ins2 →
   trefines (MS asm_module (initial_asm_state (asm_link ins1 ins2)))
-           (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) (initial_asm_state ins1, initial_asm_state ins2, APFNone)).
+           (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) (SPNone, initial_asm_state ins1, initial_asm_state ins2, APFNone)).
 Proof.
   move => Hdisj.
-  apply (inv_implies_trefines (MS _ _) (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) _) (asm_link_prod_inv ins1 ins2)).
+  apply (inv_implies_trefines (MS _ _) (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) _) (asm_link_prod_inv false ins1 ins2)).
   { simpl. naive_solver. }
-  move => /= [i1 rs1 ins1'] [[[il rsl insl] [ir rsr insr] σf]] Pσi κ [? [? [? Hinv]]] Hstep.
-  inversion Hstep; clear Hstep; simplify_eq.
+  move => /= [i1 rs1 ins1'] [[[? [il rsl insl]] [ir rsr insr] σf]] Pσi κ [? [? [? Hinv]]] Hstep.
+  inversion Hstep; clear Hstep; simplify_eq/=.
   - destruct σf; destruct_all!; simplify_eq.
     + tstep_None.
-      { econs. { apply: ProductStepL. apply: ProductStepL. econs. } done. }
+      { econs. { apply: ProductStepL. econs; [ econs|]. done. } done. }
       move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
     + tstep_None.
-      { econs. { apply: ProductStepL. apply: ProductStepR. econs. } done. }
+      { econs. { apply: ProductStepL. econs; [econs|]. done. } done. }
       move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
-  - destruct σf; destruct_and?; simplify_eq.
+  - destruct σf; destruct_and?; simplify_eq => //.
     + revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|[??]].
       * tstep_None.
-        { econs. { apply: ProductStepL. apply: ProductStepL. by apply: SJumpInternal. } done. }
+        { econs. { apply: ProductStepL. econs. by apply: SJumpInternal. done. } done. }
         move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
       * tstep_None. {
           econstructor. {
             apply: ProductStepBoth. {
-              apply: ProductStepBoth. { by apply: SJumpExternal. } { by constructor. }
+              apply: (SPLeftS _ _ (Some _)); [shelve| |done]. by econs.
             }
             constructor; econs; try eapply not_elem_of_dom; try eapply elem_of_dom_2; done.
           }
           done.
         }
-        move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
+        move => /= *. destruct_all!; simplify_eq.
+        tstep_None. {
+          econstructor. {
+            apply: ProductStepBoth. {
+              apply: (SPRightS _ _ (Some _)); [shelve| |done]. by econs.
+            }
+            constructor. econs.
+          }
+          done.
+        }
+        move => /= *. destruct_all!; simplify_eq. tend. simpl. naive_solver.
     + revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|[??]].
       * tstep_None. {
           econs. {
             apply: ProductStepBoth. {
-              apply: ProductStepBoth. { by constructor. }
-              { apply: SJumpExternal; [done|]. by apply: map_disjoint_Some_l. }
+              apply: (SPRightS _ _ (Some _)); [shelve| |done].
+              apply: SJumpExternal; [done|]. by apply: map_disjoint_Some_l.
             }
-            constructor; econs; try eapply not_elem_of_dom; try eapply elem_of_dom_2; try done.
+            constructor. econs; try eapply not_elem_of_dom; try eapply elem_of_dom_2; try done.
             by apply: map_disjoint_Some_l.
+          }
+          done.
+        }
+        move => /= *. destruct_all!; simplify_eq.
+        tstep_None. {
+          econstructor. {
+            apply: ProductStepBoth. {
+              apply: (SPLeftS _ _ (Some _)); [shelve| |done]. by econs.
+            }
+            constructor. econs.
           }
           done.
         }
         move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
       * tstep_None.
-        { econs. { apply: ProductStepL. apply: ProductStepR. by apply: SJumpInternal. } done. }
+        { econs. { apply: ProductStepL. econs. by apply: SJumpInternal. done. } done. }
         move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
   - revert select ((_ ∪ _) !! _ = None) => /lookup_union_None[??].
     destruct σf; destruct_all?; simplify_eq.
     + tstep_Some. {
         econs. {
-          apply: ProductStepBoth. { apply: (ProductStepL (Some _)). by apply: SJumpExternal. }
+          apply: ProductStepBoth.
+          { apply: (SPLeftS _ _ (Some _)); [shelve| |done]. by econs. }
           { by constructor; econs; eapply not_elem_of_dom. }
         }
         done.
@@ -166,27 +201,46 @@ Proof.
       move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
     + tstep_Some. {
         econs. {
-          apply: ProductStepBoth. { apply: (ProductStepR (Some _)). by apply: SJumpExternal. }
+          apply: ProductStepBoth.
+          { apply: (SPRightS _ _ (Some _)); [shelve| |done]. by econs. }
           { by constructor; econs; eapply not_elem_of_dom. }
         }
         done.
       }
       move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
-  - destruct σf; destruct_and?; unfold is_Some in *; simplify_eq; [naive_solver..|].
+  - destruct σf; destruct_and?; unfold is_Some in *; simplify_eq; try naive_solver.
     revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|[??]].
     + tstep_Some. {
         econs. {
-          apply: ProductStepBoth. { apply: (ProductStepL (Some _)). by apply: SRecvJump. }
-          constructor; econs; try eapply not_elem_of_dom; try eapply elem_of_dom_2; try done.
+          apply: ProductStepBoth. { econs. }
+          econs. econs; try eapply not_elem_of_dom; try eapply elem_of_dom_2; try done.
           by apply: map_disjoint_Some_l.
+        }
+        done.
+      }
+      move => /= *. destruct_all!; simplify_eq.
+      tstep_None. {
+        econs. {
+          apply: ProductStepBoth.
+          { apply: (SPLeftS _ _ (Some _)); [shelve| |done]. by econs. }
+          constructor; econs; try eapply not_elem_of_dom; try eapply elem_of_dom_2; try done.
         }
         done.
       }
       move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
     + tstep_Some. {
         econstructor. {
-          apply: ProductStepBoth. { apply: (ProductStepR (Some _)). by apply: SRecvJump. }
+          apply: ProductStepBoth. { econs. }
           constructor; econs; try eapply not_elem_of_dom; try eapply elem_of_dom_2; done.
+        }
+        done.
+      }
+      move => /= *. destruct_all!; simplify_eq.
+      tstep_None. {
+        econs. {
+          apply: ProductStepBoth.
+          { apply: (SPRightS _ _ (Some _)); [shelve| |done]. by econs. }
+          constructor; econs; try eapply not_elem_of_dom; try eapply elem_of_dom_2; try done.
         }
         done.
       }
@@ -195,35 +249,41 @@ Qed.
 
 Lemma asm_prod_refines_link ins1 ins2:
   ins1 ##ₘ ins2 →
-  trefines (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) (initial_asm_state ins1, initial_asm_state ins2, APFNone))
+  trefines (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) (SPNone, initial_asm_state ins1, initial_asm_state ins2, APFNone))
            (MS asm_module (initial_asm_state (asm_link ins1 ins2))).
 Proof.
   move => Hdisj.
-  apply (inv_implies_trefines (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) _) (MS _ _) (flip (asm_link_prod_inv ins1 ins2))).
+  apply (inv_implies_trefines (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) _) (MS _ _) (flip (asm_link_prod_inv true ins1 ins2))).
   { simpl. naive_solver. }
-  move => /= [[[il rsl insl] [ir rsr insr]] σf] [i1 rs1 ins1'] Pσi κ [? [? [? Hinv]]] Hstep.
-  inversion Hstep; simplify_eq; clear Hstep. invert_all' @m_step; invert_all asm_prod_filter_step.
-  all: try destruct σf; destruct_and?; simplify_eq.
+  move => /= [[[σsp [il rsl insl]] [ir rsr insr]] σf] [i1 rs1 ins1'] Pσi κ [? [? [? Hinv]]] Hstep.
+  inversion Hstep; simplify_eq; clear Hstep. invert_all' @m_step; invert_all asm_prod_filter.
+  all: try destruct σf; destruct_all!; simplify_eq => //.
   - tstep_None. { constructor. }
-    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _). naive_solver.
+    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _, _). naive_solver.
   - tstep_None. { econs; [done|]. by apply lookup_union_Some_l. }
-    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _). naive_solver.
+    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _, _). naive_solver.
   - tstep_None. { constructor. }
-    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _). naive_solver.
+    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _, _). naive_solver.
   - tstep_None. { econs; [done|]. by apply lookup_union_Some_r. }
-    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _). naive_solver.
+    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _, _). naive_solver.
+  - have [es ?]: is_Some (ins1 !! pc)  by apply elem_of_dom.
+    tstep_Some. { econs; [done|]. by apply lookup_union_Some_l. }
+    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _, _). naive_solver.
+  - have [es ?]: is_Some (ins2 !! pc)  by apply elem_of_dom.
+    tstep_Some. { econs; [done|]. by apply lookup_union_Some_r. }
+    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _, _). naive_solver.
+  - have [es ?]: is_Some (ins2 !! pc)  by apply elem_of_dom.
+    tstep_None. { apply: SJumpInternal; [done|]. by apply lookup_union_Some_r. }
+    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _, _). naive_solver.
   - tstep_Some. { apply: SJumpExternal; [done|]. apply lookup_union_None. by split; apply not_elem_of_dom. }
-    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _). naive_solver.
-  - tstep_Some. { apply: SRecvJump; [done|]. by apply lookup_union_Some_l. }
-    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _). naive_solver.
+    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _, _). naive_solver.
+  - tend. eexists (_, _, _, _). naive_solver.
+  - have [es ?]: is_Some (ins1 !! pc)  by apply elem_of_dom.
+    tstep_None. { apply: SJumpInternal; [done|]. by apply lookup_union_Some_l. }
+    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _, _). naive_solver.
   - tstep_Some. { apply: SJumpExternal; [done|]. apply lookup_union_None. by split; apply not_elem_of_dom. }
-    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _). naive_solver.
-  - tstep_Some. { apply: SRecvJump; [done|]. by apply lookup_union_Some_r. }
-    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _). naive_solver.
-  - tstep_None. { apply: SJumpInternal; [done|]. by apply lookup_union_Some_l. }
-    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _). naive_solver.
-  - tstep_None. { apply: SJumpInternal; [done|]. by apply lookup_union_Some_r. }
-    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _). naive_solver.
+    move => /= *. destruct_all?; simplify_eq. tend. eexists (_, _, _, _). naive_solver.
+  - tend. eexists (_, _, _, _). naive_solver.
 Qed.
 
 Lemma asm_trefines_implies_ctx_refines insi inss :
@@ -236,7 +296,7 @@ Proof.
   etrans. 2: { apply asm_prod_refines_link. apply map_disjoint_difference_r'. }
   rewrite !dom_difference_L Hdom.
   apply mod_map_trefines.
-  apply mod_product_trefines.
+  apply: mod_seq_product_trefines.
   - apply: Href.
   - erewrite map_difference_eq_dom_L => //. apply _.
 Qed.
