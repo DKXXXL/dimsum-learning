@@ -563,11 +563,21 @@ Proof.
   by apply: tmods_to_mod_product.
 Qed.
 
-(*** [mod_filter_mod] *)
-Definition mod_filter_mod {EV1 EV2} (m : module EV1) (f : module (EV1 * option EV2)) : module EV2 :=
-  mod_filter (mod_product m f) (λ e er, e.2 = (λ x, (x, er)) <$> e.1).
+(*** [mod_map] *)
+Definition mod_map_fn EV1 EV2 S :=
+  S → EV1 → option EV2 → S → Prop.
+Inductive mod_map_mod_step {EV1 EV2 S} (f : mod_map_fn EV1 EV2 S) :
+  S → option (EV1 * option EV2) → (S → Prop) → Prop :=
+| MapS σ e1 e2 σ':
+  f σ e1 e2 σ' →
+  mod_map_mod_step f σ (Some (e1, e2)) (λ σ'', σ'' = σ').
+Definition mod_map_mod {EV1 EV2 S} (f : mod_map_fn EV1 EV2 S) : module (EV1 * option EV2) :=
+  Mod (mod_map_mod_step f).
 
-Lemma mod_filter_mod_trefines {EV1 EV2} m1 m2 (f : module (EV1 * option EV2)) σ1 σ2 σf :
+Definition mod_map {EV1 EV2 S} (m : module EV1) (f : mod_map_fn EV1 EV2 S) : module EV2 :=
+  mod_filter (mod_product m (mod_map_mod f)) (λ e er, e.2 = (λ x, (x, er)) <$> e.1).
+
+Lemma mod_map_trefines {EV1 EV2 S} m1 m2 (f : mod_map_fn EV1 EV2 S) σ1 σ2 σf :
   trefines (MS m1 σ1) (MS m2 σ2) →
-  trefines (MS (mod_filter_mod m1 f) (σ1, σf)) (MS (mod_filter_mod m2 f) (σ2, σf)).
+  trefines (MS (mod_map m1 f) (σ1, σf)) (MS (mod_map m2 f) (σ2, σf)).
 Proof. move => ?. apply mod_filter_trefines. by apply mod_product_trefines. Qed.

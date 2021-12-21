@@ -171,21 +171,25 @@ Definition tsim {EV} (n : trace_index) (b : bool) (mi ms : module EV) (σi : mi.
     σi ~{ mi, κs, n' }~>ₜ - →
     σs ~{ ms, tapp κss κs }~>ₜ -.
 
+Notation "σi ⪯{ mi , ms , n , b , κss } σs" := (tsim n b mi ms σi κss σs) (at level 70,
+    format "σi  ⪯{ mi ,  ms ,  n ,  b ,  κss }  σs") : type_scope.
+Notation "σi ⪯{ mi , ms , n , b } σs" := (tsim n b mi ms σi tnil σs) (at level 70,
+    format "σi  ⪯{ mi ,  ms ,  n ,  b }  σs") : type_scope.
 
 Lemma tsim_implies_trefines {EV} (mi ms : mod_state EV) :
-  (∀ n, tsim n false mi ms (mi.(ms_state)) tnil (ms.(ms_state))) →
+  (∀ n, mi.(ms_state) ⪯{mi, ms, n, false} ms.(ms_state)) →
   trefines mi ms.
 Proof. move => Hsim. constructor => ? /thas_trace_n [??]. by apply: Hsim => /=. Qed.
 
 Lemma tsim_mono {EV} {mi ms : module EV} σi σs b n n' κs:
-  tsim n' b mi ms σi κs σs →
+  σi ⪯{mi, ms, n', b, κs} σs →
   n ⊆ n' →
-  tsim n b mi ms σi κs σs.
+  σi ⪯{mi, ms, n, b, κs} σs.
 Proof. move => Hsim Hn ???. apply: Hsim. by destruct b; (etrans; [done|]). Qed.
 
 Lemma tsim_mono_b {EV} {mi ms : module EV} σi σs n κs b:
-  tsim n b mi ms σi κs σs →
-  tsim n true mi ms σi κs σs.
+  σi ⪯{mi, ms, n, b, κs} σs →
+  σi ⪯{mi, ms, n, true, κs} σs.
 Proof. move => Hsim Hn ??. apply: Hsim. destruct b => //. by apply ti_lt_impl_le. Qed.
 
 Definition Plater (P : bool → Prop) : Prop :=
@@ -196,8 +200,8 @@ Lemma tsim_remember {EV} {mi ms : module EV} (Pσ : _ → _ → Prop) σi σs b 
   Pσ n (σi, σs) →
   (∀ n n' σi σs, tiS n' ⊆ n → Pσ n (σi, σs) → Pσ n' (σi, σs)) →
   (* TODO: can one somehow link this n' to the n? *)
-  (∀ n', Plater (λ b', ∀ σi σs, Pσ n' (σi, σs) → tsim n' b' mi ms σi tnil σs)) →
-  tsim n b mi ms σi tnil σs.
+  (∀ n', Plater (λ b', ∀ σi σs, Pσ n' (σi, σs) → σi ⪯{mi, ms, n', b'} σs)) →
+  σi ⪯{mi, ms, n, b} σs.
 Proof.
   move => HP HPmono Hsim κs' n' Hn Ht /=.
   have {}Hn: n' ⊆ n. { destruct b; (etrans; [|done]) => //. apply ti_le_S. }
@@ -209,8 +213,8 @@ Proof.
 Qed.
 
 Lemma tsim_remember_all {EV A} {mi ms : module EV} σi σs b n:
-  (∀ n, Plater (λ b', ∀ x, tsim n b' mi ms (σi x) tnil (σs x))) →
-  ∀ x : A, tsim n b mi ms (σi x) tnil (σs x).
+  (∀ n, Plater (λ b', ∀ x, σi x ⪯{mi, ms, n, b'} σs x)) →
+  ∀ x : A, σi x ⪯{mi, ms, n, b} σs x.
 Proof.
   move => Hsim x. apply: (tsim_remember (λ _ σ, ∃ x, σ = (σi x, σs x))).
   all: naive_solver.
@@ -219,8 +223,8 @@ Qed.
 Lemma tsim_step_l {EV} {mi ms : module EV} σi σs n b :
   (∀ κ Pσi,
       mi.(m_step) σi κ Pσi →
-      ∃ σi', Pσi σi' ∧ tsim n true mi ms σi' (option_trace κ) σs) →
-  tsim n b mi ms σi tnil σs.
+      ∃ σi', Pσi σi' ∧ σi' ⪯{mi, ms, n, true, option_trace κ} σs) →
+  σi ⪯{mi, ms, n, b} σs.
 Proof.
   move => Hsim κs' n' Hn /tnhas_trace_inv Ht.
   apply: thas_trace_under_tall; [done..|] => {Ht} κs [[??]|[?[?[?[?[?[?[<- ?]]]]]]]]. { tend. }
@@ -234,8 +238,8 @@ Qed.
 
 Lemma tsim_step_r {EV} {mi ms : module EV} σi σs n b κs κs' κs'' :
   κs = tapp κs' κs'' →
-  σs ~{ ms, κs' }~>ₜ (λ σs', tsim n b mi ms σi κs'' σs') →
-  tsim n b mi ms σi κs σs.
+  σs ~{ ms, κs' }~>ₜ (λ σs', σi ⪯{mi, ms, n, b, κs''} σs') →
+  σi ⪯{mi, ms, n, b, κs} σs.
 Proof.
   move => -> Hsim κss n' HIs Ht. rewrite -assoc_L. apply: thas_trace_trans; [done|] => ? {}Hsim.
   by apply: Hsim.
@@ -247,27 +251,27 @@ Global Hint Variables Opaque : tsim.
 Class TSimStepI {EV} (mi : module EV) (σi : mi.(m_state)) (P : (option EV → mi.(m_state) → Prop) → Prop) : Prop := {
   tsim_stepi_proof ms σs n κ Pσi:
     mi.(m_step) σi κ Pσi →
-    P (λ κ σi', tsim n true mi ms σi' (option_trace κ) σs) →
-    ∃ σi', Pσi σi' ∧ tsim n true mi ms σi' (option_trace κ) σs
+    P (λ κ σi', σi' ⪯{mi, ms, n, true, option_trace κ} σs) →
+    ∃ σi', Pσi σi' ∧ σi' ⪯{mi, ms, n, true, option_trace κ} σs
 }.
 Global Hint Mode TSimStepI + + ! - : tsim.
 
 Lemma tsim_step_i {EV} (mi : module EV) σi P `{!TSimStepI mi σi P} ms σs n b:
-  P (λ κ σi', tsim n true mi ms σi' (option_trace κ) σs) →
-  tsim n b mi ms σi tnil σs.
+  P (λ κ σi', σi' ⪯{mi, ms, n, true, option_trace κ} σs) →
+  σi ⪯{mi, ms, n, b} σs.
 Proof. move => HP. apply tsim_step_l => ???. by apply tsim_stepi_proof. Qed.
 
 Class TSimStepS {EV} (ms : module EV) (σs : ms.(m_state)) (κs : trace EV)
       (P : (trace EV → ms.(m_state) → Prop) → Prop) : Prop := {
   tsim_steps_proof mi σi n b:
-    P (λ κs' σs', tsim n b mi ms σi κs' σs') →
-    ∃ κs' κs'', κs = tapp κs' κs'' ∧ σs ~{ ms, κs' }~>ₜ (λ σs', tsim n b mi ms σi κs'' σs')
+    P (λ κs' σs', σi ⪯{mi, ms, n, b, κs'} σs') →
+    ∃ κs' κs'', κs = tapp κs' κs'' ∧ σs ~{ ms, κs' }~>ₜ (λ σs', σi ⪯{mi, ms, n, b, κs''} σs')
 }.
 Global Hint Mode TSimStepS + + ! + - : tsim.
 
 Lemma tsim_step_s {EV} (ms : module EV) σs κs P `{!TSimStepS ms σs κs P} mi σi n b :
-  P (λ κs' σs', tsim n b mi ms σi κs' σs') →
-  tsim n b mi ms σi κs σs.
+  P (λ κs' σs', σi ⪯{mi, ms, n, b, κs'} σs') →
+  σi ⪯{mi, ms, n, b, κs} σs.
 Proof.
   revert select (TSimStepS _ _ _ _) => -[Hproof]. move => /Hproof [?[?[??]]]. subst.
   by apply: tsim_step_r.

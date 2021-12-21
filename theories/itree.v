@@ -49,6 +49,8 @@ Inductive mod_itree_step EV S : (itree (moduleE EV S) unit * S) → option EV �
 
 Definition mod_itree EV S := Mod (mod_itree_step EV S).
 
+Global Instance itree_vis_no_all EV S: VisNoAll (mod_itree EV S).
+Proof. move => *. invert_all @m_step; naive_solver. Qed.
 
 (* Section test. *)
 (* Polymorphic Universe u v w x y. *)
@@ -494,16 +496,16 @@ Global Hint Resolve itree_step_interp_ret_s : tsim.
 Lemma tsim_remember_rec {EV S A B} {mi : module EV} (PRE : _ → _ → _ → Prop)
       (POST : _ → _ → _ → Prop) (a : A) σi r (h : B → _) s n b:
   PRE a σi s →
-  (∀ σi' y s', POST σi' y s' → tsim n b mi (mod_itree EV S) σi' tnil (h y, s')) →
+  (∀ σi' y s', POST σi' y s' → σi' ⪯{mi, mod_itree EV S, n, b} (h y, s')) →
   (∀ n, Plater (λ b', ∀ σi s h' a, PRE a σi s →
-         (∀ σi' y s', POST σi' y s' → tsim n b mi (mod_itree EV S) σi' tnil (h' y, s')) →
-         tsim n b' mi (mod_itree EV S) σi tnil ((y ← rec r a;;; h' y), s))) →
-  tsim n b mi (mod_itree EV S) σi tnil ((y ← rec r a;;; h y), s).
+         (∀ σi' y s', POST σi' y s' → σi' ⪯{mi, mod_itree EV S, n, b} (h' y, s')) →
+         σi ⪯{mi, mod_itree EV S, n, b'} ((y ← rec r a;;; h' y), s))) →
+  σi ⪯{mi, mod_itree EV S, n, b} (y ← rec r a;;; h y, s).
 Proof.
   move => ? Hh Hsim x.
   eapply (tsim_remember (ms:=mod_itree _ _)
     (λ n '(σi, (σt, s)), ∃ a h', PRE a σi s ∧ σt = (y ← rec r a;;; h' y) ∧
-      ∀ σi' y s', POST σi' y s' → tsim n b mi (mod_itree EV S) σi' tnil (h' y, s'))). { naive_solver. }
+      ∀ σi' y s', POST σi' y s' → σi' ⪯{mi, mod_itree EV S, n, b} (h' y, s'))). { naive_solver. }
   { move => ???[??]? [?[?[?[?{}Hh]]]]. simplify_eq. eexists _, _. split_and!; [done..|] => ????.
     apply: tsim_mono; [naive_solver|]. by apply ti_lt_impl_le. }
   move => n' IH ?[??] [?[?[?[??]]]]. simplify_eq.

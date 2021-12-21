@@ -26,3 +26,6 @@ Arguments ms_state {_}.
 Add Printing Constructor mod_state.
 
 Coercion ms_module : mod_state >-> module.
+
+Class VisNoAll {EV} (m : module EV) : Prop :=
+  vis_no_all σ κ Pσ : m.(m_step) σ (Some κ) Pσ → ∃ σ', ∀ σ'', Pσ σ'' ↔ σ'' = σ'.
