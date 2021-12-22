@@ -196,11 +196,11 @@ Definition Plater (P : bool → Prop) : Prop :=
   P true → P false.
 Arguments Plater _ /.
 
-Lemma tsim_remember {EV} {mi ms : module EV} (Pσ : _ → _ → Prop) σi σs b n :
-  Pσ n (σi, σs) →
-  (∀ n n' σi σs, tiS n' ⊆ n → Pσ n (σi, σs) → Pσ n' (σi, σs)) →
+Lemma tsim_remember {EV} {mi ms : module EV} (Pσ : _ → _ → _ → Prop) σi σs b n :
+  Pσ n σi σs →
+  (∀ n n' σi σs, tiS n' ⊆ n → Pσ n σi σs → Pσ n' σi σs) →
   (* TODO: can one somehow link this n' to the n? *)
-  (∀ n', Plater (λ b', ∀ σi σs, Pσ n' (σi, σs) → σi ⪯{mi, ms, n', b'} σs)) →
+  (∀ n', Plater (λ b', ∀ σi σs, Pσ n' σi σs → σi ⪯{mi, ms, n', b'} σs)) →
   σi ⪯{mi, ms, n, b} σs.
 Proof.
   move => HP HPmono Hsim κs' n' Hn Ht /=.
@@ -216,7 +216,7 @@ Lemma tsim_remember_all {EV A} {mi ms : module EV} σi σs b n:
   (∀ n, Plater (λ b', ∀ x, σi x ⪯{mi, ms, n, b'} σs x)) →
   ∀ x : A, σi x ⪯{mi, ms, n, b} σs x.
 Proof.
-  move => Hsim x. apply: (tsim_remember (λ _ σ, ∃ x, σ = (σi x, σs x))).
+  move => Hsim x. apply: (tsim_remember (λ _ σi' σs', ∃ x, σi' = σi x ∧ σs' = σs x)).
   all: naive_solver.
 Qed.
 

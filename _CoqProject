@@ -23,6 +23,7 @@ theories/trefines.v
 theories/refines_meta.v
 theories/proof_techniques.v
 theories/asm.v
+theories/imp.v
 theories/iris/wp.v
 theories/iris/mono_ord.v
 theories/iris/ord_later.v

@@ -504,7 +504,7 @@ Lemma tsim_remember_rec {EV S A B} {mi : module EV} (PRE : _ → _ → _ → Pro
 Proof.
   move => ? Hh Hsim x.
   eapply (tsim_remember (ms:=mod_itree _ _)
-    (λ n '(σi, (σt, s)), ∃ a h', PRE a σi s ∧ σt = (y ← rec r a;;; h' y) ∧
+    (λ n σi '(σt, s), ∃ a h', PRE a σi s ∧ σt = (y ← rec r a;;; h' y) ∧
       ∀ σi' y s', POST σi' y s' → σi' ⪯{mi, mod_itree EV S, n, b} (h' y, s'))). { naive_solver. }
   { move => ???[??]? [?[?[?[?{}Hh]]]]. simplify_eq. eexists _, _. split_and!; [done..|] => ????.
     apply: tsim_mono; [naive_solver|]. by apply ti_lt_impl_le. }

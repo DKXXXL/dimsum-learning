@@ -22,7 +22,7 @@ Add Printing Constructor asm_state.
 Definition initial_asm_state (instrs : gmap Z asm_instr) := AsmState None ∅ instrs.
 
 Inductive asm_event :=
-| EJump (pc : Z) (regs : gmap string Z) | ERecvJump (pc : Z) (regs : gmap string Z).
+| EAJump (pc : Z) (regs : gmap string Z) | EARecvJump (pc : Z) (regs : gmap string Z).
 
 Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) → Prop :=
 | SWriteReg regs instrs r f es:
@@ -37,11 +37,11 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
   (* TODO: Make it UB instead of NB if there is no PC in regs? *)
   regs !! "PC" = Some pc →
   instrs !! pc = None →
-  asm_step (AsmState (Some []) regs instrs) (Some (EJump pc regs)) (λ σ', σ' = AsmState None regs instrs)
+  asm_step (AsmState (Some []) regs instrs) (Some (EAJump pc regs)) (λ σ', σ' = AsmState None regs instrs)
 | SRecvJump regs regs' instrs pc es :
   regs' !! "PC" = Some pc →
   instrs !! pc = Some es →
-  asm_step (AsmState None regs instrs) (Some (ERecvJump pc regs')) (λ σ', σ' = AsmState (Some es) regs' instrs)
+  asm_step (AsmState None regs instrs) (Some (EARecvJump pc regs')) (λ σ', σ' = AsmState (Some es) regs' instrs)
 .
 
 Definition asm_module := Mod asm_step.
@@ -67,33 +67,33 @@ Inductive asm_prod_filter (ins1 ins2 : gset Z) :
 | APFJumpRecvL pc rs:
   pc ∉ ins1 →
   pc ∈ ins2 →
-  asm_prod_filter ins1 ins2 APFLeft (SPELeft (EJump pc rs) SPRight) None (APFRecvR pc rs)
+  asm_prod_filter ins1 ins2 APFLeft (SPELeft (EAJump pc rs) SPRight) None (APFRecvR pc rs)
 | APFJumpRecvL2 pc rs:
-  asm_prod_filter ins1 ins2 (APFRecvR pc rs) (SPERight (ERecvJump pc rs) SPRight) None APFRight
+  asm_prod_filter ins1 ins2 (APFRecvR pc rs) (SPERight (EARecvJump pc rs) SPRight) None APFRight
 | APFJumpRecvR pc rs:
   pc ∈ ins1 →
   pc ∉ ins2 →
-  asm_prod_filter ins1 ins2 APFRight (SPERight (EJump pc rs) SPLeft) None (APFRecvL pc rs)
+  asm_prod_filter ins1 ins2 APFRight (SPERight (EAJump pc rs) SPLeft) None (APFRecvL pc rs)
 | APFJumpRecvR2 pc rs:
-  asm_prod_filter ins1 ins2 (APFRecvL pc rs) (SPELeft (ERecvJump pc rs) SPLeft) None APFLeft
+  asm_prod_filter ins1 ins2 (APFRecvL pc rs) (SPELeft (EARecvJump pc rs) SPLeft) None APFLeft
 | APFJumpExtL pc rs:
   pc ∉ ins1 →
   pc ∉ ins2 →
-  asm_prod_filter ins1 ins2 APFLeft (SPELeft (EJump pc rs) SPNone) (Some (EJump pc rs)) APFNone
+  asm_prod_filter ins1 ins2 APFLeft (SPELeft (EAJump pc rs) SPNone) (Some (EAJump pc rs)) APFNone
 | APFJumpExtR pc rs:
   pc ∉ ins1 →
   pc ∉ ins2 →
-  asm_prod_filter ins1 ins2 APFRight (SPERight (EJump pc rs) SPNone) (Some (EJump pc rs)) APFNone
+  asm_prod_filter ins1 ins2 APFRight (SPERight (EAJump pc rs) SPNone) (Some (EAJump pc rs)) APFNone
 | APFRecvJumpL pc rs:
   pc ∈ ins1 →
   pc ∉ ins2 →
   rs !! "PC" = Some pc →
-  asm_prod_filter ins1 ins2 APFNone (SPENone SPLeft) (Some (ERecvJump pc rs)) (APFRecvL pc rs)
+  asm_prod_filter ins1 ins2 APFNone (SPENone SPLeft) (Some (EARecvJump pc rs)) (APFRecvL pc rs)
 | APFRecvJumpR pc rs:
   pc ∉ ins1 →
   pc ∈ ins2 →
   rs !! "PC" = Some pc →
-  asm_prod_filter ins1 ins2 APFNone (SPENone SPRight) (Some (ERecvJump pc rs)) (APFRecvR pc rs)
+  asm_prod_filter ins1 ins2 APFNone (SPENone SPRight) (Some (EARecvJump pc rs)) (APFRecvR pc rs)
 .
 
 Definition asm_prod (ins1 ins2 : gset Z) (m1 m2 : module asm_event) : module asm_event :=
@@ -126,7 +126,7 @@ Lemma asm_link_refines_prod ins1 ins2:
            (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) (SPNone, initial_asm_state ins1, initial_asm_state ins2, APFNone)).
 Proof.
   move => Hdisj.
-  apply (inv_implies_trefines (MS _ _) (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) _) (asm_link_prod_inv false ins1 ins2)).
+  unshelve apply: inv_implies_trefines. { exact: (asm_link_prod_inv false ins1 ins2). }
   { simpl. naive_solver. }
   move => /= [i1 rs1 ins1'] [[[? [il rsl insl]] [ir rsr insr] σf]] Pσi κ [? [? [? Hinv]]] Hstep.
   inversion Hstep; clear Hstep; simplify_eq/=.
@@ -253,7 +253,7 @@ Lemma asm_prod_refines_link ins1 ins2:
            (MS asm_module (initial_asm_state (asm_link ins1 ins2))).
 Proof.
   move => Hdisj.
-  apply (inv_implies_trefines (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) _) (MS _ _) (flip (asm_link_prod_inv true ins1 ins2))).
+  unshelve apply: inv_implies_trefines. { exact: (flip (asm_link_prod_inv true ins1 ins2)). }
   { simpl. naive_solver. }
   move => /= [[[σsp [il rsl insl]] [ir rsr insr]] σf] [i1 rs1 ins1'] Pσi κ [? [? [? Hinv]]] Hstep.
   inversion Hstep; simplify_eq; clear Hstep. invert_all' @m_step; invert_all asm_prod_filter.
@@ -315,7 +315,7 @@ Lemma asm_step_Jump_i rs ins:
           if ins !! pc is Some i then
             G None (AsmState (Some i) (rs) ins)
           else
-            G (Some (EJump pc rs)) (AsmState None (rs) ins)
+            G (Some (EAJump pc rs)) (AsmState None (rs) ins)
    ).
 Proof.
   constructor => ?????? HG. invert_all @m_step; specialize (HG _ ltac:(done)); simplify_option_eq.
@@ -327,7 +327,7 @@ Lemma asm_step_None_i rs ins:
   TSimStepI asm_module (AsmState None rs ins) (λ G,
     ∀ pc i rs', rs' !! "PC" = Some pc →
       ins !! pc = Some i →
-      G (Some (ERecvJump pc rs')) (AsmState (Some i) rs' ins)
+      G (Some (EARecvJump pc rs')) (AsmState (Some i) rs' ins)
    ).
 Proof. constructor => ?????? HG. invert_all @m_step. naive_solver. Qed.
 Global Hint Resolve asm_step_None_i : tsim.
@@ -345,15 +345,15 @@ Definition asm_loop (ins : list Z)
          if bool_decide (npc ∈ ins) then
            Ret (npc, nrs)
          else
-           translate (inr_) (TVis (EJump npc nrs));;;;
+           translate (inr_) (TVis (EAJump npc nrs));;;;
            pc ← translate (inr_) (TExist Z);;;
            rs ← translate (inr_) (TExist _);;;
-           translate (inr_) (TVis (ERecvJump pc rs));;;;
+           translate (inr_) (TVis (EARecvJump pc rs));;;;
            Ret (pc, rs)
         else
           pc ← translate (inr_) (TExist Z);;;
           rs ← translate (inr_) (TExist _);;;
-          translate (inr_) (TVis (ERecvJump pc rs));;;;
+          translate (inr_) (TVis (EARecvJump pc rs));;;;
           Ret (pc, rs)
      );;;
     translate (inr_) (TAssert (pc ∈ ins));;;;
@@ -543,14 +543,14 @@ Module asm_examples.
          translate (inr_) (TAssume (is_Some (rs !! "R29")));;;;
          r30 ← translate (inr_) (TAssumeOpt (rs !! "R30"));;;
          r29' ← translate (inr_) (TExist Z);;;
-         (* translate (inr_) (TVis (EJump 100 (<["PC":=100]> $ <["R30":= 212]> $ <["R29":= r29']> $ <["R2":= 2]> $ <["R1":= 2]> $ rs)));;;; *)
+         (* translate (inr_) (TVis (EAJump 100 (<["PC":=100]> $ <["R30":= 212]> $ <["R29":= r29']> $ <["R2":= 2]> $ <["R1":= 2]> $ rs)));;;; *)
          '(pc', rs') ← call (Some (100, (<["PC":=100]> $ <["R30":= 212]> $ <["R29":= r29']> $ <["R2":= 2]> $ <["R1":= 2]> $ rs)));;;
          translate (inr_) (TAssume (pc' = 212));;;;
          translate (inr_) (TAssume (is_Some (rs' !! "R30")));;;;
          translate (inr_) (TAssume (rs' !! "R29" = Some r29'));;;;
          translate (inr_) (TAssume (r30 ≠ 200 ∧ r30 ≠ 204 ∧ r30 ≠ 208 ∧ r30 ≠ 212 ∧ r30 ≠ 216));;;;
          r30' ← translate (inr_) (TExist Z);;;
-         (* translate (inr_) (TVis (EJump r30 (<["PC":= r30]> $ <["R30":= r30']> rs')));;;; *)
+         (* translate (inr_) (TVis (EAJump r30 (<["PC":= r30]> $ <["R30":= r30']> rs')));;;; *)
          Ret (r30, (<["PC":= r30]> $ <["R30":= r30']> rs'))
        else if bool_decide (pc = 204) then translate (inr_) TUb
        else if bool_decide (pc = 208) then translate (inr_) TUb
