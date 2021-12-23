@@ -245,42 +245,92 @@ Proof.
   by apply: Hsim.
 Qed.
 
-Create HintDb tsim discriminated.
-Global Hint Constants Opaque : tsim.
-Global Hint Variables Opaque : tsim.
-Class TSimStepI {EV} (mi : module EV) (σi : mi.(m_state)) (P : (option EV → mi.(m_state) → Prop) → Prop) : Prop := {
-  tsim_stepi_proof ms σs n κ Pσi:
-    mi.(m_step) σi κ Pσi →
-    P (λ κ σi', σi' ⪯{mi, ms, n, true, option_trace κ} σs) →
-    ∃ σi', Pσi σi' ∧ σi' ⪯{mi, ms, n, true, option_trace κ} σs
+(** * tstep *)
+Create HintDb tstep discriminated.
+Global Hint Constants Opaque : tstep.
+Global Hint Variables Opaque : tstep.
+Class TStepI {EV} (mi : module EV) (σi : mi.(m_state)) (P : (trace EV → ((bool → mi.(m_state) → Prop) → Prop) → Prop) → Prop) : Prop := {
+  tstepi_proof n Pσi G κs:
+    σi ~{mi, κs, n}~>ₜ Pσi →
+    P G →
+    under_tall κs (λ κs,
+      (tnil ⊆ κs ∧ Pσi σi) ∨
+      ∃ κs1 κs2 (Pσ : _ → Prop),
+        tapp κs1 κs2 ⊆ κs ∧
+        (∀ G', Pσ G' → ∃ σi' b n', σi' ~{mi, κs2, n'}~>ₜ Pσi ∧ (if b then tiS n' ⊆ n else n' ⊆ n) ∧ G' b σi') ∧
+        G κs1 Pσ
+      )
 }.
-Global Hint Mode TSimStepI + + ! - : tsim.
+Global Hint Mode TStepI + + ! - : tstep.
 
-Lemma tsim_step_i {EV} (mi : module EV) σi P `{!TSimStepI mi σi P} ms σs n b:
-  P (λ κ σi', σi' ⪯{mi, ms, n, true, option_trace κ} σs) →
+Lemma tsim_tstep_i {EV} (mi : module EV) σi P `{!TStepI mi σi P} ms σs n b:
+  P (λ κs1 Pσ, Pσ (λ b' σi', σi' ⪯{mi, ms, n, b || b', κs1} σs)) →
   σi ⪯{mi, ms, n, b} σs.
-Proof. move => HP. apply tsim_step_l => ???. by apply tsim_stepi_proof. Qed.
+Proof.
+  move => HP κs n' Hn /tstepi_proof Hi. move: HP => /Hi /= {}HP.
+  apply: thas_trace_under_tall; [done..|] => {Hi HP} {}κs /= [[??]|[κs1[κs2[Pσ [Hκs [HPσ /HPσ[σi' [b' [n'' [?[? Ht]]]]]]]]]]].
+  { tend. }
+  rewrite -Hκs. apply: Ht; [|done]. destruct b, b' => /=; (etrans; [|done]); try econs; (etrans; [|done]) => //.
+  apply ti_le_S.
+Qed.
 
-Class TSimStepS {EV} (ms : module EV) (σs : ms.(m_state)) (κs : trace EV)
+Lemma tsim_tstep_both {EV} (mi : module EV) σi P `{!TStepI mi σi P} ms σs n b:
+  P (λ κs1 Pσ, σs ~{ms, κs1}~>ₜ (λ σs', Pσ (λ b' σi', σi' ⪯{mi, ms, n, b || b', tnil} σs'))) →
+  σi ⪯{mi, ms, n, b} σs.
+Proof.
+  move => HP κs n' Hn /tstepi_proof Hi. move: HP => /Hi /= {}HP.
+  apply: thas_trace_under_tall; [done..|] => {Hi HP} {}κs /= [[??]|[κs1[κs2[Pσ [Hκs [HPσ Ht]]]]]].
+  { tend. }
+  rewrite -Hκs. apply: thas_trace_trans; [done|] => ? /HPσ[σi' [b' [n'' [?[? {}Ht]]]]].
+  apply: Ht; [|done]. destruct b, b' => /=; (etrans; [|done]); try econs; (etrans; [|done]) => //.
+  apply ti_le_S.
+Qed.
+
+Lemma TStepI_single {EV} (mi : module EV) σi (P : _ → Prop) :
+  (∀ G κ Pσi,
+    mi.(m_step) σi κ Pσi →
+    P G →
+    ∃ (Pσ : _ → Prop),
+    (∀ G', Pσ G' → ∃ σi', Pσi σi' ∧ G' true σi') ∧
+    G (option_trace κ) Pσ
+  ) →
+  TStepI mi σi P.
+Proof.
+  move => Hstep. constructor => ???? Ht HP.
+  thas_trace_inv Ht.
+  - left. naive_solver.
+  - right. have [?[HG ?]]:= Hstep _ _ _ ltac:(done) ltac:(done).
+    eexists _, _, _. split_and!; [done| |done]. move => ? /HG[?[??]]. eexists _, _, _.
+    split_and!; [naive_solver| |done] => /=. etrans; [|done]. econs. by econs.
+    Unshelve. done.
+Qed.
+
+Class TStepS {EV} (ms : module EV) (σs : ms.(m_state)) (κs : trace EV)
       (P : (trace EV → ms.(m_state) → Prop) → Prop) : Prop := {
-  tsim_steps_proof mi σi n b:
-    P (λ κs' σs', σi ⪯{mi, ms, n, b, κs'} σs') →
-    ∃ κs' κs'', κs = tapp κs' κs'' ∧ σs ~{ ms, κs' }~>ₜ (λ σs', σi ⪯{mi, ms, n, b, κs''} σs')
+  tsteps_proof G:
+    P G →
+    ∃ κs' κs'', tapp κs' κs'' ⊆ κs ∧ σs ~{ ms, κs' }~>ₜ (λ σs', G κs'' σs')
 }.
-Global Hint Mode TSimStepS + + ! + - : tsim.
+Global Hint Mode TStepS + + ! + - : tstep.
 
-Lemma tsim_step_s {EV} (ms : module EV) σs κs P `{!TSimStepS ms σs κs P} mi σi n b :
+Lemma tsim_tstep_s {EV} (ms : module EV) σs κs P `{!TStepS ms σs κs P} mi σi n b :
   P (λ κs' σs', σi ⪯{mi, ms, n, b, κs'} σs') →
   σi ⪯{mi, ms, n, b, κs} σs.
 Proof.
-  revert select (TSimStepS _ _ _ _) => -[Hproof]. move => /Hproof [?[?[??]]]. subst.
-  by apply: tsim_step_r.
+  move => /tsteps_proof [?[?[Hκs ?]]] => ????. rewrite -Hκs -tapp_assoc.
+  apply: thas_trace_trans; [done|] => ? Ht. by apply: Ht.
 Qed.
 
-Ltac tsim_step_s :=
-  notypeclasses refine (tsim_step_s _ _ _ _ _ _ _ _ _); [solve [typeclasses eauto with tsim]|]; simpl.
-Ltac tsim_step_i :=
-  notypeclasses refine (tsim_step_i _ _ _ _ _ _ _ _); [solve [typeclasses eauto with tsim]|]; simpl.
+Lemma thas_trace_tstep_s {EV} (m : module EV) σ κs Pσ `{!TStepS m σ κs P} :
+  P (λ κs' σ', σ' ~{m, κs'}~>ₜ Pσ) →
+  σ ~{m, κs}~>ₜ Pσ.
+Proof. move => /tsteps_proof [?[?[<- ?]]]. by apply: thas_trace_trans. Qed.
+
+Ltac tstep_s :=
+  (* TODO: also use thas_trace_tstep_s here *)
+  notypeclasses refine (tsim_tstep_s _ _ _ _ _ _ _ _ _); [solve [typeclasses eauto with tstep]|]; simpl.
+Ltac tstep_i :=
+  notypeclasses refine (tsim_tstep_i _ _ _ _ _ _ _ _); [solve [typeclasses eauto with tstep]|]; simpl.
 
 
 (** * proving a refinement based on another refinement *)

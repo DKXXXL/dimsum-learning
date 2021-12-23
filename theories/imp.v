@@ -101,6 +101,10 @@ Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
   | EqOp => z1 ← val_to_Z v1; z2 ← val_to_Z v2; Some (ValBool (bool_decide (z1 = z2)))
   end.
 
+(* TODO: alternative idea: Define semantics as state → itree moduleE state
+   Then put an itree forever around it after adding the evaluation context
+This way one can reuse infrastructure
+*)
 Inductive head_step : imp_state → option imp_event → (imp_state → Prop) → Prop :=
 | BinOpS v1 op v2 fns:
   head_step (Imp (BinOp (Val v1) op (Val v2)) fns) None (λ σ',
@@ -169,6 +173,7 @@ Definition imp_link_prod_inv (b : bool) (fns1 fns2 : gmap string fndef)
   fns1' = fns1 ∪ fns2 ∧
   fnsl = fns1 ∧
   fnsr = fns2 ∧
+  (* TODO: define relation on evaluation contexts *)
   match σf with
   | IPFLeft => σsp = SPLeft
   | IPFRight => σsp = SPRight
