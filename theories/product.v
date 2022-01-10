@@ -2,6 +2,7 @@ Require Export refframe.module.
 Require Import refframe.srefines.
 Require Import refframe.trefines.
 Require Import refframe.filter.
+Require Import refframe.proof_techniques.
 
 
 (*** [product] *)
@@ -581,3 +582,23 @@ Lemma mod_map_trefines {EV1 EV2 S} m1 m2 (f : mod_map_fn EV1 EV2 S) σ1 σ2 σf 
   trefines (MS m1 σ1) (MS m2 σ2) →
   trefines (MS (mod_map m1 f) (σ1, σf)) (MS (mod_map m2 f) (σ2, σf)).
 Proof. move => ?. apply mod_filter_trefines. by apply mod_product_trefines. Qed.
+
+Lemma mod_map_step_i {EV1 EV2 S} m (f : mod_map_fn EV1 EV2 S) σ σf P `{!TStepI m σ P} :
+  TStepI (mod_map m f) (σ, σf) (λ G, P (λ b κ G',
+   ∀ κ' σf', (if κ is Some e then f σf e κ' σf' else κ' = None ∧ σf' = σf) →
+               G b κ' (λ Pσ, G' (λ x, Pσ (x, σf'))))).
+Proof.
+  constructor => G /tstepi_proof HP.
+  apply: (thas_trace_dual_submodule _ (mod_map _ _) (λ x, (x, σf))); [done| |].
+  - move => ?? /= [?[HG HG']]. eexists _. split; [by apply HG|] => ? /= /HG'[?[??]]. naive_solver.
+  - move => ????. invert_all' @m_step; simplify_eq/=; eexists _, _.
+    all: split_and!; [done| |repeat case_match => //;naive_solver].
+    + move => [?[HG HG']]. case_match; simplify_eq.
+      eexists _. split; [by apply HG|] => ? /= /HG'[?[??]]. naive_solver.
+    + move => [?[HG HG']]. eexists _. split; [by apply HG|] => ? /= /HG'[?[??]]. naive_solver.
+Qed.
+Global Hint Resolve mod_map_step_i : tstep.
+
+Global Hint Transparent mod_product : tstep.
+Global Hint Transparent mod_map_mod : tstep.
+Global Hint Transparent mod_map_fn : tstep.

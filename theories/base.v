@@ -124,6 +124,17 @@ Lemma elem_of_subseteq_1 X Y x: X ⊆ Y → x ∈ X → x ∈ Y.
 Proof. set_solver. Qed.
 End semi_set.
 
+Section theorems.
+Context `{FinMap K M}.
+
+Lemma lookup_union_None_1 {A} (m1 m2 : M A) i :
+  (m1 ∪ m2) !! i = None → m1 !! i = None ∧ m2 !! i = None.
+Proof. apply lookup_union_None. Qed.
+Lemma lookup_union_None_2 {A} (m1 m2 : M A) i :
+  m1 !! i = None → m2 !! i = None → (m1 ∪ m2) !! i = None.
+Proof. move => ??. by apply lookup_union_None. Qed.
+End theorems.
+
 Lemma omap_app {A B} l1 l2 (f : A → option B) :
   omap f (l1 ++ l2) = omap f l1 ++ omap f l2.
 Proof. elim: l1 => //; csimpl => ?? ->. by case_match. Qed.

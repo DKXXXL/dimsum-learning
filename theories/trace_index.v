@@ -78,6 +78,11 @@ Lemma tiChoice_mono T f1 f2:
   tiChoice T f1 ⊆ tiChoice T f2.
 Proof. move => ?. econs. econs. naive_solver. Qed.
 
+Definition tiS_maybe (b : bool) (n : trace_index) :=
+  if b then tiS n else n.
+Notation "'tiS?' b n" := (tiS_maybe b n)
+  (at level 20, b at level 9, n at level 20, right associativity, format "'tiS?' b  n").
+
 Fixpoint ti_min (n1 : trace_index) : trace_index → trace_index :=
   fix go n2 :=
   match n1, n2 with
@@ -240,6 +245,19 @@ Proof.
   - by econs.
   - move => ?? IH. constructor => ?. etrans; [apply: IH|]. econs. by econs.
 Qed.
+
+Lemma ti_le_S_maybe n b:
+  n ⊆ tiS?b n.
+Proof. destruct b => //. apply ti_le_S. Qed.
+
+Lemma tiS_maybe_orb n b1 b2:
+  tiS?(b1 || b2) n ⊆ tiS?b1 (tiS?b2 n).
+Proof. destruct b1, b2 => //=. apply ti_le_S. Qed.
+
+Lemma tiS_maybe_mono n1 n2 b:
+  n1 ⊆ n2 →
+  tiS?b n1 ⊆ tiS?b n2.
+Proof. destruct b => // ?. by econs. Qed.
 
 Lemma ti_lt_impl_le (n1 n2 : trace_index):
   tiS n1 ⊆ n2 →

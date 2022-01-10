@@ -212,6 +212,21 @@ Global Instance under_tall_proper {EV} :
   Proper ((⊆) ==> ((⊆) ==> impl) ==> impl) (@under_tall EV).
 Proof. move => κs1 κs2 Hsub ?? HP Hall. by apply: under_tall_mono. Qed.
 
+Lemma under_tall_idemp' {EV} (κs : trace EV) (P P1 : _ → Prop):
+  under_tall κs P →
+  (∀ κs, P κs → under_tall κs P1) →
+  under_tall κs P1.
+Proof.
+  elim.
+  - naive_solver.
+  - move => ????????. apply: UTAll; [|done]. naive_solver.
+Qed.
+
+Lemma under_tall_idemp {EV} (κs : trace EV) (P1 : _ → Prop):
+  under_tall κs (λ κs', under_tall κs' P1) →
+  under_tall κs P1.
+Proof. move => ?. apply: under_tall_idemp'; [done|]. naive_solver. Qed.
+
 Lemma subtrace_under_tall {EV} (κs κs1 : trace EV) (P1 : _ → Prop):
   under_tall κs1 P1 →
   (∀ κs', P1 κs' → κs ⊆ κs') →
@@ -224,9 +239,6 @@ Qed.
 
 (** * trefines *)
 
-(* Definition VisNoUb {EV} (m : module EV) (κ : option EV) (Pσ : (m.(m_state) → Prop)) := *)
-  (* is_Some κ → ∃ σ, Pσ σ. *)
-
 Inductive thas_trace {EV} (m : module EV) : m.(m_state) → trace EV → (m.(m_state) → Prop) → Prop :=
 | TTraceEnd σ (Pσ : _ → Prop) κs:
     Pσ σ →
@@ -236,7 +248,6 @@ Inductive thas_trace {EV} (m : module EV) : m.(m_state) → trace EV → (m.(m_s
     m.(m_step) σ1 κ Pσ2 →
     (∀ σ2, Pσ2 σ2 → thas_trace m σ2 κs' Pσ3) →
     tapp (option_trace κ) κs' ⊆ κs →
-    (* VisNoUb m κ Pσ2 → *)
     thas_trace m σ1 κs Pσ3
 | TTraceAll T f σ κs Pσ:
     (∀ x, thas_trace m σ (f x) Pσ) →
@@ -255,7 +266,6 @@ Inductive thas_trace_simple {EV} (m : module EV) : m.(m_state) → trace EV → 
     m.(m_step) σ1 κ Pσ2 →
     (∀ σ2, Pσ2 σ2 → thas_trace_simple m σ2 κs' Pσ3) →
     tapp (option_trace κ) κs' ⊆ κs →
-    (* VisNoUb m κ Pσ2 → *)
     thas_trace_simple m σ1 κs Pσ3
 .
 Notation " σ '~{' m , Pκs '}~>ₜₛ' P " := (thas_trace_simple m σ Pκs P) (at level 40).
@@ -271,7 +281,6 @@ Inductive tnhas_trace {EV} (m : module EV) : m.(m_state) → trace EV → trace_
     (∀ σ2 (H : Pσ2 σ2), tnhas_trace m σ2 κs' (fn (σ2 ↾ H)) Pσ3) →
     tiS (tiChoice _ fn) ⊆ n →
     tapp (option_trace κ) κs' ⊆ κs →
-    (* VisNoUb m κ Pσ2 → *)
     tnhas_trace m σ1 κs n Pσ3
 | TNTraceAll T fn f σ κs Pσ n:
     (∀ x, tnhas_trace m σ (f x) (fn x) Pσ) →
@@ -604,6 +613,101 @@ Proof.
   - move => ??? [Hr1] [Hr2]. constructor => /=. naive_solver.
 Qed.
 
+(** * thas_trace_dual *)
+Section dual.
+Local Unset Elimination Schemes.
+Inductive thas_trace_dual {EV} (m : module EV) : m.(m_state) → (bool → option EV → (m.(m_state) → Prop) → Prop) → Prop :=
+| TDEnd σ (Pσ : _ → _ → _ → Prop):
+    Pσ false None (σ =.) →
+    thas_trace_dual m σ Pσ
+| TDStep σ1 Pσ3:
+    (∀ κ Pσ2, m.(m_step) σ1 κ Pσ2 →
+       Pσ3 true κ Pσ2 ∨
+       ∃ σ2, Pσ2 σ2 ∧ κ = None ∧ thas_trace_dual m σ2 (λ _, Pσ3 true)) →
+    thas_trace_dual m σ1 Pσ3
+.
+End dual.
+Notation " σ '-{' m '}->' P " := (thas_trace_dual m σ P) (at level 40).
+
+Lemma thas_trace_dual_ind
+     : ∀ (EV : Type) (m : module EV) (P : m_state m → (bool → option EV → (m_state m → Prop) → Prop) → Prop),
+         (∀ (σ : m_state m) (Pσ : bool → option EV → (m_state m → Prop) → Prop), Pσ false None (eq σ) → P σ Pσ)
+         → (∀ (σ1 : m_state m) (Pσ3 : bool → option EV → (m_state m → Prop) → Prop),
+              (∀ (κ : option EV) (Pσ2 : m_state m → Prop),
+                 m_step m σ1 κ Pσ2
+                 → Pσ3 true κ Pσ2
+                   ∨ (∃ σ2 : m_state m, Pσ2 σ2 ∧ κ = None ∧ thas_trace_dual m σ2 (λ _ : bool, Pσ3 true)))
+              → (∀ (κ : option EV) (Pσ2 : m_state m → Prop),
+                 m_step m σ1 κ Pσ2
+                 → Pσ3 true κ Pσ2
+                   ∨ (∃ σ2 : m_state m, Pσ2 σ2 ∧ κ = None ∧ P σ2 (λ _ : bool, Pσ3 true)))
+              → P σ1 Pσ3)
+           → ∀ (m0 : m_state m) (P0 : bool → option EV → (m_state m → Prop) → Prop),
+               thas_trace_dual m m0 P0 → P m0 P0.
+Proof.
+  move => EV m P Hend Hstep σ Pσ Hs. generalize dependent P => P. move: σ Pσ Hs.
+  fix FIX 3. move => ?? [].
+  - move => ??? Hend ?. by apply: Hend.
+  - move => ?? He ? Hstep. apply: (Hstep); naive_solver.
+Qed.
+
+Lemma tnhas_trace_dual_elim {EV} (m : module EV) κs Pσ σ n:
+  σ -{ m }-> Pσ →
+  σ ~{ m, κs, n }~>ₜ - →
+  under_tall κs (λ κs,
+     tnil ⊆ κs ∨
+     ∃ b κ κs' Pσ' n', Pσ b κ Pσ' ∧ tapp (option_trace κ) κs' ⊆ κs ∧ tiS? b n' ⊆ n ∧ ∀ σ', Pσ' σ' → σ' ~{ m, κs', n' }~>ₜ -
+  ).
+Proof.
+  move => Hd. elim: Hd κs n.
+  - move => ??????. econs. naive_solver.
+  - move => ??? IH ?? Hs. apply tnhas_trace_inv in Hs.
+    apply under_tall_idemp. apply: under_tall_mono'; [done|].
+    move => ?[?|?]; destruct_all!. { econs. by left. }
+    have [?|[?[?[? {}IH]]]] := IH _ _ ltac:(done); destruct_all?; simplify_eq/=.
+    + econs. right. eexists _, _, _, _, _. split_and!; [done|simpl;done|done|] => /=.
+      move => ??. apply: tnhas_trace_mono; [naive_solver|done|by econs|done].
+    + rename select (κs' ⊆ _) into Hκs.
+      apply: under_tall_mono'. { apply IH. rewrite -Hκs. naive_solver. }
+      move => /= κs'' [?|?]; destruct_all?. { by left. } right.
+      eexists _, _, _, _, _. split_and!; [done|done| |done] => /=.
+      etrans; [|done]. econs. econs. etrans; [|done]. apply ti_le_S_maybe.
+      Unshelve. all: done.
+Qed.
+
+Lemma thas_trace_dual_elim {EV} (m : module EV) κs Pσ σ:
+  σ -{ m }-> Pσ →
+  σ ~{ m, κs }~>ₜ - →
+  under_tall κs (λ κs,
+     tnil ⊆ κs ∨
+     ∃ b κ κs' Pσ', Pσ b κ Pσ' ∧ tapp (option_trace κ) κs' ⊆ κs ∧ ∀ σ', Pσ' σ' → σ' ~{ m, κs' }~>ₜ -
+  ).
+Proof.
+  move => ? /thas_trace_n[??]. apply: under_tall_mono'; [ by apply: tnhas_trace_dual_elim|].
+  move => ? [?|?]. { by left. } right. destruct_all!. eexists _, _, _, _. split_and!; [done..|] => ??.
+  apply thas_trace_n. naive_solver.
+Qed.
+
+Lemma thas_trace_dual_submodule {EV1 EV2} (m1 : module EV1) (m2 : module EV2) (f : m1.(m_state) → m2.(m_state)) σ P1 (P2 : _ → _ → _ → Prop):
+  σ -{m1}-> P1 →
+  (∀ b σ, P1 b None (σ =.) → P2 b None ((f σ) =.)) →
+  (∀ σ1 κ Pσ2, m2.(m_step) (f σ1) κ Pσ2 →
+    ∃ κ' Pσ1, m1.(m_step) σ1 κ' Pσ1 ∧
+      (P1 true κ' Pσ1 → P2 true κ Pσ2) ∧
+      (κ' = None → κ = None ∧ ∀ σ, Pσ1 σ → Pσ2 (f σ))
+ ) →
+  f σ -{m2}-> P2.
+Proof.
+  move => Hd.
+  elim: Hd P2.
+  - move => ???? Hend?. econs. by apply: Hend.
+  - move => {}σ {}P1 ? IH P2 Hend Hstep. apply TDStep => ?? /Hstep[?[? [/IH[?|?] ?]]].
+    + naive_solver.
+    + right. destruct_all!; simplify_eq. eexists (f _). split_and!; [naive_solver..|].
+      apply H4; first naive_solver. done.
+Qed.
+
+(** * Tactics *)
 Tactic Notation "thas_trace_inv" ident(H) :=
   lazymatch type of H with
   | _ ~{ _, ?κs }~>ₜ _ =>

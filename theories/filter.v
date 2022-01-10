@@ -2,6 +2,7 @@ Require Export refframe.module.
 Require Import refframe.srefines.
 Require Import refframe.trefines.
 Require Import refframe.example_modules.
+Require Import refframe.proof_techniques.
 
 Inductive filter_step {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) :
   m.(m_state) → option EV2 → (m.(m_state) → Prop) → Prop :=
@@ -337,4 +338,25 @@ Lemma mod_filter_trefines {EV1 EV2} (R : EV1 → option EV2 → Prop) mi ms σi 
 Proof.
   move => [/=Hr]. constructor => /=? /tmod_filter_to_mod[?[? /Hr/tmod_to_mod_filter?]].
   by apply: thas_trace_mono.
+Qed.
+
+
+(** showing that [trefines1_implies_trefines2] is useful by proving
+[tmod_filter_refines] with a siginificantly simpler proof. *)
+Lemma tmod_filter_refines' {EV1 EV2} (R : EV1 → option EV2 → Prop) mi ms σi σs:
+  trefines (MS mi σi) (MS ms σs) →
+  trefines (MS (mod_filter mi R) σi) (MS (mod_filter ms R) σs).
+Proof.
+  move => Hr. eapply (trefines1_implies_trefines2 (MS mi _) (MS ms _) (MS (mod_filter mi R) _) (MS (mod_filter ms R) _) (λ σ1 σ2, σ1 = σ2) (λ σ1 σ2, σ1 = σ2)); [done.. | |] => /=.
+  - move => ???? -> Hstep. inversion Hstep; simplify_eq. eexists e.
+    split.
+    + case_match; simplify_eq => //.
+      move => ??? -> ?. apply: TTraceStep; [| |by erewrite tapp_tnil_r].
+      { econstructor; [done| simpl; done]. }
+      move => ??. apply: TTraceEnd; naive_solver.
+    + apply: TTraceStep; [done| |by erewrite tapp_tnil_r].
+      move => ??. apply: TTraceEnd; [|done]. naive_solver.
+  - move => ??? -> ?.
+    apply: TTraceStep; [by econstructor| |simpl; done].
+    move => ??. apply: TTraceEnd; [|done]. naive_solver.
 Qed.
