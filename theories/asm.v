@@ -22,26 +22,28 @@ Add Printing Constructor asm_state.
 Definition initial_asm_state (instrs : gmap Z asm_instr) := AsmState None ∅ instrs.
 
 Inductive asm_event :=
-| EAJump (pc : Z) (regs : gmap string Z) | EARecvJump (pc : Z) (regs : gmap string Z).
+| EAJump (pc : Z) (regs : gmap string Z)
+| EARecvJump (pc : Z) (regs : gmap string Z).
 
 Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) → Prop :=
 | SWriteReg regs instrs r f es:
   asm_step (AsmState (Some (WriteReg r f :: es)) regs instrs) None
            (λ σ', is_Some (regs !! r) ∧ σ' = AsmState (Some es) (<[r := f regs]>regs) instrs)
 | SJumpInternal regs instrs pc es :
-  (* TODO: Make it UB instead of NB if there is no PC in regs? *)
   regs !! "PC" = Some pc →
   instrs !! pc = Some es →
-  asm_step (AsmState (Some []) regs instrs) None (λ σ', σ' = AsmState (Some es) regs instrs)
+  asm_step (AsmState (Some []) regs instrs) None
+           (λ σ', σ' = AsmState (Some es) regs instrs)
 | SJumpExternal regs instrs pc :
-  (* TODO: Make it UB instead of NB if there is no PC in regs? *)
   regs !! "PC" = Some pc →
   instrs !! pc = None →
-  asm_step (AsmState (Some []) regs instrs) (Some (EAJump pc regs)) (λ σ', σ' = AsmState None regs instrs)
+  asm_step (AsmState (Some []) regs instrs) (Some (EAJump pc regs))
+           (λ σ', σ' = AsmState None regs instrs)
 | SRecvJump regs regs' instrs pc es :
   regs' !! "PC" = Some pc →
   instrs !! pc = Some es →
-  asm_step (AsmState None regs instrs) (Some (EARecvJump pc regs')) (λ σ', σ' = AsmState (Some es) regs' instrs)
+  asm_step (AsmState None regs instrs) (Some (EARecvJump pc regs'))
+           (λ σ', σ' = AsmState (Some es) regs' instrs)
 .
 
 Definition asm_module := Mod asm_step.

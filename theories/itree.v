@@ -228,6 +228,201 @@ Lemma thas_trace_Put {EV S} k Pσ s s' κs:
 Proof. move => Ht. tstep_None; [by econs|] => ? ->. done. Qed.
 
 (** eutt mono *)
+(* TODO: move this *)
+Definition steps_spec_rec {EV} (m : module EV) (κ : option EV) (Pσ : m.(m_state) → Prop) (R : m.(m_state) → Prop) :
+  m.(m_state) → Prop := λ σ,
+    (κ = None ∧ Pσ σ) ∨
+      ∃ κ' Pσ', m.(m_step) σ κ' Pσ' ∧
+          (if κ' is Some _ then κ = κ' else True) ∧ (∀ σ', Pσ' σ' → (κ = κ' ∧ Pσ σ') ∨ κ' = None ∧ R σ').
+
+Global Instance steps_spec_rec_mono {EV} (m : module EV) κ Pσ: MonoPred (steps_spec_rec m κ Pσ).
+Proof. constructor => ??? x [?|?]; destruct_all!; simplify_eq. { by left. } right. naive_solver. Qed.
+
+Definition steps_spec {EV} (m : module EV) (σ : m.(m_state)) (κ : option EV) (Pσ : m.(m_state) → Prop) :=
+  least_fixpoint (steps_spec_rec m κ Pσ) σ.
+
+Notation " σ '-{' m , κ '}->ₛ' P " := (steps_spec m σ κ P) (at level 40).
+
+Lemma steps_spec_end {EV} (m : module EV) σ (Pσ : _ → Prop):
+  Pσ σ →
+  σ -{ m, None }->ₛ Pσ.
+Proof. move => ?. apply pleast_fixpoint_unfold; [ apply _|]. left. naive_solver. Qed.
+
+Lemma steps_spec_step_end {EV} (m : module EV) σ (Pσ Pσ' : _ → Prop) κ:
+  m.(m_step) σ κ Pσ' →
+  (∀ σ', Pσ' σ' → Pσ σ') →
+  σ -{ m, κ }->ₛ Pσ.
+Proof.
+  move => ??. apply pleast_fixpoint_unfold; [ apply _|]. right.
+  eexists _, _. split; [done|]. split; [by case_match|]. naive_solver.
+Qed.
+
+Lemma steps_spec_step {EV} (m : module EV) σ (Pσ Pσ' : _ → Prop) κ:
+  m.(m_step) σ None Pσ' →
+  (∀ σ', Pσ' σ' → σ' -{ m, κ }->ₛ Pσ) →
+  σ -{ m, κ }->ₛ Pσ.
+Proof.
+  move => ??. apply pleast_fixpoint_unfold; [ apply _|]. right.
+  eexists _, _. split; [done|]. split; [done|]. naive_solver.
+Qed.
+
+Lemma steps_spec_has_trace {EV} (m : module EV) σ κ Pσ :
+  σ -{ m, κ }->ₛ Pσ →
+  σ ~{ m, option_trace κ }~>ₜ Pσ.
+Proof.
+  elim/@pleast_fixpoint_ind => ? [[??]|[κ'[?[?[? Ht]]]]]; simplify_eq. { tend. }
+  case_match; simplify_eq/=.
+  - tstep_Some; [done|] => ? /Ht[[??]|[??//]]. tend.
+  - tstep_None; [done|] => ? /Ht[[??]|[??]]; subst. { tend. } done.
+Qed.
+
+Lemma steps_spec_eutt_mono {EV S} t' σ κ Pσ Pσ' b1 b2:
+  (prod_relation (eqit eq b1 b2) (=) ==> iff)%signature Pσ Pσ' →
+  σ -{ mod_itree EV S, κ }->ₛ Pσ →
+  eqit eq b1 b2 σ.1 t' →
+  (t', σ.2) -{ mod_itree EV S, κ }->ₛ Pσ'.
+Proof.
+  move => HP Ht Heq.
+  elim/(@pleast_fixpoint_ind_wf (mod_itree EV S).(m_state)): Ht t' Heq => {}σ IHn t' Heq.
+  destruct σ as [t s]; simpl in *.
+  punfold Heq. unfold eqit_ in Heq at 1.
+  move: Heq. move Hot: (observe t) => ot. move Hot': (observe t') => ot' Heq.
+  elim: Heq t t' s IHn Hot Hot'.
+  - move => ?? -> t t' s IHn Hot Hot'.
+    move: IHn => [[??]|[?[?[?[??]]]]]. 2: { invert_all @m_step; congruence. } subst.
+    apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
+    rewrite (itree_eta t) Hot (itree_eta t') Hot'. done.
+  - move => m1 m2 [REL|//] t t' s IHn Hot Hot'. rewrite -/(eqit _ _ _) in REL.
+    move: IHn => [[??]|[?[?[? [? Ht]]]]]; simplify_eq.
+    + apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
+      rewrite (itree_eta t) Hot (itree_eta t') Hot'. by apply eqit_Tau.
+    + invert_all @m_step; try congruence. have ?: t'0 = m1 by congruence. subst.
+      move: Ht => [[??]|[? Hfix]]; simplify_eq.
+      * apply: steps_spec_step_end. { by econs. } move => ? ->. eapply HP; [|done]. done.
+      * apply: steps_spec_step; [by econs|] => ? ->. move: Hfix => /(pleast_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_spec_rec_mono (mod_itree _ _)). }
+        apply: IH => /=. congruence.
+  - move => u e k1 k2 Hu t t' s IHn Hot Hot'.
+    move: IHn => [[??]|[?[?[? [? Ht]]]]]. {
+      subst. apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
+      rewrite (itree_eta t) Hot (itree_eta t') Hot'.
+      apply eqit_Vis => v. move: (Hu v) => [|//]. done.
+    }
+    invert_all @m_step; rewrite ->Hot in *; simplify_eq; simplify_K.
+    + apply: steps_spec_step_end; [by econs|] => ? /= ->. move: Ht => [[??]|[??//]].
+      eapply HP; [|done]. split; [|done].
+      move: (Hu tt) => [|//]. done.
+    + apply: steps_spec_step; [by econs|] => ? /= [x ->].
+      have [|[??]|[? Hfix]]:= Ht (t'0 x, s); subst. { naive_solver. }
+      * apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
+        move: (Hu x) => [|//]. done.
+      * move: Hfix => /(pleast_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_spec_rec_mono (mod_itree _ _)). }
+        apply: IH => /=. move: (Hu x) => [|//]. done.
+    + apply: steps_spec_step; [by econs|] => ? /= ->.
+      have [[??]|[? Hfix]]:= Ht; subst.
+      * apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
+        move: (Hu x) => [|//]. done.
+      * move: Hfix => /(pleast_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_spec_rec_mono (mod_itree _ _)). }
+        apply: IH => /=. move: (Hu x) => [|//]. done.
+    + apply: steps_spec_step; [by econs|] => ? /= ->.
+      have [[??]|[? Hfix]]:= Ht; subst.
+      * apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
+        move: (Hu s) => [|//]. done.
+      * move: Hfix => /(pleast_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_spec_rec_mono (mod_itree _ _)). }
+        apply: IH => /=. move: (Hu s) => [|//]. done.
+    + apply: steps_spec_step; [by econs|] => ? /= ->.
+      have [[??]|[? Hfix]]:= Ht; subst.
+      * apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
+        move: (Hu tt) => [|//]. done.
+      * move: Hfix => /(pleast_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_spec_rec_mono (mod_itree _ _)). }
+        apply: IH => /=. move: (Hu tt) => [|//]. done.
+  - move => t1 ot2 ? REL IH t t' s IHn Hot Hot'.
+    move: REL => /fold_eqitF REL. specialize (REL _ _ ltac:(done) ltac:(done)).
+    move: IHn => [[??]|[?[?[? [? Ht]]]]]; simplify_eq.
+    + apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=. etrans; [|done].
+      destruct b1 => //. rewrite (itree_eta t) Hot. by apply eqit_Tau_l.
+    + invert_all @m_step; try congruence. have ?: t'0 = t1 by congruence. subst.
+      move: Ht => [[??]|[? Hfix]]; simplify_eq.
+      * apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=. done.
+      * apply: IH; [|done|done].
+        move: Hfix => /(pleast_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_spec_rec_mono (mod_itree _ _)). }
+        apply: mono_pred. 3: done. { apply (steps_spec_rec_mono (mod_itree _ _)). } done.
+  - move => ot1 t2 ? REL IH t t' s IHn Hot Hot'.
+    apply: steps_spec_step; [by econs|] => ? /= ->.
+    by apply: IH.
+Qed.
+
+Lemma tnhas_trace_eutt_mono {EV S} t t' s κs Pσ Pσ' b1 n:
+  (prod_relation (eqit eq b1 false) (=) ==> iff)%signature Pσ Pσ' →
+  (t, s) ~{ mod_itree EV S, κs, n }~>ₜ Pσ →
+  eqit eq b1 false t t' →
+  (t', s) ~{ mod_itree EV S, κs, n }~>ₜ Pσ'.
+Proof.
+  move => HP Ht Heq.
+  elim/ti_lt_ind: n κs t t' s Ht Heq.
+  move => n IHn κs t t' s Ht Heq.
+  punfold Heq. unfold eqit_ in Heq at 1.
+  move: Heq. move Hb2: false => b2. move Hot: (observe t) => ot. move Hot': (observe t') => ot' Heq.
+  elim: Heq t t' n κs s IHn Ht Hot Hot'.
+  - move => ?? -> t t' n κs s IHn Ht Hot Hot'.
+    move: Ht => /(tnhas_trace_Ret_inv' _ _ _ _ _)Ht. specialize (Ht _ ltac:(done)).
+    apply: tnhas_trace_under_tall; [done..|] => ? [??]. tend.
+    eapply HP; [|done]. split; [|done] => /=. rewrite (itree_eta t) Hot (itree_eta t') Hot'. done.
+  - move => m1 m2 [REL|//] t t' n κs s IHn Ht Hot Hot'. subst. rewrite -/(eqit _ _ _) in REL.
+    move: Ht => /(tnhas_trace_Tau_inv' _ _ _ _ _)Ht. specialize (Ht _ ltac:(done)).
+    apply: tnhas_trace_under_tall; [done..|] => ? /= [[??]|[?[??]]].
+    + tend. eapply HP; [|done]. split => //=. rewrite (itree_eta t) Hot (itree_eta t') Hot'. by apply eqit_Tau.
+    + apply: tnhas_trace_Tau'; [done| |done]. apply: IHn; [done|done|done].
+  - move => u e k1 k2 Hu t t' n κs s IHn Ht Hot Hot'. subst.
+    thas_trace_inv Ht. {
+      tend. eapply HP; [|done]. split; [|done] => /=. rewrite (itree_eta t) Hot (itree_eta t') Hot'.
+      apply eqit_Vis => v. move: (Hu v) => [|//]. done.
+    }
+    revert select (_ ⊆@{trace _} _) => <-.
+    invert_all @m_step; rewrite ->Hot in *; simplify_eq; simplify_K.
+    + specialize (H1 _ ltac:(done)).
+      apply: (TNTraceStep _ _ (const (fn ((t'0 (), s) ↾ eq_refl)))).
+      { by econs. } 3: { simpl; done. } 2: { etrans; [|done]. econs. econs => -[??] /=. by econs. }
+      move => ? /= ->. apply: IHn;[|done|].
+      * etrans; [|done]. econs. by econs.
+      * move: (Hu tt) => [|//]. done.
+    + apply: (TNTraceStep _ _ (const (tiChoice T (λ x, fn ((t'0 x, s) ↾ ex_intro _ x eq_refl))))).
+      { by econs. } 3: simpl; done.
+      2: { etrans; [|done]. econs. econs => -[?[??]]. econs => ?. econs. done. }
+      move => ? /= [x ->]. apply: IHn;[| |].
+      * etrans; [|done]. econs. econs => ?. econs. done.
+      * apply: tnhas_trace_mono; [done|done| |done]. econs. done.
+      * move: (Hu x) => [|//]. done.
+    + apply: (TNTraceStep _ _ (const (fn ((t'0 x, s) ↾ eq_refl)))).
+      { by econs. } 3: { simpl; done. } 2: { etrans; [|done]. econs. econs => -[??] /=. by econs. }
+      move => ? /= ->. apply: IHn;[|done|].
+      * etrans; [|done]. econs. by econs.
+      * move: (Hu x) => [|//]. done.
+    + apply: (TNTraceStep _ _ (const (fn ((t'0 s, s) ↾ eq_refl)))).
+      { by econs. } 3: { simpl; done. } 2: { etrans; [|done]. econs. econs => -[??] /=. by econs. }
+      move => ? /= ->. apply: IHn;[|done|].
+      * etrans; [|done]. econs. by econs.
+      * move: (Hu s) => [|//]. done.
+    + apply: (TNTraceStep _ _ (const (fn ((t'0 (), s') ↾ eq_refl)))).
+      { by econs. } 3: { simpl; done. } 2: { etrans; [|done]. econs. econs => -[??] /=. by econs. }
+      move => ? /= ->. apply: IHn;[|done|].
+      * etrans; [|done]. econs. by econs.
+      * move: (Hu tt) => [|//]. done.
+  - move => t1 ot2 ? REL IH t t' n κs s IHn Ht Hot Hot'.
+    move: Ht => /(tnhas_trace_Tau_inv' _ _ _ _ _ _)Ht. specialize (Ht _ ltac:(done)).
+    apply: tnhas_trace_under_tall; [done..|] => ? /= [[??]|[?[??]]].
+    + tend. eapply HP; [|done]. split; [|done] => /=. subst.
+      move: REL => /fold_eqitF REL. specialize (REL _ _ ltac:(done) ltac:(done)). etrans; [|done].
+      destruct b1 => //. rewrite (itree_eta t) Hot. by apply eqit_Tau_l.
+    + apply: IH => //. apply: tnhas_trace_mono; [done..| by apply: ti_lt_impl_le |done].
+  - move => *. subst. done.
+Qed.
+
 Lemma thas_trace_eutt_mono {EV S} t t' s κs Pσ Pσ':
   (prod_relation (eutt eq) (=) ==> iff)%signature Pσ Pσ' →
   (t, s) ~{ mod_itree EV S, κs }~>ₜ Pσ →

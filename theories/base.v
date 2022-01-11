@@ -143,6 +143,68 @@ Lemma omap_option_list {A B} (f : A → option B) o :
   omap f (option_list o) = option_list (o ≫= f).
 Proof. by destruct o. Qed.
 
+(** fixpoints based on iris/bi/lib/fixpoint.v *)
+Class MonoPred {A : Type} (F : (A → Prop) → (A → Prop)) := {
+  mono_pred (Φ Ψ : _ → Prop) :
+    (∀ x, Φ x → Ψ x) → ∀ x, F Φ x → F Ψ x;
+}.
+Global Arguments mono_pred {_ _ _} _ _.
+
+Definition least_fixpoint {A : Type}
+    (F : (A → Prop) → (A → Prop)) (x : A) : Prop :=
+  tc_opaque (∀ Φ : A -> Prop, (∀ x, F Φ x → Φ x) → Φ x).
+Global Arguments least_fixpoint : simpl never.
+Definition greatest_fixpoint {A : Type}
+    (F : (A → Prop) → (A → Prop)) (x : A) : Prop :=
+  tc_opaque (∃ Φ : A -> Prop, (∀ x, Φ x → F Φ x) ∧ Φ x).
+Global Arguments greatest_fixpoint : simpl never.
+
+Section least.
+  Context {A : Type} (F : (A → Prop) → (A → Prop)) `{!MonoPred F}.
+
+  (* TODO: What are good names for these lemmas that don't conflict with the iris names? *)
+  Lemma pleast_fixpoint_unfold_2 x : F (least_fixpoint F) x → least_fixpoint F x.
+  Proof using Type*.
+    rewrite /least_fixpoint /=. move => HF Φ Hincl.
+    apply Hincl. apply: mono_pred; [|done].
+    move => /= y Hy. apply Hy. done.
+  Qed.
+
+  Lemma pleast_fixpoint_unfold_1 x : least_fixpoint F x → F (least_fixpoint F) x.
+  Proof using Type*.
+    move => HF. apply HF. move => y Hy /=. apply: mono_pred; [|done].
+    move => z Hz. by apply: pleast_fixpoint_unfold_2.
+  Qed.
+
+  Lemma pleast_fixpoint_unfold x : least_fixpoint F x ↔ F (least_fixpoint F) x.
+  Proof using Type*. split; eauto using pleast_fixpoint_unfold_1, pleast_fixpoint_unfold_2. Qed.
+End least.
+
+Section least.
+  Context {A : Type} (F : (A → Prop) → (A → Prop)) `{!MonoPred F}.
+
+  Lemma pleast_fixpoint_ind (Φ : A → Prop) :
+    (∀ y, F Φ y → Φ y) → ∀ x, least_fixpoint F x → Φ x.
+  Proof using Type*. move => HΦ x HF. by apply: HF. Qed.
+
+  Definition wf_pred_mono Φ : MonoPred (λ (Ψ : A → Prop) (a : A), Φ a ∧ F Ψ a).
+  Proof using Type*.
+    constructor. intros Ψ Ψ' Mon x [Ha ?]. split; [done|]. apply: mono_pred; [|done]. done.
+  Qed.
+  Local Existing Instance wf_pred_mono.
+
+  Lemma pleast_fixpoint_ind_wf (Φ : A → Prop) :
+    (∀ y, F (least_fixpoint (λ Ψ a, Φ a ∧ F Ψ a)) y → Φ y) →
+    ∀ x, least_fixpoint F x → Φ x.
+  Proof using Type*.
+    move => Hmon x. rewrite pleast_fixpoint_unfold => Hx.
+    apply Hmon. apply: mono_pred; [|done].
+    apply pleast_fixpoint_ind => y Hy.
+    rewrite pleast_fixpoint_unfold. split; [|done].
+    by apply: Hmon.
+  Qed.
+End least.
+
 Ltac invert_all_tac f :=
   let do_invert H := inversion H; clear H in
   repeat lazymatch goal with
