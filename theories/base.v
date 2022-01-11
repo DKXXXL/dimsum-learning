@@ -160,3 +160,9 @@ Ltac invert_all_tac f :=
 
 Tactic Notation "invert_all" constr(f) := invert_all_tac f; simplify_eq/=; specialize_hyps.
 Tactic Notation "invert_all'" constr(f) := invert_all_tac f.
+
+Tactic Notation "case_match" "as" ident(Hd) :=
+  match goal with
+  | H : context [ match ?x with _ => _ end ] |- _ => destruct x eqn:Hd
+  | |- context [ match ?x with _ => _ end ] => destruct x eqn:Hd
+  end.

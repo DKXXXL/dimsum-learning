@@ -281,9 +281,9 @@ Qed.
 Global Hint Resolve mod_seq_product_step_None_i : tstep.
 
 Lemma mod_seq_product_step_l_i {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2 P `{!TStepI m1 σ1 P}:
-  TStepI (mod_seq_product m1 m2) (SPLeft, σ1, σ2) (λ G, P (λ b κ G',
+  TStepI (mod_seq_product m1 m2) (SPLeft, σ1, σ2) (λ G, P (λ b κ P',
     ∀ s', (if κ is None then s' = SPLeft else True) →
-     G b ((λ e, SPELeft e s') <$> κ) (λ Pσ, G' (λ x, Pσ (s', x, σ2))))).
+     G b ((λ e, SPELeft e s') <$> κ) (λ G', P' (λ x, G' (s', x, σ2))))).
 Proof.
   constructor => G /tstepi_proof HP.
   apply: (thas_trace_dual_submodule _ (mod_seq_product _ _) (λ x, (SPLeft, x, σ2))); [done| |].
@@ -295,9 +295,9 @@ Qed.
 Global Hint Resolve mod_seq_product_step_l_i : tstep.
 
 Lemma mod_seq_product_step_r_i {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2 P `{!TStepI m2 σ2 P}:
-  TStepI (mod_seq_product m1 m2) (SPRight, σ1, σ2) (λ G, P (λ b κ G',
+  TStepI (mod_seq_product m1 m2) (SPRight, σ1, σ2) (λ G, P (λ b κ P',
     ∀ s', (if κ is None then s' = SPRight else True) →
-     G b ((λ e, SPERight e s') <$> κ) (λ Pσ, G' (λ x, Pσ (s', σ1, x))))).
+     G b ((λ e, SPERight e s') <$> κ) (λ G', P' (λ x, G' (s', σ1, x))))).
 Proof.
   constructor => G /tstepi_proof HP.
   apply: (thas_trace_dual_submodule _ (mod_seq_product _ _) (λ x, (SPRight, σ1, x))); [done| |].
@@ -307,3 +307,45 @@ Proof.
     move => [?[HG HG']]. eexists _. split; [by apply HG|] => ? /= /HG'[?[??]]. naive_solver.
 Qed.
 Global Hint Resolve mod_seq_product_step_r_i : tstep.
+
+Lemma mod_seq_product_step_None_s {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2:
+  TStepS (mod_seq_product m1 m2) (SPNone, σ1, σ2) (λ G, ∃ s, G (Some (SPENone s)) (λ G', G' (s, σ1, σ2))).
+Proof.
+  constructor => G [s HG]. eexists _, _. split; [done|]. move => ??. tstep_Some. { econs. }
+  move => *. simplify_eq/=. tend.
+Qed.
+Global Hint Resolve mod_seq_product_step_None_s : tstep.
+
+Lemma mod_seq_product_step_l_s {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2 P `{!TStepS m1 σ1 P}:
+  TStepS (mod_seq_product m1 m2) (SPLeft, σ1, σ2) (λ G, P (λ κ P',
+    ∃ s', (if κ is None then s' = SPLeft else True) ∧ G ((λ e, SPELeft e s') <$> κ) (λ G',
+       P' (λ σ, G' (s', σ, σ2))))).
+Proof.
+  constructor => G /tsteps_proof[?[?[? HG']]]. destruct_all!.
+  eexists _, _. split; [done|] => ?/= /HG' Ht.
+  case_match; simplify_eq/=.
+  - move: Ht => /(thas_trace_cons_inv _ _)Ht.
+    apply: (thas_trace_trans tnil).
+    2: {  move => ? Hσ. apply: Hσ. }
+    apply: thas_trace_mono; [ by apply: seq_product_nil_l |done|] => /= [[[??]?]?].
+    destruct_all!. simplify_eq/=. tstep_Some. { by eapply (SPLeftS _ _ (Some _)). }
+    move => [[??]?]? /=. destruct_all!. simplify_eq. tend.
+Admitted.
+Global Hint Resolve mod_seq_product_step_l_s : tstep.
+
+Lemma mod_seq_product_step_r_s {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2 P `{!TStepS m2 σ2 P}:
+  TStepS (mod_seq_product m1 m2) (SPRight, σ1, σ2) (λ G, P (λ κ P',
+    ∃ s', (if κ is None then s' = SPRight else True) ∧ G ((λ e, SPERight e s') <$> κ) (λ G',
+       P' (λ σ, G' (s', σ1, σ))))).
+Proof.
+  constructor => G /tsteps_proof[?[?[? HG']]]. destruct_all!.
+  eexists _, _. split; [done|] => ?/= /HG' Ht.
+  case_match; simplify_eq/=.
+  - move: Ht => /(thas_trace_cons_inv _ _)Ht.
+    apply: (thas_trace_trans tnil).
+    2: {  move => ? Hσ. apply: Hσ. }
+    apply: thas_trace_mono; [ by apply: seq_product_nil_r |done|] => /= [[[??]?]?].
+    destruct_all!. simplify_eq/=. tstep_Some. { by eapply (SPRightS _ _ (Some _)). }
+    move => [[??]?]? /=. destruct_all!. simplify_eq. tend.
+Admitted.
+Global Hint Resolve mod_seq_product_step_r_s : tstep.

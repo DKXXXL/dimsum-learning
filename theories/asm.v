@@ -65,9 +65,9 @@ Global Hint Resolve asm_step_WriteReg_i : tstep.
 
 Lemma asm_step_WriteReg_s r f es rs ins:
   TStepS asm_module (AsmState (Some (WriteReg r f::es)) rs ins)
-            (λ κs G, is_Some (rs !! r) → G κs (AsmState (Some (es)) (<[r:=f rs]>rs) ins)).
+            (λ G, G None (λ G', is_Some (rs !! r) → G' (AsmState (Some (es)) (<[r:=f rs]>rs) ins))).
 Proof.
-  constructor => ???. eexists tnil, _. split; [simpl;done|].
+  constructor => ??. eexists _, _. split; [done|] => ? /= ?.
   tstep_None. { econs. }
   move => ? /= [? ->]. tend. naive_solver.
 Qed.
@@ -89,18 +89,17 @@ Qed.
 Global Hint Resolve asm_step_Jump_i : tstep.
 
 Lemma asm_step_Jump_s rs ins:
-  TStepS asm_module (AsmState (Some []) rs ins) (λ κs G,
+  TStepS asm_module (AsmState (Some []) rs ins) (λ G,
     ∃ pc, rs !! "PC" = Some pc ∧
       if ins !! pc is Some i then
-        G κs (AsmState (Some i) (rs) ins)
+        G None (λ G', G' (AsmState (Some i) (rs) ins))
       else
-        (if κs is tcons e' κs' then e' = EAJump pc rs ∧ G κs' (AsmState None rs ins) else False)
-   ).
+        G (Some (EAJump pc rs)) (λ G', G' (AsmState None rs ins))).
 Proof.
-  constructor => ??[?[??]]. case_match.
-  + eexists tnil, _ => /=. split; [done|]. tstep_None. { by econs. } move => ? ->. tend.
-  + case_match => //; destruct_all?; simplify_eq.
-    eexists (tcons _ tnil), _ => /=. split; [done|]. tstep_Some. { by econs. } move => ? ->. tend.
+  constructor => ?[?[??]]. case_match.
+  all: eexists _, _; split; [done|] => ? /= ?.
+  - tstep_None. { by econs. } move => ? ->. tend.
+  - tstep_Some. { by econs. } move => ? ->. tend.
 Qed.
 Global Hint Resolve asm_step_Jump_s : tstep.
 
@@ -117,15 +116,13 @@ Qed.
 Global Hint Resolve asm_step_None_i : tstep.
 
 Lemma asm_step_None_s rs ins:
-  TStepS asm_module (AsmState None rs ins) (λ κs G,
+  TStepS asm_module (AsmState None rs ins) (λ G,
     ∃ pc i rs', rs' !! "PC" = Some pc ∧
       ins !! pc = Some i ∧
-      if κs is tcons e' κs' then
-        e' = EARecvJump pc rs' ∧ G κs' (AsmState (Some i) rs' ins)
-      else False).
+      G (Some (EARecvJump pc rs')) (λ G', G' (AsmState (Some i) rs' ins))).
 Proof.
-  constructor => ???. destruct_all!. case_match => //. destruct_all!; simplify_eq.
-  eexists (tcons _ tnil), _ => /=. split; [done|]. tstep_Some. { by econs. } move => ? ->. tend.
+  constructor => ??. destruct_all!. eexists _, _. split; [done|] => ? /= ?.
+  tstep_Some. { by econs. } move => ? ->. tend.
 Qed.
 Global Hint Resolve asm_step_None_s : tstep.
 
@@ -200,125 +197,58 @@ Lemma asm_link_refines_prod ins1 ins2:
            (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) (SPNone, initial_asm_state ins1, initial_asm_state ins2, APFNone)).
 Proof.
   move => Hdisj.
-  unshelve apply: inv_implies_trefines. { exact: (asm_link_prod_inv ins1 ins2). }
-  { simpl. naive_solver. }
-  move => /= [i1 rs1 ins1'] [[[? [il rsl insl]] [ir rsr insr] σf]] Pσi κ [? [? [? Hinv]]] Hstep.
-  inversion Hstep; clear Hstep; simplify_eq/=.
-  - destruct σf; destruct_all!; simplify_eq.
-    + tstep_None.
-      { econs. { apply: ProductStepL. econs; [ econs|]. done. } done. }
-      move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
-    + tstep_None.
-      { econs. { apply: ProductStepL. econs; [econs|]. done. } done. }
-      move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
-  - destruct σf; destruct_and?; simplify_eq => //.
-    + revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|[??]].
-      * tstep_None.
-        { econs. { apply: ProductStepL. econs. by apply: SJumpInternal. done. } done. }
-        move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
-      * tstep_None. {
-          econstructor. {
-            apply: ProductStepBoth. {
-              apply: (SPLeftS _ _ (Some _)); [shelve| |done]. by econs.
-            }
-            constructor; econs; try eapply not_elem_of_dom; try eapply elem_of_dom_2; done.
-          }
-          done.
-        }
-        move => /= *. destruct_all!; simplify_eq.
-        tstep_None. {
-          econstructor. {
-            apply: ProductStepBoth. {
-              apply: (SPRightS _ _ (Some _)); [shelve| |done]. by econs.
-            }
-            constructor. econs.
-          }
-          done.
-        }
-        move => /= *. destruct_all!; simplify_eq. tend. simpl. naive_solver.
-    + revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|[??]].
-      * tstep_None. {
-          econs. {
-            apply: ProductStepBoth. {
-              apply: (SPRightS _ _ (Some _)); [shelve| |done].
-              apply: SJumpExternal; [done|]. by apply: map_disjoint_Some_l.
-            }
-            constructor. econs; try eapply not_elem_of_dom; try eapply elem_of_dom_2; try done.
-            by apply: map_disjoint_Some_l.
-          }
-          done.
-        }
-        move => /= *. destruct_all!; simplify_eq.
-        tstep_None. {
-          econstructor. {
-            apply: ProductStepBoth. {
-              apply: (SPLeftS _ _ (Some _)); [shelve| |done]. by econs.
-            }
-            constructor. econs.
-          }
-          done.
-        }
-        move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
-      * tstep_None.
-        { econs. { apply: ProductStepL. econs. by apply: SJumpInternal. done. } done. }
-        move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
-  - revert select ((_ ∪ _) !! _ = None) => /lookup_union_None[??].
-    destruct σf; destruct_all?; simplify_eq.
-    + tstep_Some. {
-        econs. {
-          apply: ProductStepBoth.
-          { apply: (SPLeftS _ _ (Some _)); [shelve| |done]. by econs. }
-          { by constructor; econs; eapply not_elem_of_dom. }
-        }
-        done.
-      }
-      move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
-    + tstep_Some. {
-        econs. {
-          apply: ProductStepBoth.
-          { apply: (SPRightS _ _ (Some _)); [shelve| |done]. by econs. }
-          { by constructor; econs; eapply not_elem_of_dom. }
-        }
-        done.
-      }
-      move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
-  - destruct σf; destruct_and?; unfold is_Some in *; simplify_eq; try naive_solver.
-    revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|[??]].
-    + tstep_Some. {
-        econs. {
-          apply: ProductStepBoth. { econs. }
-          econs. econs; try eapply not_elem_of_dom; try eapply elem_of_dom_2; try done.
-          by apply: map_disjoint_Some_l.
-        }
-        done.
-      }
-      move => /= *. destruct_all!; simplify_eq.
-      tstep_None. {
-        econs. {
-          apply: ProductStepBoth.
-          { apply: (SPLeftS _ _ (Some _)); [shelve| |done]. by econs. }
-          constructor; econs; try eapply not_elem_of_dom; try eapply elem_of_dom_2; try done.
-        }
-        done.
-      }
-      move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
-    + tstep_Some. {
-        econstructor. {
-          apply: ProductStepBoth. { econs. }
-          constructor; econs; try eapply not_elem_of_dom; try eapply elem_of_dom_2; done.
-        }
-        done.
-      }
-      move => /= *. destruct_all!; simplify_eq.
-      tstep_None. {
-        econs. {
-          apply: ProductStepBoth.
-          { apply: (SPRightS _ _ (Some _)); [shelve| |done]. by econs. }
-          constructor; econs; try eapply not_elem_of_dom; try eapply elem_of_dom_2; try done.
-        }
-        done.
-      }
-      move => /= *. destruct_all!; simplify_eq. tend. naive_solver.
+  apply tsim_implies_trefines => /= n.
+  unshelve apply: tsim_remember. { exact: (λ _, asm_link_prod_inv ins1 ins2). }
+  { naive_solver. } { done. }
+  move => /= {}n Hloop [i1 rs1 ins1'] [[[? [il rsl insl]] [ir rsr insr] σf]] [? [? [? Hinv]]].
+  case_match; destruct_all?; simplify_eq.
+  - revert select (is_Some i1) => -[[|[??]?] ->].
+    + tstep_i => pc ?. case_match as Hunion. 1: move: Hunion => /lookup_union_Some_raw[Hl|[? Hl]].
+      * tstep_s. eexists _. split; [done|]. simplify_option_eq.
+        eexists _. split; [done|]. eexists _, _. split; [done|] => /=.
+        apply: Hloop. naive_solver.
+      * tstep_s. eexists _. split; [done|]. simplify_option_eq.
+        eexists _. split; [done|]. eexists _, _. split; [econs|].
+        { by apply not_elem_of_dom. } { by apply elem_of_dom. } simpl.
+        tstep_s. eexists _, _, _. split; [done|]. split; [done|]. eexists _. split; [done|].
+        eexists _, _. split; [econs|]. simpl.
+        apply: Hloop. naive_solver.
+      * move: Hunion => /lookup_union_None[??]. tstep_s. eexists _. split; [done|]. simplify_option_eq.
+        eexists _. split; [done|]. eexists _, _. split; [by apply APFJumpExtL; apply not_elem_of_dom|] => /=.
+        split; [done|]. apply: Hloop. naive_solver.
+    + tstep_both. tstep_s. eexists _. split; [done|]. eexists _, _. split; [done|] => /= ?.
+      tend. split; [done|]. apply: Hloop. naive_solver.
+  - revert select (is_Some i1) => -[[|[??]?] ->].
+    + tstep_i => pc ?. case_match as Hunion. 1: move: Hunion => /lookup_union_Some_raw[Hl|[? Hl]].
+      * have ?: ins2 !! pc = None by apply: map_disjoint_Some_l.
+        tstep_s. eexists _. split; [done|]. simplify_option_eq.
+        eexists _. split; [done|]. eexists _, _. split; [econs|] => /=.
+        { by apply elem_of_dom. } { by apply not_elem_of_dom. }
+        tstep_s. eexists _, _, _. split; [done|]. split; [done|]. eexists _. split; [done|].
+        eexists _, _. split; [econs|]. simpl.
+        apply: Hloop. naive_solver.
+      * tstep_s. eexists _. split; [done|]. simplify_option_eq.
+        eexists _. split; [done|]. eexists _, _. split; [done|] => /=.
+        apply: Hloop. naive_solver.
+      * move: Hunion => /lookup_union_None[??]. tstep_s. eexists _. split; [done|]. simplify_option_eq.
+        eexists _. split; [done|]. eexists _, _. split; [by apply APFJumpExtR; apply not_elem_of_dom|] => /=.
+        split; [done|]. apply: Hloop. naive_solver.
+    + tstep_both. tstep_s. eexists _. split; [done|]. eexists _, _. split; [done|] => /= ?.
+      tend. split; [done|]. apply: Hloop. naive_solver.
+  - tstep_i => pc??? /lookup_union_Some_raw[?|[??]].
+    + have ?: ins2 !! pc = None by apply: map_disjoint_Some_l.
+      tstep_s. eexists SPLeft, _, _. split; [econs|] => /=.
+      { by apply elem_of_dom. } { by apply not_elem_of_dom. } { done. }
+      split; [done|].
+      tstep_s. eexists _, _, _. split; [done|]. split; [done|]. eexists _. split; [done|].
+      eexists _, _. split; [econs|] => /=.
+      apply: Hloop. naive_solver.
+    + tstep_s. eexists SPRight, _, _. split; [econs|] => /=.
+      { by apply not_elem_of_dom. } { by apply elem_of_dom. } { done. }
+      split; [done|].
+      tstep_s. eexists _, _, _. split; [done|]. split; [done|]. eexists _. split; [done|].
+      eexists _, _. split; [econs|] => /=.
+      apply: Hloop. naive_solver.
 Qed.
 
 Lemma asm_prod_refines_link ins1 ins2:
@@ -328,7 +258,7 @@ Lemma asm_prod_refines_link ins1 ins2:
 Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
-  unshelve apply: tsim_remember. { exact: (λ _, flip (asm_link_prod_inv ins1 ins2)). }.
+  unshelve apply: tsim_remember. { exact: (λ _, flip (asm_link_prod_inv ins1 ins2)). }
   { naive_solver. } { done. }
   move => /= {}n Hloop [[[σsp [il rsl insl]] [ir rsr insr]] σf] [i1 rs1 ins1'] [? [? [? Hinv]]].
   case_match; destruct_all?; simplify_eq.

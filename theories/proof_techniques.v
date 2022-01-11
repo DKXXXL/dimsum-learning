@@ -283,25 +283,48 @@ Proof.
   etrans; [|done]. etrans; [ apply tiS_maybe_orb|]. apply tiS_maybe_mono. done.
 Qed.
 
-Class TStepS {EV} (ms : module EV) (σs : ms.(m_state)) (P : trace EV → (trace EV → ms.(m_state) → Prop) → Prop) : Prop := {
-  tsteps_proof κ G:
-    P κ G →
-    ∃ κ'1 κ'2, tapp κ'1 κ'2 ⊆ κ ∧ σs ~{ ms, κ'1 }~>ₜ (λ σs', G κ'2 σs')
+Class TStepS {EV} (ms : module EV) (σs : ms.(m_state)) (P : (option EV → ((ms.(m_state) → Prop) → Prop) → Prop) → Prop) : Prop := {
+  tsteps_proof G:
+    P G →
+    ∃ κ P',
+      G κ P' ∧
+      ∀ G', P' G' → σs ~{ ms, option_trace κ }~>ₜ (λ σs', G' σs')
 }.
 Global Hint Mode TStepS + + ! - : tstep.
 
 Lemma tsim_tstep_s {EV} (ms : module EV) σs κs P `{!TStepS ms σs P} mi σi n b :
-  P κs (λ κs' σs', σi ⪯{mi, ms, n, b, κs'} σs') →
+  P (λ κ P',
+      if κ is Some e then
+        if κs is tcons e' κs' then e = e' ∧ P' (λ σs', σi ⪯{mi, ms, n, b, κs'} σs') else False
+      else
+        P' (λ σs', σi ⪯{mi, ms, n, b, κs} σs')) →
   σi ⪯{mi, ms, n, b, κs} σs.
 Proof.
-  move => /tsteps_proof[?[?[Hsub ?]]] ????. rewrite -Hsub.
-  rewrite -assoc_L. apply: thas_trace_trans; [done|] => ? Ht. by apply: Ht.
+  move => /tsteps_proof[κ [?[? HG']]] ????.
+  repeat case_match => //; destruct_all?; simplify_eq/= => //.
+  - apply: (thas_trace_trans (tcons _ tnil)); simplify_eq/=; [naive_solver|].
+    naive_solver.
+  - apply: (thas_trace_trans tnil); simplify_eq/=; [naive_solver|].
+    naive_solver.
 Qed.
 
 Lemma thas_trace_tstep_s {EV} (m : module EV) σ κs Pσ `{!TStepS m σ P} :
-  P κs (λ κs' σ', σ' ~{m, κs'}~>ₜ Pσ) →
+  P (λ κ P',
+      if κ is Some e then
+        ∃ κs', tcons e κs' ⊆ κs ∧ P' (λ σ', σ' ~{m, κs'}~>ₜ Pσ)
+      else
+        P' (λ σ', σ' ~{m, κs}~>ₜ Pσ)
+  ) →
   σ ~{m, κs}~>ₜ Pσ.
-Proof. move => /tsteps_proof [?[?[<- ?]]]. by apply: thas_trace_trans. Qed.
+Proof.
+ move => /tsteps_proof[?[?[??]]].
+ case_match; destruct_all?; simplify_eq/=.
+ - revert select (_ ⊆ _) => <-.
+   apply: (thas_trace_trans (tcons _ tnil)); simplify_eq/=; [naive_solver|].
+   naive_solver.
+  - apply: (thas_trace_trans tnil); simplify_eq/=; [naive_solver|].
+    naive_solver.
+Qed.
 
 Ltac tstep_s :=
   first [

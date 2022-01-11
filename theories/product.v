@@ -583,10 +583,20 @@ Lemma mod_map_trefines {EV1 EV2 S} m1 m2 (f : mod_map_fn EV1 EV2 S) σ1 σ2 σf 
   trefines (MS (mod_map m1 f) (σ1, σf)) (MS (mod_map m2 f) (σ2, σf)).
 Proof. move => ?. apply mod_filter_trefines. by apply mod_product_trefines. Qed.
 
+Lemma mod_map_nil {EV1 EV2 S} m (f : mod_map_fn EV1 EV2 S) σ Pσ Pσf σf κs:
+  σ ~{ m, tnil }~>ₜ Pσ →
+  (∀ σ', Pσ σ' → (σ', σf) ~{ mod_map m f, κs }~>ₜ Pσf) →
+  (σ, σf) ~{ mod_map m f, κs }~>ₜ Pσf.
+Proof.
+  move => Hσ Hcont. apply: (thas_trace_trans tnil).
+  - apply (tmod_to_mod_filter _ _ _ _ tnil). by apply: mod_product_nil_l.
+  - move => [??]/= [??]. naive_solver.
+Qed.
+
 Lemma mod_map_step_i {EV1 EV2 S} m (f : mod_map_fn EV1 EV2 S) σ σf P `{!TStepI m σ P} :
-  TStepI (mod_map m f) (σ, σf) (λ G, P (λ b κ G',
+  TStepI (mod_map m f) (σ, σf) (λ G, P (λ b κ P',
    ∀ κ' σf', (if κ is Some e then f σf e κ' σf' else κ' = None ∧ σf' = σf) →
-               G b κ' (λ Pσ, G' (λ x, Pσ (x, σf'))))).
+               G b κ' (λ G', P' (λ x, G' (x, σf'))))).
 Proof.
   constructor => G /tstepi_proof HP.
   apply: (thas_trace_dual_submodule _ (mod_map _ _) (λ x, (x, σf))); [done| |].
@@ -598,6 +608,22 @@ Proof.
     + move => [?[HG HG']]. eexists _. split; [by apply HG|] => ? /= /HG'[?[??]]. naive_solver.
 Qed.
 Global Hint Resolve mod_map_step_i : tstep.
+
+Lemma mod_map_step_s {EV1 EV2 S} m (f : mod_map_fn EV1 EV2 S) σ σf P `{!TStepS m σ P} :
+  TStepS (mod_map m f) (σ, σf) (λ G, P (λ κ P',
+   ∃ κ' σf', (if κ is Some e then f σf e κ' σf' else κ' = None ∧ σf' = σf) ∧
+               G κ' (λ G', P' (λ x, G' (x, σf'))))).
+Proof.
+  constructor => G /tsteps_proof [κ [? [[? [κ'[??]]] HG']]]. eexists _, _. split; [done|].
+  move => ? /HG'. destruct κ; destruct_all?; simplify_eq/=.
+  - move => /(thas_trace_cons_inv _ _)Ht. apply: mod_map_nil; [done|] => ?/=[?[? {}Ht]].
+    apply: (TTraceStep _ _ _ _ _ _ tnil). { econs. { apply: ProductStepBoth; [done|]. by econs. } done. }
+    2: by rewrite tapp_tnil_r .
+    move => [??]/=[/Ht??]. simplify_eq.
+    apply: mod_map_nil; [done|] => *. tend.
+  - move => Ht. apply: mod_map_nil; [done|] => ??. tend.
+Qed.
+Global Hint Resolve mod_map_step_s : tstep.
 
 Global Hint Transparent mod_product : tstep.
 Global Hint Transparent mod_map_mod : tstep.
