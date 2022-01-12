@@ -288,7 +288,7 @@ Class TStepS {EV} (ms : module EV) (σs : ms.(m_state)) (P : (option EV → ((ms
     P G →
     ∃ κ P',
       G κ P' ∧
-      ∀ G', P' G' → σs ~{ ms, option_trace κ }~>ₜ (λ σs', G' σs')
+      ∀ G', P' G' → σs -{ ms, κ }->ₛ G'
 }.
 Global Hint Mode TStepS + + ! - : tstep.
 
@@ -302,9 +302,11 @@ Lemma tsim_tstep_s {EV} (ms : module EV) σs κs P `{!TStepS ms σs P} mi σi n 
 Proof.
   move => /tsteps_proof[κ [?[? HG']]] ????.
   repeat case_match => //; destruct_all?; simplify_eq/= => //.
-  - apply: (thas_trace_trans (tcons _ tnil)); simplify_eq/=; [naive_solver|].
+  - apply: (thas_trace_trans (tcons _ tnil)); simplify_eq/=.
+    { apply (steps_spec_has_trace' _ (Some _)); naive_solver. }
     naive_solver.
-  - apply: (thas_trace_trans tnil); simplify_eq/=; [naive_solver|].
+  - apply: (thas_trace_trans tnil); simplify_eq/=.
+    { apply (steps_spec_has_trace' _ None); naive_solver. }
     naive_solver.
 Qed.
 
@@ -320,9 +322,11 @@ Proof.
  move => /tsteps_proof[?[?[??]]].
  case_match; destruct_all?; simplify_eq/=.
  - revert select (_ ⊆ _) => <-.
-   apply: (thas_trace_trans (tcons _ tnil)); simplify_eq/=; [naive_solver|].
+   apply: (thas_trace_trans (tcons _ tnil)); simplify_eq/=.
+    { apply (steps_spec_has_trace' _ (Some _)); naive_solver. }
    naive_solver.
-  - apply: (thas_trace_trans tnil); simplify_eq/=; [naive_solver|].
+  - apply: (thas_trace_trans tnil); simplify_eq/=.
+    { apply (steps_spec_has_trace' _ None); naive_solver. }
     naive_solver.
 Qed.
 

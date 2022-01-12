@@ -631,6 +631,16 @@ Definition steps_spec {EV} (m : module EV) (σ : m.(m_state)) (κ : option EV) (
 
 Notation " σ '-{' m , κ '}->ₛ' P " := (steps_spec m σ κ P) (at level 40).
 
+Lemma steps_spec_mono {EV} (m : module EV) σ (Pσ Pσ' : _ → Prop) κ:
+  σ -{ m, κ }->ₛ Pσ' →
+  (∀ σ', Pσ' σ' → Pσ σ') →
+  σ -{ m, κ }->ₛ Pσ.
+Proof.
+  move => ??. apply: prop_least_fixpoint_strong_mono; [|done] => ?? [[??]|[?[?[??]]]].
+  - left. naive_solver.
+  - right. naive_solver.
+Qed.
+
 Lemma steps_spec_end {EV} (m : module EV) σ (Pσ : _ → Prop):
   Pσ σ →
   σ -{ m, None }->ₛ Pσ.
@@ -654,7 +664,7 @@ Proof.
   eexists _, _. split; [done|]. split; [done|]. naive_solver.
 Qed.
 
-Lemma steps_spec_has_trace' {EV} (m : module EV) σ κ Pσ :
+Lemma steps_spec_has_trace' {EV} (m : module EV) κ σ Pσ :
   σ -{ m, κ }->ₛ Pσ →
   σ ~{ m, option_trace κ }~>ₜ Pσ.
 Proof.
@@ -674,24 +684,32 @@ Proof.
   + tstep_None; [done|] => ? /Ht[[??]|[??]]; simplify_eq. { tend. } done.
 Qed.
 
-Lemma steps_spec_has_trace_2' {EV} (m : module EV) σ κ (Pσ Pσ' : _ → Prop) κs:
+Lemma steps_spec_has_trace_elim' {EV} (m : module EV) σ κ (Pσ Pσ' : _ → Prop) κs:
   σ ~{ m, κs }~>ₜₛ Pσ' →
   κs ⊆ tnil →
-  (∀ σ', Pσ' σ' → if κ is Some _ then ∃ Pσ', m.(m_step) σ' κ Pσ' ∧ ∀ σ', Pσ' σ' → Pσ σ' else Pσ σ') →
+  (∀ σ', Pσ' σ' → σ' -{ m, κ }->ₛ Pσ) →
   σ -{ m, κ }->ₛ Pσ.
 Proof.
   elim.
-  - move => ??? HP ?? Hend. move: HP => /Hend. case_match.
-    + move => [?[??]]. by apply: steps_spec_step_end.
-    + move => ?. by apply: steps_spec_end.
+  - move => ??? HP ?? Hend. move: HP => /Hend. done.
   - move => ??? κ' ???? IH <- Hsub ?. destruct κ'; [easy|].
     apply: steps_spec_step; [done|] => ? /IH. naive_solver.
 Qed.
 
+Lemma steps_spec_has_trace_elim {EV} (m : module EV) σ κ (Pσ : _ → Prop) :
+  σ ~{ m, tnil }~>ₜ (λ σ', σ' -{ m, κ }->ₛ Pσ) →
+  σ -{ m, κ }->ₛ Pσ.
+Proof. move => ?. apply: steps_spec_has_trace_elim'. { by apply thas_trace_nil_inv. } { done. } done. Qed.
+
 Lemma steps_spec_has_trace_2 {EV} (m : module EV) σ κ (Pσ : _ → Prop) :
   σ ~{ m, tnil }~>ₜ (λ σ', if κ is Some _ then ∃ Pσ', m.(m_step) σ' κ Pσ' ∧ ∀ σ', Pσ' σ' → Pσ σ' else Pσ σ') →
   σ -{ m, κ }->ₛ Pσ.
-Proof. move => ?. apply: steps_spec_has_trace_2'. { by apply thas_trace_nil_inv. } { done. } done. Qed.
+Proof.
+  move => ?.
+  apply steps_spec_has_trace_elim. apply: thas_trace_mono; [done..|] => ? /=. case_match.
+  - move => [?[??]]. by apply: steps_spec_step_end.
+  - move => ?. by apply: steps_spec_end.
+Qed.
 
 Lemma steps_spec_has_trace {EV} (m : module EV) σ κ (Pσ : _ → Prop) :
   σ -{ m, κ }->ₛ Pσ ↔

@@ -200,6 +200,16 @@ Section least.
   Qed.
 End least.
 
+Lemma prop_least_fixpoint_strong_mono {A : Type} (F : (A → Prop) → (A → Prop)) `{!MonoPred F}
+    (G : (A → Prop) → (A → Prop)) `{!MonoPred G} :
+  (∀ Φ x, F Φ x → G Φ x) →
+  ∀ x, prop_least_fixpoint F x → prop_least_fixpoint G x.
+Proof.
+  move => Hmon. apply prop_least_fixpoint_ind; [done|].
+  move => y IH. apply prop_least_fixpoint_unfold; [done|].
+  by apply Hmon.
+Qed.
+
 Section least.
   Context {A B : Type} (F : ((A * B) → Prop) → ((A * B) → Prop)) `{!MonoPred F}.
 

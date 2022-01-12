@@ -70,8 +70,8 @@ Lemma asm_step_WriteReg_s r f es rs ins:
             (λ G, G None (λ G', is_Some (rs !! r) → G' (AsmState (Some (es)) (<[r:=f rs]>rs) ins))).
 Proof.
   constructor => ??. eexists _, _. split; [done|] => ? /= ?.
-  tstep_None. { econs. }
-  move => ? /= [? ->]. tend. naive_solver.
+  apply: steps_spec_step_end. { econs. }
+  move => ? /= [? ->]. naive_solver.
 Qed.
 Global Hint Resolve asm_step_WriteReg_s : tstep.
 
@@ -100,8 +100,7 @@ Lemma asm_step_Jump_s rs ins:
 Proof.
   constructor => ?[?[??]]. case_match.
   all: eexists _, _; split; [done|] => ? /= ?.
-  - tstep_None. { by econs. } move => ? ->. tend.
-  - tstep_Some. { by econs. } move => ? ->. tend.
+  all: apply: steps_spec_step_end; [ by econs |] => ? ->; done.
 Qed.
 Global Hint Resolve asm_step_Jump_s : tstep.
 
@@ -124,7 +123,7 @@ Lemma asm_step_None_s rs ins:
       G (Some (EARecvJump pc rs')) (λ G', G' (AsmState (Some i) rs' ins))).
 Proof.
   constructor => ??. destruct_all!. eexists _, _. split; [done|] => ? /= ?.
-  tstep_Some. { by econs. } move => ? ->. tend.
+  apply: steps_spec_step_end. { by econs. } naive_solver.
 Qed.
 Global Hint Resolve asm_step_None_s : tstep.
 

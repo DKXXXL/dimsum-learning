@@ -311,8 +311,9 @@ Global Hint Resolve mod_seq_product_step_r_i : tstep.
 Lemma mod_seq_product_step_None_s {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2:
   TStepS (mod_seq_product m1 m2) (SPNone, σ1, σ2) (λ G, ∃ s, G (Some (SPENone s)) (λ G', G' (s, σ1, σ2))).
 Proof.
-  constructor => G [s HG]. eexists _, _. split; [done|]. move => ??. tstep_Some. { econs. }
-  move => *. simplify_eq/=. tend.
+  constructor => G [s HG]. eexists _, _. split; [done|]. move => ??.
+  apply: steps_spec_step_end. { econs. }
+  move => *. by simplify_eq/=.
 Qed.
 Global Hint Resolve mod_seq_product_step_None_s : tstep.
 
@@ -322,15 +323,13 @@ Lemma mod_seq_product_step_l_s {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1
        P' (λ σ, G' (s', σ, σ2))))).
 Proof.
   constructor => G /tsteps_proof[?[?[? HG']]]. destruct_all!.
-  eexists _, _. split; [done|] => ?/= /HG' Ht.
-  case_match; simplify_eq/=.
-  - move: Ht => /(thas_trace_cons_inv _ _)Ht.
-    apply: (thas_trace_trans tnil).
-    2: {  move => ? Hσ. apply: Hσ. }
-    apply: thas_trace_mono; [ by apply: seq_product_nil_l |done|] => /= [[[??]?]?].
-    destruct_all!. simplify_eq/=. tstep_Some. { by eapply (SPLeftS _ _ (Some _)). }
-    move => [[??]?]? /=. destruct_all!. simplify_eq. tend.
-Admitted.
+  eexists _, _. split; [done|] => ?/= /HG' /steps_spec_has_trace_1 Ht.
+  apply steps_spec_has_trace_elim.
+  apply: thas_trace_mono; [ by apply: seq_product_nil_l |done|] => /= [[[??]?]?].
+  case_match; destruct_all?; simplify_eq/=. 2: apply steps_spec_end; naive_solver.
+  apply: steps_spec_step_end. { by eapply (SPLeftS _ _ (Some _)). }
+  move => [[??]?]? /=. naive_solver.
+Qed.
 Global Hint Resolve mod_seq_product_step_l_s : tstep.
 
 Lemma mod_seq_product_step_r_s {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2 P `{!TStepS m2 σ2 P}:
@@ -339,13 +338,11 @@ Lemma mod_seq_product_step_r_s {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1
        P' (λ σ, G' (s', σ1, σ))))).
 Proof.
   constructor => G /tsteps_proof[?[?[? HG']]]. destruct_all!.
-  eexists _, _. split; [done|] => ?/= /HG' Ht.
-  case_match; simplify_eq/=.
-  - move: Ht => /(thas_trace_cons_inv _ _)Ht.
-    apply: (thas_trace_trans tnil).
-    2: {  move => ? Hσ. apply: Hσ. }
-    apply: thas_trace_mono; [ by apply: seq_product_nil_r |done|] => /= [[[??]?]?].
-    destruct_all!. simplify_eq/=. tstep_Some. { by eapply (SPRightS _ _ (Some _)). }
-    move => [[??]?]? /=. destruct_all!. simplify_eq. tend.
-Admitted.
+  eexists _, _. split; [done|] => ?/= /HG' /steps_spec_has_trace_1 Ht.
+  apply steps_spec_has_trace_elim.
+  apply: thas_trace_mono; [ by apply: seq_product_nil_r |done|] => /= [[[??]?]?].
+  case_match; destruct_all?; simplify_eq/=. 2: apply steps_spec_end; naive_solver.
+  apply: steps_spec_step_end. { by eapply (SPRightS _ _ (Some _)). }
+  move => [[??]?]? /=. naive_solver.
+Qed.
 Global Hint Resolve mod_seq_product_step_r_s : tstep.
