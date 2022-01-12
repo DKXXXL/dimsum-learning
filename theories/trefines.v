@@ -613,45 +613,132 @@ Proof.
   - move => ??? [Hr1] [Hr2]. constructor => /=. naive_solver.
 Qed.
 
-(** * thas_trace_dual *)
-Section dual.
-Local Unset Elimination Schemes.
-Inductive thas_trace_dual {EV} (m : module EV) : m.(m_state) → (bool → option EV → (m.(m_state) → Prop) → Prop) → Prop :=
-| TDEnd σ (Pσ : _ → _ → _ → Prop):
-    Pσ false None (σ =.) →
-    thas_trace_dual m σ Pσ
-| TDStep σ1 Pσ3:
-    (∀ κ Pσ2, m.(m_step) σ1 κ Pσ2 →
-       Pσ3 true κ Pσ2 ∨
-       ∃ σ2, Pσ2 σ2 ∧ κ = None ∧ thas_trace_dual m σ2 (λ _, Pσ3 true)) →
-    thas_trace_dual m σ1 Pσ3
-.
-End dual.
-Notation " σ '-{' m '}->' P " := (thas_trace_dual m σ P) (at level 40).
+(** * steps_spec and steps_impl *)
+(* We need to define steps_spec like this to get a strong induction
+principle for free (which is necessary to prove rewriting with
+eutt) *)
+Definition steps_spec_rec {EV} (m : module EV) (κ : option EV) (Pσ : m.(m_state) → Prop) (R : m.(m_state) → Prop) :
+  m.(m_state) → Prop := λ σ,
+    (κ = None ∧ Pσ σ) ∨
+      ∃ κ' Pσ', m.(m_step) σ κ' Pσ' ∧
+          (if κ' is Some _ then κ = κ' else True) ∧ (∀ σ', Pσ' σ' → (κ = κ' ∧ Pσ σ') ∨ κ' = None ∧ R σ').
 
-Lemma thas_trace_dual_ind
-     : ∀ (EV : Type) (m : module EV) (P : m_state m → (bool → option EV → (m_state m → Prop) → Prop) → Prop),
-         (∀ (σ : m_state m) (Pσ : bool → option EV → (m_state m → Prop) → Prop), Pσ false None (eq σ) → P σ Pσ)
-         → (∀ (σ1 : m_state m) (Pσ3 : bool → option EV → (m_state m → Prop) → Prop),
-              (∀ (κ : option EV) (Pσ2 : m_state m → Prop),
-                 m_step m σ1 κ Pσ2
-                 → Pσ3 true κ Pσ2
-                   ∨ (∃ σ2 : m_state m, Pσ2 σ2 ∧ κ = None ∧ thas_trace_dual m σ2 (λ _ : bool, Pσ3 true)))
-              → (∀ (κ : option EV) (Pσ2 : m_state m → Prop),
-                 m_step m σ1 κ Pσ2
-                 → Pσ3 true κ Pσ2
-                   ∨ (∃ σ2 : m_state m, Pσ2 σ2 ∧ κ = None ∧ P σ2 (λ _ : bool, Pσ3 true)))
-              → P σ1 Pσ3)
-           → ∀ (m0 : m_state m) (P0 : bool → option EV → (m_state m → Prop) → Prop),
-               thas_trace_dual m m0 P0 → P m0 P0.
+Global Instance steps_spec_rec_mono {EV} (m : module EV) κ Pσ: MonoPred (steps_spec_rec m κ Pσ).
+Proof. constructor => ??? x [?|?]; destruct_all!; simplify_eq. { by left. } right. naive_solver. Qed.
+
+Definition steps_spec {EV} (m : module EV) (σ : m.(m_state)) (κ : option EV) (Pσ : m.(m_state) → Prop) :=
+  prop_least_fixpoint (steps_spec_rec m κ Pσ) σ.
+
+Notation " σ '-{' m , κ '}->ₛ' P " := (steps_spec m σ κ P) (at level 40).
+
+Lemma steps_spec_end {EV} (m : module EV) σ (Pσ : _ → Prop):
+  Pσ σ →
+  σ -{ m, None }->ₛ Pσ.
+Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. left. naive_solver. Qed.
+
+Lemma steps_spec_step_end {EV} (m : module EV) σ (Pσ Pσ' : _ → Prop) κ:
+  m.(m_step) σ κ Pσ' →
+  (∀ σ', Pσ' σ' → Pσ σ') →
+  σ -{ m, κ }->ₛ Pσ.
 Proof.
-  move => EV m P Hend Hstep σ Pσ Hs. generalize dependent P => P. move: σ Pσ Hs.
-  fix FIX 3. move => ?? [].
-  - move => ??? Hend ?. by apply: Hend.
-  - move => ?? He ? Hstep. apply: (Hstep); naive_solver.
+  move => ??. apply prop_least_fixpoint_unfold; [ apply _|]. right.
+  eexists _, _. split; [done|]. split; [by case_match|]. naive_solver.
 Qed.
 
-Lemma tnhas_trace_dual_elim {EV} (m : module EV) κs Pσ σ n:
+Lemma steps_spec_step {EV} (m : module EV) σ (Pσ Pσ' : _ → Prop) κ:
+  m.(m_step) σ None Pσ' →
+  (∀ σ', Pσ' σ' → σ' -{ m, κ }->ₛ Pσ) →
+  σ -{ m, κ }->ₛ Pσ.
+Proof.
+  move => ??. apply prop_least_fixpoint_unfold; [ apply _|]. right.
+  eexists _, _. split; [done|]. split; [done|]. naive_solver.
+Qed.
+
+Lemma steps_spec_has_trace' {EV} (m : module EV) σ κ Pσ :
+  σ -{ m, κ }->ₛ Pσ →
+  σ ~{ m, option_trace κ }~>ₜ Pσ.
+Proof.
+  elim/@prop_least_fixpoint_ind => ? [[??]|[κ'[?[?[? Ht]]]]]; simplify_eq. { tend. }
+  case_match; simplify_eq/=.
+  - tstep_Some; [done|] => ? /Ht[[??]|[??//]]. tend.
+  - tstep_None; [done|] => ? /Ht[[??]|[??]]; subst. { tend. } done.
+Qed.
+
+Lemma steps_spec_has_trace_1 {EV} (m : module EV) σ κ (Pσ : _ → Prop) :
+  σ -{ m, κ }->ₛ Pσ →
+  σ ~{ m, tnil }~>ₜ (λ σ', if κ is Some _ then ∃ Pσ', m.(m_step) σ' κ Pσ' ∧ ∀ σ', Pσ' σ' → Pσ σ' else Pσ σ').
+Proof.
+  elim/@prop_least_fixpoint_ind => ? [[??]|[κ'[?[?[? Ht]]]]]; simplify_eq. { tend. }
+  destruct κ'; simplify_eq.
+  + tend. eexists _. split; [done|]. naive_solver.
+  + tstep_None; [done|] => ? /Ht[[??]|[??]]; simplify_eq. { tend. } done.
+Qed.
+
+Lemma steps_spec_has_trace_2' {EV} (m : module EV) σ κ (Pσ Pσ' : _ → Prop) κs:
+  σ ~{ m, κs }~>ₜₛ Pσ' →
+  κs ⊆ tnil →
+  (∀ σ', Pσ' σ' → if κ is Some _ then ∃ Pσ', m.(m_step) σ' κ Pσ' ∧ ∀ σ', Pσ' σ' → Pσ σ' else Pσ σ') →
+  σ -{ m, κ }->ₛ Pσ.
+Proof.
+  elim.
+  - move => ??? HP ?? Hend. move: HP => /Hend. case_match.
+    + move => [?[??]]. by apply: steps_spec_step_end.
+    + move => ?. by apply: steps_spec_end.
+  - move => ??? κ' ???? IH <- Hsub ?. destruct κ'; [easy|].
+    apply: steps_spec_step; [done|] => ? /IH. naive_solver.
+Qed.
+
+Lemma steps_spec_has_trace_2 {EV} (m : module EV) σ κ (Pσ : _ → Prop) :
+  σ ~{ m, tnil }~>ₜ (λ σ', if κ is Some _ then ∃ Pσ', m.(m_step) σ' κ Pσ' ∧ ∀ σ', Pσ' σ' → Pσ σ' else Pσ σ') →
+  σ -{ m, κ }->ₛ Pσ.
+Proof. move => ?. apply: steps_spec_has_trace_2'. { by apply thas_trace_nil_inv. } { done. } done. Qed.
+
+Lemma steps_spec_has_trace {EV} (m : module EV) σ κ (Pσ : _ → Prop) :
+  σ -{ m, κ }->ₛ Pσ ↔
+  σ ~{ m, tnil }~>ₜ (λ σ', if κ is Some _ then ∃ Pσ', m.(m_step) σ' κ Pσ' ∧ ∀ σ', Pσ' σ' → Pσ σ' else Pσ σ').
+Proof.
+  split; [apply steps_spec_has_trace_1 | apply steps_spec_has_trace_2].
+Qed.
+
+(** ** steps_impl *)
+(* We need to define steps_spec like this to get a strong induction
+principle for free (which is necessary to prove rewriting with
+eutt) *)
+Definition steps_impl_rec {EV} (m : module EV) (R : (m.(m_state) * (bool → option EV → (m.(m_state) → Prop) → Prop)) → Prop)
+  : (m.(m_state) * (bool → option EV → (m.(m_state) → Prop) → Prop)) → Prop := λ '(σ, Pσ),
+    Pσ false None (σ =.) ∨
+      (∀ κ Pσ2, m.(m_step) σ κ Pσ2 →
+                Pσ true κ Pσ2 ∨ ∃ σ2, Pσ2 σ2 ∧ κ = None ∧ R (σ2, (λ _, Pσ true))).
+
+Global Instance steps_impl_rec_mono {EV} (m : module EV): MonoPred (steps_impl_rec m).
+Proof. constructor => ??? [??] [?|?]; destruct_all?; simplify_eq. { by left. } right. naive_solver. Qed.
+
+Definition steps_impl {EV} (m : module EV) (σ : m.(m_state)) (Pσ : bool → option EV → (m.(m_state) → Prop) → Prop) :=
+  prop_least_fixpoint (steps_impl_rec m) (σ, Pσ).
+
+Notation " σ '-{' m '}->' P " := (steps_impl m σ P) (at level 40).
+
+Lemma steps_impl_end {EV} (m : module EV) σ (Pσ : _ → _ → _ → Prop):
+  Pσ false None (σ =.) →
+  σ -{ m }-> Pσ.
+Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. left. naive_solver. Qed.
+
+Lemma steps_impl_step_end {EV} (m : module EV) σ (Pσ : _ → _ → _ → Prop):
+  (∀ κ Pσ2, m.(m_step) σ κ Pσ2 → Pσ true κ Pσ2) →
+  σ -{ m }-> Pσ.
+Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. right => ???. left. naive_solver. Qed.
+
+Lemma steps_impl_step {EV} (m : module EV) σ (Pσ : _ → _ → _ → Prop):
+  (∀ κ Pσ2, m.(m_step) σ κ Pσ2 → Pσ true κ Pσ2 ∨ ∃ σ2, Pσ2 σ2 ∧ κ = None ∧ σ2 -{ m }-> (λ _, Pσ true)) →
+  σ -{ m }-> Pσ.
+Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. right => ???. naive_solver. Qed.
+
+Lemma steps_impl_step_next {EV} (m : module EV) σ (Pσ : _ → _ → _ → Prop):
+  (∀ κ Pσ2, m.(m_step) σ κ Pσ2 → ∃ σ2, Pσ2 σ2 ∧ κ = None ∧ σ2 -{ m }-> (λ _, Pσ true)) →
+  σ -{ m }-> Pσ.
+Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. right => ???. naive_solver. Qed.
+
+Lemma steps_impl_elim_n {EV} (m : module EV) κs Pσ σ n:
   σ -{ m }-> Pσ →
   σ ~{ m, κs, n }~>ₜ - →
   under_tall κs (λ κs,
@@ -659,23 +746,23 @@ Lemma tnhas_trace_dual_elim {EV} (m : module EV) κs Pσ σ n:
      ∃ b κ κs' Pσ' n', Pσ b κ Pσ' ∧ tapp (option_trace κ) κs' ⊆ κs ∧ tiS? b n' ⊆ n ∧ ∀ σ', Pσ' σ' → σ' ~{ m, κs', n' }~>ₜ -
   ).
 Proof.
-  move => Hd. elim: Hd κs n.
-  - move => ??????. econs. naive_solver.
-  - move => ??? IH ?? Hs. apply tnhas_trace_inv in Hs.
-    apply under_tall_idemp. apply: under_tall_mono'; [done|].
-    move => ?[?|?]; destruct_all!. { econs. by left. }
-    have [?|[?[?[? {}IH]]]] := IH _ _ ltac:(done); destruct_all?; simplify_eq/=.
-    + econs. right. eexists _, _, _, _, _. split_and!; [done|simpl;done|done|] => /=.
-      move => ??. apply: tnhas_trace_mono; [naive_solver|done|by econs|done].
-    + rename select (κs' ⊆ _) into Hκs.
-      apply: under_tall_mono'. { apply IH. rewrite -Hκs. naive_solver. }
-      move => /= κs'' [?|?]; destruct_all?. { by left. } right.
-      eexists _, _, _, _, _. split_and!; [done|done| |done] => /=.
-      etrans; [|done]. econs. econs. etrans; [|done]. apply ti_le_S_maybe.
-      Unshelve. all: done.
+  move => Hd. elim/@prop_least_fixpoint_pair_ind: Hd κs n => {}σ {}Pσ [?|IH] κs n Hs.
+  { econs. naive_solver. }
+  apply tnhas_trace_inv in Hs.
+  apply under_tall_idemp. apply: under_tall_mono'; [done|].
+  move => ?[?|?]; destruct_all!. { econs. by left. }
+  have [?|[?[?[? {}IH]]]] := IH _ _ ltac:(done); destruct_all?; simplify_eq/=.
+  + econs. right. eexists _, _, _, _, _. split_and!; [done|simpl;done|done|] => /=.
+    move => ??. apply: tnhas_trace_mono; [naive_solver|done|by econs|done].
+  + rename select (κs' ⊆ _) into Hκs.
+    apply: under_tall_mono'. { apply IH. rewrite -Hκs. naive_solver. }
+    move => /= κs'' [?|?]; destruct_all?. { by left. } right.
+    eexists _, _, _, _, _. split_and!; [done|done| |done] => /=.
+    etrans; [|done]. econs. econs. etrans; [|done]. apply ti_le_S_maybe.
+    Unshelve. all: done.
 Qed.
 
-Lemma thas_trace_dual_elim {EV} (m : module EV) κs Pσ σ:
+Lemma steps_impl_elim {EV} (m : module EV) κs Pσ σ:
   σ -{ m }-> Pσ →
   σ ~{ m, κs }~>ₜ - →
   under_tall κs (λ κs,
@@ -683,12 +770,12 @@ Lemma thas_trace_dual_elim {EV} (m : module EV) κs Pσ σ:
      ∃ b κ κs' Pσ', Pσ b κ Pσ' ∧ tapp (option_trace κ) κs' ⊆ κs ∧ ∀ σ', Pσ' σ' → σ' ~{ m, κs' }~>ₜ -
   ).
 Proof.
-  move => ? /thas_trace_n[??]. apply: under_tall_mono'; [ by apply: tnhas_trace_dual_elim|].
+  move => ? /thas_trace_n[??]. apply: under_tall_mono'; [ by apply: steps_impl_elim_n|].
   move => ? [?|?]. { by left. } right. destruct_all!. eexists _, _, _, _. split_and!; [done..|] => ??.
   apply thas_trace_n. naive_solver.
 Qed.
 
-Lemma thas_trace_dual_submodule {EV1 EV2} (m1 : module EV1) (m2 : module EV2) (f : m1.(m_state) → m2.(m_state)) σ P1 (P2 : _ → _ → _ → Prop):
+Lemma steps_impl_submodule {EV1 EV2} (m1 : module EV1) (m2 : module EV2) (f : m1.(m_state) → m2.(m_state)) σ P1 (P2 : _ → _ → _ → Prop):
   σ -{m1}-> P1 →
   (∀ b σ, P1 b None (σ =.) → P2 b None ((f σ) =.)) →
   (∀ σ1 κ Pσ2, m2.(m_step) (f σ1) κ Pσ2 →
@@ -698,13 +785,12 @@ Lemma thas_trace_dual_submodule {EV1 EV2} (m1 : module EV1) (m2 : module EV2) (f
  ) →
   f σ -{m2}-> P2.
 Proof.
-  move => Hd.
-  elim: Hd P2.
-  - move => ???? Hend?. econs. by apply: Hend.
-  - move => {}σ {}P1 ? IH P2 Hend Hstep. apply TDStep => ?? /Hstep[?[? [/IH[?|?] ?]]].
+  move => Hd. elim/@prop_least_fixpoint_pair_ind: Hd P2 => {}σ {}P1 [?|IH] P2 Hend Hstep.
+  - apply steps_impl_end. by apply: Hend.
+  - apply steps_impl_step => ?? /Hstep[?[? [/IH[?|/=?] [??]]]]; clear IH.
     + naive_solver.
     + right. destruct_all!; simplify_eq. eexists (f _). split_and!; [naive_solver..|].
-      apply H4; first naive_solver. done.
+      apply H2; first naive_solver. done.
 Qed.
 
 (** * Tactics *)

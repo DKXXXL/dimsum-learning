@@ -228,54 +228,6 @@ Lemma thas_trace_Put {EV S} k Pσ s s' κs:
 Proof. move => Ht. tstep_None; [by econs|] => ? ->. done. Qed.
 
 (** eutt mono *)
-(* TODO: move this *)
-Definition steps_spec_rec {EV} (m : module EV) (κ : option EV) (Pσ : m.(m_state) → Prop) (R : m.(m_state) → Prop) :
-  m.(m_state) → Prop := λ σ,
-    (κ = None ∧ Pσ σ) ∨
-      ∃ κ' Pσ', m.(m_step) σ κ' Pσ' ∧
-          (if κ' is Some _ then κ = κ' else True) ∧ (∀ σ', Pσ' σ' → (κ = κ' ∧ Pσ σ') ∨ κ' = None ∧ R σ').
-
-Global Instance steps_spec_rec_mono {EV} (m : module EV) κ Pσ: MonoPred (steps_spec_rec m κ Pσ).
-Proof. constructor => ??? x [?|?]; destruct_all!; simplify_eq. { by left. } right. naive_solver. Qed.
-
-Definition steps_spec {EV} (m : module EV) (σ : m.(m_state)) (κ : option EV) (Pσ : m.(m_state) → Prop) :=
-  least_fixpoint (steps_spec_rec m κ Pσ) σ.
-
-Notation " σ '-{' m , κ '}->ₛ' P " := (steps_spec m σ κ P) (at level 40).
-
-Lemma steps_spec_end {EV} (m : module EV) σ (Pσ : _ → Prop):
-  Pσ σ →
-  σ -{ m, None }->ₛ Pσ.
-Proof. move => ?. apply pleast_fixpoint_unfold; [ apply _|]. left. naive_solver. Qed.
-
-Lemma steps_spec_step_end {EV} (m : module EV) σ (Pσ Pσ' : _ → Prop) κ:
-  m.(m_step) σ κ Pσ' →
-  (∀ σ', Pσ' σ' → Pσ σ') →
-  σ -{ m, κ }->ₛ Pσ.
-Proof.
-  move => ??. apply pleast_fixpoint_unfold; [ apply _|]. right.
-  eexists _, _. split; [done|]. split; [by case_match|]. naive_solver.
-Qed.
-
-Lemma steps_spec_step {EV} (m : module EV) σ (Pσ Pσ' : _ → Prop) κ:
-  m.(m_step) σ None Pσ' →
-  (∀ σ', Pσ' σ' → σ' -{ m, κ }->ₛ Pσ) →
-  σ -{ m, κ }->ₛ Pσ.
-Proof.
-  move => ??. apply pleast_fixpoint_unfold; [ apply _|]. right.
-  eexists _, _. split; [done|]. split; [done|]. naive_solver.
-Qed.
-
-Lemma steps_spec_has_trace {EV} (m : module EV) σ κ Pσ :
-  σ -{ m, κ }->ₛ Pσ →
-  σ ~{ m, option_trace κ }~>ₜ Pσ.
-Proof.
-  elim/@pleast_fixpoint_ind => ? [[??]|[κ'[?[?[? Ht]]]]]; simplify_eq. { tend. }
-  case_match; simplify_eq/=.
-  - tstep_Some; [done|] => ? /Ht[[??]|[??//]]. tend.
-  - tstep_None; [done|] => ? /Ht[[??]|[??]]; subst. { tend. } done.
-Qed.
-
 Lemma steps_spec_eutt_mono {EV S} t' σ κ Pσ Pσ' b1 b2:
   (prod_relation (eqit eq b1 b2) (=) ==> iff)%signature Pσ Pσ' →
   σ -{ mod_itree EV S, κ }->ₛ Pσ →
@@ -283,7 +235,7 @@ Lemma steps_spec_eutt_mono {EV S} t' σ κ Pσ Pσ' b1 b2:
   (t', σ.2) -{ mod_itree EV S, κ }->ₛ Pσ'.
 Proof.
   move => HP Ht Heq.
-  elim/(@pleast_fixpoint_ind_wf (mod_itree EV S).(m_state)): Ht t' Heq => {}σ IHn t' Heq.
+  elim/@prop_least_fixpoint_ind_wf: Ht t' Heq => {}σ IHn t' Heq.
   destruct σ as [t s]; simpl in *.
   punfold Heq. unfold eqit_ in Heq at 1.
   move: Heq. move Hot: (observe t) => ot. move Hot': (observe t') => ot' Heq.
@@ -299,7 +251,7 @@ Proof.
     + invert_all @m_step; try congruence. have ?: t'0 = m1 by congruence. subst.
       move: Ht => [[??]|[? Hfix]]; simplify_eq.
       * apply: steps_spec_step_end. { by econs. } move => ? ->. eapply HP; [|done]. done.
-      * apply: steps_spec_step; [by econs|] => ? ->. move: Hfix => /(pleast_fixpoint_unfold_1 _ _)[|IH ?].
+      * apply: steps_spec_step; [by econs|] => ? ->. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
         { apply wf_pred_mono. apply (steps_spec_rec_mono (mod_itree _ _)). }
         apply: IH => /=. congruence.
   - move => u e k1 k2 Hu t t' s IHn Hot Hot'.
@@ -316,28 +268,28 @@ Proof.
       have [|[??]|[? Hfix]]:= Ht (t'0 x, s); subst. { naive_solver. }
       * apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
         move: (Hu x) => [|//]. done.
-      * move: Hfix => /(pleast_fixpoint_unfold_1 _ _)[|IH ?].
+      * move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
         { apply wf_pred_mono. apply (steps_spec_rec_mono (mod_itree _ _)). }
         apply: IH => /=. move: (Hu x) => [|//]. done.
     + apply: steps_spec_step; [by econs|] => ? /= ->.
       have [[??]|[? Hfix]]:= Ht; subst.
       * apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
         move: (Hu x) => [|//]. done.
-      * move: Hfix => /(pleast_fixpoint_unfold_1 _ _)[|IH ?].
+      * move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
         { apply wf_pred_mono. apply (steps_spec_rec_mono (mod_itree _ _)). }
         apply: IH => /=. move: (Hu x) => [|//]. done.
     + apply: steps_spec_step; [by econs|] => ? /= ->.
       have [[??]|[? Hfix]]:= Ht; subst.
       * apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
         move: (Hu s) => [|//]. done.
-      * move: Hfix => /(pleast_fixpoint_unfold_1 _ _)[|IH ?].
+      * move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
         { apply wf_pred_mono. apply (steps_spec_rec_mono (mod_itree _ _)). }
         apply: IH => /=. move: (Hu s) => [|//]. done.
     + apply: steps_spec_step; [by econs|] => ? /= ->.
       have [[??]|[? Hfix]]:= Ht; subst.
       * apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
         move: (Hu tt) => [|//]. done.
-      * move: Hfix => /(pleast_fixpoint_unfold_1 _ _)[|IH ?].
+      * move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
         { apply wf_pred_mono. apply (steps_spec_rec_mono (mod_itree _ _)). }
         apply: IH => /=. move: (Hu tt) => [|//]. done.
   - move => t1 ot2 ? REL IH t t' s IHn Hot Hot'.
@@ -349,7 +301,7 @@ Proof.
       move: Ht => [[??]|[? Hfix]]; simplify_eq.
       * apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=. done.
       * apply: IH; [|done|done].
-        move: Hfix => /(pleast_fixpoint_unfold_1 _ _)[|IH ?].
+        move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
         { apply wf_pred_mono. apply (steps_spec_rec_mono (mod_itree _ _)). }
         apply: mono_pred. 3: done. { apply (steps_spec_rec_mono (mod_itree _ _)). } done.
   - move => ot1 t2 ? REL IH t t' s IHn Hot Hot'.

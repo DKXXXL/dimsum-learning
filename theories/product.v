@@ -599,7 +599,7 @@ Lemma mod_map_step_i {EV1 EV2 S} m (f : mod_map_fn EV1 EV2 S) σ σf P `{!TStepI
                G b κ' (λ G', P' (λ x, G' (x, σf'))))).
 Proof.
   constructor => G /tstepi_proof HP.
-  apply: (thas_trace_dual_submodule _ (mod_map _ _) (λ x, (x, σf))); [done| |].
+  apply: (steps_impl_submodule _ (mod_map _ _) (λ x, (x, σf))); [done| |].
   - move => ?? /= [?[HG HG']]. eexists _. split; [by apply HG|] => ? /= /HG'[?[??]]. naive_solver.
   - move => ????. invert_all' @m_step; simplify_eq/=; eexists _, _.
     all: split_and!; [done| |repeat case_match => //;naive_solver].

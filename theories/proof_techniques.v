@@ -263,7 +263,7 @@ Lemma tsim_tstep_i {EV} (mi : module EV) σi P `{!TStepI mi σi P} ms σs n b:
   σi ⪯{mi, ms, n, b} σs.
 Proof.
   move => HP κs n' Hn /= Hi.
-  efeed pose proof @tnhas_trace_dual_elim as Hd. 2: done. { by apply: tstepi_proof. }
+  efeed pose proof @steps_impl_elim_n as Hd. 2: done. { by apply: tstepi_proof. }
   apply: thas_trace_under_tall; [done..|] => {Hi HP Hd} {}κs /= [?|]. { tend. }
   move => [?[?[?[?[?[[?[HP HG']][<-[??]]]]]]]]. move: HP => /HG'[?[? Hs]].
   apply: Hs. 2: naive_solver.
@@ -275,7 +275,7 @@ Lemma tsim_tstep_both {EV} (mi : module EV) σi P `{!TStepI mi σi P} ms σs n b
   σi ⪯{mi, ms, n, b} σs.
 Proof.
   move => HP κs n' Hn Hi /=.
-  efeed pose proof @tnhas_trace_dual_elim as Hd. 2: done. { by apply: tstepi_proof. }
+  efeed pose proof @steps_impl_elim_n as Hd. 2: done. { by apply: tstepi_proof. }
   apply: thas_trace_under_tall; [done..|] => {Hi HP Hd} {}κs /= [?|]. { tend. }
   move => [?[?[?[?[?[[?[? HG']][<-[??]]]]]]]].
   apply: thas_trace_trans; [done|] => ? /HG' [σi' [? {}Ht]].
