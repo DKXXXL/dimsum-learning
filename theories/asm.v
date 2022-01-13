@@ -60,7 +60,7 @@ Lemma asm_step_WriteReg_i r f es rs ins:
             (λ G, G true None (λ G', is_Some (rs !! r) ∧ G' (AsmState (Some (es)) (<[r:=f rs]>rs) ins))).
 Proof.
   constructor => ? ?. apply steps_impl_step_end => ???.
-  invert_all @m_step. eexists _. split; [done|].
+  invert_all @m_step. eexists _, _. split_and!; [done|done|].
   move => ? /=. naive_solver.
 Qed.
 Global Hint Resolve asm_step_WriteReg_i : tstep.
@@ -86,7 +86,7 @@ Lemma asm_step_Jump_i rs ins:
 Proof.
   constructor => ? HG. apply steps_impl_step_end => ???.
   invert_all @m_step; specialize (HG _ ltac:(done)); simplify_option_eq.
-  all: eexists _; split; [done|]; naive_solver.
+  all: eexists _, _; split_and!; [done..|]; naive_solver.
 Qed.
 Global Hint Resolve asm_step_Jump_i : tstep.
 
@@ -112,7 +112,7 @@ Lemma asm_step_None_i rs ins:
    ).
 Proof.
   constructor => ? HG. apply steps_impl_step_end => ???.
-  invert_all @m_step. eexists _. split; [naive_solver|]. naive_solver.
+  invert_all @m_step. eexists _, _. split_and!; [naive_solver..|]. naive_solver.
 Qed.
 Global Hint Resolve asm_step_None_i : tstep.
 

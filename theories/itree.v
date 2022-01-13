@@ -228,6 +228,99 @@ Lemma thas_trace_Put {EV S} k Pσ s s' κs:
 Proof. move => Ht. tstep_None; [by econs|] => ? ->. done. Qed.
 
 (** eutt mono *)
+Definition steps_impl_eutt_rel {EV S} (b1 b2 : bool) : relation (bool → option EV → ((itree (moduleE EV S) () * S → Prop) → Prop)) := λ Pσ Pσ',
+  ∀ (b b' : bool) κ (P1 P2 : _ → Prop),
+    (∀ t s, P1 (t, s) → ∃ t', eqit eq b1 b2 t t' ∧ P2 (t', s)) →
+    (b1 = false → b → b') →
+    Pσ b κ P1 → Pσ' b' κ P2.
+
+Lemma steps_impl_eutt_mono {EV S} t' σ (Pσ Pσ' : _ → _ → _ → Prop) b1 b2:
+  steps_impl_eutt_rel b1 b2 Pσ Pσ' →
+  σ -{ mod_itree EV S }-> Pσ →
+  eqit eq b1 b2 σ.1 t' →
+  (t', σ.2) -{ mod_itree EV S }-> Pσ'.
+Proof.
+  move => HP Ht Heq.
+  elim/@prop_least_fixpoint_pair_ind_wf: Ht t' Pσ' Heq HP => {}σ {}Pσ IHn t' {}Pσ' Heq HP.
+  destruct σ as [t s]; simpl in *.
+  punfold Heq. unfold eqit_ in Heq at 1.
+  move: Heq. move Hot: (observe t) => ot. move Hot': (observe t') => ot' Heq.
+  elim: Heq t t' s Pσ' Pσ HP IHn Hot Hot'.
+  - move => ?? -> t t' s Pσ' Pσ HP IHn Hot Hot'.
+    apply steps_impl_step_end => ???. invert_all @m_step; congruence.
+  - move => m1 m2 [REL|//] t t' s Pσ' Pσ HP IHn Hot Hot'. rewrite -/(eqit _ _ _) in REL.
+    move: IHn => [?| {}IHn]; simplify_eq.
+    + apply: steps_impl_end. eapply HP; [|done..]. move => t1 ? [? ?]. subst. eexists _. split; [|done].
+      rewrite (itree_eta t1) Hot (itree_eta t') Hot'. by apply eqit_Tau.
+    + apply: steps_impl_step => ???. invert_all @m_step; try congruence. have ?: t'0 = m2 by congruence. subst.
+      have [?|[?[?[? Hfix]]]]:= (IHn _ _ ltac:(by econs)); simplify_eq.
+      * left. eapply HP; [|done..]. naive_solver.
+      * right. eexists _. split_and!; [done..|].
+        move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|/=IH ?].
+        { apply wf_pred_mono. apply (steps_impl_rec_mono (mod_itree _ _)). }
+        apply IH => //=. unfold steps_impl_eutt_rel in *. naive_solver.
+  - move => u e k1 k2 Hu t t' s Pσ' Pσ HP IHn Hot Hot'.
+    move: IHn => [?|{}IHn]. {
+      apply: steps_impl_end. eapply HP; [|done..]. move => t1 ? [? ?]. subst. eexists _. split; [|done].
+      rewrite (itree_eta t1) Hot (itree_eta t') Hot'.
+      apply eqit_Vis => v. move: (Hu v) => [|//]. done.
+    }
+    apply: steps_impl_step => ???.
+    invert_all @m_step; rewrite ->Hot' in *; simplify_eq; simplify_K.
+    + have [?|[?[?[??]]]]:= (IHn _ _ ltac:(by econs)); simplify_eq. left.
+      eapply HP; [|done..]. move => t1 ? [? ?]. subst. eexists _. split; [|done].
+      move: (Hu tt) => [|//]. done.
+    + have [?|[?[[x ?][? Hfix]]]]:= (IHn _ _ ltac:(by econs)); simplify_eq.
+      * left. eapply HP; [|done..]. move => t1 ? [x [??]]. subst. eexists _. split; [|naive_solver].
+        move: (Hu x) => [|//]. done.
+      * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_impl_rec_mono (mod_itree _ _)). }
+        eexists _. split_and!;[ naive_solver..|].
+        apply: IH => /=. 2: unfold steps_impl_eutt_rel in *; naive_solver. move: (Hu x) => [|//]. done.
+    + efeed pose proof IHn as IH'; [by econs|]. move: IH' => [?|[?[?[? Hfix]]]]; simplify_eq.
+      * left. eapply HP; [|done..]. move => t1 ? [??]. subst. eexists _. split; [|naive_solver].
+        move: (Hu x) => [|//]. done.
+      * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|/=IH ?].
+        { apply wf_pred_mono. apply (steps_impl_rec_mono (mod_itree _ _)). }
+        eexists _. split_and!;[ naive_solver..|].
+        apply IH => /=. 2: unfold steps_impl_eutt_rel in *; naive_solver. move: (Hu x) => [|//]. done.
+    + efeed pose proof IHn as IH'; [by econs|]. move: IH' => [?|[?[?[? Hfix]]]]; simplify_eq.
+      * left. eapply HP; [|done..]. move => t1 ? [??]. subst. eexists _. split; [|naive_solver].
+        move: (Hu s) => [|//]. done.
+      * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|/=IH ?].
+        { apply wf_pred_mono. apply (steps_impl_rec_mono (mod_itree _ _)). }
+        eexists _. split_and!;[ naive_solver..|].
+        apply IH => /=. 2: unfold steps_impl_eutt_rel in *; naive_solver. move: (Hu s) => [|//]. done.
+    + efeed pose proof IHn as IH'; [by econs|]. move: IH' => [?|[?[?[? Hfix]]]]; simplify_eq.
+      * left. eapply HP; [|done..]. move => t1 ? [??]. subst. eexists _. split; [|naive_solver].
+        move: (Hu tt) => [|//]. done.
+      * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|/=IH ?].
+        { apply wf_pred_mono. apply (steps_impl_rec_mono (mod_itree _ _)). }
+        eexists _. split_and!;[ naive_solver..|].
+        apply IH => /=. 2: unfold steps_impl_eutt_rel in *; naive_solver. move: (Hu tt) => [|//]. done.
+  - move => t1 ot2 ? REL IH t t' s Pσ' Pσ HP IHn Hot Hot'.
+    move: REL => /fold_eqitF REL. specialize (REL _ _ ltac:(done) ltac:(done)).
+    destruct b1 => //. move: IHn => [?|IHn]; simplify_eq.
+    + apply: steps_impl_end. eapply HP; [|done..]. move => t1' ? [??]. subst. eexists _. split; [|naive_solver].
+      rewrite (itree_eta t1') Hot. by apply eqit_Tau_l.
+    + efeed pose proof IHn as IH'; [by econs|]. move: IH' => [?|[?[?[? Hfix]]]]; simplify_eq.
+      * apply: steps_impl_end. eapply HP; [| |done]; [|done]. move => t1' ? [??]. subst. eexists _.
+        split; [|naive_solver]. done.
+      * apply: IH; [ | |done|done]; last first.
+        -- move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH Hb].
+           { apply wf_pred_mono. apply (steps_impl_rec_mono (mod_itree _ _)). }
+           apply: mono_pred. 3: done. { apply (steps_impl_rec_mono (mod_itree _ _)). } done.
+        -- move => ???????. apply: HP; [|done]. naive_solver.
+  - move => ot1 t2 ? REL IH t t' s Pσ' Pσ HP IHn Hot Hot'.
+    apply: steps_impl_step => ???. invert_all @m_step; try congruence.
+    right. eexists _. split_and!;[done..|]. apply: IH; [|done|done|congruence].
+    move => ????????. by apply: HP.
+Qed.
+
+Global Instance steps_impl_itree_proper EV S b1 b2:
+  Proper ((prod_relation (eqit eq b1 b2) (=)) ==> steps_impl_eutt_rel b1 b2 ==> impl) (steps_impl (mod_itree EV S)).
+Proof. move => [??] [??] [/= Heq ->] ?? Hf ?. by apply: (steps_impl_eutt_mono _ (_, _)). Qed.
+
 Lemma steps_spec_eutt_mono {EV S} t' σ κ Pσ Pσ' b1 b2:
   (prod_relation (eqit eq b1 b2) (=) ==> iff)%signature Pσ Pσ' →
   σ -{ mod_itree EV S, κ }->ₛ Pσ →
@@ -479,6 +572,23 @@ Lemma itree_rel_spec_intro EV S σ κ P:
   σ -{mod_itree EV S, κ }->ₛ P.
 Proof. move => ?. apply: steps_spec_mono; [done|]. move => -[??] Hp. by apply Hp. Qed.
 
+Definition itree_impl_rel {EV S} (P : bool → option EV → (itree (moduleE EV S) () * S → Prop) → Prop) :
+  bool → option EV → (itree (moduleE EV S) () * S → Prop) → Prop :=
+  λ b κ Pσ, ∀ b' (Pσ' : _ → Prop), (∀ t s, Pσ (t, s) → ∃ t', t ≈ t' ∧ Pσ' (t', s)) → P b' κ Pσ'.
+Global Instance itree_impl_rel_proper EV S b1 b2 P:
+  Proper (steps_impl_eutt_rel b1 b2) (@itree_impl_rel EV S P).
+Proof.
+  move => b b' κ P1 P2 HP1 Hb REL ? Pσ' HPσ'. apply: REL.
+  move => ?? /HP1 [? [Ht /HPσ'[?[??]]]]. eexists _. split; [|done]. etrans; [|done].
+  by apply: eqit_mon; [..|done].
+Qed.
+Typeclasses Opaque itree_impl_rel.
+
+Lemma itree_impl_rel_intro EV S σ P:
+  σ -{mod_itree EV S }-> itree_impl_rel P →
+  σ -{mod_itree EV S }-> P.
+Proof. move => ?. apply: steps_impl_mono; [done|]. move => ??? Hp. apply Hp. naive_solver. Qed.
+
 (** * Derived notions *)
 Definition TVis {EV S} (e : EV) : itree (moduleE EV S) unit :=
   trigger (EVis e).
@@ -518,33 +628,57 @@ Proof.
 Qed.
 
 (** * tstep *)
+Lemma eq_it_to_tstep_s {EV S} s t t' (Heqit : t ≈ t'):
+  TStepS (mod_itree EV S) (t, s) (λ G, G None (λ G', itree_rel G' (t', s))).
+Proof.
+  constructor => G HG. eexists _, _. split; [done|] => ? /= ?.
+  apply itree_rel_spec_intro. setoid_rewrite Heqit. by apply steps_spec_end.
+Qed.
+
+Lemma eq_it_to_tstep_i {EV S} s t t' (Heqit : t ≈ t'):
+  TStepI (mod_itree EV S) (t, s) (λ G, G false None (λ G', itree_rel G' (t', s))).
+Proof.
+  constructor => G HG. apply itree_impl_rel_intro. setoid_rewrite Heqit. apply steps_impl_end.
+  move => ?? Ht. eexists _, _. naive_solver.
+Qed.
+
 (** These step rules should always apply to itree with a bind at the
 top-level and discriminate on the argument of the bind.
 TODO: add a step rule that adds a bind a the top-level if there is none.  *)
-Lemma itree_step_bind_s EV S A B (t : itree _ A) (k : A → itree _ B) h s:
-  TStepS (mod_itree EV S) (ITree.bind (ITree.bind t k) h, s)
-            (λ G, G None (λ G', itree_rel G' ((ITree.bind t (fun r => ITree.bind (k r) h)), s))).
-Proof.
-  constructor => G HG. eexists _, _. split; [done|] => ? /= ?.
-  apply itree_rel_spec_intro. rewrite bind_bind. by apply steps_spec_end.
-Qed.
+Program Definition itree_step_bind_s {EV S} A B s h (k : A → itree _ B) t :=
+  @eq_it_to_tstep_s EV S s (ITree.bind (ITree.bind t k) h)
+                    (ITree.bind t (fun r => ITree.bind (k r) h)) _.
+Next Obligation. move => *. by rewrite bind_bind. Qed.
 Global Hint Resolve itree_step_bind_s : tstep.
 
-Lemma itree_step_Ret_s EV S A (x : A) h s:
-  TStepS (mod_itree EV S) (ITree.bind (Ret x) h, s) (λ G, G None (λ G', itree_rel G' (h x, s))).
-Proof.
-  constructor => ??. eexists _, _. split; [done|] => ? /= ?.
-  apply itree_rel_spec_intro. rewrite bind_ret_l. by apply steps_spec_end.
-Qed.
+Program Definition itree_step_bind_i {EV S} A B s h (k : A → itree _ B) t :=
+  @eq_it_to_tstep_i EV S s (ITree.bind (ITree.bind t k) h)
+                    (ITree.bind t (fun r => ITree.bind (k r) h)) _.
+Next Obligation. move => *. by rewrite bind_bind. Qed.
+Global Hint Resolve itree_step_bind_i : tstep.
+
+Program Definition itree_step_Ret_s EV S A (x : A) h s :=
+  @eq_it_to_tstep_s EV S s (ITree.bind (Ret x) h) (h x) _.
+Next Obligation. move => *. by rewrite bind_ret_l. Qed.
 Global Hint Resolve itree_step_Ret_s : tstep.
 
-Lemma itree_step_Tau_s EV S t s:
-  TStepS (mod_itree EV S) (Tau t, s) (λ G, G None (λ G', itree_rel G' (t, s))).
-Proof.
-  constructor => ?. eexists _, _. split; [done|] => ? /= ?.
-  apply itree_rel_spec_intro. rewrite tau_eutt. by apply steps_spec_end.
-Qed.
+Program Definition itree_step_Ret_i EV S A (x : A) h s :=
+  @eq_it_to_tstep_i EV S s (ITree.bind (Ret x) h) (h x) _.
+Next Obligation. move => *. by rewrite bind_ret_l. Qed.
+Global Hint Resolve itree_step_Ret_i : tstep.
+
+Program Definition itree_step_Tau_s EV S t s :=
+  @eq_it_to_tstep_s EV S s (Tau t) t _.
+Next Obligation. move => *. by rewrite tau_eutt. Qed.
 Global Hint Resolve itree_step_Tau_s : tstep.
+
+Lemma itree_step_Tau_i EV S k s:
+  TStepI (mod_itree EV S) (Tau k, s) (λ G, G true None (λ G', G' (k, s))).
+Proof.
+  constructor => ??. apply: steps_impl_step_end => ???.
+  invert_all @m_step; simplify_eq/=. eexists _, _. naive_solver.
+Qed.
+Global Hint Resolve itree_step_Tau_i : tstep.
 
 Lemma itree_step_Vis_s EV S k s e:
   TStepS (mod_itree EV S) (TVis e;;;; k, s) (λ G, G (Some e) (λ G', itree_rel G' (k, s))).
@@ -555,15 +689,34 @@ Proof.
 Qed.
 Global Hint Resolve itree_step_Vis_s : tstep.
 
+Lemma itree_step_Vis_i EV S k s e:
+  TStepI (mod_itree EV S) (TVis e;;;; k, s) (λ G, G true (Some e) (λ G', itree_rel G' (k, s))).
+Proof.
+  constructor => ??. apply: steps_impl_step_end => ???.
+  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
+  eexists _, _. split_and!; [done..|]. move => /= ? HG. eexists _. split; [done|].
+  apply HG => /=. by setoid_rewrite bind_ret_l.
+Qed.
+Global Hint Resolve itree_step_Vis_i : tstep.
+
 Lemma itree_step_All_s EV S T k s:
-  TStepS (mod_itree EV S) (x ← TAll T;;; k x, s)
-            (λ G, G None (λ G', ∀ x, itree_rel G' (k x, s))).
+  TStepS (mod_itree EV S) (x ← TAll T;;; k x, s) (λ G, G None (λ G', ∀ x, itree_rel G' (k x, s))).
 Proof.
   constructor => ?. eexists _, _. split; [done|] => ? /= ?.
   apply itree_rel_spec_intro. rewrite bind_trigger.
   apply: steps_spec_step_end. { by econs. } naive_solver.
 Qed.
 Global Hint Resolve itree_step_All_s : tstep.
+
+Lemma itree_step_All_i EV S T k s:
+  TStepI (mod_itree EV S) (x ← TAll T;;; k x, s) (λ G, G true None (λ G', ∃ x, itree_rel G' (k x, s))).
+Proof.
+  constructor => ??. apply: steps_impl_step_end => ???.
+  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
+  eexists _, _. split_and!; [done..|]. move => /= ? [? HG]. eexists _. split; [naive_solver|].
+  apply HG => /=. by setoid_rewrite bind_ret_l.
+Qed.
+Global Hint Resolve itree_step_All_i : tstep.
 
 Lemma itree_step_Exist_s EV S T k s:
   TStepS (mod_itree EV S) (x ← TExist T;;; k x, s)
@@ -574,6 +727,17 @@ Proof.
   apply: steps_spec_step_end. { by econs. } naive_solver.
 Qed.
 Global Hint Resolve itree_step_Exist_s : tstep.
+
+Lemma itree_step_Exist_i EV S T k s:
+  TStepI (mod_itree EV S) (x ← TExist T;;; k x, s)
+            (λ G, G true None (λ G', ∀ x, itree_rel G' (k x, s))).
+Proof.
+  constructor => ??. apply: steps_impl_step_end => ???.
+  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
+  eexists _, _. split_and!; [done..|]. move => /= ? HG. eexists _. split; [done|].
+  apply: HG => /=. by setoid_rewrite bind_ret_l.
+Qed.
+Global Hint Resolve itree_step_Exist_i : tstep.
 
 Lemma itree_step_Ub_s EV S T (k : T → _) s:
   TStepS (mod_itree EV S) (x ← TUb;;; k x, s) (λ G, G None (λ G', True)).
@@ -624,42 +788,26 @@ Proof.
 Qed.
 Global Hint Resolve itree_step_AssertOpt_s : tstep.
 
-Lemma itree_step_recursive_bind_translate_s EV S R Q A B (f : A → itree (callE A B +' _) _) (t : itree (moduleE EV S) R) (k : R → itree (_ +' moduleE EV S) Q) h s:
-  TStepS (mod_itree EV S) (x ← interp (recursive f) (ITree.bind (translate inr_ t) k);;; h x, s)
-            (λ G, G None (λ G', itree_rel G' ((ITree.bind t (fun r => x ← interp (recursive f) (k r);;; h x)), s))).
-Proof.
-  constructor => ??. eexists _, _. split; [done|] => ? /= ?.
-  apply itree_rel_spec_intro. rewrite interp_bind bind_bind interp_translate /= interp_trigger_h.
-  by apply steps_spec_end.
-Qed.
+Program Definition itree_step_recursive_bind_translate_s EV S R Q A B (f : A → itree (callE A B +' _) _) (t : itree (moduleE EV S) R) (k : R → itree (_ +' moduleE EV S) Q) h s :=
+  @eq_it_to_tstep_s EV S s (x ← interp (recursive f) (ITree.bind (translate inr_ t) k);;; h x)
+                    (ITree.bind t (fun r => x ← interp (recursive f) (k r);;; h x))_.
+Next Obligation. move => *. by rewrite interp_bind bind_bind interp_translate /= interp_trigger_h. Qed.
 Global Hint Resolve itree_step_recursive_bind_translate_s : tstep.
 
-Lemma itree_step_recursive_translate_s EV S R A B (f : A → itree (callE A B +' _) _) (t : itree (moduleE EV S) R) h s:
-  TStepS (mod_itree EV S) (x ← interp (recursive f) (translate inr_ t);;; h x, s)
-            (λ G, G None (λ G', itree_rel G' ((x ← t;;; h x), s))).
-Proof.
-  constructor => ??. eexists _, _. split; [done|] => ? /= ?.
-  apply itree_rel_spec_intro. rewrite interp_translate /= interp_trigger_h.
-  by apply steps_spec_end.
-Qed.
+Program Definition itree_step_recursive_translate_s EV S R A B (f : A → itree (callE A B +' _) _) (t : itree (moduleE EV S) R) h s :=
+  @eq_it_to_tstep_s EV S s (x ← interp (recursive f) (translate inr_ t);;; h x) (x ← t;;; h x) _.
+Next Obligation. move => *. by rewrite interp_translate /= interp_trigger_h. Qed.
 Global Hint Resolve itree_step_recursive_translate_s : tstep.
-Lemma itree_step_recursive_call_s EV S R A B (f : A → itree (callE A B +' _) _) k (h : R → _) s a:
-  TStepS (mod_itree EV S) (x ← interp (recursive f) (y ← call a;;; k y);;; h x, s)
-            (λ G, G None (λ G', itree_rel G' ((y ← rec f a;;; x ← interp (recursive f) (k y);;; h x), s))).
-Proof.
-  constructor => ??. eexists _, _. split; [done|] => ? /= ?.
-  apply itree_rel_spec_intro. rewrite interp_bind interp_recursive_call bind_bind.
-  by apply steps_spec_end.
-Qed.
+
+Program Definition itree_step_recursive_call_s EV S R A B (f : A → itree (callE A B +' _) _) k (h : R → _) s a :=
+  @eq_it_to_tstep_s EV S s (x ← interp (recursive f) (y ← call a;;; k y);;; h x)
+            (y ← rec f a;;; x ← interp (recursive f) (k y);;; h x) _.
+Next Obligation. move => *. by rewrite interp_bind interp_recursive_call bind_bind. Qed.
 Global Hint Resolve itree_step_recursive_call_s : tstep.
 
-Lemma itree_step_interp_ret_s EV S R E  (f : E ~> itree (moduleE EV S)) (a : R) h s:
-  TStepS (mod_itree EV S) (x ← interp f (Ret a);;; h x, s) (λ G, G None (λ G', itree_rel G' (h a, s))).
-Proof.
-  constructor => ??. eexists _, _. split; [done|] => ? /= ?.
-  apply itree_rel_spec_intro. rewrite interp_ret bind_ret_l.
-  by apply steps_spec_end.
-Qed.
+Program Definition itree_step_interp_ret_s EV S R E  (f : E ~> itree (moduleE EV S)) (a : R) h s :=
+  @eq_it_to_tstep_s EV S s (x ← interp f (Ret a);;; h x) (h a) _.
+Next Obligation. move => *. by rewrite interp_ret bind_ret_l. Qed.
 Global Hint Resolve itree_step_interp_ret_s : tstep.
 
 

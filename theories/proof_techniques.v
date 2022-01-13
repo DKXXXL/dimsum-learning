@@ -254,7 +254,7 @@ Global Hint Transparent m_state : tstep.
 Class TStepI {EV} (mi : module EV) (σi : mi.(m_state)) (P : (bool → option EV → ((mi.(m_state) → Prop) → Prop) → Prop) → Prop) : Prop := {
   tstepi_proof G:
     P G →
-    σi -{ mi }-> (λ b κ Pσ, ∃ P', G b κ P' ∧ ∀ G', P' G' → ∃ σ', Pσ σ' ∧ G' σ')
+    σi -{ mi }-> (λ b κ Pσ, ∃ b' P', G b' κ P' ∧ (b' → b) ∧ ∀ G', P' G' → ∃ σ', Pσ σ' ∧ G' σ')
 }.
 Global Hint Mode TStepI + + ! - : tstep.
 
@@ -265,9 +265,10 @@ Proof.
   move => HP κs n' Hn /= Hi.
   efeed pose proof @steps_impl_elim_n as Hd. 2: done. { by apply: tstepi_proof. }
   apply: thas_trace_under_tall; [done..|] => {Hi HP Hd} {}κs /= [?|]. { tend. }
-  move => [?[?[?[?[?[[?[HP HG']][<-[??]]]]]]]]. move: HP => /HG'[?[? Hs]].
+  move => [?[?[?[?[?[[b'[? [HP [? HG']]]][<-[??]]]]]]]]. move: HP => /HG'[?[? Hs]].
   apply: Hs. 2: naive_solver.
-  etrans; [|done]. etrans; [ apply tiS_maybe_orb|]. apply tiS_maybe_mono. done.
+  etrans; [|done]. etrans; [ apply tiS_maybe_orb|]. apply tiS_maybe_mono; [done|].
+  etrans; [|done]. by apply tiS_maybe_mono.
 Qed.
 
 Lemma tsim_tstep_both {EV} (mi : module EV) σi P `{!TStepI mi σi P} ms σs n b:
@@ -277,10 +278,11 @@ Proof.
   move => HP κs n' Hn Hi /=.
   efeed pose proof @steps_impl_elim_n as Hd. 2: done. { by apply: tstepi_proof. }
   apply: thas_trace_under_tall; [done..|] => {Hi HP Hd} {}κs /= [?|]. { tend. }
-  move => [?[?[?[?[?[[?[? HG']][<-[??]]]]]]]].
+  move => [?[?[?[?[?[[?[?[?[? HG']]]][<-[??]]]]]]]].
   apply: thas_trace_trans; [done|] => ? /HG' [σi' [? {}Ht]].
   apply: Ht; [|naive_solver].
-  etrans; [|done]. etrans; [ apply tiS_maybe_orb|]. apply tiS_maybe_mono. done.
+  etrans; [|done]. etrans; [ apply tiS_maybe_orb|]. apply tiS_maybe_mono; [done|].
+  etrans; [|done]. by apply tiS_maybe_mono.
 Qed.
 
 Class TStepS {EV} (ms : module EV) (σs : ms.(m_state)) (P : (option EV → ((ms.(m_state) → Prop) → Prop) → Prop) → Prop) : Prop := {
@@ -330,16 +332,42 @@ Proof.
     naive_solver.
 Qed.
 
+Lemma steps_spec_tstep_s {EV} (m : module EV) σ κ Pσ `{!TStepS m σ P} :
+  P (λ κ' P', κ = κ' ∧ P' Pσ) →
+  σ -{m, κ}->ₛ Pσ.
+Proof. move => /tsteps_proof[?[?[[? HP] HG']]]. subst. move: HP => /HG'. done. Qed.
+
+Lemma steps_impl_tstep_i {EV} (m : module EV) σ (Pσ : _ → _ → _ → Prop) `{!TStepI m σ P} :
+  P (λ b κ' P', ∀ (b' : bool) (Pσ' : _ → Prop), (b → b') → P' (λ σ', Pσ' σ' → Pσ b' κ' Pσ')) →
+  σ -{m}-> Pσ.
+Proof.
+  move => /tstepi_proof?. apply: steps_impl_mono; [done|] => ??? [?[?[HP[? HG']]]].
+  naive_solver.
+Qed.
+
 Ltac tstep_s :=
   first [
-      notypeclasses refine (tsim_tstep_s _ _ _ _ _ _ _ _ _); [solve [typeclasses eauto with tstep]|]; simpl
-    | notypeclasses refine (thas_trace_tstep_s _ _ _ _ _); [solve [typeclasses eauto with tstep]|]; simpl
+      once (notypeclasses refine (tsim_tstep_s _ _ _ _ _ _ _ _ _); [solve [typeclasses eauto with tstep]|]); simpl
+    | once (notypeclasses refine (thas_trace_tstep_s _ _ _ _ _); [solve [typeclasses eauto with tstep]|]); simpl
+    | once (notypeclasses refine (steps_spec_tstep_s _ _ _ _ _)); [solve [typeclasses eauto with tstep]|]; simpl
     ].
 Ltac tstep_i :=
-  notypeclasses refine (tsim_tstep_i _ _ _ _ _ _ _ _); [solve [typeclasses eauto with tstep]|]; simpl.
+  first [
+      once (notypeclasses refine (tsim_tstep_i _ _ _ _ _ _ _ _); [solve [typeclasses eauto with tstep]|]); simpl
+    | once (notypeclasses refine (steps_impl_tstep_i _ _ _ _); [solve [typeclasses eauto with tstep]|]); simpl
+    ].
 Ltac tstep_both :=
-  notypeclasses refine (tsim_tstep_both _ _ _ _ _ _ _ _); [solve [typeclasses eauto with tstep]|]; simpl.
+  once (notypeclasses refine (tsim_tstep_both _ _ _ _ _ _ _ _); [solve [typeclasses eauto with tstep]|]); simpl.
 
+Lemma tstep_i_generic EV (m : module EV) σ:
+  TStepI m σ (λ G, σ -{ m }-> (λ b κ Pσ, G b κ (λ G', ∃ σ', Pσ σ' ∧ G' σ'))).
+Proof. constructor => ? HG. apply: steps_impl_mono; [done|]. naive_solver. Qed.
+Global Hint Resolve tstep_i_generic | 1000 : tstep.
+
+Lemma tstep_s_generic EV (m : module EV) σ:
+  TStepS m σ (λ G, ∃ κ, G κ (λ G', σ -{m, κ}->ₛ G')).
+Proof. constructor => ? [??]. eexists _, _. split; [done|]. done. Qed.
+Global Hint Resolve tstep_s_generic | 1000 : tstep.
 
 (** * proving a refinement based on another refinement *)
 

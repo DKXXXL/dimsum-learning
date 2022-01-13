@@ -201,12 +201,12 @@ Inductive imp_prod_filter (fns1 fns2 : gset string) :
 | IPFCallExtToLeft f vs cs:
   f ∈ fns1 → f ∉ fns2 →
   imp_prod_filter fns1 fns2 (IPFState IPFNone cs) (SPENone SPLeft)
-                  (Some (EICall f vs)) (IPFState (IPFLeftRecvCall f vs) (IPFNone :: cs))
+                  (Some (EIRecvCall f vs)) (IPFState (IPFLeftRecvCall f vs) (IPFNone :: cs))
 (* call ext -> r *)
 | IPFCallExtToRight f vs cs:
   f ∉ fns1 → f ∈ fns2 →
   imp_prod_filter fns1 fns2 (IPFState IPFNone cs) (SPENone SPRight)
-                  (Some (EICall f vs)) (IPFState (IPFRightRecvCall f vs) (IPFNone :: cs))
+                  (Some (EIRecvCall f vs)) (IPFState (IPFRightRecvCall f vs) (IPFNone :: cs))
 (* ret l -> r *)
 | IPFReturnLeftToRight v cs:
   imp_prod_filter fns1 fns2 (IPFState IPFLeft (IPFRight :: cs)) (SPELeft (EIReturn v) SPRight)

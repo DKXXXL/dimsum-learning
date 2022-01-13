@@ -276,7 +276,7 @@ Lemma mod_seq_product_step_None_i {EV1 EV2} (m1 : module EV1) (m2 : module EV2) 
   TStepI (mod_seq_product m1 m2) (SPNone, σ1, σ2) (λ G, ∀ s, G true (Some (SPENone s)) (λ G', G' (s, σ1, σ2))).
 Proof.
   constructor => G HG. apply: steps_impl_step_end => ???. invert_all @m_step.
-  eexists _. split; [done|]. naive_solver.
+  eexists _, _. split_and!; [done..|]. naive_solver.
 Qed.
 Global Hint Resolve mod_seq_product_step_None_i : tstep.
 
@@ -287,10 +287,10 @@ Lemma mod_seq_product_step_l_i {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1
 Proof.
   constructor => G /tstepi_proof HP.
   apply: (steps_impl_submodule _ (mod_seq_product _ _) (λ x, (SPLeft, x, σ2))); [done| |].
-  - move => ?? /= [?[HG HG']]. eexists _. split; [by apply HG|] => ? /= /HG'[?[??]]. naive_solver.
+  - move => ?? /= [?[?[HG[? HG']]]]. eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
   - move => ????. invert_all' @m_step; simplify_eq/=; eexists _, _.
     split_and!; [done| |naive_solver].
-    move => [?[HG HG']]. eexists _. split; [by apply HG|] => ? /= /HG'[?[??]]. naive_solver.
+    move => [?[?[HG [? HG']]]]. eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
 Qed.
 Global Hint Resolve mod_seq_product_step_l_i : tstep.
 
@@ -301,10 +301,10 @@ Lemma mod_seq_product_step_r_i {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1
 Proof.
   constructor => G /tstepi_proof HP.
   apply: (steps_impl_submodule _ (mod_seq_product _ _) (λ x, (SPRight, σ1, x))); [done| |].
-  - move => ?? /= [?[HG HG']]. eexists _. split; [by apply HG|] => ? /= /HG'[?[??]]. naive_solver.
+  - move => ?? /= [?[?[HG [? HG']]]]. eexists _,_. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
   - move => ????. invert_all' @m_step; simplify_eq/=; eexists _, _.
     split_and!; [done| |naive_solver].
-    move => [?[HG HG']]. eexists _. split; [by apply HG|] => ? /= /HG'[?[??]]. naive_solver.
+    move => [?[?[HG [? HG']]]]. eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
 Qed.
 Global Hint Resolve mod_seq_product_step_r_i : tstep.
 

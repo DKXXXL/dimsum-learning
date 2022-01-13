@@ -733,6 +733,7 @@ Proof. constructor => ??? [??] [?|?]; destruct_all?; simplify_eq. { by left. } r
 
 Definition steps_impl {EV} (m : module EV) (σ : m.(m_state)) (Pσ : bool → option EV → (m.(m_state) → Prop) → Prop) :=
   prop_least_fixpoint (steps_impl_rec m) (σ, Pσ).
+Arguments steps_impl_rec : simpl never.
 
 Notation " σ '-{' m '}->' P " := (steps_impl m σ P) (at level 40).
 
@@ -755,6 +756,17 @@ Lemma steps_impl_step_next {EV} (m : module EV) σ (Pσ : _ → _ → _ → Prop
   (∀ κ Pσ2, m.(m_step) σ κ Pσ2 → ∃ σ2, Pσ2 σ2 ∧ κ = None ∧ σ2 -{ m }-> (λ _, Pσ true)) →
   σ -{ m }-> Pσ.
 Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. right => ???. naive_solver. Qed.
+
+Lemma steps_impl_mono {EV} (m : module EV) σ (Pσ Pσ' : _ → _ → _ → Prop):
+  σ -{ m }-> Pσ' →
+  (∀ b κ P, Pσ' b κ P → Pσ b κ P) →
+  σ -{ m }-> Pσ.
+Proof.
+  move => Ht.
+  elim/@prop_least_fixpoint_pair_ind: Ht Pσ => ?? [?|?] Pσ HP.
+  - apply steps_impl_end. by apply HP.
+  - apply steps_impl_step. naive_solver.
+Qed.
 
 Lemma steps_impl_elim_n {EV} (m : module EV) κs Pσ σ n:
   σ -{ m }-> Pσ →

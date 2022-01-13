@@ -33,6 +33,29 @@ Inductive mod_seq_map_filter {EV1 EV2} :
 
 Definition mod_seq_map {EV1 EV2} (m : module EV1) (f : module (EV1 + EV2)) : module EV2 :=
   mod_map (mod_seq_product m f) mod_seq_map_filter.
+Global Hint Transparent mod_seq_map : tstep.
+
+Lemma mod_seq_map_nil_l {EV1 EV2} m (f : module (EV1 + EV2)) σ Pσ Pσf σf κs σm:
+  σ ~{ m, tnil }~>ₜ Pσ →
+  (∀ σ', Pσ σ' → (SPLeft, σ', σf, σm) ~{ mod_seq_map m f, κs }~>ₜ Pσf) →
+  (SPLeft, σ, σf, σm) ~{ mod_seq_map m f, κs }~>ₜ Pσf.
+Proof.
+  move => Hσ Hcont.
+  apply: mod_map_nil.
+  - by apply: seq_product_nil_l.
+  - move => [[??]?] /=. naive_solver.
+Qed.
+
+Lemma mod_seq_map_nil_r {EV1 EV2} m (f : module (EV1 + EV2)) σ Pσ Pσf σf κs σm:
+  σf ~{ f, tnil }~>ₜ Pσ →
+  (∀ σ', Pσ σ' → (SPRight, σ, σ', σm) ~{ mod_seq_map m f, κs }~>ₜ Pσf) →
+  (SPRight, σ, σf, σm) ~{ mod_seq_map m f, κs }~>ₜ Pσf.
+Proof.
+  move => Hσ Hcont.
+  apply: mod_map_nil.
+  - by apply: seq_product_nil_r.
+  - move => [[??]?] /=. naive_solver.
+Qed.
 
 Lemma mod_seq_map_step_filter_i {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{!TStepI f σf P} :
   TStepI (mod_seq_map m f) (SPRight, σ, σf, SMFilter) (λ G, P (λ b κ P',
@@ -42,17 +65,43 @@ Lemma mod_seq_map_step_filter_i {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{
     | Some (inl e) => G b None (λ G', P' (λ x, G' (SPLeft, σ, x, SMProgRecv e)))
     end)).
 Proof.
-  constructor => G /tstepi_proof?.
+  constructor => G /tstepi_proof?. clear TStepI0.
+  (* Set Typeclasses Debug. *)
+  (* tstep_i.  *)
+  (* apply: steps_impl_mono; [done|]. *)
+  (* move => ? κ ?/= [?[?[?[??]]]] ?? κ' ??. *)
+  (* destruct κ as [[e|e]|]; simplify_eq/=. *)
   apply: (steps_impl_submodule _ (mod_seq_map _ _) (λ x, (SPRight, σ, x, SMFilter))); [done| |].
-  - move => /= ?? [?[? HG']]. eexists _. split; [done|] => /= ? /HG'. naive_solver.
+  - move => /= ?? [?[? [? [? HG']]]]. eexists _, _. split_and!; [done..|] => /= ? /HG'. naive_solver.
   - move => /= ??? Hs. invert_all' @filter_step; simplify_eq. invert_all' @m_step; simplify_eq/=.
     case_match; simplify_eq. all: eexists _, _; split; [done|] => /=; split_and! => /= *; destruct_all?.
-    + eexists _. split; [done|]. move => /= ? /H0 [?[??]]. eexists (_, _, _, _). naive_solver.
+    + eexists _, _. split_and!; [done..|]. move => /= ? /H2 [?[??]]. eexists (_, _, _, _). naive_solver.
     + naive_solver.
     + admit.
     + naive_solver.
 Admitted.
 Global Hint Resolve mod_seq_map_step_filter_i | 1 : tstep.
+
+Lemma mod_seq_map_step_filter_recv_i {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{!TStepI f σf P} e :
+  TStepI (mod_seq_map m f) (SPRight, σ, σf, SMFilterRecv e) (λ G, P (λ b κ P',
+       if κ is Some e' then inl e = e' → G b None (λ G', P' (λ x, G' (SPRight, σ, x, SMFilter)))
+       else G b None (λ G', P' (λ x, G' (SPRight, σ, x, SMFilterRecv e))))).
+Proof. Admitted.
+Global Hint Resolve mod_seq_map_step_filter_recv_i | 1 : tstep.
+
+Lemma mod_seq_map_step_prog_i {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{!TStepI m σ P}:
+  TStepI (mod_seq_map m f) (SPLeft, σ, σf, SMProg) (λ G, P (λ b κ P',
+   G b None (λ G', P' (λ x, if κ is Some e then G' (SPRight, x, σf, SMFilterRecv e)
+                            else G' (SPLeft, x, σf, SMProg))))).
+Proof. Admitted.
+Global Hint Resolve mod_seq_map_step_prog_i | 1 : tstep.
+
+Lemma mod_seq_map_step_prog_recv_i {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{!TStepI m σ P} e:
+  TStepI (mod_seq_map m f) (SPLeft, σ, σf, SMProgRecv e) (λ G, P (λ b κ P',
+   if κ is Some e' then e = e' → G b None (λ G', P' (λ x, G' (SPLeft, x, σf, SMProg)))
+                 else G b None (λ G', P' (λ x, G' (SPLeft, x, σf, SMProgRecv e))))).
+Proof. Admitted.
+Global Hint Resolve mod_seq_map_step_prog_recv_i | 1 : tstep.
 
 Lemma mod_seq_map_step_filter_s {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{!TStepS f σf P} :
   TStepS (mod_seq_map m f) (SPRight, σ, σf, SMFilter) (λ G, P (λ κ P',
@@ -62,11 +111,52 @@ Lemma mod_seq_map_step_filter_s {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{
     | Some (inl e) => G None (λ G', P' (λ x, G' (SPLeft, σ, x, SMProgRecv e)))
     end)).
 Proof.
-  constructor => G /tsteps_proof [κ [? [? HG']]].
-  destruct κ as [[e|e]|]. all: eexists _, _; split; [done|] => G' /= /HG' /steps_spec_has_trace_1 Ht.
-  all: apply steps_spec_has_trace_elim.
-Admitted.
+  constructor => G /tsteps_proof [κ [? [? HG']]]. clear TStepS0.
+  destruct κ as [[e|e]|]. all: eexists _, _; split; [done|] => G' /= /HG'?; tstep_s.
+  - eexists (Some (inl e)), _. split; [done|]. eexists _, _ => /=. split_and!; [econs|done|done].
+  - eexists (Some (inr e)), _. split; [done|]. eexists _, _ => /=. split_and!; [econs|done|done].
+  - eexists None, _. split; [done|]. eexists _, _ => /=. naive_solver.
+Qed.
 Global Hint Resolve mod_seq_map_step_filter_s | 1 : tstep.
+
+Lemma mod_seq_map_step_filter_recv_s {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{!TStepS f σf P} e:
+  TStepS (mod_seq_map m f) (SPRight, σ, σf, SMFilterRecv e) (λ G, P (λ κ P',
+   G None (λ G', if κ is Some e' then inl e = e' ∧ P' (λ x, G' (SPRight, σ, x, SMFilter))
+                 else P' (λ x, G' (SPRight, σ, x, SMFilterRecv e))))).
+Proof.
+  constructor => G /tsteps_proof [κ [? [? HG']]]. eexists _, _. split; [done|].
+  move => ? /=?. clear TStepS0. tstep_s. eexists κ, _. split; [by case_match|].
+  case_match; destruct_all?; simplify_eq; eexists _, _ => /=.
+  - split_and!; [econs|done|]. by apply HG'.
+  - split_and!; [done..|]. by apply HG'.
+Qed.
+Global Hint Resolve mod_seq_map_step_filter_recv_s | 1 : tstep.
+
+Lemma mod_seq_map_step_prog_s {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{!TStepS m σ P}:
+  TStepS (mod_seq_map m f) (SPLeft, σ, σf, SMProg) (λ G, P (λ κ P',
+   G None (λ G', P' (λ x, if κ is Some e then G' (SPRight, x, σf, SMFilterRecv e)
+                          else G' (SPLeft, x, σf, SMProg))))).
+Proof.
+  constructor => G /tsteps_proof [κ [? [? HG']]]. eexists _, _. split; [done|].
+  move => ? /=?. clear TStepS0. tstep_s.
+  eexists κ; case_match; eexists _; (split; [done|]); eexists _, _ => /=.
+  - split_and!; [econs|done|naive_solver].
+  - split_and!; [done..|naive_solver].
+Qed.
+Global Hint Resolve mod_seq_map_step_prog_s | 1 : tstep.
+
+Lemma mod_seq_map_step_prog_recv_s {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{!TStepS m σ P} e:
+  TStepS (mod_seq_map m f) (SPLeft, σ, σf, SMProgRecv e) (λ G, P (λ κ P',
+   G None (λ G', if κ is Some e' then e = e' ∧ P' (λ x, G' (SPLeft, x, σf, SMProg))
+                 else P' (λ x, G' (SPLeft, x, σf, SMProgRecv e))))).
+Proof.
+  constructor => G /tsteps_proof [κ [? [? HG']]]. eexists _, _. split; [done|].
+  move => ? /=?. clear TStepS0. tstep_s. eexists κ, _. split; [by case_match|].
+  case_match; destruct_all?; simplify_eq; eexists _, _ => /=.
+  - split_and!; [econs|done|]. by apply HG'.
+  - split_and!; [done..|]. by apply HG'.
+Qed.
+Global Hint Resolve mod_seq_map_step_prog_recv_s | 1 : tstep.
 
 (** * imp_to_asm *)
 Definition imp_to_asm_args (rs : gmap string Z) (vs : list val) : Prop := True.
@@ -76,7 +166,7 @@ Definition imp_to_asm_itree_from_env (ins : gset Z) (fns : gmap string Z) : itre
   rs ← TExist _;;;
   TVis (inr (EARecvJump pc rs));;;;
   TAssert (pc ∈ ins);;;;
-  b ← TExist bool;;;
+  b ← TAll bool;;;
   if b then
     f ← TAll _;;;
     TAssume (fns !! f = Some pc);;;;
@@ -88,7 +178,17 @@ Definition imp_to_asm_itree_from_env (ins : gset Z) (fns : gmap string Z) : itre
 .
 
 Definition imp_to_asm_itree_to_env (ins : gset Z) (fns : gmap string Z) : itree (moduleE (imp_event + asm_event) ()) () :=
-  Ret ().
+  b ← TExist bool;;;
+  if b then
+    f ← TExist _;;;
+    vs ← TExist _;;;
+    TVis (inl (EICall f vs));;;;
+    pc ← TExist Z;;;
+    rs ← TExist _;;;
+    TAssume (imp_to_asm_args rs vs);;;;
+    TVis (inr (EAJump pc rs))
+  else
+    Ret ().
 
 Definition imp_to_asm_itree (ins : gset Z) (fns : gmap string Z) : itree (moduleE (imp_event + asm_event) ()) () :=
   ITree.forever (imp_to_asm_itree_from_env ins fns;;;; imp_to_asm_itree_to_env ins fns).
@@ -109,52 +209,49 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event) (ins1 ins2 : gset Z
   let fns := (fns1 ∪ fns2) in
   σi1 = σs1 ∧
   σi2 = σs2 ∧
-  match σfa with
-  | APFNone =>
+  ((∃ cs,
+      σfa = APFNone ∧
       σpa = SPNone ∧ σfs = SMFilter ∧ σps = SPRight ∧ t = imp_to_asm_itree ins fns
       ∧ t1 = imp_to_asm_itree ins1 fns1 ∧ t2 = imp_to_asm_itree ins2 fns2
       ∧ σf1 = SMFilter ∧ σf2 = SMFilter ∧ σpi1 = SPRight ∧ σpi2 = SPRight
-  (* | APFRecvL pc rs =>  *)
-  (*     ∃ f vs, σpa = SPLeft ∧  *)
-  (*     σfs = SMProgRecv (EIRecvCall f vs) ∧ σps = SPLeft ∧ *)
-  (*     t = (imp_to_asm_itree_to_env ins fns;;;; imp_to_asm_itree ins fns) *)
-  | _ => False
-  end.
-
+      ∧ σpi = SPNone ∧ σf = IPFState IPFNone cs) ∨
+  (∃ cs,
+      ((∃ f vs, σf = IPFState (IPFLeftRecvCall f vs) cs ∧ σf1 = SMProgRecv (EIRecvCall f vs))
+      ∨ σf = IPFState IPFLeft cs ∧ σf1 = SMProg)
+      ∧ σfa = APFLeft ∧ σpa = SPLeft ∧ σfs = SMProg ∧ σps = SPLeft
+      ∧ t = (imp_to_asm_itree_to_env (ins1 ∪ ins2) (fns1 ∪ fns2);;;; imp_to_asm_itree (ins1 ∪ ins2) (fns1 ∪ fns2))
+      ∧ t1 = (imp_to_asm_itree_to_env ins1 fns1;;;; (imp_to_asm_itree ins1 fns1))
+      ∧ t2 = imp_to_asm_itree ins2 fns2
+      ∧ σf2 = SMFilter ∧ σpi1 = SPLeft ∧ σpi2 = SPRight
+      ∧ σpi = SPLeft) ∨
+  (∃ cs,
+      ((∃ f vs, σf = IPFState (IPFRightRecvCall f vs) cs ∧ σf2 = SMProgRecv (EIRecvCall f vs))
+      ∨ σf = IPFState IPFRight cs ∧ σf2 = SMProg)
+      ∧ σfa = APFRight ∧ σpa = SPRight ∧ σfs = SMProg ∧ σps = SPLeft
+      ∧ t = (imp_to_asm_itree_to_env (ins1 ∪ ins2) (fns1 ∪ fns2);;;; imp_to_asm_itree (ins1 ∪ ins2) (fns1 ∪ fns2))
+      ∧ t1 = imp_to_asm_itree ins1 fns1
+      ∧ t2 = (imp_to_asm_itree_to_env ins2 fns2;;;; (imp_to_asm_itree ins2 fns2))
+      ∧ σf1 = SMFilter ∧ σpi1 = SPRight ∧ σpi2 = SPLeft
+      ∧ σpi = SPRight)).
 Hint Constants Transparent : tstep.
 
-Lemma itree_step_forever_i EV S R (t : itree (moduleE EV S) R) s:
-  TStepI (mod_itree EV S) (ITree.forever t, s)
-         (λ G, G false None (λ G', itree_rel G' (t;;;;ITree.forever t, s))).
-Proof. constructor => ??. Admitted.
-Global Hint Resolve itree_step_forever_i : tstep.
-
-Lemma itree_step_forever_s EV S R (t : itree (moduleE EV S) R) s:
-  TStepS (mod_itree EV S) (ITree.forever t, s)
-         (λ G, G None (λ G', itree_rel G' (t;;;;ITree.forever t, s))).
-Proof.
-  constructor => ??. eexists _, _. split; [done|] => ? /= ?.
-  apply itree_rel_spec_intro. rewrite unfold_forever. setoid_rewrite tau_eutt.
-  by apply steps_spec_end.
-Qed.
+Program Definition itree_step_forever_s EV S R (t : itree (moduleE EV S) R) s :=
+  @eq_it_to_tstep_s EV S s (ITree.forever t) (t;;;;ITree.forever t) _.
+Next Obligation. move => *. setoid_rewrite unfold_forever at 1. by setoid_rewrite tau_eutt. Qed.
 Global Hint Resolve itree_step_forever_s : tstep.
 
+Program Definition itree_step_forever_i EV S R (t : itree (moduleE EV S) R) s :=
+  @eq_it_to_tstep_i EV S s (ITree.forever t) (t;;;; (ITree.forever t)) _.
+Next Obligation. move => *. setoid_rewrite unfold_forever at 1. by setoid_rewrite tau_eutt. Qed.
+Global Hint Resolve itree_step_forever_i : tstep.
+
 Axiom ELIM_EUTT : ∀ EV R (t1 t2 : itree EV R), t1 ≈ t2 -> t1 = t2.
+Local Ltac go :=
+      unfold itree_rel; intros; destruct_all?; simplify_eq/=; repeat lazymatch goal with | H : _ ≈ _ |- _ => apply ELIM_EUTT in H; subst end.
+Local Ltac go_i := tstep_i; go.
+Local Ltac go_s := tstep_s; go.
 
-Lemma tstep_i_generic EV (m : module EV) σ:
-  TStepI m σ (λ G, ∀ κ Pσ, m.(m_step) σ κ Pσ → G true κ (λ G', ∃ σ', Pσ σ' ∧ G' σ')).
-Proof. constructor => ? HG. apply: steps_impl_step_end => ?? /HG ?. eexists _. split; [done|]. naive_solver. Qed.
-Global Hint Resolve tstep_i_generic | 1000 : tstep.
-
-Lemma tstep_s_generic EV (m : module EV) σ:
-  TStepS m σ (λ G, ∃ κ, G κ (λ G', ∃ Pσ, m.(m_step) σ κ Pσ ∧ ∀ σ', Pσ σ' → G' σ')).
-Proof.
-  constructor => ? [??]. eexists _, _. split; [done|] => ? /= [?[??]].
-  by apply: steps_spec_step_end; [done|].
-Qed.
-Global Hint Resolve tstep_s_generic | 1000 : tstep.
-
-Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 m1 m2 σ1 σ2:
+Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m2}:
   trefines (MS (asm_prod ins1 ins2 (imp_to_asm m1) (imp_to_asm m2))
                (SPNone, initial_imp_to_asm_state m1 σ1 ins1 fns1, initial_imp_to_asm_state m2 σ2 ins2 fns2, APFNone))
            (MS (imp_to_asm (imp_prod (dom _ fns1) (dom _ fns2) m1 m2))
@@ -167,37 +264,72 @@ Proof.
   { naive_solver. } { done. }
   move => /= {σ1 σ2} {}n Hloop [[[σpa [[[σpi1 σi1] [t1 []]] σf1]] [[[σpi2 σi2] [t2 []]] σf2]] σfa].
   move => [[[σps [[[σpi σs1] σs2] σf]] [t []]] σfs] /= ?.
-  case_match; destruct_all?; simplify_eq.
-  (* - admit. *)
-  (* - admit. *)
-  - tstep_s => ? /= /ELIM_EUTT <-. rewrite -/(imp_to_asm_itree _ _).
-    tstep_s => ? /= /ELIM_EUTT <-. tstep_s => ? /= /ELIM_EUTT <-.
-    tstep_i => ????. invert_all asm_prod_filter.
-    + tstep_s. eexists _. move => ? /= /ELIM_EUTT <-.
-      tstep_s => ? /= /ELIM_EUTT <-. tstep_s. eexists _. move => ? /= /ELIM_EUTT <-.
-      tstep_s => ? /= /ELIM_EUTT <-. tstep_s. split; [done|]. move => ? /= /ELIM_EUTT <-.
-      tstep_s => ? /= /ELIM_EUTT <-. tstep_s. split; [admit|]. move => ? /= /ELIM_EUTT <-.
-      tstep_s => ? /= /ELIM_EUTT <-. tstep_s. eexists true. move => ? /= /ELIM_EUTT <-.
-      tstep_s => ? /= /ELIM_EUTT <-. tstep_s => f. move => ? /= /ELIM_EUTT <-.
-      tstep_s => ? /= /ELIM_EUTT <-. tstep_s => Hf. move => ? /= /ELIM_EUTT <-.
-      tstep_s => ? /= /ELIM_EUTT <-. tstep_s => vs. move => ? /= /ELIM_EUTT <-.
-      tstep_s => ? /= /ELIM_EUTT <-. tstep_s => Hvs. move => ? /= /ELIM_EUTT <-.
-      tstep_s => ? /= /ELIM_EUTT <-.
-      tstep_i => ? -> ?? [-> ->] ? /= /ELIM_EUTT <-.
-      admit.
-    + admit.
-
-(* tstep_s. eexists true. move => ? /= /ELIM_EUTT <-. *)
-(*       tstep_s => ? /= /ELIM_EUTT <-. tstep_s. eexists _. move => ? /= /ELIM_EUTT <-. *)
-(*       tstep_s => ? /= /ELIM_EUTT <-. tstep_s. eexists _. move => ? /= /ELIM_EUTT <-. *)
-(*       tstep_s => ? /= /ELIM_EUTT <-. tstep_s. split; [done|]. move => ? /= /ELIM_EUTT <-. *)
-(*       tstep_s => ? /= /ELIM_EUTT <-. tstep_s. split; [admit|]. move => ? /= /ELIM_EUTT <-. *)
-(*       tstep_s => ? /= /ELIM_EUTT <-. tstep_s => f. move => ? /= /ELIM_EUTT <-. *)
-(*       tstep_s => ? /= /ELIM_EUTT <-. tstep_s => Hf. move => ? /= /ELIM_EUTT <-. *)
-(*       tstep_s => ? /= /ELIM_EUTT <-. tstep_s => vs. move => ? /= /ELIM_EUTT <-. *)
-(*       tstep_s => ? /= /ELIM_EUTT <-. tstep_s => Hvs. move => ? /= /ELIM_EUTT <-. *)
-(*       tstep_s => ? /= /ELIM_EUTT <-. *)
- (* apply: Hloop. naive_solver. *)
-  (* - admit. *)
-  (* - admit. *)
+  destruct_all?; simplify_eq.
+  - go_s. rewrite -/(imp_to_asm_itree _ _).
+    go_s. go_s. go_i. invert_all asm_prod_filter.
+    + go_s. eexists _. go.
+      go_s. go_s. eexists _. go. go_s. go_s. split; [done|]. go.
+      go_s. go_s. split; [admit|]. go. go_s. go_s. rename x into b.
+      go_i. rewrite -/(imp_to_asm_itree _ _). go_i. go_i. go_i.
+      go_i. go_i. go_i. go_i.
+      invert_all asm_prod_filter.
+      go_i. go_i. go_i. go_i.
+      go_i. go_i. eexists b. go. destruct b.
+      * go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s.
+        eexists _, _, _. split; [apply IPFCallExtToLeft|]. { (*provable*) admit. } { (*provable*) admit. } simpl. split; [done|].
+        go_i. go_i. eexists _. go. go_i. go_i. go_i. eexists _. go.
+        go_i. go_i. go_i. eexists _. go. go_i. go_i. go_i. eexists _. go.
+        go_i. go_i. apply Hloop. naive_solver.
+        (* split_and! => //. right.  naive_solver. *)
+      * admit.
+    + go_s. eexists _. go.
+      go_s. go_s. eexists _. go. go_s. go_s. split; [done|]. go.
+      go_s. go_s. split; [admit|]. go. go_s. go_s. rename x into b.
+      go_i. rewrite -/(imp_to_asm_itree _ _). go_i. go_i. go_i.
+      go_i. go_i. go_i. go_i.
+      invert_all asm_prod_filter.
+      go_i. go_i. go_i. go_i.
+      go_i. go_i. eexists b. go. destruct b.
+      * go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s.
+        eexists _, _, _. split; [apply IPFCallExtToRight|]. { (*provable*) admit. } { (*provable*) admit. } simpl. split; [done|].
+        go_i. go_i. eexists _. go. go_i. go_i. go_i. eexists _. go.
+        go_i. go_i. go_i. eexists _. go. go_i. go_i. go_i. eexists _. go.
+        go_i. go_i. apply Hloop. naive_solver.
+      * admit.
+  - tstep_both.
+    apply steps_impl_step_end => κ Pσ2. go. case_match; go.
+    + tstep_s. eexists (Some (EIRecvCall f vs)), _. split; [done|]. eexists _, _. split; [econs|].
+      apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
+      apply: Hloop. naive_solver.
+    + tstep_s. eexists None, _. split; [done|]. eexists _, _. split; [done|].
+      apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
+      apply: Hloop. naive_solver.
+  - tstep_both.
+    apply steps_impl_step_end => κ Pσ2. go. destruct κ as [e|]; go.
+    + tend. have [σ' Hσ'] := vis_no_all _ _ _ ltac:(done). eexists σ'. split; [naive_solver|].
+      go_i. go_i. destruct x.
+      * go_i. go_i. go_i. go_i. go_i. go_i.
+        go_i. go_i. go_i. go_i. go_i. go_i. go_i. eexists _. go. go_i. go_i.
+        invert_all asm_prod_filter. 2: { (* provable ?! *) admit. }
+        go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i.
+        invert_all asm_prod_filter.
+        go_i. go_i. go_i. go_i. go_i. go_i. eexists true. go. go_i. go_i. eexists _. go.
+        go_i. go_i. go_i. eexists _. go. go_i. go_i. go_i. eexists _. go.
+        go_i. go_i. go_i. eexists _. go. go_i. go_i.
+        go_s. eexists (Some _), _. split; [done|]. eexists _, _ => /=. split; [econs|]. { admit. } { admit. }
+        apply: steps_spec_step_end; [done|] => ??.
+        apply: Hloop. naive_solver.
+      * admit.
+    + tstep_s. eexists None, _. split; [done|]. eexists _, _. split; [done|].
+      apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
+      apply: Hloop. naive_solver.
+  - tstep_both.
+    apply steps_impl_step_end => κ Pσ2. go. case_match; go.
+    + tstep_s. eexists (Some (EIRecvCall f vs)), _. split; [done|]. eexists _, _. split; [econs|].
+      apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
+      apply: Hloop. naive_solver.
+    + tstep_s. eexists None, _. split; [done|]. eexists _, _. split; [done|].
+      apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
+      apply: Hloop. naive_solver.
+  - admit.
 Abort.

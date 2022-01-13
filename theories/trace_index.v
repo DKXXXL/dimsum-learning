@@ -254,10 +254,13 @@ Lemma tiS_maybe_orb n b1 b2:
   tiS?(b1 || b2) n ⊆ tiS?b1 (tiS?b2 n).
 Proof. destruct b1, b2 => //=. apply ti_le_S. Qed.
 
-Lemma tiS_maybe_mono n1 n2 b:
+Lemma tiS_maybe_mono n1 n2 (b1 b2 : bool):
+  (b1 → b2) →
   n1 ⊆ n2 →
-  tiS?b n1 ⊆ tiS?b n2.
-Proof. destruct b => // ?. by econs. Qed.
+  tiS?b1 n1 ⊆ tiS?b2 n2.
+Proof.
+  destruct b1,b2 => /= ??. { by econs. } { naive_solver. } { etrans; [apply ti_le_S|] => /=. by econs. } { done. }
+Qed.
 
 Lemma ti_lt_impl_le (n1 n2 : trace_index):
   tiS n1 ⊆ n2 →
