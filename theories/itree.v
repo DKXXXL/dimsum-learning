@@ -748,6 +748,14 @@ Proof.
 Qed.
 Global Hint Resolve itree_step_Ub_s : tstep.
 
+Lemma itree_step_Nb_i EV S T (k : T → _) s:
+  TStepI (mod_itree EV S) (x ← TNb;;; k x, s) (λ G, G true None (λ G', True)).
+Proof.
+  constructor => ??. apply: steps_impl_step_end => ???.
+  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K. destruct x.
+Qed.
+Global Hint Resolve itree_step_Nb_i : tstep.
+
 Lemma itree_step_Assume_s EV S P k s:
   TStepS (mod_itree EV S) (TAssume P;;;; k, s) (λ G, G None (λ G', P → itree_rel G' (k, s))).
 Proof.
@@ -757,6 +765,17 @@ Proof.
   rewrite bind_ret_l. naive_solver.
 Qed.
 Global Hint Resolve itree_step_Assume_s : tstep.
+
+Lemma itree_step_Assume_i EV S P k s:
+  TStepI (mod_itree EV S) (TAssume P;;;; k, s) (λ G, G true None (λ G', P ∧ itree_rel G' (k, s))).
+Proof.
+  constructor => ??. apply: steps_impl_step_end => ???.
+  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
+  eexists _, _. split_and!; [done..|]. move => /= ? [? HG]. eexists _. split; [naive_solver|].
+  apply: HG => /=. setoid_rewrite bind_ret_l. setoid_rewrite bind_ret_l. done.
+  Unshelve. done.
+Qed.
+Global Hint Resolve itree_step_Assume_i : tstep.
 
 Lemma itree_step_Assert_s EV S P k s:
   TStepS (mod_itree EV S) (TAssert P;;;; k, s) (λ G, G None (λ G', P ∧ itree_rel G' (k, s))).
@@ -768,6 +787,16 @@ Proof.
 Qed.
 Global Hint Resolve itree_step_Assert_s : tstep.
 
+Lemma itree_step_Assert_i EV S P k s:
+  TStepI (mod_itree EV S) (TAssert P;;;; k, s) (λ G, P → G true None (λ G', itree_rel G' (k, s))).
+Proof.
+  constructor => ??. apply: steps_impl_step_end => ???.
+  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K. destruct x.
+  eexists _, _. split_and!; [naive_solver..|]. move => /= ? HG. eexists _. split; [naive_solver|].
+  apply: HG => /=. setoid_rewrite bind_ret_l. setoid_rewrite bind_ret_l. done.
+Qed.
+Global Hint Resolve itree_step_Assert_i : tstep.
+
 Lemma itree_step_AssumeOpt_s EV S A (o : option A) k s:
   TStepS (mod_itree EV S) (x ← TAssumeOpt o;;; k x, s) (λ G, G None (λ G', ∀ x, (o = Some x) → itree_rel G' (k x, s))).
 Proof.
@@ -778,6 +807,17 @@ Proof.
 Qed.
 Global Hint Resolve itree_step_AssumeOpt_s : tstep.
 
+Lemma itree_step_AssumeOpt_i EV S A (o : option A) k s:
+  TStepI (mod_itree EV S) (x ← TAssumeOpt o;;; k x, s) (λ G, G true None (λ G', ∃ x, o = Some x ∧ itree_rel G' (k x, s))).
+Proof.
+  constructor => ??. apply: steps_impl_step_end => ???.
+  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
+  eexists _, _. split_and!; [naive_solver..|]. move => /= ? [? [? HG]]. subst.
+  eexists _. split; [naive_solver|]. apply: HG => /=. setoid_rewrite bind_ret_l. setoid_rewrite bind_ret_l.
+  Unshelve. 2: { by econstructor. } done.
+Qed.
+Global Hint Resolve itree_step_AssumeOpt_i : tstep.
+
 Lemma itree_step_AssertOpt_s EV S A (o : option A) k s:
   TStepS (mod_itree EV S) (x ← TAssertOpt o;;; k x, s) (λ G, G None (λ G', ∃ x, o = Some x ∧ itree_rel G' (k x, s))).
 Proof.
@@ -787,6 +827,16 @@ Proof.
   rewrite bind_ret_l. naive_solver.
 Qed.
 Global Hint Resolve itree_step_AssertOpt_s : tstep.
+
+Lemma itree_step_AssertOpt_i EV S A (o : option A) k s:
+  TStepI (mod_itree EV S) (x ← TAssertOpt o;;; k x, s) (λ G, ∀ x, o = Some x → G true None (λ G', itree_rel G' (k x, s))).
+Proof.
+  constructor => ??. apply: steps_impl_step_end => ???.
+  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K. destruct x.
+  eexists _, _. split_and!; [naive_solver..|]. move => /= ? HG. subst.
+  eexists _. split; [naive_solver|]. apply: HG => /=. setoid_rewrite bind_ret_l. by setoid_rewrite bind_ret_l.
+Qed.
+Global Hint Resolve itree_step_AssertOpt_i : tstep.
 
 Program Definition itree_step_recursive_bind_translate_s EV S R Q A B (f : A → itree (callE A B +' _) _) (t : itree (moduleE EV S) R) (k : R → itree (_ +' moduleE EV S) Q) h s :=
   @eq_it_to_tstep_s EV S s (x ← interp (recursive f) (ITree.bind (translate inr_ t) k);;; h x)

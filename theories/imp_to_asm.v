@@ -165,7 +165,7 @@ Definition imp_to_asm_itree_from_env (ins : gset Z) (fns : gmap string Z) : itre
   pc ← TExist Z;;;
   rs ← TExist _;;;
   TVis (inr (EARecvJump pc rs));;;;
-  TAssert (pc ∈ ins);;;;
+  (* TAssert (pc ∈ ins);;;; *)
   b ← TAll bool;;;
   if b then
     f ← TAll _;;;
@@ -182,10 +182,11 @@ Definition imp_to_asm_itree_to_env (ins : gset Z) (fns : gmap string Z) : itree 
   if b then
     f ← TExist _;;;
     vs ← TExist _;;;
+    TAssert (fns !! f = None);;;;
     TVis (inl (EICall f vs));;;;
     pc ← TExist Z;;;
     rs ← TExist _;;;
-    TAssume (imp_to_asm_args rs vs);;;;
+    TAssert (imp_to_asm_args rs vs);;;;
     TVis (inr (EAJump pc rs))
   else
     Ret ().
@@ -252,6 +253,10 @@ Local Ltac go_i := tstep_i; go.
 Local Ltac go_s := tstep_s; go.
 
 Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m2}:
+  ins1 ## ins2 →
+  fns1 ##ₘ fns2 →
+  (∀ f i, fns1 !! f = Some i → i ∈ ins1) →
+  (∀ f i, fns2 !! f = Some i → i ∈ ins2) →
   trefines (MS (asm_prod ins1 ins2 (imp_to_asm m1) (imp_to_asm m2))
                (SPNone, initial_imp_to_asm_state m1 σ1 ins1 fns1, initial_imp_to_asm_state m2 σ2 ins2 fns2, APFNone))
            (MS (imp_to_asm (imp_prod (dom _ fns1) (dom _ fns2) m1 m2))
@@ -259,6 +264,7 @@ Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!Vi
                   (SPNone, σ1, σ2, (IPFState IPFNone [])) (ins1 ∪ ins2) (fns1 ∪ fns2))
 ).
 Proof.
+  move => Hdisji Hdisjf Hf1 Hf2.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { exact (λ _, imp_to_asm_combine_inv _ _ _ _ _ _). }
   { naive_solver. } { done. }
@@ -269,32 +275,35 @@ Proof.
     go_s. go_s. go_i. invert_all asm_prod_filter.
     + go_s. eexists _. go.
       go_s. go_s. eexists _. go. go_s. go_s. split; [done|]. go.
-      go_s. go_s. split; [admit|]. go. go_s. go_s. rename x into b.
+      go_s. go_s. rename x into b.
       go_i. rewrite -/(imp_to_asm_itree _ _). go_i. go_i. go_i.
       go_i. go_i. go_i. go_i.
       invert_all asm_prod_filter.
-      go_i. go_i. go_i. go_i.
       go_i. go_i. eexists b. go. destruct b.
       * go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s.
-        eexists _, _, _. split; [apply IPFCallExtToLeft|]. { (*provable*) admit. } { (*provable*) admit. } simpl. split; [done|].
-        go_i. go_i. eexists _. go. go_i. go_i. go_i. eexists _. go.
-        go_i. go_i. go_i. eexists _. go. go_i. go_i. go_i. eexists _. go.
-        go_i. go_i. apply Hloop. naive_solver.
+        revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|?]. 2: { naive_solver. }
+        eexists _, _, _. split; [apply IPFCallExtToLeft|]. { by apply elem_of_dom. }
+        { apply not_elem_of_dom. by apply: map_disjoint_Some_l. } simpl.
+        split; [done|]. go_i. go_i. eexists _. go. go_i. go_i. split; [done|]. go.
+        go_i. go_i. eexists _. go. go_i. go_i. split; [done|]. go.
+        go_i. apply Hloop. naive_solver.
         (* split_and! => //. right.  naive_solver. *)
       * admit.
     + go_s. eexists _. go.
       go_s. go_s. eexists _. go. go_s. go_s. split; [done|]. go.
-      go_s. go_s. split; [admit|]. go. go_s. go_s. rename x into b.
+      go_s. go_s. rename x into b.
       go_i. rewrite -/(imp_to_asm_itree _ _). go_i. go_i. go_i.
       go_i. go_i. go_i. go_i.
       invert_all asm_prod_filter.
-      go_i. go_i. go_i. go_i.
       go_i. go_i. eexists b. go. destruct b.
       * go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s.
-        eexists _, _, _. split; [apply IPFCallExtToRight|]. { (*provable*) admit. } { (*provable*) admit. } simpl. split; [done|].
-        go_i. go_i. eexists _. go. go_i. go_i. go_i. eexists _. go.
-        go_i. go_i. go_i. eexists _. go. go_i. go_i. go_i. eexists _. go.
-        go_i. go_i. apply Hloop. naive_solver.
+        revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|[??]]. 1: { naive_solver. }
+        eexists _, _, _. split; [apply IPFCallExtToRight|].
+        { by apply not_elem_of_dom. } { by apply elem_of_dom. } simpl.
+        split; [done|].
+        go_i. go_i. eexists _. go. go_i. go_i. split; [done|]. go.
+        go_i. go_i. eexists _. go. go_i. go_i. split; [done|]. go.
+        go_i. apply Hloop. naive_solver.
       * admit.
   - tstep_both.
     apply steps_impl_step_end => κ Pσ2. go. case_match; go.
@@ -309,16 +318,24 @@ Proof.
     + tend. have [σ' Hσ'] := vis_no_all _ _ _ ltac:(done). eexists σ'. split; [naive_solver|].
       go_i. go_i. destruct x.
       * go_i. go_i. go_i. go_i. go_i. go_i.
-        go_i. go_i. go_i. go_i. go_i. go_i. go_i. eexists _. go. go_i. go_i.
-        invert_all asm_prod_filter. 2: { (* provable ?! *) admit. }
-        go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i.
+        go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i.
         invert_all asm_prod_filter.
-        go_i. go_i. go_i. go_i. go_i. go_i. eexists true. go. go_i. go_i. eexists _. go.
-        go_i. go_i. go_i. eexists _. go. go_i. go_i. go_i. eexists _. go.
-        go_i. go_i. go_i. eexists _. go. go_i. go_i.
-        go_s. eexists (Some _), _. split; [done|]. eexists _, _ => /=. split; [econs|]. { admit. } { admit. }
-        apply: steps_spec_step_end; [done|] => ??.
-        apply: Hloop. naive_solver.
+        -- go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i.
+           invert_all asm_prod_filter.
+           go_i. go_i. eexists true. go. go_i. go_i. eexists _. go.
+           go_i. go_i. split; [admit|]. go. go_i. go_i. eexists _. go.
+           go_i. go_i. split; [done|]. go. go_i.
+           go_s. eexists (Some _), _. split; [done|]. eexists _, _ => /=. split; [econs|]. { admit. } { admit. }
+           apply: steps_spec_step_end; [done|] => ??.
+           apply: Hloop. naive_solver.
+        -- go_s. eexists (Some _), _. split; [done|]. eexists _, _ => /=. split; [apply IPFCallLeftToExt|].
+           { admit. } { admit. }
+           apply: steps_spec_step_end; [done|] => ??.
+           go_s. go_s. eexists true. go. go_s. go_s. eexists _. go.
+           go_s. go_s. eexists _. go. go_s. go_s. split; [admit|]. go.
+           go_s. go_s. split; [done|]. go. go_s. go_s. eexists _. go. go_s. go_s. eexists _. go.
+           go_s. go_s. split; [done|]. go. go_s. split; [done|]. go.
+           apply: Hloop. naive_solver.
       * admit.
     + tstep_s. eexists None, _. split; [done|]. eexists _, _. split; [done|].
       apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
