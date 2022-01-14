@@ -699,6 +699,44 @@ Proof.
 Qed.
 Global Hint Resolve itree_step_Vis_i : tstep.
 
+Lemma itree_step_Get_s EV S k s:
+  TStepS (mod_itree EV S) (x ← TGet;;; k x, s) (λ G, G None (λ G', itree_rel G' (k s, s))).
+Proof.
+  constructor => ??. eexists _, _. split; [done|] => ? /= ?.
+  apply itree_rel_spec_intro. rewrite bind_trigger.
+  apply: steps_spec_step_end. { by econs. } naive_solver.
+Qed.
+Global Hint Resolve itree_step_Get_s : tstep.
+
+Lemma itree_step_Get_i EV S k s:
+  TStepI (mod_itree EV S) (x ← TGet;;; k x, s) (λ G, G true None (λ G', itree_rel G' (k s, s))).
+Proof.
+  constructor => ??. apply: steps_impl_step_end => ???.
+  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
+  eexists _, _. split_and!; [done..|]. move => /= ? HG. eexists _. split; [done|].
+  apply HG => /=. by setoid_rewrite bind_ret_l.
+Qed.
+Global Hint Resolve itree_step_Get_i : tstep.
+
+Lemma itree_step_Put_s EV S k s s':
+  TStepS (mod_itree EV S) (TPut s';;;; k, s) (λ G, G None (λ G', itree_rel G' (k, s'))).
+Proof.
+  constructor => ??. eexists _, _. split; [done|] => ? /= ?.
+  apply itree_rel_spec_intro. rewrite bind_trigger.
+  apply: steps_spec_step_end. { by econs. } naive_solver.
+Qed.
+Global Hint Resolve itree_step_Put_s : tstep.
+
+Lemma itree_step_Put_i EV S k s s':
+  TStepI (mod_itree EV S) (TPut s';;;; k, s) (λ G, G true None (λ G', itree_rel G' (k, s'))).
+Proof.
+  constructor => ??. apply: steps_impl_step_end => ???.
+  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
+  eexists _, _. split_and!; [done..|]. move => /= ? HG. eexists _. split; [done|].
+  apply HG => /=. by setoid_rewrite bind_ret_l.
+Qed.
+Global Hint Resolve itree_step_Put_i : tstep.
+
 Lemma itree_step_All_s EV S T k s:
   TStepS (mod_itree EV S) (x ← TAll T;;; k x, s) (λ G, G None (λ G', ∀ x, itree_rel G' (k x, s))).
 Proof.
