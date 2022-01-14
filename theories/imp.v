@@ -234,11 +234,11 @@ Inductive imp_prod_filter (fns1 fns2 : gset string) :
 (* ret ext -> l *)
 | IPFReturnExtToLeft v cs:
   imp_prod_filter fns1 fns2 (IPFState IPFNone (IPFLeft :: cs)) (SPENone SPLeft)
-                  (Some (EIReturn v)) (IPFState (IPFLeftRecvReturn v) cs)
+                  (Some (EIRecvReturn v)) (IPFState (IPFLeftRecvReturn v) cs)
 (* ret ext -> r *)
 | IPFReturnExtToRight v cs:
   imp_prod_filter fns1 fns2 (IPFState IPFNone (IPFRight :: cs)) (SPENone SPRight)
-                  (Some (EIReturn v)) (IPFState (IPFRightRecvReturn v) cs)
+                  (Some (EIRecvReturn v)) (IPFState (IPFRightRecvReturn v) cs)
 .
 
 Definition imp_prod (fns1 fns2 : gset string) (m1 m2 : module imp_event) : module imp_event :=

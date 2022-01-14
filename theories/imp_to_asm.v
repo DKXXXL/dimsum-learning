@@ -258,7 +258,8 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
       ∧ σf1 = SMFilter ∧ σf2 = SMFilter ∧ σpi1 = SPRight ∧ σpi2 = SPRight
       ∧ σpi = SPNone ∧ σf = IPFState IPFNone cs) ∨
   (∃ cs,
-      ((∃ f vs, σf = IPFState (IPFLeftRecvCall f vs) cs ∧ σf1 = SMProgRecv (EIRecvCall f vs))
+      ( (∃ f vs, σf = IPFState (IPFLeftRecvCall f vs) cs ∧ σf1 = SMProgRecv (EIRecvCall f vs))
+      ∨ (∃ v, σf = IPFState (IPFLeftRecvReturn v) cs ∧ σf1 = SMProgRecv (EIRecvReturn v))
       ∨ σf = IPFState IPFLeft cs ∧ σf1 = SMProg)
       ∧ σfa = APFLeft ∧ σpa = SPLeft ∧ σfs = SMProg ∧ σps = SPLeft
       ∧ t = (imp_to_asm_itree_to_env ins fns f2i;;;; imp_to_asm_itree ins fns f2i)
@@ -268,6 +269,7 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
       ∧ σpi = SPLeft) ∨
   (∃ cs,
       ((∃ f vs, σf = IPFState (IPFRightRecvCall f vs) cs ∧ σf2 = SMProgRecv (EIRecvCall f vs))
+      ∨ (∃ v, σf = IPFState (IPFRightRecvReturn v) cs ∧ σf2 = SMProgRecv (EIRecvReturn v))
       ∨ σf = IPFState IPFRight cs ∧ σf2 = SMProg)
       ∧ σfa = APFRight ∧ σpa = SPRight ∧ σfs = SMProg ∧ σps = SPLeft
       ∧ t = (imp_to_asm_itree_to_env ins fns f2i;;;; imp_to_asm_itree ins fns f2i)
@@ -339,7 +341,12 @@ Proof.
         go_i. go_i. split; [done|]. go.
         go_i. apply Hloop. naive_solver.
         (* split_and! => //. right.  naive_solver. *)
-      * admit.
+      * go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s.
+        have [cs' ?]: ∃ cs', cs = IPFLeft :: cs' by admit. subst.
+        eexists _, _, _. split; [apply IPFReturnExtToLeft|]. simpl. split; [done|].
+        go_i. go_i. eexists _. go. go_i. go_i. eexists _. go.
+        go_i. go_i. split; [done|]. go.
+        go_i. apply Hloop. naive_solver.
     + go_s. eexists _. go.
       go_s. go_s. eexists _. go. go_s. go_s. split; [done|]. go.
       go_s. go_s. rename x into b.
@@ -360,10 +367,23 @@ Proof.
         go_i. go_i. split; [done|]. go. go_i. go_i. split; [done|]. go.
         go_i. go_i. split; [done|]. go.
         go_i. apply Hloop. naive_solver.
-      * admit.
+      * go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s.
+        have [cs' ?]: ∃ cs', cs = IPFRight :: cs' by admit. subst.
+        eexists _, _, _. split; [apply IPFReturnExtToRight|]. simpl. split; [done|].
+        go_i. go_i. eexists _. go. go_i. go_i. eexists _. go.
+        go_i. go_i. split; [done|]. go.
+        go_i. apply Hloop.  naive_solver.
   - tstep_both.
     apply steps_impl_step_end => κ Pσ2. go. case_match; go.
     + tstep_s. eexists (Some (EIRecvCall f vs)), _. split; [done|]. eexists _, _. split; [econs|].
+      apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
+      apply: Hloop. naive_solver.
+    + tstep_s. eexists None, _. split; [done|]. eexists _, _. split; [done|].
+      apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
+      apply: Hloop. naive_solver.
+  - tstep_both.
+    apply steps_impl_step_end => κ Pσ2. go. case_match; go.
+    + tstep_s. eexists (Some (EIRecvReturn v)), _. split; [done|]. eexists _, _. split; [econs|].
       apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
       apply: Hloop. naive_solver.
     + tstep_s. eexists None, _. split; [done|]. eexists _, _. split; [done|].
@@ -396,7 +416,27 @@ Proof.
            go. go_s. go_s. split. { apply lookup_union_Some_raw. naive_solver. }
            go. go_s. go_s. split; [done|]. go. go_s. go_s. split; [done|]. go. go_s. split; [done|]. go.
            apply: Hloop. naive_solver.
-      * admit.
+      * go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i.
+        invert_all asm_prod_filter.
+        -- go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i.
+           invert_all asm_prod_filter.
+           have [cs' ?]: ∃ cs', cs = IPFRight :: cs' by admit. subst.
+           go_i. go_i. eexists false. go. go_i. go_i. eexists _. go.
+           go_i. go_i. eexists _. go. go_i. go_i. split; [done|]. go.
+           go_i.
+           go_s. eexists (Some _), _. split; [done|]. eexists _, _ => /=.
+           split; [apply IPFReturnLeftToRight|].
+           apply: steps_spec_step_end; [done|] => ??.
+           apply: Hloop. naive_solver.
+        -- have [cs' ?]: ∃ cs', cs = IPFNone :: cs' by admit. subst.
+           go_s. eexists (Some _), _. split; [done|]. eexists _, _ => /=.
+           split; [apply IPFReturnLeftToExt|].
+           apply: steps_spec_step_end; [done|] => ??.
+           go_s. go_s. eexists _. go. go_s. go_s. eexists _. go.
+           go_s. go_s. eexists false. go. go_s. go_s. eexists _. go.
+           go_s. go_s. eexists _. go. go_s. go_s. split; [done|]. go.
+           go_s. go_s. split; [done|]. go. go_s. split; [done|]. go.
+           apply: Hloop. naive_solver.
     + tstep_s. eexists None, _. split; [done|]. eexists _, _. split; [done|].
       apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
       apply: Hloop. naive_solver.
@@ -408,5 +448,64 @@ Proof.
     + tstep_s. eexists None, _. split; [done|]. eexists _, _. split; [done|].
       apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
       apply: Hloop. naive_solver.
-  - admit.
+  - tstep_both.
+    apply steps_impl_step_end => κ Pσ2. go. case_match; go.
+    + tstep_s. eexists (Some (EIRecvReturn v)), _. split; [done|]. eexists _, _. split; [econs|].
+      apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
+      apply: Hloop. naive_solver.
+    + tstep_s. eexists None, _. split; [done|]. eexists _, _. split; [done|].
+      apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
+      apply: Hloop. naive_solver.
+  - tstep_both.
+    apply steps_impl_step_end => κ Pσ2. go. destruct κ as [e|]; go.
+    + tend. have [σ' Hσ'] := vis_no_all _ _ _ ltac:(done). eexists σ'. split; [naive_solver|].
+      go_i. go_i. go_i. go_i. go_i. go_i. destruct x1.
+      * go_i. go_i. go_i. go_i. go_i. go_i.
+        go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i.
+        invert_all asm_prod_filter.
+        -- go_i. go_i. go_i. go_i. go_i. go_i.
+           go_i. go_i. invert_all asm_prod_filter.
+           go_i. go_i. eexists true. go. go_i. go_i. eexists _. go.
+           go_i. go_i. eexists _. go. go_i. go_i. eexists _. go.
+           go_i. go_i. split; [ naive_solver|]. go. go_i. go_i. split; [naive_solver|]. go.
+           go_i. go_i. split; [done|]. go. go_i.
+           go_s. eexists (Some _), _. split; [done|]. eexists _, _ => /=.
+           split; [econs|]. { naive_solver. } { naive_solver. }
+           apply: steps_spec_step_end; [done|] => ??.
+           apply: Hloop. naive_solver.
+        -- go_s. eexists (Some _), _. split; [done|]. eexists _, _ => /=. split; [apply IPFCallRightToExt|].
+           { naive_solver. } { naive_solver. }
+           apply: steps_spec_step_end; [done|] => ??.
+           go_s. go_s. eexists _. go. go_s. go_s. eexists _. go.
+           go_s. go_s. eexists true. go. go_s. go_s. eexists _. go.
+           go_s. go_s. eexists _. go. go_s. go_s. eexists _. go.
+           go_s. go_s. split. { apply not_elem_of_union. naive_solver. }
+           go. go_s. go_s. split.
+           { apply lookup_union_Some_raw. destruct (f2i1 !! x2) as [?|] eqn:?; naive_solver. }
+           go. go_s. go_s. split; [done|]. go. go_s. go_s. split; [done|]. go. go_s. split; [done|]. go.
+           apply: Hloop. naive_solver.
+      * go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i.
+        invert_all asm_prod_filter.
+        -- go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i.
+           invert_all asm_prod_filter.
+           have [cs' ?]: ∃ cs', cs = IPFLeft :: cs' by admit. subst.
+           go_i. go_i. eexists false. go. go_i. go_i. eexists _. go.
+           go_i. go_i. eexists _. go. go_i. go_i. split; [done|]. go.
+           go_i.
+           go_s. eexists (Some _), _. split; [done|]. eexists _, _ => /=.
+           split; [apply IPFReturnRightToLeft|].
+           apply: steps_spec_step_end; [done|] => ??.
+           apply: Hloop. naive_solver.
+        -- have [cs' ?]: ∃ cs', cs = IPFNone :: cs' by admit. subst.
+           go_s. eexists (Some _), _. split; [done|]. eexists _, _ => /=.
+           split; [apply IPFReturnRightToExt|].
+           apply: steps_spec_step_end; [done|] => ??.
+           go_s. go_s. eexists _. go. go_s. go_s. eexists _. go.
+           go_s. go_s. eexists false. go. go_s. go_s. eexists _. go.
+           go_s. go_s. eexists _. go. go_s. go_s. split; [done|]. go.
+           go_s. go_s. split; [done|]. go. go_s. split; [done|]. go.
+           apply: Hloop. naive_solver.
+    + tstep_s. eexists None, _. split; [done|]. eexists _, _. split; [done|].
+      apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
+      apply: Hloop. naive_solver.
 Abort.
