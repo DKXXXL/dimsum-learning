@@ -259,43 +259,37 @@ Definition initial_imp_to_asm_state (m : module imp_event) (σ : m.(m_state)) (i
   (SPRight, σ, (imp_to_asm_itree ins fns f2i, []), SMFilter).
 
 Inductive imp_to_asm_combine_stacks (ins1 ins2 : gset Z) :
-  list (imp_prod_filter_enum * imp_prod_filter_enum) →
+  imp_prod_filter_enum → list imp_prod_filter_enum →
   list (bool * Z * gmap string Z) → list (bool * Z * gmap string Z) → list (bool * Z * gmap string Z) →
  Prop :=
 | IAC_nil :
-  imp_to_asm_combine_stacks ins1 ins2 [] [] [] []
+  imp_to_asm_combine_stacks ins1 ins2 IPFNone [] [] [] []
 | IAC_NoneLeft ret rs ics cs cs1 cs2:
   ret ∉ ins1 →
   ret ∉ ins2 →
-  default IPFNone (fst <$> head ics) = IPFNone →
-  imp_to_asm_combine_stacks ins1 ins2 ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 ((IPFLeft, IPFNone) :: ics) ((false, ret, rs) :: cs) ((false, ret, rs) :: cs1) cs2
+  imp_to_asm_combine_stacks ins1 ins2 IPFNone ics cs cs1 cs2 →
+  imp_to_asm_combine_stacks ins1 ins2 IPFLeft (IPFNone :: ics) ((false, ret, rs) :: cs) ((false, ret, rs) :: cs1) cs2
 | IAC_NoneRight ret rs ics cs cs1 cs2:
   ret ∉ ins1 →
   ret ∉ ins2 →
-  default IPFNone (fst <$> head ics) = IPFNone →
-  imp_to_asm_combine_stacks ins1 ins2 ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 ((IPFRight, IPFNone) :: ics) ((false, ret, rs) :: cs) cs1 ((false, ret, rs) :: cs2)
+  imp_to_asm_combine_stacks ins1 ins2 IPFNone ics cs cs1 cs2 →
+  imp_to_asm_combine_stacks ins1 ins2 IPFRight (IPFNone :: ics) ((false, ret, rs) :: cs) cs1 ((false, ret, rs) :: cs2)
 | IAC_LeftRight ret rs ics cs cs1 cs2:
   ret ∈ ins1 →
-  fst <$> head ics = Some IPFLeft →
-  imp_to_asm_combine_stacks ins1 ins2 ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 ((IPFRight, IPFLeft) :: ics) cs ((true, ret, rs) :: cs1) ((false, ret, rs) :: cs2)
+  imp_to_asm_combine_stacks ins1 ins2 IPFLeft ics cs cs1 cs2 →
+  imp_to_asm_combine_stacks ins1 ins2 IPFRight (IPFLeft :: ics) cs ((true, ret, rs) :: cs1) ((false, ret, rs) :: cs2)
 | IAC_LeftNone ret rs ics cs cs1 cs2:
   ret ∈ ins1 →
-  fst <$> head ics = Some IPFLeft →
-  imp_to_asm_combine_stacks ins1 ins2 ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 ((IPFNone, IPFLeft) :: ics) ((true, ret, rs) :: cs) ((true, ret, rs) :: cs1) cs2
+  imp_to_asm_combine_stacks ins1 ins2 IPFLeft ics cs cs1 cs2 →
+  imp_to_asm_combine_stacks ins1 ins2  IPFNone (IPFLeft :: ics) ((true, ret, rs) :: cs) ((true, ret, rs) :: cs1) cs2
 | IAC_RightLeft ret rs ics cs cs1 cs2:
   ret ∈ ins2 →
-  fst <$> head ics = Some IPFRight →
-  imp_to_asm_combine_stacks ins1 ins2 ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 ((IPFLeft, IPFRight) :: ics) cs ((false, ret, rs) :: cs1) ((true, ret, rs) :: cs2)
+  imp_to_asm_combine_stacks ins1 ins2 IPFRight ics cs cs1 cs2 →
+  imp_to_asm_combine_stacks ins1 ins2 IPFLeft (IPFRight :: ics) cs ((false, ret, rs) :: cs1) ((true, ret, rs) :: cs2)
 | IAC_RightNone ret rs ics cs cs1 cs2:
   ret ∈ ins2 →
-  fst <$> head ics = Some IPFRight →
-  imp_to_asm_combine_stacks ins1 ins2 ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 ((IPFNone, IPFRight) :: ics) ((true, ret, rs) :: cs) cs1 ((true, ret, rs) :: cs2)
+  imp_to_asm_combine_stacks ins1 ins2 IPFRight ics cs cs1 cs2 →
+  imp_to_asm_combine_stacks ins1 ins2 IPFNone (IPFRight :: ics) ((true, ret, rs) :: cs) cs1 ((true, ret, rs) :: cs2)
 .
 
 Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
@@ -307,15 +301,15 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
   let ins := (ins1 ∪ ins2) in
   let fns := (fns1 ∪ fns2) in
   let f2i := (f2i1 ∪ f2i2) in
-  ∃ ics,
+  ∃ ics ips,
   σi1 = σs1 ∧
   σi2 = σs2 ∧
-  imp_to_asm_combine_stacks ins1 ins2 ics cs cs1 cs2 ∧
+  imp_to_asm_combine_stacks ins1 ins2 ips ics cs cs1 cs2 ∧
   (( σfa = APFNone ∧ σpa = SPNone ∧ σfs = SMFilter ∧ σps = SPRight ∧ t = imp_to_asm_itree ins fns f2i
       ∧ t1 = imp_to_asm_itree ins1 fns1 f2i1 ∧ t2 = imp_to_asm_itree ins2 fns2 f2i2
       ∧ σf1 = SMFilter ∧ σf2 = SMFilter ∧ σpi1 = SPRight ∧ σpi2 = SPRight
       ∧ σpi = SPNone ∧ σf = IPFState IPFNone ics
-      ∧ default IPFNone (fst <$> head ics) = IPFNone
+      ∧ ips = IPFNone
     ) ∨
   (( (∃ f vs, σf = IPFState (IPFLeftRecvCall f vs) ics ∧ σf1 = SMProgRecv (EIRecvCall f vs))
       ∨ (∃ v, σf = IPFState (IPFLeftRecvReturn v) ics ∧ σf1 = SMProgRecv (EIRecvReturn v))
@@ -326,7 +320,7 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
       ∧ t2 = imp_to_asm_itree ins2 fns2 f2i2
       ∧ σf2 = SMFilter ∧ σpi1 = SPLeft ∧ σpi2 = SPRight
       ∧ σpi = SPLeft
-      ∧ fst <$> head ics = Some IPFLeft) ∨
+      ∧ ips = IPFLeft) ∨
   (((∃ f vs, σf = IPFState (IPFRightRecvCall f vs) ics ∧ σf2 = SMProgRecv (EIRecvCall f vs))
       ∨ (∃ v, σf = IPFState (IPFRightRecvReturn v) ics ∧ σf2 = SMProgRecv (EIRecvReturn v))
       ∨ σf = IPFState IPFRight ics ∧ σf2 = SMProg)
@@ -336,10 +330,10 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
       ∧ t2 = (imp_to_asm_itree_to_env ins2 fns2 f2i2;;;; (imp_to_asm_itree ins2 fns2 f2i2))
       ∧ σf1 = SMFilter ∧ σpi1 = SPRight ∧ σpi2 = SPLeft
       ∧ σpi = SPRight
-      ∧ fst <$> head ics = Some IPFRight)).
+      ∧ ips = IPFRight)).
 Hint Constants Transparent : tstep.
 Ltac solve_imp_to_asm_combine_inv :=
-  eexists _; split_and!; [naive_solver..| try done; try by econs | naive_solver].
+  eexists _, _; split_and!; [naive_solver..| try done; try by econs | naive_solver].
 
 Program Definition itree_step_forever_s EV S R (t : itree (moduleE EV S) R) s :=
   @eq_it_to_tstep_s EV S s (ITree.forever t) (t;;;;ITree.forever t) _.
@@ -407,7 +401,7 @@ Proof.
         go_i. apply Hloop. solve_imp_to_asm_combine_inv.
         (* split_and! => //. right.  naive_solver. *)
       * go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s.
-        revert select (imp_to_asm_combine_stacks _ _ _ _ _ _) => Hstack.
+        revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
         inversion Hstack; simplify_eq/= => //.
         eexists _, _, _. split; [apply IPFReturnExtToLeft|]. simpl. split; [done|].
         go_i. go_i. eexists _. go. go_i. go_i. eexists _. go.
@@ -437,7 +431,7 @@ Proof.
         go_i. go_i. split; [done|]. go. go_i. go_i. split; [done|]. go. go_i. go_i. go_i. go_i.
         go_i. apply Hloop. solve_imp_to_asm_combine_inv.
       * go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s. go_s.
-        revert select (imp_to_asm_combine_stacks _ _ _ _ _ _) => Hstack.
+        revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
         inversion Hstack; simplify_eq/= => //.
         eexists _, _, _. split; [apply IPFReturnExtToRight|]. simpl. split; [done|].
         go_i. go_i. eexists _. go. go_i. go_i. eexists _. go.
@@ -495,7 +489,7 @@ Proof.
         invert_all asm_prod_filter.
         -- go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i.
            invert_all asm_prod_filter.
-           revert select (imp_to_asm_combine_stacks _ _ _ _ _ _) => Hstack.
+           revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
            inversion Hstack; simplify_eq/= => //.
            go_i. go_i. eexists false. go. go_i. go_i. eexists _. go.
            go_i. go_i. eexists _. go. go_i. go_i. eexists _. go. go_i. go_i. go_i. go_i. split;[done|]. go.
@@ -504,7 +498,7 @@ Proof.
            split; [apply IPFReturnLeftToRight|].
            apply: steps_spec_step_end; [done|] => ??.
            apply: Hloop. solve_imp_to_asm_combine_inv.
-        -- revert select (imp_to_asm_combine_stacks _ _ _ _ _ _) => Hstack.
+        -- revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
            inversion Hstack; simplify_eq/= => //.
            go_s. eexists (Some _), _. split; [done|]. eexists _, _ => /=.
            split; [apply IPFReturnLeftToExt|].
@@ -568,7 +562,7 @@ Proof.
         invert_all asm_prod_filter.
         -- go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i.
            invert_all asm_prod_filter.
-           revert select (imp_to_asm_combine_stacks _ _ _ _ _ _) => Hstack.
+           revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
            inversion Hstack; simplify_eq/= => //.
            go_i. go_i. eexists false. go. go_i. go_i. eexists _. go.
            go_i. go_i. eexists _. go. go_i. go_i. eexists _. go. go_i. go_i.
@@ -578,7 +572,7 @@ Proof.
            split; [apply IPFReturnRightToLeft|].
            apply: steps_spec_step_end; [done|] => ??.
            apply: Hloop. solve_imp_to_asm_combine_inv.
-        -- revert select (imp_to_asm_combine_stacks _ _ _ _ _ _) => Hstack.
+        -- revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
            inversion Hstack; simplify_eq/= => //.
            go_s. eexists (Some _), _. split; [done|]. eexists _, _ => /=.
            split; [apply IPFReturnRightToExt|].

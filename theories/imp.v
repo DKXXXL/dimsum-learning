@@ -162,8 +162,8 @@ Inductive imp_prod_filter_enum :=
 .
 Record imp_prod_filter_state := IPFState {
   ipf_cur : imp_prod_filter_enum;
-  (* list of returns (from, to) *)
-  ipf_stack : list (imp_prod_filter_enum * imp_prod_filter_enum)
+  (* list of returns *)
+  ipf_stack : list imp_prod_filter_enum
 }.
 Add Printing Constructor imp_prod_filter_state.
 
@@ -174,7 +174,7 @@ Inductive imp_prod_filter (fns1 fns2 : gset string) :
 | IPFCallLeftToRight f vs cs:
   f ∉ fns1 → f ∈ fns2 →
   imp_prod_filter fns1 fns2 (IPFState IPFLeft cs) (SPELeft (EICall f vs) SPRight)
-                  None (IPFState (IPFRightRecvCall f vs) ((IPFRight, IPFLeft) :: cs))
+                  None (IPFState (IPFRightRecvCall f vs) (IPFLeft :: cs))
 (* call l -> r step 2 *)
 | IPFCallLeftToRight2 f vs cs:
   imp_prod_filter fns1 fns2 (IPFState (IPFRightRecvCall f vs) cs) (SPERight (EIRecvCall f vs) SPRight)
@@ -183,7 +183,7 @@ Inductive imp_prod_filter (fns1 fns2 : gset string) :
 | IPFCallRightToLeft f vs cs:
   f ∈ fns1 → f ∉ fns2 →
   imp_prod_filter fns1 fns2 (IPFState IPFRight cs) (SPERight (EICall f vs) SPLeft)
-                  None (IPFState (IPFLeftRecvCall f vs) ((IPFLeft, IPFRight) :: cs))
+                  None (IPFState (IPFLeftRecvCall f vs) (IPFRight :: cs))
 (* call r -> l step 2*)
 | IPFCallRightToLeft2 f vs cs:
   imp_prod_filter fns1 fns2 (IPFState (IPFLeftRecvCall f vs) cs) (SPELeft (EIRecvCall f vs) SPLeft)
@@ -192,25 +192,25 @@ Inductive imp_prod_filter (fns1 fns2 : gset string) :
 | IPFCallLeftToExt f vs cs:
   f ∉ fns1 → f ∉ fns2 →
   imp_prod_filter fns1 fns2 (IPFState IPFLeft cs) (SPELeft (EICall f vs) SPNone)
-                  (Some (EICall f vs)) (IPFState IPFNone ((IPFNone, IPFLeft) :: cs))
+                  (Some (EICall f vs)) (IPFState IPFNone (IPFLeft :: cs))
 (* call r -> ext *)
 | IPFCallRightToExt f vs cs:
   f ∉ fns1 → f ∉ fns2 →
   imp_prod_filter fns1 fns2 (IPFState IPFRight cs) (SPERight (EICall f vs) SPNone)
-                  (Some (EICall f vs)) (IPFState IPFNone ((IPFNone, IPFRight) :: cs))
+                  (Some (EICall f vs)) (IPFState IPFNone (IPFRight :: cs))
 (* call ext -> l *)
 | IPFCallExtToLeft f vs cs:
   f ∈ fns1 → f ∉ fns2 →
   imp_prod_filter fns1 fns2 (IPFState IPFNone cs) (SPENone SPLeft)
-                  (Some (EIRecvCall f vs)) (IPFState (IPFLeftRecvCall f vs) ((IPFLeft, IPFNone) :: cs))
+                  (Some (EIRecvCall f vs)) (IPFState (IPFLeftRecvCall f vs) (IPFNone :: cs))
 (* call ext -> r *)
 | IPFCallExtToRight f vs cs:
   f ∉ fns1 → f ∈ fns2 →
   imp_prod_filter fns1 fns2 (IPFState IPFNone cs) (SPENone SPRight)
-                  (Some (EIRecvCall f vs)) (IPFState (IPFRightRecvCall f vs) ((IPFRight, IPFNone) :: cs))
+                  (Some (EIRecvCall f vs)) (IPFState (IPFRightRecvCall f vs) (IPFNone :: cs))
 (* ret l -> r *)
 | IPFReturnLeftToRight v cs:
-  imp_prod_filter fns1 fns2 (IPFState IPFLeft ((IPFLeft, IPFRight) :: cs)) (SPELeft (EIReturn v) SPRight)
+  imp_prod_filter fns1 fns2 (IPFState IPFLeft (IPFRight :: cs)) (SPELeft (EIReturn v) SPRight)
                   None (IPFState (IPFRightRecvReturn v) cs)
 (* ret l -> r step 2 *)
 | IPFReturnLeftToRight2 v cs:
@@ -218,7 +218,7 @@ Inductive imp_prod_filter (fns1 fns2 : gset string) :
                   None (IPFState IPFRight cs)
 (* ret r -> l *)
 | IPFReturnRightToLeft v cs:
-  imp_prod_filter fns1 fns2 (IPFState IPFRight ((IPFRight, IPFLeft) :: cs)) (SPERight (EIReturn v) SPLeft)
+  imp_prod_filter fns1 fns2 (IPFState IPFRight (IPFLeft :: cs)) (SPERight (EIReturn v) SPLeft)
                   None (IPFState (IPFLeftRecvReturn v) cs)
 (* ret l -> r step 2 *)
 | IPFReturnRightToLeft2 v cs:
@@ -226,19 +226,19 @@ Inductive imp_prod_filter (fns1 fns2 : gset string) :
                   None (IPFState IPFLeft cs)
 (* ret l -> ext *)
 | IPFReturnLeftToExt v cs:
-  imp_prod_filter fns1 fns2 (IPFState IPFLeft ((IPFLeft, IPFNone) :: cs)) (SPELeft (EIReturn v) SPNone)
+  imp_prod_filter fns1 fns2 (IPFState IPFLeft (IPFNone :: cs)) (SPELeft (EIReturn v) SPNone)
                   (Some (EIReturn v)) (IPFState IPFNone cs)
 (* ret r -> ext *)
 | IPFReturnRightToExt v cs:
-  imp_prod_filter fns1 fns2 (IPFState IPFRight ((IPFRight, IPFNone) :: cs)) (SPERight (EIReturn v) SPNone)
+  imp_prod_filter fns1 fns2 (IPFState IPFRight (IPFNone :: cs)) (SPERight (EIReturn v) SPNone)
                   (Some (EIReturn v)) (IPFState IPFNone cs)
 (* ret ext -> l *)
 | IPFReturnExtToLeft v cs:
-  imp_prod_filter fns1 fns2 (IPFState IPFNone ((IPFNone, IPFLeft) :: cs)) (SPENone SPLeft)
+  imp_prod_filter fns1 fns2 (IPFState IPFNone (IPFLeft :: cs)) (SPENone SPLeft)
                   (Some (EIRecvReturn v)) (IPFState (IPFLeftRecvReturn v) cs)
 (* ret ext -> r *)
 | IPFReturnExtToRight v cs:
-  imp_prod_filter fns1 fns2 (IPFState IPFNone ((IPFNone, IPFRight) :: cs)) (SPENone SPRight)
+  imp_prod_filter fns1 fns2 (IPFState IPFNone (IPFRight :: cs)) (SPENone SPRight)
                   (Some (EIRecvReturn v)) (IPFState (IPFRightRecvReturn v) cs)
 .
 
