@@ -74,6 +74,18 @@ Tactic Notation "destruct_all" "?" :=
 Tactic Notation "destruct_all" "!" :=
   progress destruct_all?.
 
+Ltac split_step :=
+  match goal with
+  | |- ∃ x, _ => eexists _
+  | |- _ ∧ _ => split
+  | |- ?e1 = ?e2 => is_evar e1; reflexivity
+  | |- ?e1 = ?e2 => is_evar e2; reflexivity
+  | |- ?G => assert_fails (has_evar G); done
+  end; simpl.
+
+Tactic Notation "split!" :=
+  simpl; repeat split_step.
+
 Section theorems.
 Context `{FinMap K M}.
 Lemma map_disjoint_difference_l' {A} (m1 m2 : M A) : m2 ∖ m1 ##ₘ m1.
