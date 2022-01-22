@@ -483,13 +483,10 @@ Module asm_examples.
     go_s => r2 HR2; go.
     go_s => r30 HR30; go.
     go_s.
-    tstep_i. split. { by simplify_map_eq. }
-    erewrite lookup_total_correct; [|done]. erewrite lookup_total_correct; [|done].
-    tstep_i. split. { by simplify_map_eq. }
-    erewrite lookup_total_correct; [|by simplify_map_eq].
-    tstep_i => ??. simplify_map_eq.
-    tstep_i. split. { by simplify_map_eq. }
-    erewrite lookup_total_correct; [|by simplify_map_eq].
+    tstep_i; simplify_map_eq'. split!.
+    tstep_i; simplify_map_eq'. split!.
+    tstep_i => ??; simplify_map_eq'.
+    tstep_i; simplify_map_eq'. split!.
     revert select (eqit eq _ _ _ _) => ->.
     apply HCONT; simplify_map_eq => //. by rewrite insert_insert.
   Qed.
@@ -566,19 +563,15 @@ Module asm_examples.
     go_s => -[r29 HR29]; go.
     go_s => r30 HR30; go.
 
-    tstep_i. split; [ by simplify_map_eq|].
-    tstep_i. split; [ by simplify_map_eq|].
-    tstep_i. split; [ by simplify_map_eq|].
-    erewrite lookup_total_correct; [|by simplify_map_eq].
-    tstep_i => ??. simplify_map_eq.
-    tstep_i. split; [ by simplify_map_eq|].
-    erewrite lookup_total_correct; [|by simplify_map_eq].
-    tstep_i. split; [ by simplify_map_eq|].
-    erewrite lookup_total_correct; [|by simplify_map_eq].
-    tstep_i => ??. simplify_map_eq.
-    tstep_i. split; [ by simplify_map_eq|].
-    erewrite lookup_total_correct; [|by simplify_map_eq].
-    tstep_i. split; [ by simplify_map_eq|].
+    tstep_i; simplify_map_eq'. split!.
+    tstep_i; simplify_map_eq'. split!.
+    tstep_i; simplify_map_eq'. split!.
+    tstep_i => ??; simplify_map_eq'.
+    tstep_i; simplify_map_eq'. split!.
+    tstep_i; simplify_map_eq'. split!.
+    tstep_i => ??; simplify_map_eq'.
+    tstep_i; simplify_map_eq'. split!.
+    tstep_i; simplify_map_eq'. split!.
     rewrite insert_commute // insert_insert (insert_commute _ "PC") // insert_insert.
     go_s. eexists r30; go.
     go_s.
@@ -592,13 +585,10 @@ Module asm_examples.
     go_s => -[r30'' HR30'']; go.
     go_s => ?; go.
     go_s => -[?[?[?[??]]]]; go.
-    tstep_i. split; [ by simplify_map_eq|].
-    erewrite lookup_total_correct; [|by simplify_map_eq].
-    tstep_i. split; [ by simplify_map_eq|].
-    erewrite lookup_total_correct; [|by simplify_map_eq].
-    tstep_i => ??. simplify_map_eq.
-    tstep_i. split; [ by simplify_map_eq|].
-    erewrite lookup_total_correct; [|by simplify_map_eq].
+    tstep_i; simplify_map_eq'. split!.
+    tstep_i; simplify_map_eq'. split!.
+    tstep_i => ??; simplify_map_eq'.
+    tstep_i; simplify_map_eq'. split!.
     go_s. eexists _; go.
     go_s. revert select (eqit eq _ _ _ _) => ->.
     apply HCONT. { by rewrite insert_insert. } { by simplify_map_eq. }

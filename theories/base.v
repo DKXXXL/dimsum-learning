@@ -97,6 +97,20 @@ Ltac split_step :=
 Tactic Notation "split!" :=
   simpl; repeat split_step.
 
+Tactic Notation "simpl_map_total" "by" tactic3(tac) := repeat
+   match goal with
+   | H : ?m !! ?i = Some ?x |- context [?m !!! ?i] =>
+       rewrite (lookup_total_correct m i x H)
+   | |- context[ (<[_:=_]>_) !!! _ ] =>
+       rewrite lookup_total_insert || rewrite ->lookup_total_insert_ne by done
+   end.
+ Tactic Notation "simplify_map_eq'" "/=" "by" tactic3(tac) :=
+  repeat (progress csimpl in * || (progress simpl_map_total by tac) || simplify_map_eq by tac ).
+ Tactic Notation "simplify_map_eq'" :=
+  repeat (progress (simpl_map_total by eauto with simpl_map map_disjoint) || simplify_map_eq by eauto with simpl_map map_disjoint ).
+Tactic Notation "simplify_map_eq'" "/=" :=
+  simplify_map_eq'/= by eauto with simpl_map map_disjoint.
+
 Section theorems.
 Context `{FinMap K M}.
 Lemma map_disjoint_difference_l' {A} (m1 m2 : M A) : m2 ∖ m1 ##ₘ m1.

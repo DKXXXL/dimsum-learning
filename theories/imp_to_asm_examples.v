@@ -51,21 +51,17 @@ Proof.
   go_s => ?; go. go_s => ?; go. go_s => ?; go. go_s => Hargs; go.
   go_s. go_s. go_s.
   have ?: f = "add" by set_solver. subst. simplify_map_eq.
-  change ((Waiting false)) with (expr_fill [] (Waiting false)).
   tstep_s. split!; [|done|]; simplify_map_eq; [done|]. case_bool_decide.
-  2: { change (UbE) with (expr_fill [] UbE). tstep_s. done. }
+  2: { by tstep_s. }
   destruct vs as [|v1 [|v2 []]] => //=.
   move: Hargs => -[?[? /= Hregs]]. unfold saved_registers in *. decompose_Forall_hyps.
   tstep_i. split; [done|].
-  tstep_i. split. { by simplify_map_eq. }
-  tstep_i => ??. simplify_map_eq. erewrite lookup_total_correct; [|by simplify_map_eq].
-  rewrite {1}/asm_add. simplify_map_eq.
-  tstep_i. split. { by simplify_map_eq. } simplify_map_eq.
-  tstep_i => ??. simplify_map_eq. erewrite lookup_total_correct; [|by simplify_map_eq].
+  tstep_i; simplify_map_eq'. split; [done|].
+  tstep_i => ??. simplify_map_eq'.
+  tstep_i; simplify_map_eq'. split!.
+  tstep_i => ??; simplify_map_eq'.
   case_match. 1: { admit. }
-  change (ReturnExt false (BinOp v1 AddOp v2)) with (expr_fill [ReturnExtCtx false] (BinOp v1 AddOp v2)).
   go_s => n1 n2 ??; subst.
-  change (ReturnExt false (n1 + n2)) with (expr_fill [] (ReturnExt false (n1 + n2))).
   go_s. go_s. eexists _; go. go_s. eexists _; go. go_s. eexists false; go.
   go_s. eexists _; go. go_s. eexists _; go. go_s. eexists _; go.
   go_s. go_s. split; [done|]; go. go_s. go_s. split; [shelve|]; go. go_s. split; [done|]. go.
@@ -73,7 +69,5 @@ Proof.
   Unshelve.
   2: { unfold imp_to_asm_ret. unfold tmp_registers, saved_registers.
        split!; decompose_Forall; simplify_map_eq => //.
-       all: try by apply lookup_lookup_total.
-       admit.
-  }
+       all: try by apply lookup_lookup_total. }
 Abort.
