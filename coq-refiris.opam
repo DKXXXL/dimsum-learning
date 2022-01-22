@@ -10,7 +10,7 @@ version: "dev"
 synopsis: "Refiris"
 
 depends: [
-  "coq" { (>= "8.13.2" & < "8.15~") | (= "dev") }
+  "coq" { (>= "8.14.1" & < "8.16~") | (= "dev") }
   "coq-iris" { (= "dev.2021-12-09.1.f52f9f6a") | (= "dev") }
   "coq-itree" { (= "4.0.0") }
 ]

@@ -197,22 +197,22 @@ Arguments Plater _ /.
 
 Lemma tsim_remember {EV} {mi ms : module EV} (Pσ : _ → _ → _ → Prop) σi σs b n :
   Pσ n σi σs →
-  (∀ n n' σi σs, tiS n' ⊆ n → Pσ n σi σs → Pσ n' σi σs) →
-  (* TODO: can one somehow link this n' to the n? *)
-  (∀ n', Plater (λ b', ∀ σi σs, Pσ n' σi σs → σi ⪯{mi, ms, n', b'} σs)) →
+  (∀ n n' σi σs, tiS?b n' ⊆ n → Pσ n σi σs → Pσ n' σi σs) →
+  (∀ n', tiS?b n' ⊆ n → Plater (λ b', ∀ σi σs, Pσ n' σi σs → σi ⪯{mi, ms, n', b'} σs)) →
   σi ⪯{mi, ms, n, b} σs.
 Proof.
   move => HP HPmono Hsim κs' n' Hn Ht /=.
-  have {}Hn: n' ⊆ n. { destruct b; (etrans; [|done]) => //. apply ti_le_S. }
-  elim/ti_lt_ind: n n' κs' σi σs Hn HP Ht.
-  move => n IHn n' κs' σi σs Hn HP Ht.
-  apply: Hsim ; [|done|done|done].
-  move => ????? Hn'/=. eapply IHn; [done..|].
-  by apply: HPmono.
+  move: HP => /HPmono HP. move: (HP _ ltac:(done)) => {}HP.
+  elim/ti_lt_ind: n' κs' σi σs Hn HP Ht.
+  move => n' IHn κs' σi σs Hn HP Ht.
+  apply: Hsim; [done| |done| |done]. 2: done.
+  move => ??????? /=. eapply IHn; [done| | |done].
+  - etrans; [|done]. apply tiS_maybe_mono; [done|]. etrans; [|done]. apply ti_le_S.
+  - apply: HPmono; [|done]. etrans; [|done]. by apply tiS_maybe_mono.
 Qed.
 
 Lemma tsim_remember_all {EV A} {mi ms : module EV} σi σs b n:
-  (∀ n, Plater (λ b', ∀ x, σi x ⪯{mi, ms, n, b'} σs x)) →
+  (∀ n', tiS?b n' ⊆ n → Plater (λ b', ∀ x, σi x ⪯{mi, ms, n', b'} σs x)) →
   ∀ x : A, σi x ⪯{mi, ms, n, b} σs x.
 Proof.
   move => Hsim x. apply: (tsim_remember (λ _ σi' σs', ∃ x, σi' = σi x ∧ σs' = σs x)).

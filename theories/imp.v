@@ -411,6 +411,43 @@ Proof.
 Qed.
 Global Hint Resolve imp_step_ReturnExt_s : tstep.
 
+Lemma imp_step_Binop_i fns K (v1 v2 : val) op:
+  TStepI imp_module (Imp (expr_fill K (BinOp v1 op v2)) fns) (λ G,
+    (G true None (λ G', ∃ v', eval_binop op v1 v2 = Some v' ∧ G' (Imp (expr_fill K v') fns)))).
+Proof.
+  constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
+  { solve_sub_redexes_are_values. } { done. } subst.
+  invert_all head_step.
+  naive_solver.
+Qed.
+Global Hint Resolve imp_step_Binop_i | 10 : tstep.
+
+Lemma imp_step_Binop_s fns K (v1 v2 : val) op:
+  TStepS imp_module (Imp (expr_fill K (BinOp v1 op v2)) fns) (λ G,
+    (G None (λ G', ∀ v', eval_binop op v1 v2 = Some v' → G' (Imp (expr_fill K v') fns)))).
+Proof.
+  constructor => ? HG. split!; [done|]. move => /= ??.
+  apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
+  destruct_all?; simplify_eq. naive_solver.
+Qed.
+Global Hint Resolve imp_step_Binop_s | 10 : tstep.
+
+Lemma imp_step_BinopAdd_i fns K n1 n2:
+  TStepI imp_module (Imp (expr_fill K (BinOp (ValNum n1) AddOp (ValNum n2))) fns) (λ G,
+    (G true None (λ G', G' (Imp (expr_fill K (ValNum (n1 + n2))) fns)))).
+Proof.
+  constructor => ? HG. tstep_i => ???. split!; [done|] => ?. naive_solver.
+Qed.
+Global Hint Resolve imp_step_BinopAdd_i | 5 : tstep.
+
+Lemma imp_step_BinopAdd_s fns K (v1 v2 : val):
+  TStepS imp_module (Imp (expr_fill K (BinOp v1 AddOp v2)) fns) (λ G,
+    (G None (λ G', ∀ n1 n2, v1 = ValNum n1 → v2 = ValNum n2 → G' (Imp (expr_fill K (ValNum (n1 + n2))) fns)))).
+Proof.
+  constructor => ? HG. split!; [done|]. move => /= ??. tstep_s. split! => ? /bind_Some[?[? /bind_Some[?[??]]]].
+  destruct v1, v2 => //. simplify_eq/=. naive_solver.
+Qed.
+Global Hint Resolve imp_step_BinopAdd_s | 5 : tstep.
 
 (** * syntactic linking *)
 Definition imp_link (fns1 fns2 : gmap string fndef) : gmap string fndef :=
@@ -578,7 +615,7 @@ Proof.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { exact: (λ _, imp_link_prod_inv true fns1 fns2). }
   { split!. 1: by econs. all: done. } { done. }
-  move => /= {}n Hloop [e1 fns1'] [[[? [el fnsl]] [er fnsr] [ipfs cs]]] [m [K [Kl [Kr ?]]]].
+  move => /= {}n _ Hloop [e1 fns1'] [[[? [el fnsl]] [er fnsr] [ipfs cs]]] [m [K [Kl [Kr ?]]]].
   have {}Hloop : ∀ σi σs,
             imp_link_prod_inv false fns1 fns2 σi σs
             → σi ⪯{imp_module, imp_prod (dom (gset string) fns1) (dom (gset string) fns2) imp_module imp_module, n, true} σs. {
@@ -609,9 +646,7 @@ Proof.
     simplify_eq. revert select (Is_true (static_expr _)) => /static_expr_expr_fill/=[??]//.
     rewrite -expr_fill_app.
     invert_all head_step => //.
-    + tstep_s. eexists None. split!; [done..|] => /=.
-      apply: steps_spec_step_end; [econs; [done|by econs]|].
-      move => /=*; destruct_all?; simplify_eq. tend. split!; [done..|].
+    + tstep_s. split!; [done..|] => /= *. tend. split!; [done..|].
       apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply static_expr_expr_fill.
     + tstep_s. eexists None. split!; [done..|] => /=.
@@ -648,9 +683,7 @@ Proof.
     simplify_eq. revert select (Is_true (static_expr _)) => /static_expr_expr_fill/=[??]//.
     rewrite -expr_fill_app.
     invert_all head_step => //.
-    + tstep_s. eexists None. split!; [done..|] => /=.
-      apply: steps_spec_step_end; [econs; [done|by econs]|].
-      move => /=*; destruct_all?; simplify_eq. tend. split!; [done..|].
+    + tstep_s. split!; [done..|] => /= *. tend. split!; [done..|].
       apply: Hloop. rewrite !expr_fill_app. split!; [done..|].
       by apply static_expr_expr_fill.
     + tstep_s. eexists None. split!; [done..|] => /=.
@@ -720,7 +753,7 @@ Proof.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { exact: (λ _, flip (imp_link_prod_inv false fns1 fns2)). }
   { split!. 1: by econs. all: done. } { done. }
-  move => /= {}n Hloop [[[? [el fnsl]] [er fnsr] [ipfs cs]]] [e1 fns1'] [m [K [Kl [Kr ?]]]].
+  move => /= {}n _ Hloop [[[? [el fnsl]] [er fnsr] [ipfs cs]]] [e1 fns1'] [m [K [Kl [Kr ?]]]].
   destruct_all?; simplify_eq/=. case_match; destruct_all?; simplify_eq.
   - destruct (to_val el') eqn:?.
     + destruct el'; simplify_eq/=.
@@ -736,9 +769,7 @@ Proof.
       simplify_eq. revert select (Is_true (static_expr _)) => /static_expr_expr_fill/=[??]//.
       rewrite -expr_fill_app.
       invert_all head_step => //; destruct_all?; simplify_eq.
-      * tstep_s. eexists None.
-        apply: steps_spec_step_end; [econs; [done|by econs]|].
-        move => /=*; destruct_all?; simplify_eq. tend. split!; [done..|].
+      * tstep_s => *. tend. split!; [done..|].
         apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
         by apply static_expr_expr_fill.
       * tstep_s. eexists None. split!; [done..|] => /=.
@@ -786,9 +817,7 @@ Proof.
       simplify_eq. revert select (Is_true (static_expr _)) => /static_expr_expr_fill/=[??]//.
       rewrite -expr_fill_app.
       invert_all head_step => //; destruct_all?; simplify_eq.
-      * tstep_s. eexists None.
-        apply: steps_spec_step_end; [econs; [done|by econs]|].
-        move => /=*; destruct_all?; simplify_eq. tend. split!; [done..|].
+      * tstep_s => *. tend. split!; [done..|].
         apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
         by apply static_expr_expr_fill.
       * tstep_s. eexists None. split!; [done..|] => /=.

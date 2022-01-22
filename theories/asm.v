@@ -201,7 +201,7 @@ Proof.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { exact: (λ _, asm_link_prod_inv ins1 ins2). }
   { naive_solver. } { done. }
-  move => /= {}n Hloop [i1 rs1 ins1'] [[[? [il rsl insl]] [ir rsr insr] σf]] [? [? [? Hinv]]].
+  move => /= {}n _ Hloop [i1 rs1 ins1'] [[[? [il rsl insl]] [ir rsr insr] σf]] [? [? [? Hinv]]].
   case_match; destruct_all?; simplify_eq.
   - revert select (is_Some i1) => -[[|[??]?] ->].
     + tstep_i => pc ?. case_match as Hunion. 1: move: Hunion => /lookup_union_Some_raw[Hl|[? Hl]].
@@ -261,7 +261,7 @@ Proof.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { exact: (λ _, flip (asm_link_prod_inv ins1 ins2)). }
   { naive_solver. } { done. }
-  move => /= {}n Hloop [[[σsp [il rsl insl]] [ir rsr insr]] σf] [i1 rs1 ins1'] [? [? [? Hinv]]].
+  move => /= {}n _ Hloop [[[σsp [il rsl insl]] [ir rsr insr]] σf] [i1 rs1 ins1'] [? [? [? Hinv]]].
   case_match; destruct_all?; simplify_eq.
   - revert select (is_Some i1) => -[[|[??]?] ->].
     + tstep_i => pc ?. case_match => *; destruct_all?; simplify_eq.
@@ -314,6 +314,13 @@ Proof.
 Qed.
 
 Require Import refframe.itree.
+Local Ltac go :=
+  clear_itree.
+Local Ltac go_s :=
+  tstep_s; go.
+Local Ltac go_i :=
+  tstep_i; go.
+
 (* TODO: Get rid of Some in recursive call (maybe by passing an itree to t instead of the +'? ) *)
 (* TODO: prove merging of two asm loops (should just be all choice between the two implementations ) *)
 Definition asm_loop (ins : list Z)
@@ -378,20 +385,19 @@ Proof.
    )
    (λ σi '(pc, rs) s', ∃ i, σi = AsmState (Some i) rs ins ∧ rs !! "PC" = Some pc ∧ ins !! pc = Some i)).
   { naive_solver. }
-  { move => ????. rewrite -(bind_ret_r TUb). by tstep_s. }
-  move => {}n Hloop σi [] CONT a Ha HCONT.
+  { move => ????. go_s. done. }
+  move => {}n _ Hloop σi [] CONT a Ha HCONT.
   destruct a as [[pc' rs']|]. 2: {
     move: Ha => [{}rs ?]. subst.
     tstep_i => pc i {}rs HPC Hi.
     rewrite {1}rec_as_interp {2}/rc.
-    rewrite bind_bind.
-    tstep_s => ? <- /=. tstep_s. eexists _ => ? <- /=. rewrite bind_bind.
-    tstep_s => ? <- /=. tstep_s. eexists _ => ? <- /=. rewrite bind_bind.
-    tstep_s => ? <- /=. tstep_s. split; [done|] => ? <- /=. rewrite bind_ret_l.
-    tstep_s => ? <- /=. tstep_s. split. { apply Hins. naive_solver. } move => ? <- /=.
-    tstep_s => ? <- /=. tstep_s => -[] ? <- /=.
-    { tstep_s => ? <- /=. apply: tsim_mono_b. apply HCONT. naive_solver. }
-    rewrite interp_bind bind_bind.
+    go_s. eexists _. go.
+    go_s. eexists _. go.
+    go_s. split; [done|]. go.
+    go_s. split. { apply Hins. naive_solver. } go.
+    go_s => -[]; go.
+    { go_s. apply: tsim_mono_b. revert select (eqit eq _ _ _ _) => ->. apply HCONT. naive_solver. }
+    revert select (eqit eq _ _ _ _) => ->. rewrite interp_bind bind_bind.
     apply: Hl; [done..| |].
     - move => ???????. subst. apply Hloop; [done|].
       move => ? [rs' pc'] []. naive_solver.
@@ -403,11 +409,10 @@ Proof.
   tstep_i => pc HPC. simplify_eq.
   case_match.
   - rewrite {1}rec_as_interp {2}/rc. rewrite bool_decide_true. { apply Hins. naive_solver. }
-    rewrite bind_ret_l.
-    tstep_s => ? <- /=. tstep_s. split. { apply Hins. naive_solver. } move => ? <- /=.
-    tstep_s => ? <- /=. tstep_s => -[] ? <- /=.
-    { tstep_s => ? <- /=. apply: tsim_mono_b. apply HCONT. naive_solver. }
-    rewrite interp_bind bind_bind.
+    go_s. split. { apply Hins. naive_solver. } go.
+    go_s => -[]; go.
+    { go_s. apply: tsim_mono_b. revert select (eqit eq _ _ _ _) => ->. apply HCONT. naive_solver. }
+    revert select (eqit eq _ _ _ _) => ->. rewrite interp_bind bind_bind.
     apply: Hl; [done..| |].
     + move => ???????. subst. apply Hloop; [done|].
       move => ? [? ?] []. naive_solver.
@@ -415,16 +420,15 @@ Proof.
       apply Hloop. { naive_solver. }
       move => ? [??] [] [?[??]]. apply: HCONT. naive_solver.
   - rewrite {1}rec_as_interp {2}/rc. rewrite bool_decide_false. { move => /Hins[??]. naive_solver. }
-    rewrite bind_bind.
-    tstep_s => ? <- /=. tstep_s. split; [done|] => ? <- /=. rewrite bind_bind.
+    go_s. split; [done|]. go.
     tstep_i => pc i {}rs HPC Hi.
-    tstep_s => ? <- /=. tstep_s. eexists _ => ? <- /=. rewrite bind_bind.
-    tstep_s => ? <- /=. tstep_s. eexists _ => ? <- /=. rewrite bind_bind.
-    tstep_s => ? <- /=. tstep_s. split; [done|] => ? <- /=. rewrite bind_ret_l.
-    tstep_s => ? <- /=. tstep_s. split. { apply Hins. naive_solver. } move  => ? <- /=.
-    tstep_s => ? <- /=. tstep_s => -[] ? <- /=.
-    { tstep_s => ? <- /=. apply: tsim_mono_b. apply HCONT. naive_solver. }
-    rewrite interp_bind bind_bind.
+    go_s. eexists _. go.
+    go_s. eexists _. go.
+    go_s. split; [done|]. go.
+    go_s. split. { apply Hins. naive_solver. } go.
+    go_s => -[]; go.
+    { go_s. apply: tsim_mono_b. revert select (eqit eq _ _ _ _) => ->. apply HCONT. naive_solver. }
+    revert select (eqit eq _ _ _ _) => ->. rewrite interp_bind bind_bind.
     apply: Hl; [done..| |].
     + move => ???????. subst. apply Hloop; [done|].
       move => ? [? ?] []. naive_solver.
@@ -473,12 +477,12 @@ Module asm_examples.
     move => {}n rc pc rs i CONT HPC Hi Hloop HCONT.
     move: Hi. rewrite !lookup_insert_Some !lookup_empty => Hi. destruct_all!; simplify_eq.
     all: repeat (rewrite bool_decide_false; [done|]); rewrite bool_decide_true //.
-    all: try by tstep_s => ? <- /=; tstep_s.
+    all: try by go_s.
 
-    tstep_s => ? <- /=. tstep_s => r1 HR1 ? <- /=.
-    tstep_s => ? <- /=. tstep_s => r2 HR2 ? <- /=.
-    tstep_s => ? <- /=. tstep_s => r30 HR30 ? <- /=.
-    tstep_s => ? <- /=.
+    go_s => r1 HR1; go.
+    go_s => r2 HR2; go.
+    go_s => r30 HR30; go.
+    go_s.
     tstep_i. split. { by simplify_map_eq. }
     erewrite lookup_total_correct; [|done]. erewrite lookup_total_correct; [|done].
     tstep_i. split. { by simplify_map_eq. }
@@ -486,6 +490,7 @@ Module asm_examples.
     tstep_i => ??. simplify_map_eq.
     tstep_i. split. { by simplify_map_eq. }
     erewrite lookup_total_correct; [|by simplify_map_eq].
+    revert select (eqit eq _ _ _ _) => ->.
     apply HCONT; simplify_map_eq => //. by rewrite insert_insert.
   Qed.
 
@@ -554,12 +559,13 @@ Module asm_examples.
     move=> {}n rc pc rs i CONT HPC Hi Hloop HCONT.
     move: Hi. rewrite !lookup_insert_Some !lookup_empty => Hi. destruct_all!; simplify_eq.
     all: repeat (rewrite bool_decide_false; [done|]); rewrite bool_decide_true //.
-    all: try by tstep_s => ? <- /=; tstep_s.
+    all: try by go_s.
 
-    tstep_s => ? <- /=. tstep_s => -[r1 HR1] ? <- /=.
-    tstep_s => ? <- /=. tstep_s => -[r2 HR2] ? <- /=.
-    tstep_s => ? <- /=. tstep_s => -[r29 HR29] ? <- /=.
-    tstep_s => ? <- /=. tstep_s => r30 HR30 ? <- /=.
+    go_s => -[r1 HR1]; go.
+    go_s => -[r2 HR2]; go.
+    go_s => -[r29 HR29]; go.
+    go_s => r30 HR30; go.
+
     tstep_i. split; [ by simplify_map_eq|].
     tstep_i. split; [ by simplify_map_eq|].
     tstep_i. split; [ by simplify_map_eq|].
@@ -574,18 +580,18 @@ Module asm_examples.
     erewrite lookup_total_correct; [|by simplify_map_eq].
     tstep_i. split; [ by simplify_map_eq|].
     rewrite insert_commute // insert_insert (insert_commute _ "PC") // insert_insert.
-    tstep_s => ? <- /=. tstep_s. eexists r30 => ? <- /=.
-    tstep_s => ? <- /=.
+    go_s. eexists r30; go.
+    go_s.
+    revert select (eqit eq _ _ _ _) => ->.
     apply Hloop. {
       apply map_eq => i. apply option_eq => ?.
       rewrite !lookup_insert_Some. naive_solver.
     } { by simplify_map_eq. }
     move => pc' rs'' i HPC' Hi'.
-    tstep_s => ? <- /=. tstep_s => ? ? <- /=.
-    unfold asm_mul_client in Hi'. simplify_map_eq.
-    tstep_s => ? <- /=. tstep_s => -[r30'' HR30''] ? <- /=.
-    tstep_s => ? <- /=. tstep_s => ? ? <- /=.
-    tstep_s => ? <- /=. tstep_s => -[?[?[?[??]]]] ? <- /=.
+    go_s => ?; go; subst. unfold asm_mul_client in Hi'. simplify_map_eq.
+    go_s => -[r30'' HR30'']; go.
+    go_s => ?; go.
+    go_s => -[?[?[?[??]]]]; go.
     tstep_i. split; [ by simplify_map_eq|].
     erewrite lookup_total_correct; [|by simplify_map_eq].
     tstep_i. split; [ by simplify_map_eq|].
@@ -593,7 +599,8 @@ Module asm_examples.
     tstep_i => ??. simplify_map_eq.
     tstep_i. split; [ by simplify_map_eq|].
     erewrite lookup_total_correct; [|by simplify_map_eq].
-    tstep_s => ? <- /=. tstep_s. eexists _ => ? <- /=.
-    tstep_s => ? <- /=. apply HCONT. { by rewrite insert_insert. } { by simplify_map_eq. }
+    go_s. eexists _; go.
+    go_s. revert select (eqit eq _ _ _ _) => ->.
+    apply HCONT. { by rewrite insert_insert. } { by simplify_map_eq. }
   Qed.
 End asm_examples.

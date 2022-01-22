@@ -74,10 +74,21 @@ Tactic Notation "destruct_all" "?" :=
 Tactic Notation "destruct_all" "!" :=
   progress destruct_all?.
 
+Ltac simpl_or :=
+  repeat match goal with
+         | |- ?P ∨ _ =>
+             assert_succeeds (exfalso; assert P; [| destruct_all?; done]);
+             right
+         | |- _ ∨ ?P =>
+             assert_succeeds (exfalso; assert P; [| destruct_all?; done]);
+             left
+         end.
+
 Ltac split_step :=
   match goal with
   | |- ∃ x, _ => eexists _
   | |- _ ∧ _ => split
+  | |- _ ∨ _ => simpl_or
   | |- ?e1 = ?e2 => is_evar e1; reflexivity
   | |- ?e1 = ?e2 => is_evar e2; reflexivity
   | |- ?G => assert_fails (has_evar G); done
