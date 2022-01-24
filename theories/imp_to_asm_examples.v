@@ -31,6 +31,41 @@ Definition imp_add : fndef := {|
 Definition imp_add_prog : gmap string fndef :=
   <[ "add" := imp_add ]> ∅.
 
+Definition asm_add_client : gmap Z asm_instr :=
+  <[ 200 := [
+        (* mov R0, 1 *)
+        WriteReg "R0" (λ rs, 1);
+        WriteReg "PC" (λ rs, rs !!! "PC" + 4)
+    ] ]> $
+  <[ 204 := [
+        (* mov R1, 1 *)
+        WriteReg "R1" (λ rs, 1);
+        WriteReg "PC" (λ rs, rs !!! "PC" + 4)
+    ] ]> $
+  <[ 208 := [
+        (* mov R29, R30 *)
+        WriteReg "R29" (λ rs, rs !!! "R30");
+        WriteReg "PC" (λ rs, rs !!! "PC" + 4)
+    ] ]> $
+  <[ 212 := [
+        (* bl 100; *)
+        WriteReg "R30" (λ rs, rs !!! "PC" + 4);
+        WriteReg "PC" (λ rs, 100)
+    ] ]> $
+  <[ 216 := [
+        (* ret *)
+        WriteReg "PC" (λ rs, rs !!! "R29")
+    ] ]> $ ∅.
+
+Definition imp_add_client : fndef := {|
+  fd_args := [];
+  fd_body := (imp.Call "add" [Val 1; Val 1]);
+  fd_static := I
+|}.
+
+Definition imp_add_client_prog : gmap string fndef :=
+  <[ "add_client" := imp_add_client ]> ∅.
+
 Local Hint Constants Transparent : tstep.
 Local Ltac go := clear_itree; destruct_all?; simplify_eq/=.
 Local Ltac go_i := tstep_i; go.
@@ -40,34 +75,102 @@ Lemma asm_add_refines_imp_add :
   trefines (MS asm_module (initial_asm_state asm_add))
            (MS (imp_to_asm imp_module) (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_prog) {[ 100; 104 ]} {[ "add" ]} (<["add" := 100]> ∅))).
 Proof.
-  apply tsim_implies_trefines => /= n.
-
-  rewrite /initial_asm_state/initial_imp_state/initial_imp_to_asm_state.
-
-  tstep_i => ???? Hin. unfold asm_add in Hin.
-  go_s. go_s. eexists _; go. go_s. eexists _; go. go_s. split; [done|]. go.
-  go_s => b; go. destruct b. 2: { repeat (go_s; intros; go). }
-  go_s => r; go. go_s => f; go. go_s => vs; go.
-  go_s => ?; go. go_s => ?; go. go_s => ?; go. go_s => Hargs; go.
-  go_s. go_s. go_s.
-  have ?: f = "add" by set_solver. subst. simplify_map_eq.
-  tstep_s. split!; [|done|]; simplify_map_eq; [done|]. case_bool_decide.
-  2: { by tstep_s. }
+  apply imp_to_asm_proof; [set_solver..|].
+  move => n i rs K f fn vs cs t pc ret Hpc Hi Hf Hf2i Hargs Hvs Hcall Hret.
+  unfold imp_add_prog in Hf. unfold asm_add in Hi.
+  move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   destruct vs as [|v1 [|v2 []]] => //=.
   move: Hargs => -[?[? /= Hregs]]. unfold saved_registers in *. decompose_Forall_hyps.
   tstep_i. split; [done|].
   tstep_i; simplify_map_eq'. split; [done|].
   tstep_i => ??. simplify_map_eq'.
   tstep_i; simplify_map_eq'. split!.
-  tstep_i => ??; simplify_map_eq'.
-  case_match. 1: { admit. }
   go_s => n1 n2 ??; subst.
-  go_s. go_s. eexists _; go. go_s. eexists _; go. go_s. eexists false; go.
-  go_s. eexists _; go. go_s. eexists _; go. go_s. eexists _; go.
-  go_s. go_s. split; [done|]; go. go_s. go_s. split; [shelve|]; go. go_s. split; [done|]. go.
-  go_s. split; [done|]. go.
-  Unshelve.
-  2: { unfold imp_to_asm_ret. unfold tmp_registers, saved_registers.
-       split!; decompose_Forall; simplify_map_eq => //.
-       all: try by apply lookup_lookup_total. }
-Abort.
+  apply: Hret; [by simplify_map_eq| |done].
+  unfold imp_to_asm_ret. unfold tmp_registers, saved_registers.
+  split!; decompose_Forall; simplify_map_eq => //.
+  all: try by apply lookup_lookup_total.
+Qed.
+
+Lemma asm_add_client_refines_imp_add_client :
+  trefines (MS asm_module (initial_asm_state asm_add_client))
+           (MS (imp_to_asm imp_module) (initial_imp_to_asm_state imp_module
+          (initial_imp_state imp_add_client_prog) {[ 200; 204; 208; 212; 216 ]} {[ "add_client" ]}
+          (<["add_client" := 200]> $ <["add" := 100]> ∅))).
+Proof.
+  apply imp_to_asm_proof; [set_solver..|].
+  move => n i rs K f fn vs cs t pc ret Hpc Hi Hf Hf2i Hargs Hvs Hcall Hret.
+  unfold imp_add_client_prog in Hf. unfold asm_add_client in Hi.
+  move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
+  destruct vs as [|] => //=.
+  move: Hargs => -[?[? /= Hregs]]. unfold saved_registers in *. decompose_Forall_hyps.
+  tstep_i. split; [done|].
+  tstep_i; simplify_map_eq'. split; [done|].
+  tstep_i => ??. simplify_map_eq'.
+  tstep_i; simplify_map_eq'. split; [done|].
+  tstep_i; simplify_map_eq'. split; [done|].
+  tstep_i => ??. simplify_map_eq'.
+  tstep_i; simplify_map_eq'. split; [done|].
+  tstep_i; simplify_map_eq'. split; [done|].
+  tstep_i => ??. simplify_map_eq'.
+  tstep_i; simplify_map_eq'. split; [done|].
+  tstep_i; simplify_map_eq'. split; [done|].
+  change (imp.Call "add" [Val 1; Val 1]) with (expr_fill [] (imp.Call "add" [Val 1; Val 1])).
+  apply: Hcall. { repeat econs. } { by simplify_map_eq. } { set_solver. } { set_solver. } { by simplify_map_eq. }
+  { unfold imp_to_asm_args. unfold tmp_registers, saved_registers.
+    split!; decompose_Forall; simplify_map_eq => //. } { by simplify_map_eq. } { done. }
+  move => rs'' v ? Hpc'' Hv ?.
+  move: Hv => -[?[/= ? Hregs]]. unfold tmp_registers, saved_registers in *. decompose_Forall_hyps.
+  simplify_map_eq'.
+  tstep_i; simplify_map_eq'. split; [done|].
+  apply: Hret; [by simplify_map_eq'| |done].
+  unfold imp_to_asm_ret. unfold tmp_registers, saved_registers.
+  split!; decompose_Forall; simplify_map_eq => //.
+  (* TODO: without a stack one cannot save the original frame pointer anywhere *)
+Admitted.
+
+Definition full_asm_add : gmap Z asm_instr :=
+  asm_add ∪ asm_add_client.
+
+Definition full_imp_add : gmap string fndef :=
+  imp_add_prog ∪ imp_add_client_prog.
+
+Lemma full_add_stack :
+  trefines (MS asm_module (initial_asm_state full_asm_add))
+           (MS (imp_to_asm imp_module) (initial_imp_to_asm_state imp_module
+              (initial_imp_state full_imp_add) {[ 100; 104; 200; 204; 208; 212; 216 ]} {[ "add"; "add_client" ]}
+              (<["add_client" := 200]> $ <["add" := 100]> ∅))).
+Proof.
+  etrans. { apply asm_link_refines_prod. unfold asm_add, asm_add_client. eauto with map_disjoint. }
+  etrans. {
+    apply: asm_prod_trefines.
+    - apply asm_add_refines_imp_add.
+    - apply asm_add_client_refines_imp_add_client.
+  }
+  etrans. {
+    have ->: (dom (gset Z) asm_add) = {[100; 104]} by set_solver.
+    have ->: (dom (gset Z) asm_add_client) = {[200; 204; 208; 212; 216]} by set_solver.
+    apply imp_to_asm_combine.
+    - apply _.
+    - apply _.
+    - set_solver.
+    - set_solver.
+    - move => f ?. have ->: f = "add" by set_solver. eexists 100; simplify_map_eq. set_solver.
+    - move => f ?. have ->: f = "add_client" by set_solver. eexists 200; simplify_map_eq. set_solver.
+    - move => f ??. rewrite !lookup_insert_Some => ??. naive_solver.
+    - move => f ?. rewrite !lookup_insert_Some => ?. naive_solver.
+    - move => f ?. rewrite !lookup_insert_Some => ?. naive_solver.
+  }
+  etrans. {
+    apply imp_to_asm_trefines. { apply _. }
+    have <-: (dom (gset _) imp_add_prog) = {["add"]} by set_solver.
+    have <-: (dom (gset _) imp_add_client_prog) = {["add_client"]} by set_solver.
+    apply imp_prod_refines_link.
+    unfold imp_add_prog, imp_add_client_prog. eauto with map_disjoint.
+  }
+  f_equiv. f_equal. { set_solver. }
+  rewrite -insert_union_r. set_solver.
+  f_equal.
+  apply idemp.
+  apply _.
+Qed.

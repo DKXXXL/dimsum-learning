@@ -460,6 +460,20 @@ Proof.
 Qed.
 Global Hint Resolve imp_step_ReturnExt_s : tstep.
 
+Lemma imp_step_Call_s fns e K f vs `{!ImpExprFill e K (imp.Call f (Val <$> vs))}:
+  TStepS imp_module (Imp e fns) (λ G,
+    (∃ fn, fns !! f = Some fn ∧ G None (λ G', length vs = length fn.(fd_args) → G'
+             (Imp (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) fns))) ∨
+    (fns !! f = None ∧ G (Some (EICall f vs)) (λ G',
+           G' (Imp (expr_fill K (Waiting true)) fns)))).
+Proof.
+  destruct ImpExprFill0; subst.
+  constructor => ? HG. destruct_all?; (split!; [done|]); move => /= ??.
+  all: apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
+  all: destruct_all?; simplify_eq; naive_solver.
+Qed.
+Global Hint Resolve imp_step_Call_s : tstep.
+
 Lemma imp_step_Binop_i fns e K (v1 v2 : val) op `{!ImpExprFill e K (BinOp v1 op v2)}:
   TStepI imp_module (Imp e fns) (λ G,
     (G true None (λ G', ∃ v', eval_binop op v1 v2 = Some v' ∧ G' (Imp (expr_fill K v') fns)))).
@@ -604,6 +618,13 @@ Definition imp_prod (fns1 fns2 : gset string) (m1 m2 : module imp_event) : modul
   mod_map (mod_seq_product m1 m2) (imp_prod_filter fns1 fns2).
 Global Hint Transparent imp_prod : tstep.
 
+Lemma imp_prod_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
+  trefines (MS m1 σ1) (MS m1' σ1') →
+  trefines (MS m2 σ2) (MS m2' σ2') →
+  trefines (MS (imp_prod ins1 ins2 m1 m2) (SPNone, σ1, σ2, σ))
+           (MS (imp_prod ins1 ins2 m1' m2') (SPNone, σ1', σ2', σ)).
+Proof. move => ??. apply mod_map_trefines. by apply mod_seq_product_trefines. Qed.
+
 Inductive imp_link_prod_combine_ectx :
   nat → bool → bool → imp_prod_filter_state → list expr_ectx → list expr_ectx → list expr_ectx → Prop :=
 | IPCENil:
@@ -714,23 +735,18 @@ Proof.
       apply static_expr_expr_fill. split!. by apply static_expr_subst.
     + tstep_s. by split!.
     + revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|[??]].
-      * tstep_s. eexists None. split!; [done..|] => /=.
-        apply: steps_spec_step_end; [econs; [done|by econs]|].
-        move => /=??. destruct_all?; simplify_eq. tend. split!; [done..|].
+      * tstep_s. left. split!; [done..|] => /=. tend. split!; [done..|].
         apply: Hloop. rewrite !expr_fill_app. split!; [done..|].
         apply static_expr_expr_fill. split!. apply static_expr_subst_l; [|done]. apply fd_static.
-      * tstep_s. eexists (Some _). split!; [econs|].
+      * tstep_s. right. split!; [econs|].
         { by apply not_elem_of_dom. } { by apply elem_of_dom. } simpl.
-        apply: steps_spec_step_end; [econs; [done|by econs]|].
-        move => /=??. destruct_all?; simplify_eq.
         tstep_s. left. split!; [done|econs|] => /=. case_bool_decide.
         2: { tstep_s. naive_solver. }
         tend. split!; [done..|]. apply: Hloop. split!; [by econs|done..|].
         apply static_expr_subst_l; [|done]. apply fd_static.
     + revert select ((_ ∪ _) !! _ = None) => /lookup_union_None[??].
-      tstep_s. eexists (Some _). split!; [apply IPFCallLeftToExt; by apply not_elem_of_dom|] => /=.
-      split!; [done|]. apply: steps_spec_step_end; [econs; [done|by econs]|].
-      move => /=??. destruct_all?; simplify_eq. tend. split!; [done..|].
+      tstep_s. right. split!; [apply IPFCallLeftToExt; by apply not_elem_of_dom|] => /=.
+      split!; [done|]. tend. split!; [done..|].
       apply: Hloop. split!; [by econs|done..].
   - tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]].
     simplify_eq. revert select (Is_true (static_expr _)) => /static_expr_expr_fill/=[??]//.
@@ -752,23 +768,18 @@ Proof.
     + tstep_s. by split!.
     + revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|[??]].
       * have ? : fns2 !! f = None by apply: map_disjoint_Some_l.
-        tstep_s. eexists (Some _). split!; [econs|].
+        tstep_s. right. split!; [econs|].
         { by apply elem_of_dom. } { by apply not_elem_of_dom. } simpl.
-        apply: steps_spec_step_end; [econs; [done|by econs]|].
-        move => /=??. destruct_all?; simplify_eq.
         tstep_s. left. split!; [done|econs|] => /=. case_bool_decide.
         2: { tstep_s. naive_solver. }
         tend. split!; [done..|]. apply: Hloop. split!; [by econs|done..|].
         apply static_expr_subst_l; [|done]. apply fd_static.
-      * tstep_s. eexists None. split!; [done..|] => /=.
-        apply: steps_spec_step_end; [econs; [done|by econs]|].
-        move => /=??. destruct_all?; simplify_eq. tend. split!; [done..|].
+      * tstep_s. left. split!; [done..|] => /= ?. tend. split!; [done..|].
         apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
         apply static_expr_expr_fill. split!. apply static_expr_subst_l; [|done]. apply fd_static.
     + revert select ((_ ∪ _) !! _ = None) => /lookup_union_None[??].
-      tstep_s. eexists (Some _). split!; [apply IPFCallRightToExt; by apply not_elem_of_dom|] => /=.
-      split!; [done|]. apply: steps_spec_step_end; [econs; [done|by econs]|].
-      move => /=??. destruct_all?; simplify_eq. tend. split!; [done..|].
+      tstep_s. right. split!; [apply IPFCallRightToExt; by apply not_elem_of_dom|] => /=.
+      split!; [done|]. tend. split!; [done..|].
       apply: Hloop. split!; [by econs|rewrite ?orb_true_r; done..].
   - tstep_i. split.
     + move => f fn vs /lookup_union_Some_raw[?|[??]].
@@ -836,26 +847,18 @@ Proof.
         apply: Hloop. rewrite !expr_fill_app. split!; [done..|].
         apply static_expr_expr_fill. split!. by apply static_expr_subst.
       * by tstep_s.
-      * tstep_s. eexists None.
-        apply: steps_spec_step_end; [econs; [done|econs; apply lookup_union_Some; naive_solver]|].
-        move => /=??. destruct_all?; simplify_eq. tend. split!; [done..|].
+      * tstep_s. left. split!; [apply lookup_union_Some; naive_solver|] => ?. tend. split!; [done..|].
         apply: Hloop. rewrite !expr_fill_app. split!; [done..|].
         apply static_expr_expr_fill. split!. apply static_expr_subst_l; [|done].
         apply fd_static.
       * invert_all imp_prod_filter.
         -- have [??] : is_Some (fns2 !! f) by apply elem_of_dom.
-           tstep_s. eexists None.
-           apply: steps_spec_step_end; [econs; [done|econs; apply lookup_union_Some; naive_solver]|].
-           move => /=??. destruct_all?; simplify_eq.
-           tend. split!; [done|].
+           tstep_s. left. split!; [apply lookup_union_Some; naive_solver|] => ?. tend. split!; [done|].
            tstep_i. split => *; invert_all imp_prod_filter. case_bool_decide => //.
            apply: Hloop. split!; [by econs|done..|].
            apply static_expr_subst_l; [|done]. apply fd_static.
-        -- tstep_s. eexists (Some _). split!; [done|].
-           apply: steps_spec_step_end; [econs; [done|
-                econs; apply lookup_union_None;split!;by apply not_elem_of_dom]|].
-           move => /=??. destruct_all?; simplify_eq. tend. split!; [done|].
-           apply: Hloop. split!; [by econs|done..].
+        -- tstep_s. right. split!; [apply lookup_union_None;split!;by apply not_elem_of_dom| done|].
+           tend. split!; [done|]. apply: Hloop. split!; [by econs|done..].
   - destruct (to_val er') eqn:?.
     + destruct er'; simplify_eq/=.
       revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _) => HK.
@@ -884,26 +887,19 @@ Proof.
         apply: Hloop. rewrite !expr_fill_app. split!; [done..|].
         apply static_expr_expr_fill. split!. by apply static_expr_subst.
       * by tstep_s.
-      * tstep_s. eexists None.
-        apply: steps_spec_step_end; [econs; [done|econs; apply lookup_union_Some; naive_solver]|].
-        move => /=??. destruct_all?; simplify_eq. tend. split!; [done..|].
+      * tstep_s. left. split!; [apply lookup_union_Some; naive_solver|] => ?. tend. split!; [done..|].
         apply: Hloop. rewrite !expr_fill_app. split!; [done..|].
         apply static_expr_expr_fill. split!. apply static_expr_subst_l; [|done].
         apply fd_static.
       * invert_all imp_prod_filter.
         -- have [??] : is_Some (fns1 !! f) by apply elem_of_dom.
-           tstep_s. eexists None.
-           apply: steps_spec_step_end; [econs; [done|econs; apply lookup_union_Some; naive_solver]|].
-           move => /=??. destruct_all?; simplify_eq.
+           tstep_s. left. split!; [apply lookup_union_Some; naive_solver|] => ?.
            tend. split!; [done|].
            tstep_i. split => *; invert_all imp_prod_filter. case_bool_decide => //.
            apply: Hloop. split!; [by econs|done..|].
            apply static_expr_subst_l; [|done]. apply fd_static.
-        -- tstep_s. eexists (Some _). split!; [done|].
-           apply: steps_spec_step_end; [econs; [done|
-                econs; apply lookup_union_None;split!;by apply not_elem_of_dom]|].
-           move => /=??. destruct_all?; simplify_eq. tend. split!; [done|].
-           apply: Hloop. split!; [by econs|rewrite ?orb_true_r; done..].
+        -- tstep_s. right. split!; [apply lookup_union_None;split!;by apply not_elem_of_dom|done|].
+           tend. split!; [done|]. apply: Hloop. split!; [by econs|rewrite ?orb_true_r; done..].
   - tstep_i => *. invert_all imp_prod_filter; try (revert select (_ ∈ dom _ _) => /elem_of_dom[??]).
     + tstep_s. left. split!; [apply lookup_union_Some; naive_solver|done|].
       case_bool_decide. 2: { tstep_s; naive_solver. }

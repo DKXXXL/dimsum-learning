@@ -178,6 +178,13 @@ Definition asm_prod (ins1 ins2 : gset Z) (m1 m2 : module asm_event) : module asm
   mod_map (mod_seq_product m1 m2) (asm_prod_filter ins1 ins2).
 Global Hint Transparent asm_prod : tstep.
 
+Lemma asm_prod_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
+  trefines (MS m1 σ1) (MS m1' σ1') →
+  trefines (MS m2 σ2) (MS m2' σ2') →
+  trefines (MS (asm_prod ins1 ins2 m1 m2) (SPNone, σ1, σ2, APFNone))
+           (MS (asm_prod ins1 ins2 m1' m2') (SPNone, σ1', σ2', APFNone)).
+Proof. move => ??. apply mod_map_trefines. by apply mod_seq_product_trefines. Qed.
+
 Definition asm_link_prod_inv (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_module.(m_state)) (σ2 : ((seq_product_state * asm_state * asm_state) * asm_prod_filter_state)) : Prop :=
   let 'AsmState i1 rs1 ins1' := σ1 in
   let '((σsp, AsmState il rsl insl, AsmState ir rsr insr), σf) := σ2 in

@@ -102,7 +102,9 @@ Tactic Notation "simpl_map_total" "by" tactic3(tac) := repeat
    | H : ?m !! ?i = Some ?x |- context [?m !!! ?i] =>
        rewrite (lookup_total_correct m i x H)
    | |- context[ (<[_:=_]>_) !!! _ ] =>
-       rewrite lookup_total_insert || rewrite ->lookup_total_insert_ne by done
+       rewrite lookup_total_insert || rewrite ->lookup_total_insert_ne by tac
+   | H : context[ (<[_:=_]>_) !!! _ ] |- _ =>
+       rewrite lookup_total_insert in H || rewrite ->lookup_total_insert_ne in H by tac
    end.
  Tactic Notation "simplify_map_eq'" "/=" "by" tactic3(tac) :=
   repeat (progress csimpl in * || (progress simpl_map_total by tac) || simplify_map_eq by tac ).

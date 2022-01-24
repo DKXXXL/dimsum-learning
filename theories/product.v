@@ -32,6 +32,17 @@ Arguments ProductStepBoth {_ _ _ _} _ _ _ _ _.
 Definition mod_product {EV1 EV2} (m1 : module EV1) (m2 : module EV2) : module (option EV1 * option EV2) :=
   Mod (product_step m1 m2).
 
+Global Instance product_vis_no_all {EV1 EV2} (m1 : module EV1) (m2 : module EV2) `{!VisNoAll m1} `{!VisNoAll m2}:
+  VisNoAll (mod_product m1 m2).
+Proof.
+  move => [??]???. invert_all @m_step; try case_match => //; simplify_eq.
+  - have [??]:= vis_no_all _ _ _ ltac:(done). eexists (_, _) => -[??]. naive_solver.
+  - have [??]:= vis_no_all _ _ _ ltac:(done). eexists (_, _) => -[??]. naive_solver.
+  - have [??]:= vis_no_all _ _ _ ltac:(done). clear H4.
+    have [??]:= vis_no_all _ _ _ ltac:(done).
+    eexists (_, _) => -[??]. naive_solver.
+Qed.
+
 Module product_example.
 
 (*
@@ -625,6 +636,10 @@ Inductive mod_map_mod_step {EV1 EV2 S} (f : mod_map_fn EV1 EV2 S) :
   mod_map_mod_step f σ (Some (e1, e2)) (λ σ'', σ'' = σ').
 Definition mod_map_mod {EV1 EV2 S} (f : mod_map_fn EV1 EV2 S) : module (EV1 * option EV2) :=
   Mod (mod_map_mod_step f).
+
+Global Instance mod_map_mod_vis_no_all {EV1 EV2 S} (f : mod_map_fn EV1 EV2 S):
+  VisNoAll (mod_map_mod f).
+Proof. move => ????. invert_all @m_step; try case_match => //; simplify_eq. naive_solver. Qed.
 
 Definition mod_map {EV1 EV2 S} (m : module EV1) (f : mod_map_fn EV1 EV2 S) : module EV2 :=
   mod_filter (mod_product m (mod_map_mod f)) (λ e er, e.2 = (λ x, (x, er)) <$> e.1).

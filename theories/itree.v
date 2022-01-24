@@ -619,7 +619,10 @@ Proof. move => ?. apply: steps_impl_mono; [done|]. move => ??? Hp. apply Hp; [|d
 
 Ltac clear_itree :=
   try match goal with | |- itree_rel _ _ _ => move => ?/=? end;
-  repeat match goal with | H : eqit _ _ _ ?t _ |- _ => clear H; clear t end.
+  repeat match goal with
+         | H : eqit _ _ _ ?t _ |- _ => clear H; clear t
+         | H1 : ?t ≈ ?t', H2: eqit _ _ _ ?t' _ |- _ => rewrite -H1 in H2; clear H1; clear t'
+         end.
 
 (** * Derived notions *)
 Definition TVis {EV S} (e : EV) : itree (moduleE EV S) unit :=
