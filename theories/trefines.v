@@ -98,6 +98,16 @@ Proof.
   - move => ??? [??] [??]. by split; etrans.
 Qed.
 
+Lemma tall_mono {EV} T (f1 f2 : T → trace EV) :
+  (∀ x, f1 x ⊆ f2 x) →
+  tall T f1 ⊆ tall T f2.
+Proof. move => ?. econs => ?. econs. naive_solver. Qed.
+
+Lemma tex_mono {EV} T (f1 f2 : T → trace EV) :
+  (∀ x, f1 x ⊆ f2 x) →
+  tex T f1 ⊆ tex T f2.
+Proof. move => ?. econs => ?. econs. naive_solver. Qed.
+
 Lemma subtrace_nil_ex_inv EV T f:
   @tnil EV ⊆ tex T f →
   ∃ x, tnil ⊆ f x.

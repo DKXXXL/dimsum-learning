@@ -3,6 +3,40 @@ Require Import refframe.trefines.
 
 (*** Proving refinement *)
 
+(** ** [mod_to_trace] *)
+Fixpoint mod_to_trace {EV} (m : module EV) (n : trace_index) (σ : m.(m_state)) : trace EV :=
+  match n with
+  | tiO => tnb
+  | tiS n' => tall { x : option EV * (m.(m_state) → Prop) | m.(m_step) σ x.1 x.2} (λ x,
+         tapp (option_trace (`x).1) (tex {σ' : m.(m_state) | (`x).2 σ'} (λ σ', mod_to_trace m n' (`σ'))))
+  | tiChoice T fn => tall T (λ x, mod_to_trace m (fn x) σ)
+  end.
+
+Lemma thas_trace_mod_to_trace {EV} (m : module EV) n σ :
+  σ ~{m, mod_to_trace m n σ}~>ₜ -.
+Proof.
+  elim: n σ => /=.
+  - move => ?. tend. apply tnb_sub.
+  - move => n IH σ. apply thas_trace_all => -[[/=??]?].
+    tstep; [done| |done] => ??. apply: (thas_trace_ex (exist _ _ _)); [done|]. naive_solver.
+  - move => ?? IH σ. apply thas_trace_all. naive_solver.
+Qed.
+
+Lemma mod_to_trace_mono {EV} (m : module EV) n n' σ :
+  n' ⊆ n →
+  mod_to_trace m n σ ⊆ mod_to_trace m n' σ.
+Proof.
+  move => Hsub. elim: Hsub σ => /=.
+  - move => ??. apply tnb_sub.
+  - move => ??? IH σ.
+    apply tall_mono => -[[/=??]?].
+    apply tapp_mono; [done|].
+    apply tex_mono => ?.
+    naive_solver.
+  - move => T f {}n ? IH σ. econs. naive_solver.
+  - move => T f {}n x Hle IH σ. econs. naive_solver.
+Qed.
+
 (** ** [inv] *)
 Lemma inv_implies_trefines {EV} (m1 m2 : mod_state EV) (inv : m1.(m_state) → m2.(m_state) → Prop):
   inv m1.(ms_state) m2.(ms_state) →
@@ -160,6 +194,24 @@ Proof.
   - move => T fn f σ κs Pσ n ? IH Hκs Hle σs1 Hwp. rewrite -Hκs.
     apply thas_trace_all => ?. apply: IH.
     apply: wp_mono; [done|]. etrans; [|done]. by econs.
+Qed.
+
+Lemma wp_complete {EV} (m1 m2 : mod_state EV):
+  trefines m1 m2 →
+  ∀ n, wp m1 m2 n m1.(ms_state) m2.(ms_state).
+Proof.
+  destruct m1 as [m1 σi1]. destruct m2 as [m2 σs1]. move => /= [Href] n.
+  have {Href} := Href (mod_to_trace _ n σi1) ltac:(apply thas_trace_mod_to_trace) => /=.
+  elim/ti_lt_ind: n σi1 σs1 => /= n IH σi σs Ht.
+  apply Wp_step => Pσi n' κ Hsub Hstep.
+  move: Ht => /thas_trace_mono Ht.
+  have {Ht} := Ht _ (λ _, True) ltac:(by apply mod_to_trace_mono) ltac:(done) => /=.
+  move => /thas_trace_all_inv Ht.
+  have /=/thas_trace_app_inv {}Ht := (Ht (exist _ (κ, Pσi) Hstep)).
+  rewrite -(tapp_tnil_r (option_trace κ)). apply: thas_trace_trans; [done|].
+  move => ? /= /thas_trace_ex_inv {}Ht.
+  apply: thas_trace_mono; [done..|] => ? /= [[??]?].
+  naive_solver.
 Qed.
 
 (** * tsim *)

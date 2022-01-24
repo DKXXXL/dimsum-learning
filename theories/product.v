@@ -564,6 +564,57 @@ Proof.
   by apply: tmods_to_mod_product.
 Qed.
 
+(* simpler proof that uses completeness of wp *)
+Lemma mod_product_trefines' {EV1 EV2} (m1 m1' : module EV1) (m2 m2' : module EV2) σ1 σ1' σ2 σ2':
+  trefines (MS m1 σ1) (MS m1' σ1') →
+  trefines (MS m2 σ2) (MS m2' σ2') →
+  trefines (MS (mod_product m1 m2) (σ1, σ2)) (MS (mod_product m1' m2') (σ1', σ2')).
+Proof.
+  move => /wp_complete /= Hr1 /wp_complete/=Hr2.
+  apply wp_implies_refines => n. elim/ti_lt_ind: n σ1 σ1' σ2 σ2' {Hr1 Hr2} (Hr1 n) (Hr2 n).
+  move => n IH σ1 σ1' σ2 σ2' Hr1 Hr2.
+  apply Wp_step => Pσi n' κ Hsub Hstep. invert_all @m_step.
+  - inversion Hr1 as [??? Hr1']; simplify_eq.
+    have [?[Ht HP]]:= Hr1' _ _ _ ltac:(done) ltac:(done).
+    case_match; simplify_eq/=.
+    + move: Ht => /(thas_trace_cons_inv _ _)?.
+      apply: (thas_trace_trans tnil); [ by apply: mod_product_nil_l|].
+      move => [??]/= [[?[? HP']] ?]; subst.
+      tstep_Some; [by apply (ProductStepL (Some _))|].
+      move => [??]/= [/HP'? ?]; subst.
+      apply: thas_trace_mono; [by apply: mod_product_nil_l|done|] => -[??] /= [/HP[?[??]]?]; subst. eexists (_, _).
+      split; [done|]. apply: IH; [done..|]. apply: wp_mono; [done|]. by apply ti_lt_impl_le.
+    + apply: thas_trace_mono; [by apply: mod_product_nil_l|done|] => -[??] /= [/HP[?[??]]?]; subst. eexists (_, _).
+      split; [done|]. apply: IH; [done..|]. apply: wp_mono; [done|]. by apply ti_lt_impl_le.
+  - inversion Hr2 as [??? Hr2']; simplify_eq.
+    have [?[Ht HP]]:= Hr2' _ _ _ ltac:(done) ltac:(done).
+    case_match; simplify_eq/=.
+    + move: Ht => /(thas_trace_cons_inv _ _)?.
+      apply: (thas_trace_trans tnil); [ by apply: mod_product_nil_r|].
+      move => [??]/= [[?[? HP']] ?]; subst.
+      tstep_Some; [by apply (ProductStepR (Some _))|].
+      move => [??]/= [? /HP'?]; subst.
+      apply: thas_trace_mono; [by apply: mod_product_nil_r|done|] => -[??] /= [/HP[?[??]] ?]; subst. eexists (_, _).
+      split; [done|]. apply: IH; [done| |done]. apply: wp_mono; [done|]. by apply ti_lt_impl_le.
+    + apply: thas_trace_mono; [by apply: mod_product_nil_r|done|] => -[??] /= [/HP[?[??]]?]; subst. eexists (_, _).
+      split; [done|]. apply: IH; [done| |done]. apply: wp_mono; [done|]. by apply ti_lt_impl_le.
+  - inversion Hr1 as [??? Hr1']; simplify_eq.
+    inversion Hr2 as [??? Hr2']; simplify_eq.
+    have [?[Ht1 HP1]]:= Hr1' _ _ _ ltac:(done) ltac:(done).
+    have [?[Ht2 HP2]]:= Hr2' _ _ _ ltac:(done) ltac:(done).
+    move: Ht1 => /(thas_trace_cons_inv _ _)?.
+    apply: (thas_trace_trans tnil); [ by apply: mod_product_nil_l|].
+    move => [??]/= [[?[? HP1']] ?]; subst.
+    move: Ht2 => /(thas_trace_cons_inv _ _)?.
+    apply: (thas_trace_trans tnil); [ by apply: mod_product_nil_r|].
+    move => [??]/= [[?[? HP2']] ?]; subst.
+    tstep_Some; [by econs|].
+    move => [??]/= [/HP1'? /HP2'?]; subst.
+    apply: (thas_trace_trans tnil); [by apply: mod_product_nil_l|] => -[??] /= [/HP1[?[??]] ?]; subst.
+    apply: thas_trace_mono; [by apply: mod_product_nil_r|done|] => -[??] /= [/HP2[?[??]] ?]; subst.
+    eexists (_, _). split; [done|]. by apply: IH.
+Qed.
+
 (*** [mod_map] *)
 Definition mod_map_fn EV1 EV2 S :=
   S → EV1 → option EV2 → S → Prop.
