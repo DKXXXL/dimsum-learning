@@ -101,6 +101,8 @@ Tactic Notation "simpl_map_total" "by" tactic3(tac) := repeat
    match goal with
    | H : ?m !! ?i = Some ?x |- context [?m !!! ?i] =>
        rewrite (lookup_total_correct m i x H)
+   | |- context [<[ ?i := ?x ]> (<[ ?i := ?y ]> ?m)] =>
+       rewrite (insert_insert m i x y)
    | |- context[ (<[_:=_]>_) !!! _ ] =>
        rewrite lookup_total_insert || rewrite ->lookup_total_insert_ne by tac
    | H : context[ (<[_:=_]>_) !!! _ ] |- _ =>
@@ -112,6 +114,15 @@ Tactic Notation "simpl_map_total" "by" tactic3(tac) := repeat
   repeat (progress (simpl_map_total by eauto with simpl_map map_disjoint) || simplify_map_eq by eauto with simpl_map map_disjoint ).
 Tactic Notation "simplify_map_eq'" "/=" :=
   simplify_map_eq'/= by eauto with simpl_map map_disjoint.
+
+Ltac sort_map_insert :=
+  repeat match goal with
+         | |- context [<[ ?i := ?x ]> (<[ ?j := ?y ]> ?m)] =>
+             is_closed_term i;
+             is_closed_term j;
+             assert_succeeds (assert (encode j <? encode i)%positive; [vm_compute; exact I|]);
+             rewrite (insert_commute m i j x y); [done|]
+         end.
 
 Section theorems.
 Context `{FinMap K M}.

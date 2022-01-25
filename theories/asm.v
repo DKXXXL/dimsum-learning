@@ -495,7 +495,7 @@ Module asm_examples.
     tstep_i => ??; simplify_map_eq'.
     tstep_i; simplify_map_eq'. split!.
     revert select (eqit eq _ _ _ _) => ->.
-    apply HCONT; simplify_map_eq => //. by rewrite insert_insert.
+    apply HCONT; simplify_map_eq => //.
   Qed.
 
   Definition asm_mul_client : gmap Z asm_instr :=
@@ -579,14 +579,11 @@ Module asm_examples.
     tstep_i => ??; simplify_map_eq'.
     tstep_i; simplify_map_eq'. split!.
     tstep_i; simplify_map_eq'. split!.
-    rewrite insert_commute // insert_insert (insert_commute _ "PC") // insert_insert.
+    sort_map_insert; simplify_map_eq'.
     go_s. eexists r30; go.
     go_s.
     revert select (eqit eq _ _ _ _) => ->.
-    apply Hloop. {
-      apply map_eq => i. apply option_eq => ?.
-      rewrite !lookup_insert_Some. naive_solver.
-    } { by simplify_map_eq. }
+    apply Hloop. { by sort_map_insert. } { by simplify_map_eq. }
     move => pc' rs'' i HPC' Hi'.
     go_s => ?; go; subst. unfold asm_mul_client in Hi'. simplify_map_eq.
     go_s => -[r30'' HR30'']; go.
@@ -598,6 +595,6 @@ Module asm_examples.
     tstep_i; simplify_map_eq'. split!.
     go_s. eexists _; go.
     go_s. revert select (eqit eq _ _ _ _) => ->.
-    apply HCONT. { by rewrite insert_insert. } { by simplify_map_eq. }
+    apply HCONT; [done|]. by simplify_map_eq.
   Qed.
 End asm_examples.

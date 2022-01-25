@@ -115,6 +115,7 @@ Proof.
   tstep_i => ??. simplify_map_eq'.
   tstep_i; simplify_map_eq'. split; [done|].
   tstep_i; simplify_map_eq'. split; [done|].
+  sort_map_insert. simplify_map_eq'.
   change (imp.Call "add" [Val 1; Val 1]) with (expr_fill [] (imp.Call "add" [Val 1; Val 1])).
   apply: Hcall. { repeat econs. } { by simplify_map_eq. } { set_solver. } { set_solver. } { by simplify_map_eq. }
   { unfold imp_to_asm_args. unfold tmp_registers, saved_registers.
