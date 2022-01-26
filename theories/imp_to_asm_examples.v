@@ -93,7 +93,7 @@ Proof.
   tstep_i => ??. simplify_map_eq'.
   tstep_i; simplify_map_eq'. split!.
   go_s => n1 n2 ??; subst.
-  apply: Hret; [by simplify_map_eq| |done].
+  apply: Hret; [by simplify_map_eq| |done|done].
   unfold imp_to_asm_ret. unfold tmp_registers, saved_registers.
   split!; decompose_Forall; simplify_map_eq => //.
   all: try by apply lookup_lookup_total.
@@ -128,7 +128,7 @@ Proof.
   apply: Hcall. { repeat econs. } { by simplify_map_eq. } { set_solver. } { set_solver. } { by simplify_map_eq. }
   { unfold imp_to_asm_args. unfold tmp_registers, saved_registers.
     split!; decompose_Forall; simplify_map_eq => //. } { by simplify_map_eq. } { done. }
-  move => rs'' mem'' v ? Hpc'' Hv ?.
+  move => rs'' mem'' v ? Hpc'' Hv Hmem ?.
   move: Hv => -[?[/= ? Hregs]]. unfold tmp_registers, saved_registers in *. decompose_Forall_hyps.
   simplify_map_eq'.
   tstep_i; simplify_map_eq'. split!; [done..|].
@@ -136,12 +136,13 @@ Proof.
   tstep_i; simplify_map_eq'. split!; [done..|].
   tstep_i => ??. simplify_map_eq'.
   tstep_i; simplify_map_eq'. split; [done|].
-  apply: Hret; [| |done]. { simplify_map_eq'. admit. }
+  apply: Hret; [| | |done]. { simplify_map_eq'. f_equal. etrans; [eapply Hmem|]; by simplify_map_eq'. }
+  2 : { move => ?. simplify_map_eq' => ?. etrans; [eapply Hmem; simplify_map_eq'; lia|].
+        rewrite lookup_total_insert_ne //. lia. }
   unfold imp_to_asm_ret. unfold tmp_registers, saved_registers.
   split!; decompose_Forall; simplify_map_eq => //.
   f_equal. lia.
-  (* TODO: without a stack one cannot save the original frame pointer anywhere *)
-Admitted.
+Qed.
 
 Definition full_asm_add : gmap Z asm_instr :=
   asm_add ∪ asm_add_client.
