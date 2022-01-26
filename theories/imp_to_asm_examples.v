@@ -83,7 +83,7 @@ Lemma asm_add_refines_imp_add :
            (MS (imp_to_asm imp_module) (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_prog) (dom _ asm_add) (dom _ imp_add_prog) (<["add" := 100]> ∅))).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
-  move => n i rs mem K f fn vs cs t pc ret Hpc Hi Hf Hf2i Hargs Hvs Hcall Hret.
+  move => n i rs mem K f fn vs h cs t pc ret Hpc Hi Hf Hf2i Hargs Hvs Hcall Hret.
   unfold imp_add_prog in Hf. unfold asm_add in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   destruct vs as [|v1 [|v2 []]] => //=.
@@ -95,7 +95,7 @@ Proof.
   go_s => n1 n2 ??; subst.
   apply: Hret; [by simplify_map_eq| |done|done].
   unfold imp_to_asm_ret. unfold tmp_registers, saved_registers.
-  split!; decompose_Forall; simplify_map_eq => //.
+  split!; decompose_Forall; simplify_map_eq' => //.
   all: try by apply lookup_lookup_total.
 Qed.
 
@@ -106,7 +106,7 @@ Lemma asm_add_client_refines_imp_add_client :
           (dom _ imp_add_client_prog) (<["add_client" := 200]> $ <["add" := 100]> ∅))).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
-  move => n i rs mem K f fn vs cs t pc ret Hpc Hi Hf Hf2i Hargs Hvs Hcall Hret.
+  move => n i rs mem K f fn vs h cs t pc ret Hpc Hi Hf Hf2i Hargs Hvs Hcall Hret.
   unfold imp_add_client_prog in Hf. unfold asm_add_client in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   destruct vs as [|] => //=.
@@ -127,8 +127,8 @@ Proof.
   change (imp.Call "add" [Val 1; Val 1]) with (expr_fill [] (imp.Call "add" [Val 1; Val 1])).
   apply: Hcall. { repeat econs. } { by simplify_map_eq. } { set_solver. } { set_solver. } { by simplify_map_eq. }
   { unfold imp_to_asm_args. unfold tmp_registers, saved_registers.
-    split!; decompose_Forall; simplify_map_eq => //. } { by simplify_map_eq. } { done. }
-  move => rs'' mem'' v ? Hpc'' Hv Hmem ?.
+    split!; decompose_Forall; split!; simplify_map_eq => //. } { by simplify_map_eq. } { done. }
+  move => rs'' mem'' v h'' ? Hpc'' Hv Hmem ?.
   move: Hv => -[?[/= ? Hregs]]. unfold tmp_registers, saved_registers in *. decompose_Forall_hyps.
   simplify_map_eq'.
   tstep_i; simplify_map_eq'. split!; [done..|].
@@ -140,6 +140,7 @@ Proof.
   2 : { move => ?. simplify_map_eq' => ?. etrans; [eapply Hmem; simplify_map_eq'; lia|].
         rewrite lookup_total_insert_ne //. lia. }
   unfold imp_to_asm_ret. unfold tmp_registers, saved_registers.
+  split. { by simplify_map_eq. }
   split!; decompose_Forall; simplify_map_eq => //.
   f_equal. lia.
 Qed.

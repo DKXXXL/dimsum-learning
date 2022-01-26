@@ -8,10 +8,13 @@ Require Import refframe.proof_techniques.
 Local Open Scope Z_scope.
 
 (** * C-like language language *)
+Definition prov : Set := Z.
+Definition loc : Set := (prov * Z).
+
 Inductive binop : Set :=
 | AddOp | EqOp.
 
-Inductive val := | ValNum (z : Z) | ValBool (b : bool).
+Inductive val := | ValNum (z : Z) | ValBool (b : bool) | ValLoc (l : loc).
 Coercion ValNum : Z >-> val.
 Global Instance val_eq_dec : EqDecision val.
 Proof. solve_decision. Qed.
@@ -26,6 +29,11 @@ Definition val_to_bool (v : val) : option bool :=
   | ValBool b => Some b
   | _ => None
   end.
+Definition val_to_loc (v : val) : option loc :=
+  match v with
+  | ValLoc l => Some l
+  | _ => None
+  end.
 
 Section expr.
 Local Unset Elimination Schemes.
@@ -33,6 +41,8 @@ Inductive expr : Set :=
 | Var (v : string)
 | Val (v : val)
 | BinOp (e1 : expr) (o : binop) (e2 : expr)
+| Load (e : expr)
+| Store (e1 e2 : expr)
 | If (e e1 e2 : expr)
 | LetE (v : string) (e1 e2 : expr)
 | Call (f : string) (args : list expr)
@@ -46,6 +56,8 @@ Lemma expr_ind (P : expr → Prop) :
   (∀ (x : string), P (Var x)) →
   (∀ (v : val), P (Val v)) →
   (∀ (e1 : expr) (op : binop) (e2 : expr), P e1 → P e2 → P (BinOp e1 op e2)) →
+  (∀ (e : expr), P e → P (Load e)) →
+  (∀ (e1 e2 : expr), P e1 → P e2 → P (Store e1 e2)) →
   (∀ (e1 e2 e3 : expr), P e1 → P e2 → P e3 → P (If e1 e2 e3)) →
   (∀ (v : string) (e1 e2 : expr), P e1 → P e2 → P (LetE v e1 e2)) →
   (∀ (f : string) (args : list expr), Forall P args → P (Call f args)) →
@@ -55,8 +67,8 @@ Lemma expr_ind (P : expr → Prop) :
   ∀ (e : expr), P e.
 Proof.
   move => *. generalize dependent P => P. match goal with | e : expr |- _ => revert e end.
-  fix FIX 1. move => [ ^e] => ????? Hcall ???.
-  6: { apply Hcall. apply Forall_true => ?. by apply: FIX. }
+  fix FIX 1. move => [ ^e] => ??????? Hcall ???.
+  8: { apply Hcall. apply Forall_true => ?. by apply: FIX. }
   all: auto.
 Qed.
 Coercion Val : val >-> expr.
@@ -72,6 +84,8 @@ Fixpoint subst (x : string) (v : val) (e : expr) : expr :=
   | Var y => if bool_decide (x = y) then Val v else Var y
   | Val v => Val v
   | BinOp e1 o e2 => BinOp (subst x v e1) o (subst x v e2)
+  | Load e => Load (subst x v e)
+  | Store e1 e2 => Store (subst x v e1) (subst x v e2)
   | If e e1 e2 => If (subst x v e) (subst x v e1) (subst x v e2)
   | LetE y e1 e2 => LetE y (subst x v e1) (if bool_decide (x ≠ y) then subst x v e2 else e2)
   | Call f args => Call f (subst x v <$> args)
@@ -88,6 +102,9 @@ Fixpoint subst_l (xs : list string) (vs : list val) (e : expr) : expr :=
 Inductive expr_ectx :=
 | BinOpLCtx (op : binop) (e2 : expr)
 | BinOpRCtx (v1 : val) (op : binop)
+| LoadCtx
+| StoreLCtx (e2 : expr)
+| StoreRCtx (v1 : val)
 | IfCtx (e2 e3 : expr)
 | LetECtx (v : string) (e2 : expr)
 | CallCtx (f : string) (vl : list val) (el : list expr)
@@ -98,6 +115,9 @@ Definition expr_fill_item (Ki : expr_ectx) (e : expr) : expr :=
   match Ki with
   | BinOpLCtx op e2 => BinOp e op e2
   | BinOpRCtx v1 op => BinOp v1 op e
+  | LoadCtx => Load e
+  | StoreLCtx e2 => Store e e2
+  | StoreRCtx v1 => Store v1 e
   | IfCtx e2 e3 => If e e2 e3
   | LetECtx v e2 => LetE v e e2
   | CallCtx f vl el => Call f ((Val <$> vl) ++ e :: el)
@@ -153,6 +173,8 @@ Fixpoint static_expr (e : expr) : bool :=
   | Var v => true
   | Val v => true
   | BinOp e1 o e2 => static_expr e1 && static_expr e2
+  | Load e1 => static_expr e1
+  | Store e1 e2 => static_expr e1 && static_expr e2
   | If e e1 e2 => static_expr e && static_expr e1 && static_expr e2
   | LetE v e1 e2 => static_expr e1 && static_expr e2
   | Call f args => forallb static_expr args
@@ -197,18 +219,26 @@ Record fndef : Type := {
   fd_static : static_expr fd_body;
 }.
 
+Record heap_state := Heap {
+  h_heap : gmap loc val;
+}.
+Add Printing Constructor heap_state.
+Definition initial_heap_state : heap_state :=
+  Heap ∅.
+
 Record imp_state := Imp {
   st_expr : expr;
+  st_heap : heap_state;
   st_fns : gmap string fndef;
 }.
 Add Printing Constructor imp_state.
 
 Definition initial_imp_state (fns : gmap string fndef) : imp_state :=
-  Imp (Waiting false) fns.
+  Imp (Waiting false) initial_heap_state fns.
 
 Inductive imp_event : Type :=
-| EICall (fn : string) (args: list val) | EIReturn (ret: val)
-| EIRecvCall (fn : string) (args: list val) | EIRecvReturn  (ret: val).
+| EICall (fn : string) (args: list val) (h : heap_state) | EIReturn (ret: val) (h : heap_state)
+| EIRecvCall (fn : string) (args: list val) (h : heap_state) | EIRecvReturn  (ret: val) (h : heap_state).
 
 Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
   match op with
@@ -221,35 +251,35 @@ Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
 This way one can reuse infrastructure
 *)
 Inductive head_step : imp_state → option imp_event → (imp_state → Prop) → Prop :=
-| BinOpS v1 op v2 fns:
-  head_step (Imp (BinOp (Val v1) op (Val v2)) fns) None (λ σ',
-    ∃ v, eval_binop op v1 v2 = Some v ∧ σ' = Imp v fns)
-| IfS v fns e1 e2:
-  head_step (Imp (If (Val v) e1 e2) fns) None (λ σ,
-       ∃ b, val_to_bool v = Some b ∧ σ = Imp (if b then e1 else e2) fns)
-| LetS x v e fns:
-  head_step (Imp (LetE x (Val v) e) fns) None (λ σ, σ = Imp (subst x v e) fns)
-| UbES fns:
-  head_step (Imp UbE fns) None (λ σ, False)
-| CallInternalS f fn fns vs:
+| BinOpS v1 op v2 h fns:
+  head_step (Imp (BinOp (Val v1) op (Val v2)) h fns) None (λ σ',
+    ∃ v, eval_binop op v1 v2 = Some v ∧ σ' = Imp v h fns)
+| IfS v fns e1 e2 h:
+  head_step (Imp (If (Val v) e1 e2) h fns) None (λ σ,
+       ∃ b, val_to_bool v = Some b ∧ σ = Imp (if b then e1 else e2) h fns)
+| LetS x v e fns h:
+  head_step (Imp (LetE x (Val v) e) h fns) None (λ σ, σ = Imp (subst x v e) h fns)
+| UbES fns h:
+  head_step (Imp UbE h fns) None (λ σ, False)
+| CallInternalS f fn fns vs h:
   fns !! f = Some fn →
-  head_step (Imp (Call f (Val <$> vs)) fns) None (λ σ,
+  head_step (Imp (Call f (Val <$> vs)) h fns) None (λ σ,
    length vs = length fn.(fd_args) ∧
-   σ = Imp (subst_l fn.(fd_args) vs fn.(fd_body)) fns)
-| CallExternalS f fns vs:
+   σ = Imp (subst_l fn.(fd_args) vs fn.(fd_body)) h fns)
+| CallExternalS f fns vs h:
   fns !! f = None →
-  head_step (Imp (Call f (Val <$> vs)) fns) (Some (EICall f vs)) (λ σ, σ = Imp (Waiting true) fns)
-| ReturnS fns v b:
-  head_step (Imp (ReturnExt b (Val v)) fns) (Some (EIReturn v)) (λ σ, σ = (Imp (Waiting b) fns))
-| RecvCallS fns f fn vs b:
+  head_step (Imp (Call f (Val <$> vs)) h fns) (Some (EICall f vs h)) (λ σ, σ = Imp (Waiting true) h fns)
+| ReturnS fns v b h:
+  head_step (Imp (ReturnExt b (Val v)) h fns) (Some (EIReturn v h)) (λ σ, σ = (Imp (Waiting b) h fns))
+| RecvCallS fns f fn vs b h h':
   fns !! f = Some fn →
-  head_step (Imp (Waiting b) fns) (Some (EIRecvCall f vs)) (λ σ,
+  head_step (Imp (Waiting b) h fns) (Some (EIRecvCall f vs h')) (λ σ,
     σ = (Imp (if bool_decide (length vs = length fn.(fd_args)) then
                 ReturnExt b (subst_l fn.(fd_args) vs fn.(fd_body))
               else
-                UbE) fns))
-| RecvReturnS fns v:
-  head_step (Imp (Waiting true) fns) (Some (EIRecvReturn v)) (λ σ, σ = (Imp (Val v) fns))
+                UbE) h' fns))
+| RecvReturnS fns v h h':
+  head_step (Imp (Waiting true) h fns) (Some (EIRecvReturn v h')) (λ σ, σ = (Imp (Val v) h' fns))
 .
 
 Definition sub_redexes_are_values (e : expr) :=
@@ -269,26 +299,26 @@ Ltac solve_sub_redexes_are_values := apply sub_redexes_are_values_item; case; na
 Global Instance expr_fill_inj K : Inj (=) (=) (expr_fill K).
 Proof. induction K as [|Ki K IH]; rewrite /Inj; naive_solver. Qed.
 
-Lemma val_head_stuck e1 σ1 κ Pσ : head_step (Imp e1 σ1) κ Pσ → to_val e1 = None.
+Lemma val_head_stuck e1 h σ1 κ Pσ : head_step (Imp e1 h σ1) κ Pσ → to_val e1 = None.
 Proof. by inversion 1. Qed.
 
-Lemma head_ctx_step_val Ki e σ1 κ Pσ :
-  head_step (Imp (expr_fill_item Ki e) σ1) κ Pσ → is_Some (to_val e).
+Lemma head_ctx_step_val Ki e h σ1 κ Pσ :
+  head_step (Imp (expr_fill_item Ki e) h σ1) κ Pσ → is_Some (to_val e).
 Proof. destruct Ki; inversion 1; simplify_eq => //; by apply: list_expr_val_inv. Qed.
 
-Lemma head_fill_step_val K e σ1 κ Pσ :
+Lemma head_fill_step_val K e h σ1 κ Pσ :
   to_val e = None →
-  head_step (Imp (expr_fill K e) σ1) κ Pσ →
+  head_step (Imp (expr_fill K e) h σ1) κ Pσ →
   K = [].
 Proof.
   elim/rev_ind: K => //=????. rewrite expr_fill_app /= => /head_ctx_step_val /fill_val[??].
   naive_solver.
 Qed.
 
-Lemma step_by_val K K' e1' e1_redex σ1 κ Pσ :
+Lemma step_by_val K K' e1' e1_redex h σ1 κ Pσ :
   expr_fill K e1' = expr_fill K' e1_redex →
   to_val e1' = None →
-  head_step (Imp e1_redex σ1) κ Pσ →
+  head_step (Imp e1_redex h σ1) κ Pσ →
   ∃ K'', K' = K'' ++ K.
 Proof.
   assert (fill_val : ∀ K e, is_Some (to_val (expr_fill K e)) → is_Some (to_val e)).
@@ -309,29 +339,29 @@ Proof.
 Qed.
 
 Inductive prim_step : imp_state → option imp_event → (imp_state → Prop) → Prop :=
-  Ectx_step K e e' fns κ Pσ:
+  Ectx_step K e e' fns κ Pσ h:
     e = expr_fill K e' →
-    head_step (Imp e' fns) κ Pσ →
-    prim_step (Imp e fns) κ (λ σ, ∃ e2 fns2, Pσ (Imp e2 fns2) ∧ σ = Imp (expr_fill K e2) fns2).
+    head_step (Imp e' h fns) κ Pσ →
+    prim_step (Imp e h fns) κ (λ σ, ∃ e2 h2 fns2, Pσ (Imp e2 h2 fns2) ∧ σ = Imp (expr_fill K e2) h2 fns2).
 
-Lemma prim_step_inv K e fns κ Pσ:
-  prim_step (Imp (expr_fill K e) fns) κ Pσ →
+Lemma prim_step_inv K e fns κ h Pσ:
+  prim_step (Imp (expr_fill K e) h fns) κ Pσ →
   to_val e = None →
-  ∃ K' e' Pσ', e = expr_fill K' e' ∧ head_step (Imp e' fns) κ Pσ' ∧
-      Pσ = (λ σ, ∃ e2 fns2, Pσ' (Imp e2 fns2) ∧ σ = Imp (expr_fill (K' ++ K) e2) fns2).
+  ∃ K' e' Pσ', e = expr_fill K' e' ∧ head_step (Imp e' h fns) κ Pσ' ∧
+      Pσ = (λ σ, ∃ e2 h2 fns2, Pσ' (Imp e2 h2 fns2) ∧ σ = Imp (expr_fill (K' ++ K) e2) h2 fns2).
 Proof.
   inversion 1; simplify_eq => ?.
   revert select (expr_fill _ _ = expr_fill _ _) => Heq. move: (Heq) => /step_by_val Hg.
-  have [//|? ?]:= Hg _ _ _ _ ltac:(done). subst.
+  have [//|? ?]:= Hg _ _ _ _ _ ltac:(done). subst.
   rewrite expr_fill_app in Heq. naive_solver.
 Qed.
 
-Lemma prim_step_inv_head K e fns κ Pσ:
-  prim_step (Imp (expr_fill K e) fns) κ Pσ →
+Lemma prim_step_inv_head K e fns h κ Pσ:
+  prim_step (Imp (expr_fill K e) h fns) κ Pσ →
   sub_redexes_are_values e →
   to_val e = None →
-  ∃ Pσ', head_step (Imp e fns) κ Pσ' ∧
-      Pσ = (λ σ, ∃ e2 fns2, Pσ' (Imp e2 fns2) ∧ σ = Imp (expr_fill K e2) fns2).
+  ∃ Pσ', head_step (Imp e h fns) κ Pσ' ∧
+      Pσ = (λ σ, ∃ e2 h2 fns2, Pσ' (Imp e2 h2 fns2) ∧ σ = Imp (expr_fill K e2) h2 fns2).
 Proof.
   move => Hprim Hsub ?.
   move: Hprim => /prim_step_inv[|?[?[?[?[Hstep ?]]]]]. { done. } subst.
@@ -372,6 +402,21 @@ Lemma imp_expr_fill_BinOpR (v1 : val) e2 op K e' `{!ImpExprFill e2 K e'} :
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
 Global Hint Resolve imp_expr_fill_BinOpR : tstep.
 
+Lemma imp_expr_fill_Load e1 K e' `{!ImpExprFill e1 K e'} :
+  ImpExprFill (Load e1) (K ++ [LoadCtx]) e'.
+Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
+Global Hint Resolve imp_expr_fill_Load : tstep.
+
+Lemma imp_expr_fill_StoreL e1 e2 K e' `{!ImpExprFill e1 K e'} :
+  ImpExprFill (Store e1 e2) (K ++ [StoreLCtx e2]) e'.
+Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
+Global Hint Resolve imp_expr_fill_StoreL : tstep.
+
+Lemma imp_expr_fill_StoreR (v1 : val) e2 K e' `{!ImpExprFill e2 K e'} :
+  ImpExprFill (Store v1 e2) (K ++ [StoreRCtx v1]) e'.
+Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
+Global Hint Resolve imp_expr_fill_StoreR : tstep.
+
 Lemma imp_expr_fill_If e e2 e3 K e' `{!ImpExprFill e K e'} :
   ImpExprFill (If e e2 e3) (K ++ [IfCtx e2 e3]) e'.
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
@@ -390,8 +435,8 @@ Global Hint Resolve imp_expr_fill_ReturnExt : tstep.
 (** ** instances *)
 (* This pattern of using ImpExprFill at each rule is quite expensive
 but we don't care at the moment. *)
-Lemma imp_step_UbE_s fns e K `{!ImpExprFill e K UbE}:
-  TStepS imp_module (Imp e fns) (λ G, G None (λ G', True)).
+Lemma imp_step_UbE_s fns h e K `{!ImpExprFill e K UbE}:
+  TStepS imp_module (Imp e h fns) (λ G, G None (λ G', True)).
 Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. eexists _, _. split; [done|] => /= ??.
@@ -399,16 +444,16 @@ Proof.
 Qed.
 Global Hint Resolve imp_step_UbE_s : tstep.
 
-Lemma imp_step_Waiting_i fns K e b `{!ImpExprFill e K (Waiting b)}:
-  TStepI imp_module (Imp e fns) (λ G,
-    (∀ f fn vs, fns !! f = Some fn →
-      G true (Some (EIRecvCall f vs)) (λ G',  G'
+Lemma imp_step_Waiting_i fns h K e b `{!ImpExprFill e K (Waiting b)}:
+  TStepI imp_module (Imp e h fns) (λ G,
+    (∀ f fn vs h', fns !! f = Some fn →
+      G true (Some (EIRecvCall f vs h')) (λ G',  G'
           (Imp (expr_fill K (
            if bool_decide (length vs = length (fd_args fn)) then
              ReturnExt b ((subst_l fn.(fd_args) vs fn.(fd_body)))
            else
-             UbE)) fns))) ∧
-    ∀ v, b → G true (Some (EIRecvReturn v)) (λ G', G' (Imp (expr_fill K v) fns))
+             UbE)) h' fns))) ∧
+    ∀ v h', b → G true (Some (EIRecvReturn v h')) (λ G', G' (Imp (expr_fill K v) h' fns))
    ).
 Proof.
   destruct ImpExprFill0; subst.
@@ -420,15 +465,15 @@ Proof.
 Qed.
 Global Hint Resolve imp_step_Waiting_i : tstep.
 
-Lemma imp_step_Waiting_s fns e K b `{!ImpExprFill e K (Waiting b)}:
-  TStepS imp_module (Imp e fns) (λ G,
-    (∃ f fn vs, fns !! f = Some fn ∧
-      G (Some (EIRecvCall f vs)) (λ G', G'
+Lemma imp_step_Waiting_s fns h e K b `{!ImpExprFill e K (Waiting b)}:
+  TStepS imp_module (Imp e h fns) (λ G,
+    (∃ f fn vs h', fns !! f = Some fn ∧
+      G (Some (EIRecvCall f vs h')) (λ G', G'
           (Imp (expr_fill K (if bool_decide (length vs = length (fd_args fn)) then
                                ReturnExt b ((subst_l fn.(fd_args) vs fn.(fd_body)))
                              else
-                               UbE)) fns))) ∨
-    ∃ v, b ∧ G (Some (EIRecvReturn v)) (λ G', G' (Imp (expr_fill K v) fns))
+                               UbE)) h' fns))) ∨
+    ∃ v h', b ∧ G (Some (EIRecvReturn v h')) (λ G', G' (Imp (expr_fill K v) h' fns))
    ).
 Proof.
   destruct ImpExprFill0; subst.
@@ -437,9 +482,9 @@ Proof.
 Qed.
 Global Hint Resolve imp_step_Waiting_s : tstep.
 
-Lemma imp_step_ReturnExt_i fns e K b (v : val) `{!ImpExprFill e K (ReturnExt b v)}:
-  TStepI imp_module (Imp e fns) (λ G,
-    (G true (Some (EIReturn v)) (λ G', G' (Imp (expr_fill K (Waiting b)) fns)))).
+Lemma imp_step_ReturnExt_i fns h e K b (v : val) `{!ImpExprFill e K (ReturnExt b v)}:
+  TStepI imp_module (Imp e h fns) (λ G,
+    (G true (Some (EIReturn v h)) (λ G', G' (Imp (expr_fill K (Waiting b)) h fns)))).
 Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
@@ -449,9 +494,9 @@ Proof.
 Qed.
 Global Hint Resolve imp_step_ReturnExt_i : tstep.
 
-Lemma imp_step_ReturnExt_s fns e K b (v : val) `{!ImpExprFill e K (ReturnExt b v)}:
-  TStepS imp_module (Imp e fns) (λ G,
-    (G (Some (EIReturn v)) (λ G', G' (Imp (expr_fill K (Waiting b)) fns)))).
+Lemma imp_step_ReturnExt_s fns h e K b (v : val) `{!ImpExprFill e K (ReturnExt b v)}:
+  TStepS imp_module (Imp e h fns) (λ G,
+    (G (Some (EIReturn v h)) (λ G', G' (Imp (expr_fill K (Waiting b)) h fns)))).
 Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
@@ -460,12 +505,12 @@ Proof.
 Qed.
 Global Hint Resolve imp_step_ReturnExt_s : tstep.
 
-Lemma imp_step_Call_s fns e K f vs `{!ImpExprFill e K (imp.Call f (Val <$> vs))}:
-  TStepS imp_module (Imp e fns) (λ G,
+Lemma imp_step_Call_s fns h e K f vs `{!ImpExprFill e K (imp.Call f (Val <$> vs))}:
+  TStepS imp_module (Imp e h fns) (λ G,
     (∃ fn, fns !! f = Some fn ∧ G None (λ G', length vs = length fn.(fd_args) → G'
-             (Imp (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) fns))) ∨
-    (fns !! f = None ∧ G (Some (EICall f vs)) (λ G',
-           G' (Imp (expr_fill K (Waiting true)) fns)))).
+             (Imp (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) h fns))) ∨
+    (fns !! f = None ∧ G (Some (EICall f vs h)) (λ G',
+           G' (Imp (expr_fill K (Waiting true)) h fns)))).
 Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. destruct_all?; (split!; [done|]); move => /= ??.
@@ -474,9 +519,9 @@ Proof.
 Qed.
 Global Hint Resolve imp_step_Call_s : tstep.
 
-Lemma imp_step_Binop_i fns e K (v1 v2 : val) op `{!ImpExprFill e K (BinOp v1 op v2)}:
-  TStepI imp_module (Imp e fns) (λ G,
-    (G true None (λ G', ∃ v', eval_binop op v1 v2 = Some v' ∧ G' (Imp (expr_fill K v') fns)))).
+Lemma imp_step_Binop_i fns h e K (v1 v2 : val) op `{!ImpExprFill e K (BinOp v1 op v2)}:
+  TStepI imp_module (Imp e h fns) (λ G,
+    (G true None (λ G', ∃ v', eval_binop op v1 v2 = Some v' ∧ G' (Imp (expr_fill K v') h fns)))).
 Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
@@ -486,9 +531,9 @@ Proof.
 Qed.
 Global Hint Resolve imp_step_Binop_i | 10 : tstep.
 
-Lemma imp_step_Binop_s fns e K (v1 v2 : val) op `{!ImpExprFill e K (BinOp v1 op v2)}:
-  TStepS imp_module (Imp e fns) (λ G,
-    (G None (λ G', ∀ v', eval_binop op v1 v2 = Some v' → G' (Imp (expr_fill K v') fns)))).
+Lemma imp_step_Binop_s fns h e K (v1 v2 : val) op `{!ImpExprFill e K (BinOp v1 op v2)}:
+  TStepS imp_module (Imp e h fns) (λ G,
+    (G None (λ G', ∀ v', eval_binop op v1 v2 = Some v' → G' (Imp (expr_fill K v') h fns)))).
 Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
@@ -497,18 +542,18 @@ Proof.
 Qed.
 Global Hint Resolve imp_step_Binop_s | 10 : tstep.
 
-Lemma imp_step_BinopAdd_i fns e K n1 n2 `{!ImpExprFill e K (BinOp (ValNum n1) AddOp (ValNum n2))}:
-  TStepI imp_module (Imp e fns) (λ G,
-    (G true None (λ G', G' (Imp (expr_fill K (ValNum (n1 + n2))) fns)))).
+Lemma imp_step_BinopAdd_i fns h e K n1 n2 `{!ImpExprFill e K (BinOp (ValNum n1) AddOp (ValNum n2))}:
+  TStepI imp_module (Imp e h fns) (λ G,
+    (G true None (λ G', G' (Imp (expr_fill K (ValNum (n1 + n2))) h fns)))).
 Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. tstep_i => ???. split!; [done|] => ?. naive_solver.
 Qed.
 Global Hint Resolve imp_step_BinopAdd_i | 5 : tstep.
 
-Lemma imp_step_BinopAdd_s fns e K (v1 v2 : val) `{!ImpExprFill e K (BinOp v1 AddOp v2)}:
-  TStepS imp_module (Imp e fns) (λ G,
-    (G None (λ G', ∀ n1 n2, v1 = ValNum n1 → v2 = ValNum n2 → G' (Imp (expr_fill K (ValNum (n1 + n2))) fns)))).
+Lemma imp_step_BinopAdd_s fns h e K (v1 v2 : val) `{!ImpExprFill e K (BinOp v1 AddOp v2)}:
+  TStepS imp_module (Imp e h fns) (λ G,
+    (G None (λ G', ∀ n1 n2, v1 = ValNum n1 → v2 = ValNum n2 → G' (Imp (expr_fill K (ValNum (n1 + n2))) h fns)))).
 Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??. tstep_s. split! => ? /bind_Some[?[? /bind_Some[?[??]]]].
@@ -527,10 +572,10 @@ Definition imp_ctx_refines (fnsi fnss : gmap string fndef) :=
 (** * semantic linking *)
 Inductive imp_prod_filter_enum :=
 | IPFLeft | IPFRight | IPFNone
-| IPFLeftRecvCall (f : string) (vs : list val)
-| IPFRightRecvCall (f : string) (vs : list val)
-| IPFLeftRecvReturn (v : val)
-| IPFRightRecvReturn (v : val)
+| IPFLeftRecvCall (f : string) (vs : list val) (h : heap_state)
+| IPFRightRecvCall (f : string) (vs : list val) (h : heap_state)
+| IPFLeftRecvReturn (v : val) (h : heap_state)
+| IPFRightRecvReturn (v : val) (h : heap_state)
 .
 Record imp_prod_filter_state := IPFState {
   ipf_cur : imp_prod_filter_enum;
@@ -543,75 +588,75 @@ Inductive imp_prod_filter (fns1 fns2 : gset string) :
   imp_prod_filter_state → (seq_product_event imp_event imp_event) →
   option imp_event → imp_prod_filter_state → Prop :=
 (* call l -> r *)
-| IPFCallLeftToRight f vs cs:
+| IPFCallLeftToRight f vs cs h:
   f ∉ fns1 → f ∈ fns2 →
-  imp_prod_filter fns1 fns2 (IPFState IPFLeft cs) (SPELeft (EICall f vs) SPRight)
-                  None (IPFState (IPFRightRecvCall f vs) (IPFLeft :: cs))
+  imp_prod_filter fns1 fns2 (IPFState IPFLeft cs) (SPELeft (EICall f vs h) SPRight)
+                  None (IPFState (IPFRightRecvCall f vs h) (IPFLeft :: cs))
 (* call l -> r step 2 *)
-| IPFCallLeftToRight2 f vs cs:
-  imp_prod_filter fns1 fns2 (IPFState (IPFRightRecvCall f vs) cs) (SPERight (EIRecvCall f vs) SPRight)
+| IPFCallLeftToRight2 f vs cs h:
+  imp_prod_filter fns1 fns2 (IPFState (IPFRightRecvCall f vs h) cs) (SPERight (EIRecvCall f vs h) SPRight)
                   None (IPFState IPFRight cs)
 (* call r -> l *)
-| IPFCallRightToLeft f vs cs:
+| IPFCallRightToLeft f vs cs h:
   f ∈ fns1 → f ∉ fns2 →
-  imp_prod_filter fns1 fns2 (IPFState IPFRight cs) (SPERight (EICall f vs) SPLeft)
-                  None (IPFState (IPFLeftRecvCall f vs) (IPFRight :: cs))
+  imp_prod_filter fns1 fns2 (IPFState IPFRight cs) (SPERight (EICall f vs h) SPLeft)
+                  None (IPFState (IPFLeftRecvCall f vs h) (IPFRight :: cs))
 (* call r -> l step 2*)
-| IPFCallRightToLeft2 f vs cs:
-  imp_prod_filter fns1 fns2 (IPFState (IPFLeftRecvCall f vs) cs) (SPELeft (EIRecvCall f vs) SPLeft)
+| IPFCallRightToLeft2 f vs cs h:
+  imp_prod_filter fns1 fns2 (IPFState (IPFLeftRecvCall f vs h) cs) (SPELeft (EIRecvCall f vs h) SPLeft)
                   None (IPFState IPFLeft cs)
 (* call l -> ext *)
-| IPFCallLeftToExt f vs cs:
+| IPFCallLeftToExt f vs cs h:
   f ∉ fns1 → f ∉ fns2 →
-  imp_prod_filter fns1 fns2 (IPFState IPFLeft cs) (SPELeft (EICall f vs) SPNone)
-                  (Some (EICall f vs)) (IPFState IPFNone (IPFLeft :: cs))
+  imp_prod_filter fns1 fns2 (IPFState IPFLeft cs) (SPELeft (EICall f vs h) SPNone)
+                  (Some (EICall f vs h)) (IPFState IPFNone (IPFLeft :: cs))
 (* call r -> ext *)
-| IPFCallRightToExt f vs cs:
+| IPFCallRightToExt f vs cs h:
   f ∉ fns1 → f ∉ fns2 →
-  imp_prod_filter fns1 fns2 (IPFState IPFRight cs) (SPERight (EICall f vs) SPNone)
-                  (Some (EICall f vs)) (IPFState IPFNone (IPFRight :: cs))
+  imp_prod_filter fns1 fns2 (IPFState IPFRight cs) (SPERight (EICall f vs h) SPNone)
+                  (Some (EICall f vs h)) (IPFState IPFNone (IPFRight :: cs))
 (* call ext -> l *)
-| IPFCallExtToLeft f vs cs:
+| IPFCallExtToLeft f vs cs h:
   f ∈ fns1 → f ∉ fns2 →
   imp_prod_filter fns1 fns2 (IPFState IPFNone cs) (SPENone SPLeft)
-                  (Some (EIRecvCall f vs)) (IPFState (IPFLeftRecvCall f vs) (IPFNone :: cs))
+                  (Some (EIRecvCall f vs h)) (IPFState (IPFLeftRecvCall f vs h) (IPFNone :: cs))
 (* call ext -> r *)
-| IPFCallExtToRight f vs cs:
+| IPFCallExtToRight f vs cs h:
   f ∉ fns1 → f ∈ fns2 →
   imp_prod_filter fns1 fns2 (IPFState IPFNone cs) (SPENone SPRight)
-                  (Some (EIRecvCall f vs)) (IPFState (IPFRightRecvCall f vs) (IPFNone :: cs))
+                  (Some (EIRecvCall f vs h)) (IPFState (IPFRightRecvCall f vs h) (IPFNone :: cs))
 (* ret l -> r *)
-| IPFReturnLeftToRight v cs:
-  imp_prod_filter fns1 fns2 (IPFState IPFLeft (IPFRight :: cs)) (SPELeft (EIReturn v) SPRight)
-                  None (IPFState (IPFRightRecvReturn v) cs)
+| IPFReturnLeftToRight v cs h:
+  imp_prod_filter fns1 fns2 (IPFState IPFLeft (IPFRight :: cs)) (SPELeft (EIReturn v h) SPRight)
+                  None (IPFState (IPFRightRecvReturn v h) cs)
 (* ret l -> r step 2 *)
-| IPFReturnLeftToRight2 v cs:
-  imp_prod_filter fns1 fns2 (IPFState (IPFRightRecvReturn v) cs) (SPERight (EIRecvReturn v) SPRight)
+| IPFReturnLeftToRight2 v cs h:
+  imp_prod_filter fns1 fns2 (IPFState (IPFRightRecvReturn v h) cs) (SPERight (EIRecvReturn v h) SPRight)
                   None (IPFState IPFRight cs)
 (* ret r -> l *)
-| IPFReturnRightToLeft v cs:
-  imp_prod_filter fns1 fns2 (IPFState IPFRight (IPFLeft :: cs)) (SPERight (EIReturn v) SPLeft)
-                  None (IPFState (IPFLeftRecvReturn v) cs)
+| IPFReturnRightToLeft v cs h:
+  imp_prod_filter fns1 fns2 (IPFState IPFRight (IPFLeft :: cs)) (SPERight (EIReturn v h) SPLeft)
+                  None (IPFState (IPFLeftRecvReturn v h) cs)
 (* ret l -> r step 2 *)
-| IPFReturnRightToLeft2 v cs:
-  imp_prod_filter fns1 fns2 (IPFState (IPFLeftRecvReturn v) cs) (SPELeft (EIRecvReturn v) SPLeft)
+| IPFReturnRightToLeft2 v cs h:
+  imp_prod_filter fns1 fns2 (IPFState (IPFLeftRecvReturn v h) cs) (SPELeft (EIRecvReturn v h) SPLeft)
                   None (IPFState IPFLeft cs)
 (* ret l -> ext *)
-| IPFReturnLeftToExt v cs:
-  imp_prod_filter fns1 fns2 (IPFState IPFLeft (IPFNone :: cs)) (SPELeft (EIReturn v) SPNone)
-                  (Some (EIReturn v)) (IPFState IPFNone cs)
+| IPFReturnLeftToExt v cs h:
+  imp_prod_filter fns1 fns2 (IPFState IPFLeft (IPFNone :: cs)) (SPELeft (EIReturn v h) SPNone)
+                  (Some (EIReturn v h)) (IPFState IPFNone cs)
 (* ret r -> ext *)
-| IPFReturnRightToExt v cs:
-  imp_prod_filter fns1 fns2 (IPFState IPFRight (IPFNone :: cs)) (SPERight (EIReturn v) SPNone)
-                  (Some (EIReturn v)) (IPFState IPFNone cs)
+| IPFReturnRightToExt v cs h:
+  imp_prod_filter fns1 fns2 (IPFState IPFRight (IPFNone :: cs)) (SPERight (EIReturn v h) SPNone)
+                  (Some (EIReturn v h)) (IPFState IPFNone cs)
 (* ret ext -> l *)
-| IPFReturnExtToLeft v cs:
+| IPFReturnExtToLeft v cs h:
   imp_prod_filter fns1 fns2 (IPFState IPFNone (IPFLeft :: cs)) (SPENone SPLeft)
-                  (Some (EIRecvReturn v)) (IPFState (IPFLeftRecvReturn v) cs)
+                  (Some (EIRecvReturn v h)) (IPFState (IPFLeftRecvReturn v h) cs)
 (* ret ext -> r *)
-| IPFReturnExtToRight v cs:
+| IPFReturnExtToRight v cs h:
   imp_prod_filter fns1 fns2 (IPFState IPFNone (IPFRight :: cs)) (SPENone SPRight)
-                  (Some (EIRecvReturn v)) (IPFState (IPFRightRecvReturn v) cs)
+                  (Some (EIRecvReturn v h)) (IPFState (IPFRightRecvReturn v h) cs)
 .
 
 Definition imp_prod (fns1 fns2 : gset string) (m1 m2 : module imp_event) : module imp_event :=
@@ -660,8 +705,8 @@ Inductive imp_link_prod_combine_ectx :
 .
 
 Definition imp_link_prod_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : imp_module.(m_state)) (σ2 : ((seq_product_state * imp_state * imp_state) * imp_prod_filter_state)) : Prop :=
-  let 'Imp e1 fns1' := σ1 in
-  let '((σsp, Imp el fnsl, Imp er fnsr), σf) := σ2 in
+  let 'Imp e1 h1 fns1' := σ1 in
+  let '((σsp, Imp el hl fnsl, Imp er hr fnsr), σf) := σ2 in
   ∃ n K Kl Kr e1' el' er' bl br,
   fns1' = fns1 ∪ fns2 ∧
   fnsl = fns1 ∧
@@ -671,9 +716,9 @@ Definition imp_link_prod_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : 
   el = expr_fill Kl el' ∧
   er = expr_fill Kr er' ∧
   match σf.(ipf_cur) with
-  | IPFLeft => σsp = SPLeft ∧ e1' = el' ∧ static_expr el' ∧ er' = Waiting br
+  | IPFLeft => σsp = SPLeft ∧ e1' = el' ∧ static_expr el' ∧ er' = Waiting br ∧ h1 = hl
               ∧ (if bv then to_val el' = None else True)
-  | IPFRight => σsp = SPRight ∧ e1' = er' ∧ static_expr er' ∧ el' = Waiting bl
+  | IPFRight => σsp = SPRight ∧ e1' = er' ∧ static_expr er' ∧ el' = Waiting bl ∧ h1 = hr
                ∧ (if bv then to_val er' = None else True)
   | IPFNone => σsp = SPNone ∧ e1' = Waiting (bl || br) ∧ el' = Waiting bl ∧ er' = Waiting br
   | _ => False
@@ -689,14 +734,14 @@ Proof.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { exact: (λ _, imp_link_prod_inv true fns1 fns2). }
   { split!. 1: by econs. all: done. } { done. }
-  move => /= {}n _ Hloop [e1 fns1'] [[[? [el fnsl]] [er fnsr] [ipfs cs]]] [m [K [Kl [Kr ?]]]].
+  move => /= {}n _ Hloop [e1 h1 fns1'] [[[? [el hl fnsl]] [er hr fnsr] [ipfs cs]]] [m [K [Kl [Kr ?]]]].
   have {}Hloop : ∀ σi σs,
             imp_link_prod_inv false fns1 fns2 σi σs
             → σi ⪯{imp_module, imp_prod (dom (gset string) fns1) (dom (gset string) fns2) imp_module imp_module, n, true} σs. {
-    clear -Hloop. move => [e1 fns1'] [[[sp [el fnsl]] [er fnsr] [ipfs cs]]].
+    clear -Hloop. move => [e1 h1 fns1'] [[[sp [el hl fnsl]] [er hr fnsr] [ipfs cs]]].
     move => [m [K [Kl [Kr [e1' [el' [er' [bl [br [?[?[?[HK[?[?[? Hm]]]]]]]]]]]]]]]]; simplify_eq.
-    elim/lt_wf_ind: m sp ipfs cs K Kl Kr e1' el' er' bl br HK Hm => m IHm.
-    move => ipfs cs sp K Kl Kr e1' el' er' bl br HK Hmatch.
+    elim/lt_wf_ind: m sp ipfs h1 hl hr cs K Kl Kr e1' el' er' bl br HK Hm => m IHm.
+    move => ipfs h1 hl hr cs sp K Kl Kr e1' el' er' bl br HK Hmatch.
     case_match; destruct_all?; simplify_eq/=.
     - destruct (to_val el') eqn:?; [ |apply: Hloop; naive_solver].
       destruct el'; simplify_eq/=.
@@ -782,7 +827,7 @@ Proof.
       split!; [done|]. tend. split!; [done..|].
       apply: Hloop. split!; [by econs|rewrite ?orb_true_r; done..].
   - tstep_i. split.
-    + move => f fn vs /lookup_union_Some_raw[?|[??]].
+    + move => f fn vs h' /lookup_union_Some_raw[?|[??]].
       * have ?: fns2 !! f = None by apply: map_disjoint_Some_l.
         tstep_s. split!; [econs|]. { by apply elem_of_dom. } { by apply not_elem_of_dom. }
         simpl. split!; [done|].
@@ -794,7 +839,7 @@ Proof.
         tstep_s. left. split!; [done|econs|] => /=. case_bool_decide. 2: { tstep_s. naive_solver. }
         apply Hloop. split!; [by econs|done..| ].
         apply static_expr_subst_l; [|done]. apply fd_static.
-    + move => v ?.
+    + move => v h' ?.
       revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _) => HK.
       inversion HK; clear HK; simplify_eq/= => //.
       * tstep_s. split!;[apply IPFReturnExtToLeft|] => /=. split!; [done|].
@@ -817,7 +862,7 @@ Proof.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { exact: (λ _, flip (imp_link_prod_inv false fns1 fns2)). }
   { split!. 1: by econs. all: done. } { done. }
-  move => /= {}n _ Hloop [[[? [el fnsl]] [er fnsr] [ipfs cs]]] [e1 fns1'] [m [K [Kl [Kr ?]]]].
+  move => /= {}n _ Hloop [[[? [el hl fnsl]] [er hr fnsr] [ipfs cs]]] [e1 h1 fns1'] [m [K [Kl [Kr ?]]]].
   destruct_all?; simplify_eq/=. case_match; destruct_all?; simplify_eq.
   - destruct (to_val el') eqn:?.
     + destruct el'; simplify_eq/=.
