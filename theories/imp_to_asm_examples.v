@@ -66,7 +66,11 @@ Definition asm_add_client : gmap Z asm_instr :=
 
 Definition imp_add_client : fndef := {|
   fd_args := [];
-  fd_body := (imp.Call "add" [Val 1; Val 1]);
+  fd_body := (LetE "tmp" (Alloc (Val 1))
+             (LetE "_" (Store (Var "tmp") (Val 1))
+             (LetE "v" (Load (Var "tmp"))
+             (LetE "_" (Free (Var "tmp"))
+             (imp.Call "add" [Val 1; Var "v"])))));
   fd_static := I
 |}.
 
@@ -99,6 +103,17 @@ Proof.
   all: try by apply lookup_lookup_total.
 Qed.
 
+Definition fresh_loc (h : heap_state) : loc :=
+  (fresh (set_map (D:=gset prov) fst (dom (gset loc) (h.(h_heap)))), 0).
+
+Lemma fresh_loc_fresh h:
+  heap_fresh h (fresh_loc h).
+Proof.
+  split; [done|] => /= -[/=??] ?.
+  match goal with | |- context [fresh ?X] => pose proof (is_fresh X) as H; revert H; move: {1 3}(X) => l Hl end.
+  contradict Hl. rewrite {}Hl. apply elem_of_map. eexists (_, _). split; [done|]. by apply elem_of_dom.
+Qed.
+
 Lemma asm_add_client_refines_imp_add_client :
   trefines (MS asm_module (initial_asm_state asm_add_client))
            (MS (imp_to_asm imp_module) (initial_imp_to_asm_state imp_module
@@ -124,6 +139,14 @@ Proof.
   tstep_i; simplify_map_eq'. split; [done|].
   tstep_i; simplify_map_eq'. split; [done|].
   sort_map_insert. simplify_map_eq'.
+  tstep_s. split!; [apply fresh_loc_fresh|]. move => *; simplify_eq.
+  tstep_s.
+  tstep_s => *; simplify_eq.
+  tstep_s.
+  tstep_s => *; simplify_map_eq.
+  tstep_s.
+  tstep_s => *; simplify_eq.
+  tstep_s.
   change (imp.Call "add" [Val 1; Val 1]) with (expr_fill [] (imp.Call "add" [Val 1; Val 1])).
   apply: Hcall. { repeat econs. } { by simplify_map_eq. } { set_solver. } { set_solver. } { by simplify_map_eq. }
   { unfold imp_to_asm_args. unfold tmp_registers, saved_registers.

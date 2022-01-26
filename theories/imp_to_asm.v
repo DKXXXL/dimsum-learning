@@ -552,7 +552,7 @@ Inductive imp_to_asm_proof_stack (n : trace_index) (ins : gmap Z asm_instr) (fns
       t ≈ (imp_to_asm_itree_to_env (dom (gset Z) ins) (dom (gset string) fns) f2i;;;;
               imp_to_asm_itree (dom (gset Z) ins) (dom (gset string) fns) f2i) →
       AsmState (Some i) rs' amem' ins ⪯{asm_module, imp_to_asm imp_module, n, true}
-               (SPLeft, Imp (expr_fill ((K' ++ K'') ++ K) v) h' fns, (t, I2A (c :: cs)), SMProg)) →
+               (SPLeft, Imp (expr_fill ((K' ++ K'') ++ K) (Val v)) h' fns, (t, I2A (c :: cs)), SMProg)) →
   imp_to_asm_proof_stack n ins fns f2i true ((K' ++ K'') ++ K) (I2A ((I2AI true ret rs amem) :: c :: cs))
 .
 
@@ -583,7 +583,7 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
               imp_to_asm_mem_rel (rs'' !!! "SP") mem'' mem' →
               t'' ≈ t' →
               AsmState (Some i') rs'' mem'' ins ⪯{asm_module, imp_to_asm imp_module, n, false}
-               (SPLeft, Imp (expr_fill K (expr_fill K' v)) h'' fns, (t'', cs), SMProg)) →
+               (SPLeft, Imp (expr_fill K (expr_fill K' (Val v))) h'' fns, (t'', cs), SMProg)) →
           AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm imp_module, n, b}
                (SPLeft, Imp (expr_fill K (expr_fill K' (imp.Call f' es))) h' fns, (t', cs), SMProg)) →
       (* Return *)
@@ -593,7 +593,7 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
           imp_to_asm_mem_rel (rs' !!! "SP") mem' mem →
           t' ≈ t →
           AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm imp_module, n, b}
-               (SPLeft, Imp (expr_fill K v) h' fns, (t', cs), SMProg)) →
+               (SPLeft, Imp (expr_fill K (Val v)) h' fns, (t', cs), SMProg)) →
       AsmState (Some i) rs mem ins ⪯{asm_module, imp_to_asm imp_module, n, false}
                (SPLeft, Imp (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) h fns, (t, cs), SMProg)
 ) →
