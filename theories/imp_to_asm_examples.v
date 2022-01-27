@@ -82,6 +82,33 @@ Local Ltac go := clear_itree; destruct_all?; simplify_eq/=.
 Local Ltac go_i := tstep_i; go.
 Local Ltac go_s := tstep_s; go.
 
+Ltac simpl_map_ext tac ::=
+  repeat match goal with
+         | H : map_list_included ?ns ?m |- is_Some (?m !! ?r) =>
+             is_closed_term ns;
+             apply (map_list_included_is_Some _ _ _ H);
+             compute_done
+         | |- map_list_included ?ns (<[?i:=?x]> ?m) =>
+             apply (map_list_included_insert ns m i x)
+         | |- context [ map_scramble ?ns ?m (<[?i:=?x]> ?m') ] =>
+             is_closed_term ns;
+             rewrite ->(map_scramble_insert_r_in ns m m' i x) by compute_done
+         | H : map_scramble ?ns (<[?i:=?x]> ?m) ?m' |- _ =>
+             is_closed_term ns;
+             rewrite ->(map_scramble_insert_l_in ns m m' i x) in H by compute_done
+         | H : map_scramble ?ns (<[?i:=?x]> ?m) ?m' |- _ =>
+             is_closed_term ns;
+             apply map_scramble_insert_l_not_in in H; [|compute_done];
+             let H' := fresh in
+             destruct H as [H' H]
+         | |- context [map_scramble ?ns ?m (<[?i:=?x]> ?m')] =>
+             is_closed_term ns;
+             rewrite ->(map_scramble_insert_r_not_in ns m m' i x) by compute_done
+         | |- context [ map_scramble ?ns ?m ?m ] =>
+             rewrite ->(map_scramble_eq' ns m)
+         end.
+
+
 Lemma asm_add_refines_imp_add :
   trefines (MS asm_module (initial_asm_state asm_add))
            (MS (imp_to_asm imp_module) (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_prog) (dom _ asm_add) (dom _ imp_add_prog) (<["add" := 100]> ∅))).
@@ -91,16 +118,14 @@ Proof.
   unfold imp_add_prog in Hf. unfold asm_add in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   destruct vs as [|v1 [|v2 []]] => //=.
-  move: Hargs => -[?[? /= Hregs]]. unfold saved_registers in *. decompose_Forall_hyps.
-  tstep_i. split; [done|].
+  move: Hargs => -[?[? /= [??]]]. decompose_Forall_hyps.
+  tstep_i. split; [simplify_map_eq'|].
   tstep_i; simplify_map_eq'. split; [done|].
   tstep_i => ??. simplify_map_eq'.
   tstep_i; simplify_map_eq'. split!.
   go_s => n1 n2 ??; subst.
   apply: Hret; [by simplify_map_eq| |done..].
-  unfold imp_to_asm_ret. unfold tmp_registers, saved_registers.
-  split!; decompose_Forall; simplify_map_eq' => //.
-  all: try by apply lookup_lookup_total.
+  unfold imp_to_asm_ret; split!; by simplify_map_eq'.
 Qed.
 
 Lemma asm_add_client_refines_imp_add_client :
@@ -114,14 +139,14 @@ Proof.
   unfold imp_add_client_prog in Hf. unfold asm_add_client in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   destruct vs as [|] => //=.
-  move: Hargs => -[?[? /= Hregs]]. unfold saved_registers in *. decompose_Forall_hyps.
-  tstep_i. split; [done|].
+  move: Hargs => -[?[? /= [? ?]]]. decompose_Forall_hyps.
+  tstep_i. split; [simplify_map_eq'|].
   tstep_i; simplify_map_eq'. split; [done|].
   tstep_i => ??. simplify_map_eq'.
-  tstep_i; simplify_map_eq'. split; [done|].
+  tstep_i; simplify_map_eq'. split; [simplify_map_eq'|].
   tstep_i; simplify_map_eq'. split; [done|].
   tstep_i => ??. simplify_map_eq'.
-  tstep_i; simplify_map_eq'. split; [done|].
+  tstep_i; simplify_map_eq'. split; [simplify_map_eq'|].
   tstep_i; simplify_map_eq'. split!; [done..|].
   tstep_i; simplify_map_eq'. split!; [done..|].
   tstep_i => ??. simplify_map_eq'.
@@ -138,23 +163,21 @@ Proof.
   tstep_s.
   change (imp.Call "add" [Val 1; Val 1]) with (expr_fill [] (imp.Call "add" [Val 1; Val 1])).
   apply: Hcall. { repeat econs. } { by simplify_map_eq. } { set_solver. } { set_solver. } { by simplify_map_eq. }
-  { unfold imp_to_asm_args. unfold tmp_registers, saved_registers.
-    split!; decompose_Forall; split!; simplify_map_eq => //. } { by simplify_map_eq. } { done. } { done. }
+  { unfold imp_to_asm_args. split!; decompose_Forall; by simplify_map_eq'. }
+  { by simplify_map_eq. } { done. } { done. }
   move => rs'' mem'' v h'' ? pb'' Hpc'' Hv Hmem ? ?.
-  move: Hv => -[?[/= ? Hregs]]. unfold tmp_registers, saved_registers in *. decompose_Forall_hyps.
-  simplify_map_eq'.
-  tstep_i; simplify_map_eq'. split!; [done..|].
+  move: Hv => [?[? Hm]]; simplify_map_eq'.
+  tstep_i; simplify_map_eq'. split!; [by simplify_map_eq'..|].
   tstep_i; simplify_map_eq'. split!; [done..|].
   tstep_i; simplify_map_eq'. split!; [done..|].
   tstep_i => ??. simplify_map_eq'.
+  have ->: rs !!! "SP" - 1 + 1 = rs !!! "SP" by lia.
   tstep_i; simplify_map_eq'. split; [done|].
   apply: Hret; [| | |done|done]. { simplify_map_eq'. f_equal. etrans; [eapply Hmem|]; by simplify_map_eq'. }
   2 : { move => ?. simplify_map_eq' => ?. etrans; [eapply Hmem; simplify_map_eq'; lia|].
         rewrite lookup_total_insert_ne //. lia. }
-  unfold imp_to_asm_ret. unfold tmp_registers, saved_registers.
-  split. { by simplify_map_eq. }
-  split!; decompose_Forall; simplify_map_eq => //.
-  f_equal. lia.
+  unfold imp_to_asm_ret; split!; simplify_map_eq'; split!.
+  apply lookup_lookup_total; simplify_map_eq'.
 Qed.
 
 Definition full_asm_add : gmap Z asm_instr :=
@@ -198,3 +221,29 @@ Proof.
   apply idemp.
   apply _.
 Qed.
+
+(* TODO: an interesting example would be to prove
+
+main :
+
+  mov SECRET, 0
+  bl c_code
+  bl ext
+
+c_code :
+
+  push R30
+  bl set_secret
+  pop R30
+  ret
+
+set_secret :
+  mov SECRET, 1
+  ret
+
+The interesting property to prove here would be to prove that SECRET is 1 when calling ext
+and showing that this can be proven even if one refines c_code to Call "set_secret".
+The current imp_to_asm seems to enforce a condition that is too strong (almost all registers must
+be preserved between call and return)
+
+*)

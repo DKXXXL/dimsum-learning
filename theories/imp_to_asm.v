@@ -22,22 +22,21 @@ Definition args_registers : list string :=
   ["R0"; "R1"; "R2"; "R3"; "R4"; "R5"; "R6"; "R7" ; "R8"].
 
 Definition tmp_registers : list string :=
-  ["R9"; "R10"; "R11"; "R12"; "R13"; "R14"; "R15"; "R16"; "R17"; "R30"].
+  args_registers ++ ["R9"; "R10"; "R11"; "R12"; "R13"; "R14"; "R15"; "R16"; "R17"; "R30"; "PC"].
 
 Definition saved_registers : list string :=
   ["R19"; "R20"; "R21"; "R22"; "R23"; "R24"; "R25"; "R26"; "R27"; "R28"; "R29"; "SP"].
 
 Definition imp_to_asm_args (pb : gmap prov (option Z)) (ret : Z) (rs : gmap string Z) (vs : list val) : Prop :=
   rs !! "R30" = Some ret ∧
-  Forall2 (λ v r, ∃ z, rs !! r = Some z ∧ imp_val_to_asm_val pb v = Some z) vs
-          (take (length vs) args_registers) ∧
-  Forall (λ r, is_Some (rs !! r)) (args_registers ++ tmp_registers ++ saved_registers)
-.
+  Forall2 (λ v r, imp_val_to_asm_val pb v = Some (rs !!! r)) vs (take (length vs) args_registers) ∧
+  map_list_included tmp_registers rs ∧
+  map_list_included saved_registers rs.
 
 Definition imp_to_asm_ret (pb : gmap prov (option Z)) (rs rsold : gmap string Z) (v : val) : Prop :=
-  (∃ z, rs !! "R0" = Some z ∧ imp_val_to_asm_val pb v = Some z) ∧
-  Forall (λ r, is_Some (rs !! r)) (args_registers ++ tmp_registers) ∧
-  Forall (λ r, rs !! r = Some (rsold !!! r)) (saved_registers).
+  imp_val_to_asm_val pb v = Some (rs !!! "R0") ∧
+  map_list_included tmp_registers rs ∧
+  map_scramble tmp_registers rsold rs.
 
 Definition imp_to_asm_mem_rel (sp : Z) (amem amemold : gmap Z Z) : Prop :=
   ∀ a, sp ≤ a → amem !!! a = amemold !!! a.

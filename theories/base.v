@@ -97,6 +97,8 @@ Ltac split_step :=
 Tactic Notation "split!" :=
   simpl; repeat split_step.
 
+Ltac simpl_map_ext tac := idtac.
+
 Tactic Notation "simpl_map_total" "by" tactic3(tac) := repeat
    match goal with
    | H : ?m !! ?i = Some ?x |- context [?m !!! ?i] =>
@@ -109,9 +111,9 @@ Tactic Notation "simpl_map_total" "by" tactic3(tac) := repeat
        rewrite lookup_total_insert in H || rewrite ->lookup_total_insert_ne in H by tac
    end.
  Tactic Notation "simplify_map_eq'" "/=" "by" tactic3(tac) :=
-  repeat (progress csimpl in * || (progress simpl_map_total by tac) || simplify_map_eq by tac ).
+  repeat (progress csimpl in * || (progress simpl_map_total by tac) || (progress simpl_map_ext tac) || simplify_map_eq by tac ).
  Tactic Notation "simplify_map_eq'" :=
-  repeat (progress (simpl_map_total by eauto with simpl_map map_disjoint) || simplify_map_eq by eauto with simpl_map map_disjoint ).
+  repeat (progress (simpl_map_total by eauto with simpl_map map_disjoint) || (progress simpl_map_ext ltac:(eauto with simpl_map map_disjoint)) || simplify_map_eq by eauto with simpl_map map_disjoint ).
 Tactic Notation "simplify_map_eq'" "/=" :=
   simplify_map_eq'/= by eauto with simpl_map map_disjoint.
 
@@ -302,3 +304,62 @@ Tactic Notation "case_match" "as" ident(Hd) :=
   | H : context [ match ?x with _ => _ end ] |- _ => destruct x eqn:Hd
   | |- context [ match ?x with _ => _ end ] => destruct x eqn:Hd
   end.
+
+
+Definition map_list_included {K A} `{Countable K} (ns : list K) (rs : gmap K A) :=
+  list_to_set ns ⊆ dom (gset _) rs.
+
+Definition map_scramble {K A} `{Countable K} (ns : list K) (rs rs' : gmap K A) :=
+  ∀ i, i ∉ ns → rs !! i = rs' !! i.
+Lemma map_list_included_is_Some {K A} `{Countable K} ns (m : gmap K A) i :
+  map_list_included ns m →
+  i ∈ ns →
+  is_Some (m !! i).
+Proof. move => Hin ?. apply elem_of_dom. apply Hin. set_solver. Qed.
+
+Lemma map_list_included_insert {K A} `{Countable K} ns (m : gmap K A) i x:
+  map_list_included ns m →
+  map_list_included ns (<[i := x]>m).
+Proof. unfold map_list_included. set_solver. Qed.
+
+Lemma map_scramble_sym {K A} `{Countable K} ns (m m' : gmap K A) :
+  map_scramble ns m m' ↔ map_scramble ns m' m.
+Proof. unfold map_scramble. naive_solver. Qed.
+
+Lemma map_scramble_insert_r_in {K A} `{Countable K} ns (m m' : gmap K A) i x:
+  i ∈ ns →
+  map_scramble ns m (<[i:=x]>m') ↔ map_scramble ns m m'.
+Proof.
+  move => Hin. unfold map_scramble. apply forall_proper => ?.
+  apply forall_proper => ?. rewrite lookup_insert_ne //. naive_solver.
+Qed.
+
+Lemma map_scramble_insert_r_not_in {K A} `{Countable K} ns (m m' : gmap K A) i x:
+  i ∉ ns →
+  map_scramble ns m (<[i:=x]>m') ↔ m !! i = Some x ∧ map_scramble (i :: ns) m m'.
+Proof.
+  unfold map_scramble. move => ?. split.
+  - move => Hm. split; [rewrite Hm //; by simplify_map_eq|]. move => ??. rewrite Hm; [set_solver|].
+    rewrite lookup_insert_ne; [set_solver|]. done.
+  - move => [? Hm] i' ?. destruct (decide (i = i')); simplify_map_eq => //. apply Hm. set_solver.
+Qed.
+
+Lemma map_scramble_insert_l_in {K A} `{Countable K} ns (m m' : gmap K A) i x:
+  i ∈ ns →
+  map_scramble ns (<[i:=x]>m) m' ↔ map_scramble ns m m'.
+Proof. move => ?. rewrite map_scramble_sym map_scramble_insert_r_in // map_scramble_sym. done. Qed.
+
+Lemma map_scramble_insert_l_not_in {K A} `{Countable K} ns (m m' : gmap K A) i x:
+  i ∉ ns →
+  map_scramble ns (<[i:=x]>m) m' ↔ m' !! i = Some x ∧ map_scramble (i :: ns) m m'.
+Proof. move => ?. rewrite map_scramble_sym map_scramble_insert_r_not_in // map_scramble_sym //. Qed.
+
+Lemma map_scramble_eq {K A} `{Countable K} ns (m : gmap K A):
+  map_scramble ns m m.
+Proof. unfold map_scramble. naive_solver. Qed.
+
+Lemma map_scramble_eq' {K A} `{Countable K} ns (m : gmap K A):
+  map_scramble ns m m ↔ True.
+Proof. unfold map_scramble. naive_solver. Qed.
+
+Global Opaque map_list_included map_scramble.
