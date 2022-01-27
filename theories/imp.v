@@ -20,7 +20,7 @@ Notation "l +ₗ z" := (shift_loc l%L z%Z) (at level 50, left associativity) : l
 Typeclasses Opaque shift_loc.
 
 Inductive binop : Set :=
-| AddOp | EqOp.
+| AddOp | ShiftOp | EqOp.
 
 Inductive val := | ValNum (z : Z) | ValBool (b : bool) | ValLoc (l : loc).
 Coercion ValNum : Z >-> val.
@@ -255,11 +255,22 @@ Definition heap_alive (h : heap_state) (l : loc) : Prop :=
 Definition heap_fresh (h : heap_state) (l : loc) : Prop :=
   l.2 = 0 ∧ ∀ l', heap_alive h l' → l.1 ≠ l'.1.
 
+Definition fresh_loc (h : heap_state) : loc :=
+  (fresh (set_map (D:=gset prov) fst (dom (gset loc) (h.(h_heap)))), 0).
+
 Definition heap_alloc (h : heap_state) (l : loc) (n : Z) : heap_state :=
   Heap (list_to_map ((λ z, (l +ₗ z, ValNum 0)) <$> seqZ 0 n) ∪ h.(h_heap)).
 
 Definition heap_free (h : heap_state) (l : loc) : heap_state :=
   Heap (filter (λ '(l', v), l'.1 ≠ l.1) h.(h_heap)).
+
+Lemma fresh_loc_fresh h:
+  heap_fresh h (fresh_loc h).
+Proof.
+  split; [done|] => /= -[/=??] ?.
+  match goal with | |- context [fresh ?X] => pose proof (is_fresh X) as H; revert H; move: {1 3}(X) => l Hl end.
+  contradict Hl. rewrite {}Hl. apply elem_of_map. eexists (_, _). split; [done|]. by apply elem_of_dom.
+Qed.
 
 (** ** state *)
 Record imp_state := Imp {
@@ -279,6 +290,7 @@ Inductive imp_event : Type :=
 Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
   match op with
   | AddOp => z1 ← val_to_Z v1; z2 ← val_to_Z v2; Some (ValNum (z1 + z2))
+  | ShiftOp => l ← val_to_loc v1; z ← val_to_Z v2; Some (ValLoc (l +ₗ z))
   | EqOp => z1 ← val_to_Z v1; z2 ← val_to_Z v2; Some (ValBool (bool_decide (z1 = z2)))
   end.
 
@@ -619,6 +631,25 @@ Proof.
   destruct v1, v2 => //. simplify_eq/=. naive_solver.
 Qed.
 Global Hint Resolve imp_step_BinopAdd_s | 5 : tstep.
+
+Lemma imp_step_BinopShift_i fns h e K l z `{!ImpExprFill e K (BinOp (Val (ValLoc l)) ShiftOp (Val (ValNum z)))}:
+  TStepI imp_module (Imp e h fns) (λ G,
+    (G true None (λ G', G' (Imp (expr_fill K (Val (ValLoc (l +ₗ z)))) h fns)))).
+Proof.
+  destruct ImpExprFill0; subst.
+  constructor => ? HG. tstep_i => ???. split!; [done|] => ?. naive_solver.
+Qed.
+Global Hint Resolve imp_step_BinopShift_i | 5 : tstep.
+
+Lemma imp_step_BinopShift_s fns h e K (v1 v2 : val) `{!ImpExprFill e K (BinOp (Val v1) ShiftOp (Val v2))}:
+  TStepS imp_module (Imp e h fns) (λ G,
+    (G None (λ G', ∀ l z, v1 = ValLoc l → v2 = ValNum z → G' (Imp (expr_fill K (Val (ValLoc (l +ₗ z)))) h fns)))).
+Proof.
+  destruct ImpExprFill0; subst.
+  constructor => ? HG. split!; [done|]. move => /= ??. tstep_s. split! => ? /bind_Some[?[? /bind_Some[?[??]]]].
+  destruct v1, v2 => //. simplify_eq/=. naive_solver.
+Qed.
+Global Hint Resolve imp_step_BinopShift_s | 5 : tstep.
 
 Lemma imp_step_Load_i fns h e K l `{!ImpExprFill e K (Load (Val (ValLoc l)))}:
   TStepI imp_module (Imp e h fns) (λ G,
