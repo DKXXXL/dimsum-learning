@@ -311,6 +311,10 @@ Definition map_list_included {K A} `{Countable K} (ns : list K) (rs : gmap K A) 
 
 Definition map_scramble {K A} `{Countable K} (ns : list K) (rs rs' : gmap K A) :=
   ∀ i, i ∉ ns → rs !! i = rs' !! i.
+
+Definition map_preserved {K A} `{Countable K} (ns : list K) (rs rs' : gmap K A) :=
+  ∀ i, i ∈ ns → rs !! i = rs' !! i.
+
 Lemma map_list_included_is_Some {K A} `{Countable K} ns (m : gmap K A) i :
   map_list_included ns m →
   i ∈ ns →
@@ -321,6 +325,20 @@ Lemma map_list_included_insert {K A} `{Countable K} ns (m : gmap K A) i x:
   map_list_included ns m →
   map_list_included ns (<[i := x]>m).
 Proof. unfold map_list_included. set_solver. Qed.
+
+Global Instance map_scramble_preorder {K A} `{Countable K} ns : PreOrder (map_scramble (K:=K) (A:=A) ns).
+Proof.
+  constructor.
+  - move => ???. done.
+  - move => ??? Hm1 Hm2 ??. etrans; [by apply Hm1|]. by apply Hm2.
+Qed.
+
+Global Instance map_preserved_preorder {K A} `{Countable K} ns : PreOrder (map_preserved (K:=K) (A:=A) ns).
+Proof.
+  constructor.
+  - move => ???. done.
+  - move => ??? Hm1 Hm2 ??. etrans; [by apply Hm1|]. by apply Hm2.
+Qed.
 
 Lemma map_scramble_sym {K A} `{Countable K} ns (m m' : gmap K A) :
   map_scramble ns m m' ↔ map_scramble ns m' m.
@@ -362,4 +380,45 @@ Lemma map_scramble_eq' {K A} `{Countable K} ns (m : gmap K A):
   map_scramble ns m m ↔ True.
 Proof. unfold map_scramble. naive_solver. Qed.
 
-Global Opaque map_list_included map_scramble.
+
+Lemma map_preserved_sym {K A} `{Countable K} ns (m m' : gmap K A) :
+  map_preserved ns m m' ↔ map_preserved ns m' m.
+Proof. unfold map_preserved. naive_solver. Qed.
+
+Lemma map_preserved_insert_r_not_in {K A} `{Countable K} ns (m m' : gmap K A) i x:
+  i ∉ ns →
+  map_preserved ns m (<[i:=x]>m') ↔ map_preserved ns m m'.
+Proof.
+  move => Hin. unfold map_preserved. apply forall_proper => ?.
+  apply forall_proper => ?. rewrite lookup_insert_ne //. naive_solver.
+Qed.
+
+Lemma map_preserved_insert_r_in {K A} `{Countable K} ns (m m' : gmap K A) i x:
+  i ∈ ns →
+  map_preserved ns m (<[i:=x]>m') ↔ m !! i = Some x ∧ map_preserved (filter (i≠.) ns) m m'.
+Proof.
+  unfold map_preserved. move => ?. split.
+  - move => Hm. split; [rewrite Hm //; by simplify_map_eq|]. move => ? /elem_of_list_filter[??].
+    by rewrite Hm //  lookup_insert_ne.
+  - move => [? Hm] i' ?. destruct (decide (i = i')); simplify_map_eq => //. apply Hm. by apply elem_of_list_filter.
+Qed.
+
+Lemma map_preserved_insert_l_not_in {K A} `{Countable K} ns (m m' : gmap K A) i x:
+  i ∉ ns →
+  map_preserved ns (<[i:=x]>m) m' ↔ map_preserved ns m m'.
+Proof. move => ?. rewrite map_preserved_sym map_preserved_insert_r_not_in // map_preserved_sym. done. Qed.
+
+Lemma map_preserved_insert_l_in {K A} `{Countable K} ns (m m' : gmap K A) i x:
+  i ∈ ns →
+  map_preserved ns (<[i:=x]>m) m' ↔ m' !! i = Some x ∧ map_preserved (filter (i≠.) ns) m m'.
+Proof. move => ?. rewrite map_preserved_sym map_preserved_insert_r_in // map_preserved_sym. done. Qed.
+
+Lemma map_preserved_eq {K A} `{Countable K} ns (m : gmap K A):
+  map_preserved ns m m.
+Proof. unfold map_preserved. naive_solver. Qed.
+
+Lemma map_preserved_eq' {K A} `{Countable K} ns (m : gmap K A):
+  map_preserved ns m m ↔ True.
+Proof. unfold map_preserved. naive_solver. Qed.
+
+Global Opaque map_list_included map_scramble map_preserved.
