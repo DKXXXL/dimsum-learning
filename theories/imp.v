@@ -17,7 +17,7 @@ Definition loc : Set := (prov * Z).
 
 Definition shift_loc (l : loc) (z : Z) : loc := (l.1, l.2 + z).
 Notation "l +ₗ z" := (shift_loc l%L z%Z) (at level 50, left associativity) : loc_scope.
-Typeclasses Opaque shift_loc.
+Global Typeclasses Opaque shift_loc.
 
 Inductive binop : Set :=
 | AddOp | ShiftOp | EqOp.

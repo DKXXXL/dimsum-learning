@@ -49,7 +49,7 @@ Definition imp_to_asm_phys_blocks_extend (p1 p2 : gmap prov (option Z)) : Prop :
 
 Global Instance imp_to_asm_phys_blocks_extend_preorder : (PreOrder imp_to_asm_phys_blocks_extend).
 Proof. apply _. Qed.
-Typeclasses Opaque imp_to_asm_phys_blocks_extend.
+Global Typeclasses Opaque imp_to_asm_phys_blocks_extend.
 
 Record imp_to_asm_stack_item := I2AI {
   i2as_extern : bool;
@@ -148,7 +148,7 @@ Definition imp_to_asm_itree_to_env (ins : gset Z) (fns : gset string) (f2i : gma
     TAssert (f ∉ fns);;;;
     (* program proves that the address is correct *)
     TAssert (f2i !! f = Some pc);;;;
-    (* program proves that ret is in invs *)
+    (* program proves that ret is in ins *)
     TAssert (ret ∈ ins);;;;
     (* prog proves pb is an increment *)
     TAssert (imp_to_asm_phys_blocks_extend s.(i2a_phys_blocks) pb);;;;

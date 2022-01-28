@@ -172,4 +172,4 @@ Section mono_ord.
   Qed.
 End mono_ord.
 
-Typeclasses Opaque mono_ord_auth mono_ord_ub.
+Global Typeclasses Opaque mono_ord_auth mono_ord_ub.

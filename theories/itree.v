@@ -585,7 +585,7 @@ Proof.
   have {}Heq : x ≈ y. { by apply: eqit_mon; [..|done]. }
   split => ??; [rewrite -Heq | rewrite Heq]; naive_solver.
 Qed.
-Typeclasses Opaque itree_rel.
+Global Typeclasses Opaque itree_rel.
 
 Lemma itree_rel_intro EV S σ κs P:
   σ ~{mod_itree EV S, κs }~>ₜ itree_rel true P →
@@ -610,7 +610,7 @@ Proof.
   move => ?? /HP1 [? [Ht /HPσ'[?[??]]]]. eexists _. split; [|done]. etrans; [|done].
   by apply: eqit_mon; [..|done].
 Qed.
-Typeclasses Opaque itree_impl_rel.
+Global Typeclasses Opaque itree_impl_rel.
 
 Lemma itree_impl_rel_intro EV S σ P:
   σ -{mod_itree EV S }-> itree_impl_rel P →
@@ -1038,7 +1038,7 @@ Lemma itree_step_AssertOpt_s EV S T (o : option T) k s:
   ITreeTStepS (EV:=EV) (S:=S) (x ← TAssertOpt o;;; k x) s None (λ G, ∃ x, o = Some x ∧ G (k x) s).
 Proof.
   constructor => ?[?[??]]. rewrite bind_bind bind_trigger. setoid_rewrite bind_ret_l.
-  apply: steps_spec_step_end. { by econs. } Unshelve. 3: by econstructor. move => [??] [??]; simplify_eq. done.
+  apply: steps_spec_step_end. { by econs. } Unshelve. 2: by econstructor. move => [??] [??]; simplify_eq. done.
 Qed.
 Global Hint Resolve itree_step_AssertOpt_s : tstep.
 
