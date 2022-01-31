@@ -298,10 +298,11 @@ Qed.
 
 (** * tstep *)
 Create HintDb tstep discriminated.
-Global Hint Constants Opaque : tstep.
-Global Hint Variables Opaque : tstep.
-
-Global Hint Transparent m_state : tstep.
+(* The following sadly causes more problems than it solves since
+module is a dependent pair and [m.(m_state)] cannot be reduced if [m] is
+opaque. *)
+(* Global Hint Constants Opaque : tstep. *)
+(* Global Hint Variables Opaque : tstep. *)
 
 Class TStepI {EV} (mi : module EV) (σi : mi.(m_state)) (P : (bool → option EV → ((mi.(m_state) → Prop) → Prop) → Prop) → Prop) : Prop := {
   tstepi_proof G:

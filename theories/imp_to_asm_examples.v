@@ -77,7 +77,6 @@ Definition imp_add_client : fndef := {|
 Definition imp_add_client_prog : gmap string fndef :=
   <[ "add_client" := imp_add_client ]> ∅.
 
-Local Hint Constants Transparent : tstep.
 Local Ltac go := clear_itree; destruct_all?; simplify_eq/=.
 Local Ltac go_i := tstep_i; go.
 Local Ltac go_s := tstep_s; go.

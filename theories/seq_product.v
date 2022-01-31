@@ -39,7 +39,6 @@ Inductive seq_product_step {EV1 EV2} (m1 : module EV1) (m2 : module EV2) :
 
 Definition mod_seq_product {EV1 EV2} (m1 : module EV1) (m2 : module EV2) : module (seq_product_event EV1 EV2) :=
   Mod (seq_product_step m1 m2).
-Global Hint Transparent mod_seq_product : tstep.
 
 Global Instance seq_product_vis_no_all {EV1 EV2} (m1 : module EV1) (m2 : module EV2) `{!VisNoAll m1} `{!VisNoAll m2}:
   VisNoAll (mod_seq_product m1 m2).
@@ -379,7 +378,6 @@ Definition mod_seq_map_trans {EV1 EV2} (m : module EV1) (f : module (EV1 + EV2))
         | SMFilter | SMFilterRecv _ => SPRight
         end, σ.1.2, σ.2, σ.1.1).
 Arguments mod_seq_map_trans _ _ _ /.
-Global Hint Transparent mod_seq_map_trans : tstep.
 Global Instance mod_seq_map_trans_inj {EV1 EV2} (m : module EV1) (f : module (EV1 + EV2)) :
   Inj (=) (=) (mod_seq_map_trans m f).
 Proof. move => [[??]?] [[??]?] /=?. by simplify_eq. Qed.
@@ -387,7 +385,6 @@ Proof. move => [[??]?] [[??]?] /=?. by simplify_eq. Qed.
 Definition mod_seq_map {EV1 EV2} (m : module EV1) (f : module (EV1 + EV2)) : module EV2 :=
   (mod_state_transform (mod_map (mod_seq_product m f) mod_seq_map_filter)
                        (λ σ σ', σ' = mod_seq_map_trans m f σ)).
-Global Hint Transparent mod_seq_map : tstep.
 
 Lemma mod_seq_map_trefines {EV1 EV2} (m1 m2 : module EV1) (f : module (EV1 + EV2)) σ1 σ2 σ σf `{!VisNoAll m1} `{!VisNoAll f}:
   trefines (MS m1 σ1) (MS m2 σ2) →
@@ -502,7 +499,6 @@ Proof.
 Qed.
 Global Hint Resolve mod_seq_map_step_prog_recv_i | 1 : tstep.
 
-Local Hint Constants Transparent : tstep.
 Lemma mod_seq_map_step_filter_s {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{!TStepS f σf P} :
   TStepS (mod_seq_map m f) (SMFilter, σ, σf) (λ G, P (λ κ P',
     match κ with

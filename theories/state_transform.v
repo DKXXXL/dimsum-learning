@@ -12,7 +12,6 @@ Inductive state_transform_step {EV S} (m : module EV) (R : S → m.(m_state) →
 
 Definition mod_state_transform {EV S} (m : module EV) (R : S → m.(m_state) → Prop) :=
   Mod (state_transform_step m R).
-Global Hint Transparent mod_state_transform : tstep.
 
 Lemma mod_state_transform_nil {EV S} (m : module EV) (R : S → m.(m_state) → Prop) σ σ' (Pσ Pσ' : _ → Prop):
   σ' ~{ m, tnil }~>ₜ Pσ' →

@@ -50,7 +50,6 @@ Inductive mod_itree_step EV S : (itree (moduleE EV S) unit * S) â†’ option EV â†
 .
 
 Definition mod_itree EV S := Mod (mod_itree_step EV S).
-Global Hint Transparent mod_itree : tstep.
 
 Global Instance itree_vis_no_all EV S: VisNoAll (mod_itree EV S).
 Proof. move => *. invert_all @m_step; naive_solver. Qed.
@@ -1052,6 +1051,8 @@ Proof.
   setoid_rewrite bind_ret_l. by setoid_rewrite bind_ret_l.
 Qed.
 Global Hint Resolve itree_step_AssertOpt_i : tstep.
+
+Global Hint Opaque TVis TAll TExist TUb TNb TAssume TAssert TAssumeOpt TAssertOpt TGet TPut : tstep.
 
 Module itree_test.
 Local Definition test_itree : itree (moduleE _ _) ()

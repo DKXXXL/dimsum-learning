@@ -296,7 +296,6 @@ Lemma itree_tstep_imp_to_asm_itree ins fns f2i b:
 Proof. rewrite /imp_to_asm_itree. unlock. constructor. rewrite -bind_bind. eapply itree_tstep_forever. Qed.
 Global Hint Resolve itree_tstep_imp_to_asm_itree : tstep.
 
-Local Hint Constants Transparent : tstep.
 Local Ltac go := clear_itree; destruct_all?; simplify_eq/=.
 Local Ltac go_i := tstep_i; intros; go.
 Local Ltac go_s := tstep_s; go.

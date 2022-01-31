@@ -431,7 +431,6 @@ Proof.
 Qed.
 
 Definition imp_module := Mod prim_step.
-Global Hint Transparent imp_module : tstep.
 
 Global Instance imp_vis_no_all: VisNoAll imp_module.
 Proof. move => *. invert_all' @m_step; invert_all head_step; naive_solver. Qed.
@@ -866,7 +865,6 @@ Inductive imp_prod_filter (fns1 fns2 : gset string) :
 
 Definition imp_prod (fns1 fns2 : gset string) (m1 m2 : module imp_event) : module imp_event :=
   mod_map (mod_seq_product m1 m2) (imp_prod_filter fns1 fns2).
-Global Hint Transparent imp_prod : tstep.
 
 Lemma imp_prod_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
   trefines (MS m1 σ1) (MS m1' σ1') →

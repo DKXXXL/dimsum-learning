@@ -16,8 +16,6 @@ Inductive filter_step {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Pro
 Definition mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) : module EV2 :=
   Mod (filter_step m R).
 
-Global Hint Transparent mod_filter : tstep.
-
 Global Instance filter_vis_no_all {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) `{!VisNoAll m}:
   VisNoAll (mod_filter m R).
 Proof. move => *. invert_all @m_step; case_match; simplify_eq. by apply: vis_no_all. Qed.

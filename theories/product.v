@@ -688,8 +688,3 @@ Proof.
   - by apply steps_spec_end.
 Qed.
 Global Hint Resolve mod_map_step_s : tstep.
-
-Global Hint Transparent mod_map : tstep.
-Global Hint Transparent mod_product : tstep.
-Global Hint Transparent mod_map_mod : tstep.
-Global Hint Transparent mod_map_fn : tstep.

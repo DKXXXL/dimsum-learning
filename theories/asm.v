@@ -67,14 +67,11 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
 .
 
 Definition asm_module := Mod asm_step.
-Global Hint Transparent asm_module : tstep.
 
 Global Instance asm_vis_no_all: VisNoAll asm_module.
 Proof. move => *. invert_all @m_step; naive_solver. Qed.
 
 (** * tstep *)
-Global Hint Transparent asm_instr : tstep.
-
 Lemma asm_step_WriteReg_i r f es rs ins mem:
   TStepI asm_module (AsmState (Some (WriteReg r f::es)) rs mem ins)
             (λ G, G true None (λ G', is_Some (rs !! r) ∧ G' (AsmState (Some (es)) (<[r:=f rs]>rs) mem ins))).
@@ -240,7 +237,6 @@ Inductive asm_prod_filter (ins1 ins2 : gset Z) :
 
 Definition asm_prod (ins1 ins2 : gset Z) (m1 m2 : module asm_event) : module asm_event :=
   mod_map (mod_seq_product m1 m2) (asm_prod_filter ins1 ins2).
-Global Hint Transparent asm_prod : tstep.
 
 Lemma asm_prod_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
   trefines (MS m1 σ1) (MS m1' σ1') →
