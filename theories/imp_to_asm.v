@@ -199,13 +199,13 @@ Definition imp_to_asm (m : module imp_event) : module asm_event :=
   mod_seq_map m (mod_itree (imp_event + asm_event) imp_to_asm_state).
 
 Definition initial_imp_to_asm_state (m : module imp_event) (σ : m.(m_state)) (ins : gset Z) (fns : gset string) (f2i : gmap string Z) : (imp_to_asm m).(m_state) :=
-  (SPRight, σ, (imp_to_asm_itree ins fns f2i, I2A [] ∅ ∅), SMFilter).
+  (SMFilter, σ, (imp_to_asm_itree ins fns f2i, I2A [] ∅ ∅)).
 
 Lemma imp_to_asm_trefines m m' σ σ' ins fns f2i `{!VisNoAll m}:
   trefines (MS m σ) (MS m' σ') →
   trefines (MS (imp_to_asm m) (initial_imp_to_asm_state m σ ins fns f2i))
            (MS (imp_to_asm m') (initial_imp_to_asm_state m' σ' ins fns f2i)).
-Proof. move => ?. apply: mod_map_trefines. by apply: mod_seq_product_trefines. Qed.
+Proof. move => ?. by apply: mod_seq_map_trefines. Qed.
 
 Inductive imp_to_asm_combine_stacks (ins1 ins2 : gset Z) :
   imp_prod_filter_enum → list imp_prod_filter_enum →
@@ -245,8 +245,8 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
            (ins1 ins2 : gset Z) (fns1 fns2 : gset string) (f2i1 f2i2 : gmap string Z)
   (σ1 : (asm_prod ins1 ins2 (imp_to_asm m1) (imp_to_asm m2)).(m_state))
   (σ2 : (imp_to_asm (imp_prod fns1 fns2 m1 m2)).(m_state)) : Prop :=
-  let '(σpa, (σpi1, σi1, (t1, I2A cs1 pb1 lr1), σf1), (σpi2, σi2, (t2, I2A cs2 pb2 lr2), σf2), σfa) := σ1 in
-  let '(σps, (σpi, σs1, σs2, σf), (t, I2A cs pb lr), σfs) := σ2 in
+  let '(σpa, (σf1, σi1, (t1, I2A cs1 pb1 lr1)), (σf2, σi2, (t2, I2A cs2 pb2 lr2)), σfa) := σ1 in
+  let '(σfs, (σpi, σs1, σs2, σf), (t, I2A cs pb lr)) := σ2 in
   let ins := (ins1 ∪ ins2) in
   let fns := (fns1 ∪ fns2) in
   let f2i := (f2i1 ∪ f2i2) in
@@ -254,11 +254,11 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
   σi1 = σs1 ∧
   σi2 = σs2 ∧
   imp_to_asm_combine_stacks ins1 ins2 ips ics cs cs1 cs2 ∧
-  (( σfa = APFNone ∧ σpa = SPNone ∧ σfs = SMFilter ∧ σps = SPRight
+  (( σfa = APFNone ∧ σpa = SPNone ∧ σfs = SMFilter
      ∧ t ≈ (imp_to_asm_itree ins fns f2i)
       ∧ t1 ≳ (imp_to_asm_itree ins1 fns1 f2i1)
       ∧ t2 ≳ imp_to_asm_itree ins2 fns2 f2i2
-      ∧ σf1 = SMFilter ∧ σf2 = SMFilter ∧ σpi1 = SPRight ∧ σpi2 = SPRight
+      ∧ σf1 = SMFilter ∧ σf2 = SMFilter
       ∧ σpi = SPNone ∧ σf = IPFState IPFNone ics
       ∧ ips = IPFNone
       ∧ imp_to_asm_phys_blocks_extend pb1 pb
@@ -267,11 +267,11 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
   (( (∃ f vs h, σf = IPFState (IPFLeftRecvCall f vs h) ics ∧ σf1 = SMProgRecv (EIRecvCall f vs h))
       ∨ (∃ v h, σf = IPFState (IPFLeftRecvReturn v h) ics ∧ σf1 = SMProgRecv (EIRecvReturn v h))
       ∨ σf = IPFState IPFLeft ics ∧ σf1 = SMProg)
-      ∧ σfa = APFLeft ∧ σpa = SPLeft ∧ σfs = SMProg ∧ σps = SPLeft
+      ∧ σfa = APFLeft ∧ σpa = SPLeft ∧ σfs = SMProg
       ∧ t ≈ (imp_to_asm_itree_to_env ins fns f2i;;;; (imp_to_asm_itree ins fns f2i))
       ∧ t1 ≳ (imp_to_asm_itree_to_env ins1 fns1 f2i1;;;; (imp_to_asm_itree ins1 fns1 f2i1))
       ∧ t2 ≳ imp_to_asm_itree ins2 fns2 f2i2
-      ∧ σf2 = SMFilter ∧ σpi1 = SPLeft ∧ σpi2 = SPRight
+      ∧ σf2 = SMFilter
       ∧ σpi = SPLeft
       ∧ ips = IPFLeft
       ∧ map_scramble touched_registers lr lr1
@@ -280,11 +280,11 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
   (((∃ f vs h, σf = IPFState (IPFRightRecvCall f vs h) ics ∧ σf2 = SMProgRecv (EIRecvCall f vs h))
       ∨ (∃ v h, σf = IPFState (IPFRightRecvReturn v h) ics ∧ σf2 = SMProgRecv (EIRecvReturn v h))
       ∨ σf = IPFState IPFRight ics ∧ σf2 = SMProg)
-      ∧ σfa = APFRight ∧ σpa = SPRight ∧ σfs = SMProg ∧ σps = SPLeft
+      ∧ σfa = APFRight ∧ σpa = SPRight ∧ σfs = SMProg
       ∧ t ≈ (imp_to_asm_itree_to_env ins fns f2i;;;; (imp_to_asm_itree ins fns f2i))
       ∧ t1 ≳ (imp_to_asm_itree ins1 fns1 f2i1)
       ∧ t2 ≳ (imp_to_asm_itree_to_env ins2 fns2 f2i2;;;; (imp_to_asm_itree ins2 fns2 f2i2))
-      ∧ σf1 = SMFilter ∧ σpi1 = SPRight ∧ σpi2 = SPLeft
+      ∧ σf1 = SMFilter
       ∧ σpi = SPRight
       ∧ ips = IPFRight
       ∧ map_scramble touched_registers lr lr2
@@ -321,8 +321,8 @@ Proof.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { exact (λ _, imp_to_asm_combine_inv _ _ _ _ _ _ f2i1 f2i2). }
   { split!; [econs|done]. } { done. }
-  move => /= {σ1 σ2} {}n _ Hloop [[[σpa [[[σpi1 σi1] [t1 [cs1 pb1 lr1]] σf1]] [[[σpi2 σi2] [t2 [cs2 pb2 lr2]]]] σf2]] σfa].
-  move => [[[σps [[[σpi σs1] σs2] σf]] [t [cs pb lr]]] σfs] /= ?.
+  move => /= {σ1 σ2} {}n _ Hloop [[[σpa [[σf1 σi1] [t1 [cs1 pb1 lr1]]] [[σf2 σi2] [t2 [cs2 pb2 lr2]]]]] σfa].
+  move => [[σfs [[[σpi σs1] σs2] σf]] [t [cs pb lr]]] /= ?.
   destruct_all?; simplify_eq.
   - go_s.
     go_i. invert_all asm_prod_filter.
@@ -626,7 +626,7 @@ Inductive imp_to_asm_proof_stack (n : trace_index) (ins : gmap Z asm_instr) (fns
   bool → list expr_ectx → imp_to_asm_state → Prop :=
 | IAPSNil :
   imp_to_asm_proof_stack n ins fns f2i false [] (I2A [] ∅ ∅)
-| IAPSStep c cs pb pb' lr lr' K' K'' rs ret K b amem h:
+| IAPSStep c cs pb pb' lr lr' K' rs ret K b amem h:
   imp_to_asm_proof_stack n ins fns f2i b K (I2A cs pb lr) →
   imp_to_asm_phys_blocks_extend pb pb' →
   (∀ i rs' amem' pb'' h' v t,
@@ -638,8 +638,8 @@ Inductive imp_to_asm_proof_stack (n : trace_index) (ins : gmap Z asm_instr) (fns
       t ≈ (imp_to_asm_itree_to_env (dom (gset Z) ins) (dom (gset string) fns) f2i;;;;
               imp_to_asm_itree (dom (gset Z) ins) (dom (gset string) fns) f2i) →
       AsmState (Some i) rs' amem' ins ⪯{asm_module, imp_to_asm imp_module, n, true}
-               (SPLeft, Imp (expr_fill ((K' ++ K'') ++ K) (Val v)) h' fns, (t, I2A (c :: cs) pb'' rs'), SMProg)) →
-  imp_to_asm_proof_stack n ins fns f2i true ((K' ++ K'') ++ K) (I2A ((I2AI true ret rs amem h) :: c :: cs) pb' lr')
+               (SMProg, Imp (expr_fill (K' ++ K) (Val v)) h' fns, (t, I2A (c :: cs) pb'' rs'))) →
+  imp_to_asm_proof_stack n ins fns f2i true (K' ++ K) (I2A ((I2AI true ret rs amem h) :: c :: cs) pb' lr')
 .
 
 
@@ -672,9 +672,9 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
               imp_to_asm_phys_blocks_extend pb' pb'' →
               t'' ≈ t' →
               AsmState (Some i') rs'' mem'' ins ⪯{asm_module, imp_to_asm imp_module, n, false}
-               (SPLeft, Imp (expr_fill K (expr_fill K' (Val v))) h'' fns, (t'', I2A cs pb'' rs''), SMProg)) →
+               (SMProg, Imp (expr_fill K (expr_fill K' (Val v))) h'' fns, (t'', I2A cs pb'' rs''))) →
           AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm imp_module, n, b}
-               (SPLeft, Imp (expr_fill K (expr_fill K' (imp.Call f' es))) h' fns, (t', I2A cs pb' lr), SMProg)) →
+               (SMProg, Imp (expr_fill K (expr_fill K' (imp.Call f' es))) h' fns, (t', I2A cs pb' lr))) →
       (* Return *)
       (∀ rs' mem' v h' b t' pb' lr,
           rs' !! "PC" = Some ret →
@@ -684,9 +684,9 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
           map_scramble touched_registers lr rs' →
           t' ≈ t →
           AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm imp_module, n, b}
-               (SPLeft, Imp (expr_fill K (Val v)) h' fns, (t', I2A cs pb' lr), SMProg)) →
+               (SMProg, Imp (expr_fill K (Val v)) h' fns, (t', I2A cs pb' lr))) →
       AsmState (Some i) rs mem ins ⪯{asm_module, imp_to_asm imp_module, n, false}
-               (SPLeft, Imp (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) h fns, (t, I2A cs pb rs), SMProg)
+               (SMProg, Imp (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) h fns, (t, I2A cs pb rs))
 ) →
   trefines (MS asm_module (initial_asm_state ins))
            (MS (imp_to_asm imp_module) (initial_imp_to_asm_state imp_module
@@ -694,19 +694,19 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
 Proof.
   move => -> -> Hf.
   apply tsim_implies_trefines => /= n.
-  unshelve apply: tsim_remember. { simpl. exact: (λ n' '(AsmState i rs mem ins') '(σps, Imp e h fns', (t, I2A cs pb lr), σfs),
-     ∃ K b pb' lr', i = None ∧ ins = ins' ∧ σps = SPRight ∧ e = expr_fill K (Waiting b) ∧ fns = fns' ∧
+  unshelve apply: tsim_remember. { simpl. exact: (λ n' '(AsmState i rs mem ins') '(σfs, Imp e h fns', (t, I2A cs pb lr)),
+     ∃ K b pb' lr', i = None ∧ ins = ins' ∧ e = expr_fill K (Waiting b) ∧ fns = fns' ∧
               t ≈ imp_to_asm_itree (dom _ ins) (dom _ fns) f2i ∧ σfs = SMFilter ∧
               imp_to_asm_phys_blocks_extend pb' pb ∧
               imp_to_asm_proof_stack n' ins fns f2i b K (I2A cs pb' lr')
 ). }
   { eexists []. split!; [done|done|]. econs. } {
-    clear => /= n n' [????] [[[?[???]][?[???]]]?] Hsub ?. destruct_all?; simplify_eq. split!; [done..|].
+    clear => /= n n' [????] [[?[???]][?[???]]] Hsub ?. destruct_all?; simplify_eq. split!; [done..|].
     instantiate (1:=lr').
-    elim: H8 n' Hsub; [by econs|].
+    elim: H7 n' Hsub; [by econs|].
     move => *. econs; [ naive_solver..|]. move => *. apply: tsim_mono; [|done]. naive_solver.
   }
-  move => {}n _ /= IH [i rs mem ins'] [[[?[???]][?[???]]]?] ?. destruct_all?; simplify_eq/=.
+  move => {}n _ /= IH [i rs mem ins'] [[?[???]][?[???]]] ?. destruct_all?; simplify_eq/=.
   tstep_i => ??????.
   go_s.
   go_s. eexists _; go.
