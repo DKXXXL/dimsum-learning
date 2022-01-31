@@ -126,6 +126,14 @@ Ltac sort_map_insert :=
              rewrite (insert_commute m i j x y); [done|]
          end.
 
+Ltac simpl_map_decide :=
+  let go' := first [done | by apply elem_of_dom | by apply not_elem_of_dom] in
+  let go := solve [ first [go' | by match goal with | H : _ ## _ |- _ => move => ?; apply: H; go' end] ] in
+  repeat (match goal with
+  | |- context [bool_decide (?P)] => rewrite (bool_decide_true P); [go|]
+  | |- context [bool_decide (?P)] => rewrite (bool_decide_false P); [go|]
+  end; simpl).
+
 Section theorems.
 Context `{FinMap K M}.
 Lemma map_disjoint_difference_l' {A} (m1 m2 : M A) : m2 ∖ m1 ##ₘ m1.
@@ -147,6 +155,15 @@ Proof.
   destruct (m1 !! i) as [x'|], (m2 !! i) => /=; intuition congruence.
 Qed.
 End theorems.
+
+Section map.
+  Context `{FinMap K M}.
+  Context {A} (f : A → A → option A).
+  Implicit Types m : M A.
+Lemma lookup_union_l' (m1 m2 : M A) i :
+  m2 !! i = None → (m1 ∪ m2) !! i = m1 !! i.
+Proof using Type*. intros Hi. rewrite lookup_union Hi. by destruct (m1 !! i). Qed.
+End map.
 
 Section dom.
 Context `{FinMapDom K M D}.
