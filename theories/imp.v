@@ -283,9 +283,10 @@ Add Printing Constructor imp_state.
 Definition initial_imp_state (fns : gmap string fndef) : imp_state :=
   Imp (Waiting false) initial_heap_state fns.
 
-Inductive imp_event : Type :=
-| EICall (fn : string) (args: list val) (h : heap_state) | EIReturn (ret: val) (h : heap_state)
-| EIRecvCall (fn : string) (args: list val) (h : heap_state) | EIRecvReturn  (ret: val) (h : heap_state).
+Inductive imp_ev : Type :=
+| EICall (fn : string) (args: list val) (h : heap_state) | EIReturn (ret: val) (h : heap_state).
+
+Definition imp_event := io_event imp_ev.
 
 Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
   match op with
@@ -329,18 +330,18 @@ Inductive head_step : imp_state → option imp_event → (imp_state → Prop) �
    σ = Imp (subst_l fn.(fd_args) vs fn.(fd_body)) h fns)
 | CallExternalS f fns vs h:
   fns !! f = None →
-  head_step (Imp (Call f (Val <$> vs)) h fns) (Some (EICall f vs h)) (λ σ, σ = Imp (Waiting true) h fns)
+  head_step (Imp (Call f (Val <$> vs)) h fns) (Some (Outgoing, EICall f vs h)) (λ σ, σ = Imp (Waiting true) h fns)
 | ReturnS fns v b h:
-  head_step (Imp (ReturnExt b (Val v)) h fns) (Some (EIReturn v h)) (λ σ, σ = (Imp (Waiting b) h fns))
+  head_step (Imp (ReturnExt b (Val v)) h fns) (Some (Outgoing, EIReturn v h)) (λ σ, σ = (Imp (Waiting b) h fns))
 | RecvCallS fns f fn vs b h h':
   fns !! f = Some fn →
-  head_step (Imp (Waiting b) h fns) (Some (EIRecvCall f vs h')) (λ σ,
+  head_step (Imp (Waiting b) h fns) (Some (Incoming, EICall f vs h')) (λ σ,
     σ = (Imp (if bool_decide (length vs = length fn.(fd_args)) then
                 ReturnExt b (subst_l fn.(fd_args) vs fn.(fd_body))
               else
                 UbE) h' fns))
 | RecvReturnS fns v h h':
-  head_step (Imp (Waiting true) h fns) (Some (EIRecvReturn v h')) (λ σ, σ = (Imp (Val v) h' fns))
+  head_step (Imp (Waiting true) h fns) (Some (Incoming, EIReturn v h')) (λ σ, σ = (Imp (Val v) h' fns))
 .
 
 Definition sub_redexes_are_values (e : expr) :=
@@ -517,13 +518,13 @@ Global Hint Resolve imp_step_UbE_s : tstep.
 Lemma imp_step_Waiting_i fns h K e b `{!ImpExprFill e K (Waiting b)}:
   TStepI imp_module (Imp e h fns) (λ G,
     (∀ f fn vs h', fns !! f = Some fn →
-      G true (Some (EIRecvCall f vs h')) (λ G',  G'
+      G true (Some (Incoming, EICall f vs h')) (λ G',  G'
           (Imp (expr_fill K (
            if bool_decide (length vs = length (fd_args fn)) then
              ReturnExt b ((subst_l fn.(fd_args) vs fn.(fd_body)))
            else
              UbE)) h' fns))) ∧
-    ∀ v h', b → G true (Some (EIRecvReturn v h')) (λ G', G' (Imp (expr_fill K (Val v)) h' fns))
+    ∀ v h', b → G true (Some (Incoming, EIReturn v h')) (λ G', G' (Imp (expr_fill K (Val v)) h' fns))
    ).
 Proof.
   destruct ImpExprFill0; subst.
@@ -538,12 +539,12 @@ Global Hint Resolve imp_step_Waiting_i : tstep.
 Lemma imp_step_Waiting_s fns h e K b `{!ImpExprFill e K (Waiting b)}:
   TStepS imp_module (Imp e h fns) (λ G,
     (∃ f fn vs h', fns !! f = Some fn ∧
-      G (Some (EIRecvCall f vs h')) (λ G', G'
+      G (Some (Incoming, EICall f vs h')) (λ G', G'
           (Imp (expr_fill K (if bool_decide (length vs = length (fd_args fn)) then
                                ReturnExt b ((subst_l fn.(fd_args) vs fn.(fd_body)))
                              else
                                UbE)) h' fns))) ∨
-    ∃ v h', b ∧ G (Some (EIRecvReturn v h')) (λ G', G' (Imp (expr_fill K (Val v)) h' fns))
+    ∃ v h', b ∧ G (Some (Incoming, EIReturn v h')) (λ G', G' (Imp (expr_fill K (Val v)) h' fns))
    ).
 Proof.
   destruct ImpExprFill0; subst.
@@ -554,7 +555,7 @@ Global Hint Resolve imp_step_Waiting_s : tstep.
 
 Lemma imp_step_ReturnExt_i fns h e K b (v : val) `{!ImpExprFill e K (ReturnExt b (Val v))}:
   TStepI imp_module (Imp e h fns) (λ G,
-    (G true (Some (EIReturn v h)) (λ G', G' (Imp (expr_fill K (Waiting b)) h fns)))).
+    (G true (Some (Outgoing, EIReturn v h)) (λ G', G' (Imp (expr_fill K (Waiting b)) h fns)))).
 Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
@@ -566,7 +567,7 @@ Global Hint Resolve imp_step_ReturnExt_i : tstep.
 
 Lemma imp_step_ReturnExt_s fns h e K b (v : val) `{!ImpExprFill e K (ReturnExt b (Val v))}:
   TStepS imp_module (Imp e h fns) (λ G,
-    (G (Some (EIReturn v h)) (λ G', G' (Imp (expr_fill K (Waiting b)) h fns)))).
+    (G (Some (Outgoing, EIReturn v h)) (λ G', G' (Imp (expr_fill K (Waiting b)) h fns)))).
 Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
@@ -579,7 +580,7 @@ Lemma imp_step_Call_s fns h e K f vs `{!ImpExprFill e K (imp.Call f (Val <$> vs)
   TStepS imp_module (Imp e h fns) (λ G,
     (∃ fn, fns !! f = Some fn ∧ G None (λ G', length vs = length fn.(fd_args) → G'
              (Imp (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) h fns))) ∨
-    (fns !! f = None ∧ G (Some (EICall f vs h)) (λ G',
+    (fns !! f = None ∧ G (Some (Outgoing, EICall f vs h)) (λ G',
            G' (Imp (expr_fill K (Waiting true)) h fns)))).
 Proof.
   destruct ImpExprFill0; subst.
@@ -776,11 +777,9 @@ Definition imp_ctx_refines (fnsi fnss : gmap string fndef) :=
 (** * semantic linking *)
 Inductive imp_prod_filter_enum :=
 | IPFLeft | IPFRight | IPFNone
-| IPFLeftRecvCall (f : string) (vs : list val) (h : heap_state)
-| IPFRightRecvCall (f : string) (vs : list val) (h : heap_state)
-| IPFLeftRecvReturn (v : val) (h : heap_state)
-| IPFRightRecvReturn (v : val) (h : heap_state)
-.
+| IPFLeftRecv (e : imp_ev)
+| IPFRightRecv (e : imp_ev).
+
 Record imp_prod_filter_state := IPFState {
   ipf_cur : imp_prod_filter_enum;
   (* list of returns *)
@@ -794,73 +793,65 @@ Inductive imp_prod_filter (fns1 fns2 : gset string) :
 (* call l -> r *)
 | IPFCallLeftToRight f vs cs h:
   f ∉ fns1 → f ∈ fns2 →
-  imp_prod_filter fns1 fns2 (IPFState IPFLeft cs) (SPELeft (EICall f vs h) SPRight)
-                  None (IPFState (IPFRightRecvCall f vs h) (IPFLeft :: cs))
+  imp_prod_filter fns1 fns2 (IPFState IPFLeft cs) (SPELeft (Outgoing, EICall f vs h) SPRight)
+                  None (IPFState (IPFRightRecv (EICall f vs h)) (IPFLeft :: cs))
 (* call l -> r step 2 *)
-| IPFCallLeftToRight2 f vs cs h:
-  imp_prod_filter fns1 fns2 (IPFState (IPFRightRecvCall f vs h) cs) (SPERight (EIRecvCall f vs h) SPRight)
+| IPFCallLeftToRight2 cs e:
+  imp_prod_filter fns1 fns2 (IPFState (IPFRightRecv e) cs) (SPERight (Incoming, e) SPRight)
                   None (IPFState IPFRight cs)
 (* call r -> l *)
 | IPFCallRightToLeft f vs cs h:
   f ∈ fns1 → f ∉ fns2 →
-  imp_prod_filter fns1 fns2 (IPFState IPFRight cs) (SPERight (EICall f vs h) SPLeft)
-                  None (IPFState (IPFLeftRecvCall f vs h) (IPFRight :: cs))
+  imp_prod_filter fns1 fns2 (IPFState IPFRight cs) (SPERight (Outgoing, EICall f vs h) SPLeft)
+                  None (IPFState (IPFLeftRecv (EICall f vs h)) (IPFRight :: cs))
 (* call r -> l step 2*)
-| IPFCallRightToLeft2 f vs cs h:
-  imp_prod_filter fns1 fns2 (IPFState (IPFLeftRecvCall f vs h) cs) (SPELeft (EIRecvCall f vs h) SPLeft)
+| IPFCallRightToLeft2 e cs:
+  imp_prod_filter fns1 fns2 (IPFState (IPFLeftRecv e) cs) (SPELeft (Incoming, e) SPLeft)
                   None (IPFState IPFLeft cs)
 (* call l -> ext *)
 | IPFCallLeftToExt f vs cs h:
   f ∉ fns1 → f ∉ fns2 →
-  imp_prod_filter fns1 fns2 (IPFState IPFLeft cs) (SPELeft (EICall f vs h) SPNone)
-                  (Some (EICall f vs h)) (IPFState IPFNone (IPFLeft :: cs))
+  imp_prod_filter fns1 fns2 (IPFState IPFLeft cs) (SPELeft (Outgoing, EICall f vs h) SPNone)
+                  (Some (Outgoing, EICall f vs h)) (IPFState IPFNone (IPFLeft :: cs))
 (* call r -> ext *)
 | IPFCallRightToExt f vs cs h:
   f ∉ fns1 → f ∉ fns2 →
-  imp_prod_filter fns1 fns2 (IPFState IPFRight cs) (SPERight (EICall f vs h) SPNone)
-                  (Some (EICall f vs h)) (IPFState IPFNone (IPFRight :: cs))
+  imp_prod_filter fns1 fns2 (IPFState IPFRight cs) (SPERight (Outgoing, EICall f vs h) SPNone)
+                  (Some (Outgoing, EICall f vs h)) (IPFState IPFNone (IPFRight :: cs))
 (* call ext -> l *)
 | IPFCallExtToLeft f vs cs h:
   f ∈ fns1 → f ∉ fns2 →
   imp_prod_filter fns1 fns2 (IPFState IPFNone cs) (SPENone SPLeft)
-                  (Some (EIRecvCall f vs h)) (IPFState (IPFLeftRecvCall f vs h) (IPFNone :: cs))
+                  (Some (Incoming, EICall f vs h)) (IPFState (IPFLeftRecv (EICall f vs h)) (IPFNone :: cs))
 (* call ext -> r *)
 | IPFCallExtToRight f vs cs h:
   f ∉ fns1 → f ∈ fns2 →
   imp_prod_filter fns1 fns2 (IPFState IPFNone cs) (SPENone SPRight)
-                  (Some (EIRecvCall f vs h)) (IPFState (IPFRightRecvCall f vs h) (IPFNone :: cs))
+                  (Some (Incoming, EICall f vs h)) (IPFState (IPFRightRecv (EICall f vs h)) (IPFNone :: cs))
 (* ret l -> r *)
 | IPFReturnLeftToRight v cs h:
-  imp_prod_filter fns1 fns2 (IPFState IPFLeft (IPFRight :: cs)) (SPELeft (EIReturn v h) SPRight)
-                  None (IPFState (IPFRightRecvReturn v h) cs)
-(* ret l -> r step 2 *)
-| IPFReturnLeftToRight2 v cs h:
-  imp_prod_filter fns1 fns2 (IPFState (IPFRightRecvReturn v h) cs) (SPERight (EIRecvReturn v h) SPRight)
-                  None (IPFState IPFRight cs)
+  imp_prod_filter fns1 fns2 (IPFState IPFLeft (IPFRight :: cs)) (SPELeft (Outgoing, EIReturn v h) SPRight)
+                  None (IPFState (IPFRightRecv (EIReturn v h)) cs)
 (* ret r -> l *)
 | IPFReturnRightToLeft v cs h:
-  imp_prod_filter fns1 fns2 (IPFState IPFRight (IPFLeft :: cs)) (SPERight (EIReturn v h) SPLeft)
-                  None (IPFState (IPFLeftRecvReturn v h) cs)
-(* ret l -> r step 2 *)
-| IPFReturnRightToLeft2 v cs h:
-  imp_prod_filter fns1 fns2 (IPFState (IPFLeftRecvReturn v h) cs) (SPELeft (EIRecvReturn v h) SPLeft)
-                  None (IPFState IPFLeft cs)
+  imp_prod_filter fns1 fns2 (IPFState IPFRight (IPFLeft :: cs)) (SPERight (Outgoing, EIReturn v h) SPLeft)
+                  None (IPFState (IPFLeftRecv (EIReturn v h)) cs)
 (* ret l -> ext *)
 | IPFReturnLeftToExt v cs h:
-  imp_prod_filter fns1 fns2 (IPFState IPFLeft (IPFNone :: cs)) (SPELeft (EIReturn v h) SPNone)
-                  (Some (EIReturn v h)) (IPFState IPFNone cs)
+  imp_prod_filter fns1 fns2 (IPFState IPFLeft (IPFNone :: cs)) (SPELeft (Outgoing, EIReturn v h) SPNone)
+                  (Some (Outgoing, EIReturn v h)) (IPFState IPFNone cs)
 (* ret r -> ext *)
 | IPFReturnRightToExt v cs h:
-  imp_prod_filter fns1 fns2 (IPFState IPFRight (IPFNone :: cs)) (SPERight (EIReturn v h) SPNone)
-                  (Some (EIReturn v h)) (IPFState IPFNone cs)
+  imp_prod_filter fns1 fns2 (IPFState IPFRight (IPFNone :: cs)) (SPERight (Outgoing, EIReturn v h) SPNone)
+                  (Some (Outgoing, EIReturn v h)) (IPFState IPFNone cs)
 (* ret ext -> l *)
 | IPFReturnExtToLeft v cs h:
   imp_prod_filter fns1 fns2 (IPFState IPFNone (IPFLeft :: cs)) (SPENone SPLeft)
-                  (Some (EIRecvReturn v h)) (IPFState (IPFLeftRecvReturn v h) cs)
+                  (Some (Incoming, EIReturn v h)) (IPFState (IPFLeftRecv (EIReturn v h)) cs)
 (* ret ext -> r *)
 | IPFReturnExtToRight v cs h:
   imp_prod_filter fns1 fns2 (IPFState IPFNone (IPFRight :: cs)) (SPENone SPRight)
-                  (Some (EIRecvReturn v h)) (IPFState (IPFRightRecvReturn v h) cs)
+                  (Some (Incoming, EIReturn v h)) (IPFState (IPFRightRecv (EIReturn v h)) cs)
 .
 
 Definition imp_prod (fns1 fns2 : gset string) (m1 m2 : module imp_event) : module imp_event :=

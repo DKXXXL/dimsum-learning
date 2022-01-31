@@ -72,7 +72,7 @@ Definition imp_to_asm_itree_from_env (ins : gset Z) (fns : gset string) (f2i : g
   rs ← TExist _;;;
   mem ← TExist _;;;
   s ← TGet;;;
-  TVis (inr (EARecvJump pc rs mem));;;;
+  TVis (inr (Incoming, EAJump pc rs mem));;;;
   (* env chooses if this is a function call or return *)
   b ← TAll bool;;;
   if b then
@@ -98,7 +98,7 @@ Definition imp_to_asm_itree_from_env (ins : gset Z) (fns : gset string) (f2i : g
     TAssume (imp_to_asm_args pb ret rs vs);;;;
     (* track the registers and return address (false means ret belongs to env) *)
     TPut (I2A ((I2AI false ret rs mem h)::s.(i2a_calls)) pb rs);;;;
-    TVis (inl (EIRecvCall f vs h))
+    TVis (inl (Incoming, EICall f vs h))
   else
     (* env chooses return value *)
     v ← TAll _;;;
@@ -123,7 +123,7 @@ Definition imp_to_asm_itree_from_env (ins : gset Z) (fns : gset string) (f2i : g
     (* env proves memory is updated correctly *)
     TAssume (imp_to_asm_mem_rel (rs !!! "SP") mem memold);;;;
     TPut (I2A cs' pb rs);;;;
-    TVis (inl (EIRecvReturn v h))
+    TVis (inl (Incoming, EIReturn v h))
 .
 
 Definition imp_to_asm_itree_to_env (ins : gset Z) (fns : gset string) (f2i : gmap string Z) : itree (moduleE (imp_event + asm_event) imp_to_asm_state) () :=
@@ -158,8 +158,8 @@ Definition imp_to_asm_itree_to_env (ins : gset Z) (fns : gset string) (f2i : gma
     TAssert (map_scramble touched_registers s.(i2a_last_regs) rs);;;;
     (* track the registers and return address (true means ret belongs to program) *)
     TPut (I2A ((I2AI true ret rs mem h)::s.(i2a_calls)) pb s.(i2a_last_regs));;;;
-    TVis (inl (EICall f vs h));;;;
-    TVis (inr (EAJump pc rs mem))
+    TVis (inl (Outgoing, EICall f vs h));;;;
+    TVis (inr (Outgoing, EAJump pc rs mem))
   else
     (* program chooses return value *)
     v ← TExist _;;;
@@ -186,8 +186,8 @@ Definition imp_to_asm_itree_to_env (ins : gset Z) (fns : gset string) (f2i : gma
     (* program proves it only touched a specific set of registers *)
     TAssert (map_scramble touched_registers s.(i2a_last_regs) rs);;;;
     TPut (I2A cs' pb s.(i2a_last_regs));;;;
-    TVis (inl (EIReturn v h));;;;
-    TVis (inr (EAJump pc rs mem)).
+    TVis (inl (Outgoing, EIReturn v h));;;;
+    TVis (inr (Outgoing, EAJump pc rs mem)).
 
 Definition imp_to_asm_itree' (ins : gset Z) (fns : gset string) (f2i : gmap string Z) : itree (moduleE (imp_event + asm_event) imp_to_asm_state) () :=
   (ITree.forever (imp_to_asm_itree_from_env ins fns f2i;;;; imp_to_asm_itree_to_env ins fns f2i)).
@@ -264,8 +264,7 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
       ∧ imp_to_asm_phys_blocks_extend pb1 pb
       ∧ imp_to_asm_phys_blocks_extend pb2 pb
     ) ∨
-  (( (∃ f vs h, σf = IPFState (IPFLeftRecvCall f vs h) ics ∧ σf1 = SMProgRecv (EIRecvCall f vs h))
-      ∨ (∃ v h, σf = IPFState (IPFLeftRecvReturn v h) ics ∧ σf1 = SMProgRecv (EIRecvReturn v h))
+  (( (∃ e, σf = IPFState (IPFLeftRecv e) ics ∧ σf1 = SMProgRecv (Incoming, e))
       ∨ σf = IPFState IPFLeft ics ∧ σf1 = SMProg)
       ∧ σfa = APFLeft ∧ σpa = SPLeft ∧ σfs = SMProg
       ∧ t ≈ (imp_to_asm_itree_to_env ins fns f2i;;;; (imp_to_asm_itree ins fns f2i))
@@ -277,8 +276,7 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
       ∧ map_scramble touched_registers lr lr1
       ∧ imp_to_asm_phys_blocks_extend pb pb1
       ∧ imp_to_asm_phys_blocks_extend pb2 pb1) ∨
-  (((∃ f vs h, σf = IPFState (IPFRightRecvCall f vs h) ics ∧ σf2 = SMProgRecv (EIRecvCall f vs h))
-      ∨ (∃ v h, σf = IPFState (IPFRightRecvReturn v h) ics ∧ σf2 = SMProgRecv (EIRecvReturn v h))
+  (((∃ e, σf = IPFState (IPFRightRecv e) ics ∧ σf2 = SMProgRecv (Incoming, e))
       ∨ σf = IPFState IPFRight ics ∧ σf2 = SMProg)
       ∧ σfa = APFRight ∧ σpa = SPRight ∧ σfs = SMProg
       ∧ t ≈ (imp_to_asm_itree_to_env ins fns f2i;;;; (imp_to_asm_itree ins fns f2i))
@@ -458,15 +456,7 @@ Proof.
         apply Hloop. split!; [done..|]. by etrans.
   - tstep_both.
     apply steps_impl_step_end => κ Pσ2 ?. case_match; intros; go.
-    + tstep_s. eexists (Some (EIRecvCall f vs h)), _. split!; [econs|].
-      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-      apply: Hloop. by split!.
-    + tstep_s. eexists None, _. split!.
-      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-      apply: Hloop. by split!.
-  - tstep_both.
-    apply steps_impl_step_end => κ Pσ2 ?. case_match; intros; go.
-    + tstep_s. eexists (Some (EIRecvReturn v h)), _. split!; [econs|].
+    + tstep_s. eexists (Some _), _. split!; [econs|].
       apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
       apply: Hloop. by split!.
     + tstep_s. eexists None, _. split!.
@@ -544,15 +534,7 @@ Proof.
       apply: Hloop. by split!.
   - tstep_both.
     apply steps_impl_step_end => κ Pσ2 ?. case_match; intros; go.
-    + tstep_s. eexists (Some (EIRecvCall f vs h)), _. split!; [econs|].
-      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-      apply: Hloop. by split!.
-    + tstep_s. eexists None, _. split!.
-      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-      apply: Hloop. by split!.
-  - tstep_both.
-    apply steps_impl_step_end => κ Pσ2 ?. case_match; intros; go.
-    + tstep_s. eexists (Some (EIRecvReturn v h)), _. split!; [econs|].
+    + tstep_s. eexists (Some _), _. split!; [econs|].
       apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
       apply: Hloop. by split!.
     + tstep_s. eexists None, _. split!.
