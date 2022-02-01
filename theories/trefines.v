@@ -728,6 +728,20 @@ Proof.
   split; [apply steps_spec_has_trace_1 | apply steps_spec_has_trace_2].
 Qed.
 
+Lemma steps_spec_step_trans' {EV} (m : module EV) σ κ (Pσ Pσ' : _ → Prop):
+  σ -{ m, None }->ₛ Pσ' →
+  (∀ σ', Pσ' σ' → σ' -{ m, κ }->ₛ Pσ) →
+  σ -{ m, κ }->ₛ Pσ.
+Proof.
+  move => HNone ?.
+  apply steps_spec_has_trace. apply: (thas_trace_trans tnil); [ by apply steps_spec_has_trace|].
+  move => /= ??. apply steps_spec_has_trace. naive_solver.
+Qed.
+
+Lemma steps_spec_step_trans {EV} (m : module EV) σ κ (Pσ : _ → Prop):
+  σ -{ m, None }->ₛ (λ σ', σ' -{ m, κ }->ₛ Pσ) →
+  σ -{ m, κ }->ₛ Pσ.
+Proof. move => ?. by apply: steps_spec_step_trans'. Qed.
 (** ** steps_impl *)
 (* We need to define steps_spec like this to get a strong induction
 principle for free (which is necessary to prove rewriting with
@@ -766,6 +780,23 @@ Lemma steps_impl_step_next {EV} (m : module EV) σ (Pσ : _ → _ → _ → Prop
   (∀ κ Pσ2, m.(m_step) σ κ Pσ2 → ∃ σ2, Pσ2 σ2 ∧ κ = None ∧ σ2 -{ m }-> (λ _, Pσ true)) →
   σ -{ m }-> Pσ.
 Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. right => ???. naive_solver. Qed.
+
+Lemma steps_impl_step_trans' {EV} (m : module EV) σ (Pσ Pσ' : _ → _ → _ → Prop):
+  σ -{ m }-> Pσ' →
+  (∀ b e P, Pσ' b e P → ∃ σ', e = None ∧ P σ' ∧ σ' -{ m }-> (λ b', Pσ (b || b'))) →
+  σ -{ m }-> Pσ.
+Proof.
+  move => Ht. elim/@prop_least_fixpoint_pair_ind: Ht Pσ => {}σ {}Pσ' [?|IH] Pσ HP.
+  { naive_solver. }
+  apply steps_impl_step_next => ???.
+  have [?|[?[?[? {}IH]]]]:= IH _ _ ltac:(done); simplify_eq/=. { naive_solver. }
+  split!; [done|]. apply IH. naive_solver.
+Qed.
+
+Lemma steps_impl_step_trans {EV} (m : module EV) σ (Pσ : _ → _ → _ → Prop):
+  σ -{ m }-> (λ b e P, ∃ σ', e = None ∧ P σ' ∧ σ' -{ m }-> (λ b', Pσ (b || b'))) →
+  σ -{ m }-> Pσ.
+Proof. move => ?. by apply: steps_impl_step_trans'. Qed.
 
 Lemma steps_impl_mono {EV} (m : module EV) σ (Pσ Pσ' : _ → _ → _ → Prop):
   σ -{ m }-> Pσ' →

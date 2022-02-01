@@ -453,7 +453,7 @@ Proof.
     + case_match; simplify_eq. naive_solver.
     + case_match; simplify_eq. invert_all @mod_seq_map_filter; naive_solver.
 Qed.
-Global Hint Resolve mod_seq_map_step_filter_i | 1 : tstep.
+Global Hint Resolve mod_seq_map_step_filter_i | 4 : tstep.
 
 Lemma mod_seq_map_step_filter_recv_i {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{!TStepI f σf P} e :
   TStepI (mod_seq_map m f) (SMFilterRecv e, σ, σf) (λ G, P (λ b κ P',
@@ -471,7 +471,7 @@ Proof.
       invert_all @mod_seq_map_filter. destruct_all?. eexists _, _. split_and!;[naive_solver..|].
       move => ? /H2[?[??]]. eexists (_, _, _). split!; [|done] => /=. done.
 Qed.
-Global Hint Resolve mod_seq_map_step_filter_recv_i | 1 : tstep.
+Global Hint Resolve mod_seq_map_step_filter_recv_i | 4 : tstep.
 
 Lemma mod_seq_map_step_prog_i {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{!TStepI m σ P}:
   TStepI (mod_seq_map m f) (SMProg, σ, σf) (λ G, P (λ b κ P',
@@ -489,7 +489,7 @@ Proof.
       invert_all @mod_seq_map_filter. destruct_all?. eexists _, _. split_and!;[naive_solver..|].
       move => ? /H2[?[??]]. eexists (_, _, _). split!; [|done] => /=. done.
 Qed.
-Global Hint Resolve mod_seq_map_step_prog_i | 1 : tstep.
+Global Hint Resolve mod_seq_map_step_prog_i | 4 : tstep.
 
 Lemma mod_seq_map_step_prog_recv_i {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{!TStepI m σ P} e:
   TStepI (mod_seq_map m f) (SMProgRecv e, σ, σf) (λ G, P (λ b κ P',
@@ -507,7 +507,7 @@ Proof.
       invert_all @mod_seq_map_filter. destruct_all?. eexists _, _. split_and!;[naive_solver..|].
       move => ? /H2[?[??]]. eexists (_, _, _). split!; [|done] => /=. done.
 Qed.
-Global Hint Resolve mod_seq_map_step_prog_recv_i | 1 : tstep.
+Global Hint Resolve mod_seq_map_step_prog_recv_i | 4 : tstep.
 
 Lemma mod_seq_map_step_filter_s {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{!TStepS f σf P} :
   TStepS (mod_seq_map m f) (SMFilter, σ, σf) (λ G, P (λ κ P',
@@ -526,7 +526,7 @@ Proof.
   - eexists None, _. split; [done|]. eexists _, _ => /=. split_and!; [done..|].
     apply: steps_spec_mono; [done|] => /= ? ? [[[|||]]]/=; naive_solver.
 Qed.
-Global Hint Resolve mod_seq_map_step_filter_s | 1 : tstep.
+Global Hint Resolve mod_seq_map_step_filter_s | 4 : tstep.
 
 Lemma mod_seq_map_step_filter_recv_s {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{!TStepS f σf P} e:
   TStepS (mod_seq_map m f) (SMFilterRecv e, σ, σf) (λ G, P (λ κ P',
@@ -541,7 +541,7 @@ Proof.
   - split_and!; [done..|].
     apply: steps_spec_mono; [naive_solver|] => /= ? ? [[[|||]]]/=; naive_solver.
 Qed.
-Global Hint Resolve mod_seq_map_step_filter_recv_s | 1 : tstep.
+Global Hint Resolve mod_seq_map_step_filter_recv_s | 4 : tstep.
 
 Lemma mod_seq_map_step_prog_s {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{!TStepS m σ P}:
   TStepS (mod_seq_map m f) (SMProg, σ, σf) (λ G, P (λ κ P',
@@ -556,7 +556,7 @@ Proof.
   - split_and!; [done..|].
     apply: steps_spec_mono; [naive_solver|] => /= ? ? [[[|||]]]/=; naive_solver.
 Qed.
-Global Hint Resolve mod_seq_map_step_prog_s | 1 : tstep.
+Global Hint Resolve mod_seq_map_step_prog_s | 4 : tstep.
 
 Lemma mod_seq_map_step_prog_recv_s {EV1 EV2} m (f : module (EV1 + EV2)) σ σf P `{!TStepS m σ P} e:
   TStepS (mod_seq_map m f) (SMProgRecv e, σ, σf) (λ G, P (λ κ P',
@@ -571,4 +571,4 @@ Proof.
   - split_and!; [done..|].
     apply: steps_spec_mono; [naive_solver|] => /= ? ? [[[|||]]]/=; naive_solver.
 Qed.
-Global Hint Resolve mod_seq_map_step_prog_recv_s | 1 : tstep.
+Global Hint Resolve mod_seq_map_step_prog_recv_s | 4 : tstep.

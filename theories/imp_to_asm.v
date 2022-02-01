@@ -4,6 +4,7 @@ Require Import refframe.filter.
 Require Import refframe.product.
 Require Import refframe.seq_product.
 Require Import refframe.link.
+Require Import refframe.prepost.
 Require Import refframe.proof_techniques.
 Require Import refframe.imp.
 Require Import refframe.asm.
@@ -67,6 +68,71 @@ Record imp_to_asm_state := I2A {
   i2a_last_regs : gmap string Z;
 }.
 Add Printing Constructor imp_to_asm_state.
+
+Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string Z) (e : asm_event) (s : imp_to_asm_state) : prepost (imp_event * imp_to_asm_state) :=
+  match e with
+  | (i, EAJump pc rs mem) =>
+      pp_quant (λ b,
+        pp_prop (i = Incoming) $
+        if b then
+          pp_quant $ λ ret,
+          pp_quant $ λ f,
+          pp_quant $ λ vs,
+          pp_quant $ λ h,
+          pp_quant $ λ pb,
+          pp_prop  (f ∈ fns) $
+          pp_prop (f2i !! f = Some pc) $
+          pp_prop (ret ∉ ins) $
+          pp_prop (imp_to_asm_phys_blocks_extend s.(i2a_phys_blocks) pb) $
+          pp_prop (imp_to_asm_args pb ret rs vs) $
+          pp_end ((i, EICall f vs h), I2A ((I2AI false ret rs mem h)::s.(i2a_calls)) pb rs)
+        else
+          pp_quant $ λ v,
+          pp_quant $ λ h,
+          pp_quant $ λ pb,
+          pp_quant $ λ rsold,
+          pp_quant $ λ memold,
+          pp_quant $ λ hold,
+          pp_quant $ λ cs',
+          pp_prop (s.(i2a_calls) = (I2AI true pc rsold memold hold)::cs') $
+          pp_prop (imp_to_asm_phys_blocks_extend s.(i2a_phys_blocks) pb) $
+          pp_prop (imp_to_asm_ret pb rs rsold v) $
+          pp_prop (imp_to_asm_mem_rel (rs !!! "SP") mem memold) $
+          pp_end ((i, EIReturn v h), I2A cs' pb rs))
+  end.
+
+Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string Z) (e : imp_event) (s : imp_to_asm_state) : prepost (asm_event * imp_to_asm_state) :=
+  pp_prop (e.1 = Outgoing) $
+  match e with
+  | (i, EICall f vs h) =>
+      pp_quant $ λ pc,
+      pp_quant $ λ rs,
+      pp_quant $ λ mem,
+      pp_quant $ λ ret,
+      pp_quant $ λ pb,
+      pp_prop (f ∉ fns) $
+      pp_prop (f2i !! f = Some pc) $
+      pp_prop (ret ∈ ins) $
+      pp_prop (imp_to_asm_phys_blocks_extend s.(i2a_phys_blocks) pb) $
+      pp_prop (imp_to_asm_args pb ret rs vs) $
+      pp_prop (map_scramble touched_registers s.(i2a_last_regs) rs) $
+      pp_end ((Outgoing, EAJump pc rs mem), (I2A ((I2AI true ret rs mem h)::s.(i2a_calls)) pb s.(i2a_last_regs)))
+  | (i, EIReturn v h) =>
+      pp_quant $ λ pc,
+      pp_quant $ λ rs,
+      pp_quant $ λ mem,
+      pp_quant $ λ pb,
+      pp_quant $ λ rsold,
+      pp_quant $ λ memold,
+      pp_quant $ λ hold,
+      pp_quant $ λ cs',
+      pp_prop (s.(i2a_calls) = (I2AI false pc rsold memold hold)::cs') $
+      pp_prop (imp_to_asm_phys_blocks_extend s.(i2a_phys_blocks) pb) $
+      pp_prop (imp_to_asm_ret pb rs rsold v) $
+      pp_prop (imp_to_asm_mem_rel (rs !!! "SP") mem memold) $
+      pp_prop (map_scramble touched_registers s.(i2a_last_regs) rs) $
+      pp_end ((Outgoing, EAJump pc rs mem), (I2A cs' pb s.(i2a_last_regs)))
+  end.
 
 Definition imp_to_asm_itree_from_env (ins : gset Z) (fns : gset string) (f2i : gmap string Z) : itree (moduleE (imp_event + asm_event) imp_to_asm_state) () :=
   pc ← TExist Z;;;
@@ -196,17 +262,20 @@ Definition imp_to_asm_itree :=
 (* This is sadly necessary as assumption goes crazy in some cases without it. *)
   locked imp_to_asm_itree'.
 
-Definition imp_to_asm (m : module imp_event) : module asm_event :=
-  mod_seq_map m (mod_itree (imp_event + asm_event) imp_to_asm_state).
+(* Definition imp_to_asm (m : module imp_event) : module asm_event := *)
+  (* mod_seq_map m (mod_itree (imp_event + asm_event) imp_to_asm_state). *)
+Definition imp_to_asm (ins : gset Z) (fns : gset string) (f2i : gmap string Z)
+           (m : module imp_event) : module asm_event :=
+  mod_prepost (imp_to_asm_pre ins fns f2i) (imp_to_asm_post ins fns f2i) m.
 
-Definition initial_imp_to_asm_state (m : module imp_event) (σ : m.(m_state)) (ins : gset Z) (fns : gset string) (f2i : gmap string Z) : (imp_to_asm m).(m_state) :=
-  (SMFilter, σ, (imp_to_asm_itree ins fns f2i, I2A [] ∅ ∅)).
+Definition initial_imp_to_asm_state (m : module imp_event) (σ : m.(m_state)) :=
+  (@SMFilter imp_event, σ, (@PPOutside imp_event asm_event, I2A [] ∅ ∅)).
 
 Lemma imp_to_asm_trefines m m' σ σ' ins fns f2i `{!VisNoAll m}:
   trefines (MS m σ) (MS m' σ') →
-  trefines (MS (imp_to_asm m) (initial_imp_to_asm_state m σ ins fns f2i))
-           (MS (imp_to_asm m') (initial_imp_to_asm_state m' σ' ins fns f2i)).
-Proof. move => ?. by apply: mod_seq_map_trefines. Qed.
+  trefines (MS (imp_to_asm ins fns f2i m) (initial_imp_to_asm_state m σ))
+           (MS (imp_to_asm ins fns f2i m') (initial_imp_to_asm_state m' σ')).
+Proof. move => ?. by apply: mod_prepost_trefines. Qed.
 
 Inductive imp_to_asm_combine_stacks (ins1 ins2 : gset Z) :
   mod_link_state imp_ev → list seq_product_state →
@@ -244,8 +313,8 @@ Inductive imp_to_asm_combine_stacks (ins1 ins2 : gset Z) :
 
 Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
            (ins1 ins2 : gset Z) (fns1 fns2 : gset string) (f2i1 f2i2 : gmap string Z)
-  (σ1 : (asm_prod ins1 ins2 (imp_to_asm m1) (imp_to_asm m2)).(m_state))
-  (σ2 : (imp_to_asm (imp_prod fns1 fns2 m1 m2)).(m_state)) : Prop :=
+  (σ1 : (asm_prod ins1 ins2 (imp_to_asm ins1 fns1 f2i1 m1) (imp_to_asm ins2 fns2 f2i2 m2)).(m_state))
+  (σ2 : (imp_to_asm (ins1 ∪ ins2) (fns1 ∪ fns2) (f2i1 ∪ f2i2) (imp_prod fns1 fns2 m1 m2)).(m_state)) : Prop :=
   let '(σfa, _, (σf1, σi1, (t1, I2A cs1 pb1 lr1)), (σf2, σi2, (t2, I2A cs2 pb2 lr2))) := σ1 in
   let '(σfs, (σpi, ics, σs1, σs2), (t, I2A cs pb lr)) := σ2 in
   let ins := (ins1 ∪ ins2) in
@@ -256,9 +325,9 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
   σi2 = σs2 ∧
   imp_to_asm_combine_stacks ins1 ins2 ips ics cs cs1 cs2 ∧
   (( σfa = MLFNone ∧ σfs = SMFilter
-     ∧ t ≈ (imp_to_asm_itree ins fns f2i)
-      ∧ t1 ≳ (imp_to_asm_itree ins1 fns1 f2i1)
-      ∧ t2 ≳ imp_to_asm_itree ins2 fns2 f2i2
+     ∧ t = PPOutside
+      ∧ t1 = PPOutside
+      ∧ t2 = PPOutside
       ∧ σf1 = SMFilter ∧ σf2 = SMFilter
       ∧ σpi = MLFNone
       ∧ ips = MLFNone
@@ -268,9 +337,9 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
   (( (∃ e, σpi = MLFRecvL e ∧ σf1 = SMProgRecv (Incoming, e))
       ∨ σpi = MLFLeft ∧ σf1 = SMProg)
       ∧ σfa = MLFLeft ∧ σfs = SMProg
-      ∧ t ≈ (imp_to_asm_itree_to_env ins fns f2i;;;; (imp_to_asm_itree ins fns f2i))
-      ∧ t1 ≳ (imp_to_asm_itree_to_env ins1 fns1 f2i1;;;; (imp_to_asm_itree ins1 fns1 f2i1))
-      ∧ t2 ≳ imp_to_asm_itree ins2 fns2 f2i2
+      ∧ t = PPInside
+      ∧ t1 = PPInside
+      ∧ t2 = PPOutside
       ∧ σf2 = SMFilter
       ∧ ips = MLFLeft
       ∧ map_scramble touched_registers lr lr1
@@ -279,9 +348,9 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
   (((∃ e, σpi = MLFRecvR e ∧ σf2 = SMProgRecv (Incoming, e))
       ∨ σpi = MLFRight ∧ σf2 = SMProg)
       ∧ σfa = MLFRight ∧ σfs = SMProg
-      ∧ t ≈ (imp_to_asm_itree_to_env ins fns f2i;;;; (imp_to_asm_itree ins fns f2i))
-      ∧ t1 ≳ (imp_to_asm_itree ins1 fns1 f2i1)
-      ∧ t2 ≳ (imp_to_asm_itree_to_env ins2 fns2 f2i2;;;; (imp_to_asm_itree ins2 fns2 f2i2))
+      ∧ t = PPInside
+      ∧ t1 = PPOutside
+      ∧ t2 = PPInside
       ∧ σf1 = SMFilter
       ∧ ips = MLFRight
       ∧ map_scramble touched_registers lr lr2
@@ -306,12 +375,12 @@ Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 m1 m2 σ1 σ2 `{!VisNoAll
   (∀ f i1 i2, f2i1 !! f = Some i1 → f2i2 !! f = Some i2 → i1 = i2) →
   (∀ f i, f2i1 !! f = Some i → i ∈ ins2 → f ∈ fns2) →
   (∀ f i, f2i2 !! f = Some i → i ∈ ins1 → f ∈ fns1) →
-  trefines (MS (asm_prod ins1 ins2 (imp_to_asm m1) (imp_to_asm m2))
-               (MLFNone, tt, initial_imp_to_asm_state m1 σ1 ins1 fns1 f2i1,
-                 initial_imp_to_asm_state m2 σ2 ins2 fns2 f2i2))
-           (MS (imp_to_asm (imp_prod fns1 fns2 m1 m2))
+  trefines (MS (asm_prod ins1 ins2 (imp_to_asm ins1 fns1 f2i1 m1) (imp_to_asm ins2 fns2 f2i2 m2))
+               (MLFNone, tt, initial_imp_to_asm_state m1 σ1,
+                 initial_imp_to_asm_state m2 σ2))
+           (MS (imp_to_asm (ins1 ∪ ins2) (fns1 ∪ fns2) (f2i1 ∪ f2i2) (imp_prod fns1 fns2 m1 m2))
                (initial_imp_to_asm_state (imp_prod _ _ _ _)
-                  (MLFNone, [], σ1, σ2) (ins1 ∪ ins2) (fns1 ∪ fns2) (f2i1 ∪ f2i2))
+                  (MLFNone, [], σ1, σ2) )
 ).
 Proof.
   move => Hdisji Hdisjf Hin1 Hin2 Hagree Ho1 Ho2.
@@ -321,22 +390,11 @@ Proof.
   move => /= {σ1 σ2} {}n _ Hloop [[[σfa []] [[σf1 σi1] [t1 [cs1 pb1 lr1]]] [[σf2 σi2] [t2 [cs2 pb2 lr2]]]]].
   move => [[σfs [[[σpi ics] σs1] σs2]] [t [cs pb lr]]] /= ?.
   destruct_all?; simplify_eq.
-  - go_s. go_i.
-    go_s. eexists _; go. go_s. eexists _; go. go_s. eexists _; go.
-    go_s. go_s. split; [done|]; go.
-    go_s => b; go.
-    destruct b.
-    + go_s => ?; go.
-      go_s => f; go.
-      go_s => ?; go.
-      go_s => ?; go.
-      go_s => ?; go.
-      go_s => Hin; go.
-      go_s => Hf2i; go.
-      go_s => /not_elem_of_union[??]; go.
-      go_s => ?; go.
-      go_s => ?; go.
-      go_s. go_s. go_s.
+  - go_i.
+    go_s. split!.
+    go_s => -[] ? /=.
+    + move => pc f vs h pb' Hin Hf2i /not_elem_of_union[??] ??.
+      go_s.
       eexists (EICall _ _ _). split!; [..|done|]. { repeat case_bool_decide => //; set_solver. }
       have [[?[??]]|[?[??]]]: (pc0 ∈ ins1 ∧ f ∈ fns1 ∧ f2i1 !! f = Some pc0 ∨
                          pc0 ∈ ins2 ∧ f ∈ fns2 ∧ f2i2 !! f = Some pc0). {
@@ -345,76 +403,24 @@ Proof.
         all: move: Hf2i => /lookup_union_Some_raw[?|[??]]; simplify_eq => //; naive_solver.
       }
       all: simpl_map_decide.
-      * go_i. go_i.
-        go_i. go_i.
-        go_i. go_i.
-        go_i. eexists true; go.
-        go_i. eexists _; go.
-        go_i. eexists _; go.
-        go_i. eexists _; go.
-        go_i. eexists _; go.
-        go_i. eexists _; go.
-        go_i. split; [done|]; go.
-        go_i. split; [done|]; go.
-        go_i. split; [done|]; go.
-        go_i. split; [by etrans|]; go.
-        go_i. split; [done|]; go.
-        go_i. go_i.
+      * go_i. go_i. eexists true => /=.
+        split!; [done..|by etrans|done|].
         apply Hloop. split!; [by econs|done|done|by etrans].
-      * go_i. go_i.
-        go_i. go_i.
-        go_i. go_i.
-        go_i. eexists true; go.
-        go_i. eexists _; go.
-        go_i. eexists _; go.
-        go_i. eexists _; go.
-        go_i. eexists _; go.
-        go_i. eexists _; go.
-        go_i. split; [done|]; go.
-        go_i. split; [done|]; go.
-        go_i. split; [done|]; go.
-        go_i. split; [by etrans|]; go.
-        go_i. split; [done|]; go.
-        go_i. go_i.
+      * go_i. go_i. eexists true => /=.
+        split!; [done..|by etrans|done|].
         apply Hloop. split!; [by econs|done|done|by etrans].
-    + go_s => ?; go.
-      go_s => ?; go.
-      go_s => ?; go.
-      go_s => ?; go.
-      go_s => ?; go.
-      go_s => ?; go.
-      go_s => ?; go.
-      go_s => ?; go.
-      go_s => ?; go.
-      go_s => ?; go.
-      go_s => ?; go.
-      go_s.
-      go_s.
+    + move => v h pb' rsold memold hold cs' ????; go.
       go_s.
       revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
       inversion Hstack; simplify_eq/= => //.
       * eexists (EIReturn _ _). split!; [done..|]. simpl_map_decide.
-        go_i. go_i. go_i. go_i. go_i. go_i.
-        go_i. eexists false; go. go_i. eexists _; go.
-        go_i. eexists _; go. go_i. eexists _; go.
-        go_i. eexists _; go. go_i. eexists _; go.
-        go_i. eexists _; go. go_i. eexists _; go.
-        go_i. split; [done|]. go.
-        go_i. split; [by etrans|]. go.
-        go_i. split; [done|]. go.
-        go_i. split; [done|]. go.
-        go_i. go_i. apply Hloop. split!; [done..|]. by etrans.
+        go_i. go_i. eexists false => /=.
+        split!; [done|by etrans|done..|].
+        apply Hloop. split!; [done..|]. by etrans.
       * eexists (EIReturn _ _). split!; [done..|]. simpl_map_decide.
-        go_i. go_i. go_i. go_i. go_i. go_i.
-        go_i. eexists false; go. go_i. eexists _; go.
-        go_i. eexists _; go. go_i. eexists _; go.
-        go_i. eexists _; go. go_i. eexists _; go.
-        go_i. eexists _; go. go_i. eexists _; go.
-        go_i. split; [done|]. go.
-        go_i. split; [by etrans|]. go.
-        go_i. split; [done|]. go.
-        go_i. split; [done|]. go.
-        go_i. go_i. apply Hloop. split!; [done..|]. by etrans.
+        go_i. go_i. eexists false => /=.
+        split!; [done|by etrans|done..|].
+        apply Hloop. split!; [done..|]. by etrans.
   - tstep_both.
     apply steps_impl_step_end => κ Pσ2 ?. case_match; intros; go.
     + tstep_s. eexists (Some (Incoming, _)). split!.
@@ -426,55 +432,28 @@ Proof.
   - tstep_both.
     apply steps_impl_step_end => κ Pσ2 ? *. go. destruct κ as [e|]; go.
     + tend. have [σ' Hσ'] := vis_no_all _ _ _ ltac:(done). eexists σ'. split; [naive_solver|].
-      go_i. go_i. go_i. go_i. go_i. destruct x2.
-      * go_i. go_i. go_i. go_i. go_i. go_i.
-        go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i.
+      go_i. destruct e as [? []]; go.
+      * move => pc rs mem ret pb' ?????? *; go.
         repeat case_bool_decide => //.
-        -- go_i. go_i. go_i. go_i. go_i. go_i.
-           go_i. eexists true; go. go_i. eexists _; go.
-           go_i. eexists _; go. go_i. eexists _; go.
-           go_i. eexists _; go. go_i. eexists _; go.
-           go_i. split; [naive_solver|]. go.
-           go_i. split; [naive_solver|]. go.
-           go_i. split; [by apply: Hdisji|]. go.
-           go_i. split; [by etrans|]. go.
-           go_i. split; [done|]. go.
-           go_i. go_i.
-           go_s. eexists (Some (Outgoing, (EICall x3 _ _))), SPRight.
+        -- go_i. go_i. eexists true => /=.
+           split!. { naive_solver. } { naive_solver. } { by apply: Hdisji. } { by etrans. } { done. }
+           go_s. eexists (Some (Outgoing, (EICall fn _ _))), SPRight.
            split!. { repeat case_bool_decide => //; naive_solver. }
            apply: steps_spec_step_end; [done|] => ??.
            apply: Hloop. split!; [ naive_solver| by econs| done| done|by etrans|by etrans].
-        -- have ?: x3 ∉ fns2. { revert select (_ ∉ ins2) => Hin. contradict Hin. naive_solver. }
-           go_s. eexists (Some (Outgoing, (EICall x3 _ _))), SPNone. split!; simpl_map_decide => //.
+        -- have ?: fn ∉ fns2. { revert select (_ ∉ ins2) => Hin. contradict Hin. naive_solver. }
+           go_s. eexists (Some (Outgoing, (EICall fn _ _))), SPNone. split!; simpl_map_decide => //.
            apply: steps_spec_step_end; [done|] => ??.
-           go_s. eexists _; go. go_s. eexists _; go. go_s. eexists _; go.
-           go_s. go_s. eexists true; go. go_s. eexists _; go.
-           go_s. eexists _; go. go_s. eexists _; go.
-           go_s. eexists _; go. go_s. eexists _; go.
-           go_s. split. { apply not_elem_of_union. naive_solver. } go.
-           go_s. split. { apply lookup_union_Some_raw. naive_solver. } go.
-           go_s. split; [apply elem_of_union; by left|]. go.
-           go_s. split; [by etrans|]. go.
-           go_s. split; [done|]. go.
-           go_s. split; [by etrans|]. go.
-           go_s. go_s. split; [done|]; go.
-           go_s. split; [done|]. go.
+           go_s. split!. { apply not_elem_of_union. naive_solver. }
+           { apply lookup_union_Some_raw. naive_solver. } { apply elem_of_union; by left. }
+           { by etrans. } { done. } { by etrans. } { done. }
            apply: Hloop. split!; [naive_solver|by econs|by etrans].
-      * go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i.
+      * move => pc rs mem pb' rsold memold hold cs' *; go.
         repeat case_bool_decide => //.
-        -- go_i. go_i. go_i. go_i. go_i. go_i.
-           revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
+        -- revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
            inversion Hstack; simplify_eq/= => //.
-           go_i. eexists false; go. go_i. eexists _; go. go_i. eexists _; go.
-           go_i. eexists _; go. go_i. eexists _; go.
-           go_i. eexists _; go.
-           go_i. eexists _; go.
-           go_i. eexists _; go.
-           go_i. split; [done|]; go.
-           go_i. split; [by etrans|]; go.
-           go_i. split; [done|]; go.
-           go_i. split; [done|]; go.
-           go_i. go_i.
+           go_i. go_i. eexists false => /=.
+           split!; [done|by etrans|done..|].
            go_s. eexists (Some (Outgoing, (EIReturn _ _))). split!; [done..|].
            apply: steps_spec_step_end; [done|] => ??.
            apply: Hloop. split!; [naive_solver|done|done|done|by etrans|by etrans].
@@ -482,14 +461,7 @@ Proof.
            inversion Hstack; simplify_eq/= => //.
            go_s. eexists (Some (Outgoing, EIReturn _ _)). split!; [done..|].
            apply: steps_spec_step_end; [done|] => ??.
-           go_s. eexists _; go. go_s. eexists _; go. go_s. eexists _; go.
-           go_s. go_s. eexists false; go. go_s. eexists _; go.
-           go_s. eexists _; go. go_s. eexists _; go. go_s. eexists _; go.
-           go_s. eexists _; go. go_s. eexists _; go. go_s. eexists _; go.
-           go_s. split; [done|]. go. go_s. split; [by etrans|]. go.
-           go_s. split; [done|]. go. go_s. split; [done|]. go.
-           go_s. split; [by etrans|]. go.
-           go_s. go_s. split; [done|]. go. go_s. split; [done|]. go.
+           go_s. split!; [done| by etrans|done|done|by etrans|done|].
            apply: Hloop. split!; [naive_solver|done|by etrans].
     + tstep_s. eexists None. split!.
       apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
@@ -505,45 +477,28 @@ Proof.
   - tstep_both.
     apply steps_impl_step_end => κ Pσ2 ? *. go. destruct κ as [e|]; go.
     + tend. have [σ' Hσ'] := vis_no_all _ _ _ ltac:(done). eexists σ'. split; [naive_solver|].
-      go_i. go_i. go_i. go_i. go_i. destruct x2.
-      * go_i. go_i. go_i. go_i. go_i. go_i.
-        go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i.
+      go_i. destruct e as [? []]; go.
+      * move => pc rs mem ret pb' ?????? *; go.
         repeat case_bool_decide => //.
-        -- go_i. go_i. go_i. go_i. go_i. go_i.
-           go_i. eexists true; go. go_i. eexists _; go.
-           go_i. eexists _; go. go_i. eexists _; go. go_i. eexists _; go.
-           go_i. eexists _; go.
-           go_i. split; [ naive_solver|]. go. go_i. split; [naive_solver|]. go.
-           go_i. split. { move => ?. by apply: Hdisji. } go. go_i. split; [by etrans|]. go.
-           go_i. split; [done|]. go.
-           go_i. go_i.
-           go_s. eexists (Some (Outgoing, (EICall x3 _ _))), SPLeft.
+        -- go_i. go_i. eexists true => /=.
+           split!. { naive_solver. } { naive_solver. } { move => ?. by apply: Hdisji. } { by etrans. } { done. }
+           go_s. eexists (Some (Outgoing, (EICall fn _ _))), SPLeft.
            split!. { repeat case_bool_decide => //; naive_solver. }
            apply: steps_spec_step_end; [done|] => ??.
            apply: Hloop. split!; [ naive_solver| by econs| done| done|by etrans|by etrans].
-        -- have ?: x3 ∉ fns1. { revert select (_ ∉ ins1) => Hin. contradict Hin. naive_solver. }
-           go_s. eexists (Some (Outgoing, (EICall x3 _ _))), SPNone. split!; simpl_map_decide => //.
+        -- have ?: fn ∉ fns1. { revert select (_ ∉ ins1) => Hin. contradict Hin. naive_solver. }
+           go_s. eexists (Some (Outgoing, (EICall fn _ _))), SPNone. split!; simpl_map_decide => //.
            apply: steps_spec_step_end; [done|] => ??.
-           go_s. eexists _; go. go_s. eexists _; go. go_s. eexists _; go. go_s.
-           go_s. eexists true; go. go_s. eexists _; go. go_s. eexists _; go.
-           go_s. eexists _; go. go_s. eexists _; go. go_s. eexists _; go.
-           go_s. split. { apply not_elem_of_union. naive_solver. } go.
-           go_s. split. { apply lookup_union_Some_raw. destruct (f2i1 !! x3) eqn:?; naive_solver. } go.
-           go_s. split; [apply elem_of_union; by right|]. go.
-           go_s. split; [by etrans|]. go. go_s. split; [done|]; go.
-           go_s. split; [by etrans|]. go. go_s. go_s. split; [done|]. go. go_s. split; [done|]. go.
+           go_s. split!. { apply not_elem_of_union. naive_solver. }
+           { apply lookup_union_Some_raw. destruct (f2i1 !! fn) eqn:?; naive_solver. }
+           { apply elem_of_union; by right. } { by etrans. } { done. } { by etrans. } { done. }
            apply: Hloop. split!; [naive_solver|by econs|by etrans].
-      * go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i. go_i.
+      * move => pc rs mem pb' rsold memold hold cs' *; go.
         repeat case_bool_decide => //.
-        -- go_i. go_i. go_i. go_i. go_i. go_i.
-           revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
+        -- revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
            inversion Hstack; simplify_eq/= => //.
-           go_i. eexists false; go. go_i. eexists _; go. go_i. eexists _; go.
-           go_i. eexists _; go. go_i. eexists _; go. go_i. eexists _; go.
-           go_i. eexists _; go. go_i. eexists _; go.
-           go_i. split;[done|]; go. go_i. split;[by etrans|]; go.
-           go_i. split;[done|]; go. go_i. split;[done|]; go.
-           go_i. go_i.
+           go_i. go_i. eexists false => /=.
+           split!; [done|by etrans|done..|].
            go_s. eexists (Some (Outgoing, (EIReturn _ _))). split!; [done..|].
            apply: steps_spec_step_end; [done|] => ??.
            apply: Hloop. split!; [naive_solver|done|done|done|by etrans|by etrans].
@@ -551,17 +506,9 @@ Proof.
            inversion Hstack; simplify_eq/= => //.
            go_s. eexists (Some (Outgoing, EIReturn _ _)). split!; [done..|].
            apply: steps_spec_step_end; [done|] => ??.
-           go_s. eexists _; go. go_s. eexists _; go. go_s. eexists _; go.
-           go_s. go_s. eexists false; go. go_s. eexists _; go.
-           go_s. eexists _; go. go_s. eexists _; go. go_s. eexists _; go.
-           go_s. eexists _; go. go_s. eexists _; go. go_s. eexists _; go.
-           go_s. split; [done|]. go. go_s. split; [by etrans|]. go.
-           go_s. split; [done|]. go. go_s. split; [done|]. go.
-           go_s. split; [by etrans|]. go.
-           go_s. go_s. split; [done|]. go.
-           go_s. split; [done|]. go.
+           go_s. split!; [done| by etrans|done|done|by etrans|done|].
            apply: Hloop. split!; [naive_solver|done|by etrans].
-    + tstep_s. eexists None.
+    + tstep_s. eexists None. split!.
       apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
       apply: Hloop. by split!.
 Qed.
@@ -595,16 +542,14 @@ Inductive imp_to_asm_proof_stack (n : trace_index) (ins : gmap Z asm_instr) (fns
 | IAPSStep c cs pb pb' lr lr' K' rs ret K b amem h:
   imp_to_asm_proof_stack n ins fns f2i b K (I2A cs pb lr) →
   imp_to_asm_phys_blocks_extend pb pb' →
-  (∀ i rs' amem' pb'' h' v t,
+  (∀ i rs' amem' pb'' h' v,
       rs' !! "PC" = Some ret →
       ins !! ret = Some i →
       imp_to_asm_ret pb'' rs' rs v →
       imp_to_asm_mem_rel (rs' !!! "SP") amem' amem →
       imp_to_asm_phys_blocks_extend pb' pb'' →
-      t ≈ (imp_to_asm_itree_to_env (dom (gset Z) ins) (dom (gset string) fns) f2i;;;;
-              imp_to_asm_itree (dom (gset Z) ins) (dom (gset string) fns) f2i) →
-      AsmState (Some i) rs' amem' ins ⪯{asm_module, imp_to_asm imp_module, n, true}
-               (SMProg, Imp (expr_fill (K' ++ K) (Val v)) h' fns, (t, I2A (c :: cs) pb'' rs'))) →
+      AsmState (Some i) rs' amem' ins ⪯{asm_module, imp_to_asm (dom _ ins) (dom _ fns) f2i imp_module, n, true}
+               (SMProg, Imp (expr_fill (K' ++ K) (Val v)) h' fns, (PPInside, I2A (c :: cs) pb'' rs'))) →
   imp_to_asm_proof_stack n ins fns f2i true (K' ++ K) (I2A ((I2AI true ret rs amem h) :: c :: cs) pb' lr')
 .
 
@@ -612,7 +557,7 @@ Inductive imp_to_asm_proof_stack (n : trace_index) (ins : gmap Z asm_instr) (fns
 Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
   ins_dom = dom _ ins →
   fns_dom = dom _ fns →
-  (∀ n i rs mem K f fn vs h cs t pc ret pb,
+  (∀ n i rs mem K f fn vs h cs pc ret pb,
       rs !! "PC" = Some pc →
       ins !! pc = Some i →
       fns !! f = Some fn →
@@ -620,7 +565,7 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
       imp_to_asm_args pb ret rs vs →
       length vs = length (fd_args fn) →
       (* Call *)
-      (∀ K' rs' mem' f' es vs pc' i' ret' b t' h' pb' lr,
+      (∀ K' rs' mem' f' es vs pc' i' ret' b h' pb' lr,
           Forall2 (λ e v, e = Val v) es vs →
           rs' !! "PC" = Some pc' →
           ins !! pc' = None →
@@ -628,41 +573,38 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
           f2i !! f' = Some pc' →
           imp_to_asm_args pb' ret' rs' vs →
           ins !! ret' = Some i' →
-          t' ≈ t →
           imp_to_asm_phys_blocks_extend pb pb' →
           map_scramble touched_registers lr rs' →
-          (∀ rs'' mem'' v h'' t'' pb'',
+          (∀ rs'' mem'' v h'' pb'',
               rs'' !! "PC" = Some ret' →
               imp_to_asm_ret pb'' rs'' rs' v →
               imp_to_asm_mem_rel (rs'' !!! "SP") mem'' mem' →
               imp_to_asm_phys_blocks_extend pb' pb'' →
-              t'' ≈ t' →
-              AsmState (Some i') rs'' mem'' ins ⪯{asm_module, imp_to_asm imp_module, n, false}
-               (SMProg, Imp (expr_fill K (expr_fill K' (Val v))) h'' fns, (t'', I2A cs pb'' rs''))) →
-          AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm imp_module, n, b}
-               (SMProg, Imp (expr_fill K (expr_fill K' (imp.Call f' es))) h' fns, (t', I2A cs pb' lr))) →
+              AsmState (Some i') rs'' mem'' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, false}
+               (SMProg, Imp (expr_fill K (expr_fill K' (Val v))) h'' fns, (PPInside, I2A cs pb'' rs''))) →
+          AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, b}
+               (SMProg, Imp (expr_fill K (expr_fill K' (imp.Call f' es))) h' fns, (PPInside, I2A cs pb' lr))) →
       (* Return *)
-      (∀ rs' mem' v h' b t' pb' lr,
+      (∀ rs' mem' v h' b pb' lr,
           rs' !! "PC" = Some ret →
           imp_to_asm_ret pb' rs' rs v  →
           imp_to_asm_mem_rel (rs' !!! "SP") mem' mem →
           imp_to_asm_phys_blocks_extend pb pb' →
           map_scramble touched_registers lr rs' →
-          t' ≈ t →
-          AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm imp_module, n, b}
-               (SMProg, Imp (expr_fill K (Val v)) h' fns, (t', I2A cs pb' lr))) →
-      AsmState (Some i) rs mem ins ⪯{asm_module, imp_to_asm imp_module, n, false}
-               (SMProg, Imp (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) h fns, (t, I2A cs pb rs))
+          AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, b}
+               (SMProg, Imp (expr_fill K (Val v)) h' fns, (PPInside, I2A cs pb' lr))) →
+      AsmState (Some i) rs mem ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, false}
+               (SMProg, Imp (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) h fns, (PPInside, I2A cs pb rs))
 ) →
   trefines (MS asm_module (initial_asm_state ins))
-           (MS (imp_to_asm imp_module) (initial_imp_to_asm_state imp_module
-             (initial_imp_state fns) ins_dom fns_dom f2i)).
+           (MS (imp_to_asm ins_dom fns_dom f2i imp_module) (initial_imp_to_asm_state imp_module
+             (initial_imp_state fns))).
 Proof.
   move => -> -> Hf.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { simpl. exact: (λ n' '(AsmState i rs mem ins') '(σfs, Imp e h fns', (t, I2A cs pb lr)),
      ∃ K b pb' lr', i = None ∧ ins = ins' ∧ e = expr_fill K (Waiting b) ∧ fns = fns' ∧
-              t ≈ imp_to_asm_itree (dom _ ins) (dom _ fns) f2i ∧ σfs = SMFilter ∧
+              t = PPOutside ∧ σfs = SMFilter ∧
               imp_to_asm_phys_blocks_extend pb' pb ∧
               imp_to_asm_proof_stack n' ins fns f2i b K (I2A cs pb' lr')
 ). }
@@ -674,100 +616,36 @@ Proof.
   }
   move => {}n _ /= IH [i rs mem ins'] [[?[???]][?[???]]] ?. destruct_all?; simplify_eq/=.
   tstep_i => ??????.
-  go_s.
-  go_s. eexists _; go.
-  go_s. eexists _; go.
-  go_s. eexists _; go.
-  go_s.
-  go_s. split; [done|]; go.
-  go_s => -[]; go.
-  - go_s => ?; go.
-    go_s => ?; go.
-    go_s => ?; go.
-    go_s => ?; go.
-    go_s => ?; go.
-    go_s => /elem_of_dom[??]; go.
-    go_s => ?; go.
-    go_s => /not_elem_of_dom ?; go.
-    go_s => ?; go.
-    go_s => ?; go.
-    go_s. go_s. go_s. split!; [done|done|]. case_bool_decide; [|by go_s].
+  go_s. split!.
+  go_s => -[] ? /=.
+  - move => ret fn vs h pb /elem_of_dom[??] ? /not_elem_of_dom ? ??.
+    go_s. split!; [done|done|]. case_bool_decide; [|by go_s].
     match goal with | |- context [ReturnExt b ?e] => change (ReturnExt b e) with (expr_fill [ReturnExtCtx b] e) end.
     rewrite -expr_fill_app.
     apply: tsim_mono_b.
     apply: Hf; [done..| |].
-    + move => K' rs' mem' f' es vs pc i' ret' ? ? h' ? lr Hall ????????? Hret. go.
-      have ?: es = Val <$> vs. { clear -Hall. elim: Hall; naive_solver. } subst.
+    + move => K' rs' mem' f' es vs' pc i' ret' ? h' ? lr Hall ???????? Hret. go.
+      have ?: es = Val <$> vs'. { clear -Hall. elim: Hall; naive_solver. } subst.
       tstep_i => ??. simplify_map_eq. rewrite orb_true_r.
       go_s. right. split!.
-      go_s. eexists _; go.
-      go_s. eexists _; go.
-      go_s. eexists _; go.
-      go_s.
-      go_s. eexists true; go.
-      go_s. eexists _; go.
-      go_s. eexists _; go.
-      go_s. eexists _; go.
-      go_s. eexists _; go.
-      go_s. eexists _; go.
-      go_s. split; [by apply not_elem_of_dom|]; go.
-      go_s. split; [done|]; go.
-      go_s. split; [by apply elem_of_dom|]; go.
-      go_s. split; [done|]; go.
-      go_s. split; [done|]; go.
-      go_s. split; [done|]; go.
-      go_s.
-      go_s. split; [done|]; go.
-      go_s. split; [done|]; go.
+      go_s. split!. { by apply not_elem_of_dom. } { done. } { by apply elem_of_dom. }
+      { done. } { done. } { done. } { done. }
       apply IH.
       split!; [done..|reflexivity|].
       econs; [done..| |]. by etrans; [done|etrans]. move => *. simplify_map_eq.
       rewrite !expr_fill_app /=.
       apply: tsim_mono_b.
-      apply Hret; [done..| |].
-      by etrans; [|done].
+      apply Hret; [done..|].
       by etrans; [|done].
     + move => *. go.
       tstep_i => ??. simplify_map_eq. rewrite orb_true_r.
       go_s.
-      go_s. eexists _; go.
-      go_s. eexists _; go.
-      go_s. eexists _; go.
-      go_s.
-      go_s. eexists false; go.
-      go_s. eexists _; go.
-      go_s. eexists _; go.
-      go_s. eexists _; go.
-      go_s. eexists _; go.
-      go_s. eexists _; go.
-      go_s. eexists _; go.
-      go_s. eexists _; go.
-      go_s. split; [done|]; go.
-      go_s. split; [done|]; go.
-      go_s. split; [done|]; go.
-      go_s. split; [done|]; go.
-      go_s. split; [done|]; go.
-      go_s.
-      go_s. split; [done|]; go.
-      go_s. split; [done|]; go.
+      go_s. split!; [done..|].
       apply IH. split!; [done| |done]. by etrans; [done|etrans].
-  - go_s => ?; go.
-    go_s => ?; go.
-    go_s => ?; go.
-    go_s => ?; go.
-    go_s => ?; go.
-    go_s => ?; go.
-    go_s => ?; go.
-    go_s => ?; go.
-    go_s => ?; go.
-    go_s => ?; go.
-    go_s => ?; go.
-    go_s.
+  - move => *.
     revert select (imp_to_asm_proof_stack _ _ _ _ _ _ _) => HK.
     inversion HK; clear HK; simplify_eq.
-    go_s.
-    go_s.
-    split!; [done|].
-    apply: H12; [done..| |done]. by etrans.
+    go_s. split!; [done|].
+    apply: H7; [done..|]. by etrans.
     Unshelve. apply: inhabitant.
 Qed.

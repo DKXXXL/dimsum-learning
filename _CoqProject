@@ -20,6 +20,7 @@ theories/product.v
 theories/seq_product.v
 theories/state_transform.v
 theories/link.v
+theories/prepost.v
 theories/dem_module.v
 theories/trefines.v
 theories/refines_meta.v

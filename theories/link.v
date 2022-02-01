@@ -87,10 +87,9 @@ Section mod_link.
     TStepI (mod_link R m1 m2) (MLFLeft, s, σ1, σ2) (λ G, P (λ b κ P',
       match κ with
       | None => G b None (λ G', P' (λ x, G' (MLFLeft, s, x, σ2)))
-      | Some (Outgoing, e) => ∀ p' s' e', R SPLeft s e p' s' e' →
+      | Some κ' => ∀ p' s' e', R SPLeft s κ'.2 p' s' e' → κ'.1 = Outgoing →
                               G b (if p' is SPNone then Some (Outgoing, e') else None)
                                (λ G', P' (λ x, G' (mod_link_to_state p' e', s', x, σ2)))
-      | Some _ => True
       end)).
   Proof.
     constructor => G /tstepi_proof?. clear TStepI0.
@@ -108,10 +107,9 @@ Section mod_link.
     TStepI (mod_link R m1 m2) (MLFRight, s, σ1, σ2) (λ G, P (λ b κ P',
       match κ with
       | None => G b None (λ G', P' (λ x, G' (MLFRight, s, σ1, x)))
-      | Some (Outgoing, e) => ∀ p' s' e', R SPRight s e p' s' e' →
+      | Some κ' => ∀ p' s' e', R SPRight s κ'.2 p' s' e' → κ'.1 = Outgoing →
                               G b (if p' is SPNone then Some (Outgoing, e') else None)
                                (λ G', P' (λ x, G' (mod_link_to_state p' e', s', σ1, x)))
-      | Some _ => True
       end)).
   Proof.
     constructor => G /tstepi_proof?. clear TStepI0.
@@ -129,8 +127,7 @@ Section mod_link.
     TStepI (mod_link R m1 m2) (MLFRecvL e, s, σ1, σ2) (λ G, P (λ b κ P',
       match κ with
       | None => G b None (λ G', P' (λ x, G' (MLFRecvL e, s, x, σ2)))
-      | Some (Incoming, e') => e = e' → G b None (λ G', P' (λ x, G' (MLFLeft, s, x, σ2)))
-      | Some _ => True
+      | Some κ' => κ' = (Incoming, e) → G b None (λ G', P' (λ x, G' (MLFLeft, s, x, σ2)))
       end)).
   Proof.
     constructor => G /tstepi_proof?. clear TStepI0.
@@ -145,8 +142,7 @@ Section mod_link.
     TStepI (mod_link R m1 m2) (MLFRecvR e, s, σ1, σ2) (λ G, P (λ b κ P',
       match κ with
       | None => G b None (λ G', P' (λ x, G' (MLFRecvR e, s, σ1, x)))
-      | Some (Incoming, e') => e = e' → G b None (λ G', P' (λ x, G' (MLFRight, s, σ1, x)))
-      | Some _ => True
+      | Some κ' => κ' = (Incoming, e) → G b None (λ G', P' (λ x, G' (MLFRight, s, σ1, x)))
       end)).
   Proof.
     constructor => G /tstepi_proof?. clear TStepI0.
