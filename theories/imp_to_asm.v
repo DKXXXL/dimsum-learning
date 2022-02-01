@@ -8,7 +8,6 @@ Require Import refframe.prepost.
 Require Import refframe.proof_techniques.
 Require Import refframe.imp.
 Require Import refframe.asm.
-Require Import refframe.itree.
 
 Local Open Scope Z_scope.
 
@@ -72,31 +71,54 @@ Add Printing Constructor imp_to_asm_state.
 Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string Z) (e : asm_event) (s : imp_to_asm_state) : prepost (imp_event * imp_to_asm_state) :=
   match e with
   | (i, EAJump pc rs mem) =>
+      (* env chooses if this is a function call or return *)
       pp_quant (λ b,
         pp_prop (i = Incoming) $
         if b then
+          (* env chooses return address *)
           pp_quant $ λ ret,
+          (* env chooses function name *)
           pp_quant $ λ f,
+          (* env chooses arguments *)
           pp_quant $ λ vs,
+          (* env chooses heap *)
           pp_quant $ λ h,
+          (* env chooses new physical blocks *)
           pp_quant $ λ pb,
+          (* env proves that function name is valid *)
           pp_prop  (f ∈ fns) $
+          (* env proves it calls the right address *)
           pp_prop (f2i !! f = Some pc) $
+          (* env proves that ret is not in ins *)
           pp_prop (ret ∉ ins) $
+          (* env proves pb is an increment *)
           pp_prop (imp_to_asm_phys_blocks_extend s.(i2a_phys_blocks) pb) $
+          (* env proves that rs corresponds to vs and ret *)
           pp_prop (imp_to_asm_args pb ret rs vs) $
+          (* track the registers and return address (false means ret belongs to env) *)
           pp_end ((i, EICall f vs h), I2A ((I2AI false ret rs mem h)::s.(i2a_calls)) pb rs)
         else
+          (* env chooses return value *)
           pp_quant $ λ v,
+          (* env chooses heap *)
           pp_quant $ λ h,
+          (* env chooses new physical blocks *)
           pp_quant $ λ pb,
+          (* env chooses old registers *)
           pp_quant $ λ rsold,
+          (* env chooses old mem *)
           pp_quant $ λ memold,
+          (* env chooses old heap *)
           pp_quant $ λ hold,
+          (* env chooses rest of cs *)
           pp_quant $ λ cs',
+          (* get registers from stack (true means pc belongs to the program) *)
           pp_prop (s.(i2a_calls) = (I2AI true pc rsold memold hold)::cs') $
+          (* env proves pb is an increment *)
           pp_prop (imp_to_asm_phys_blocks_extend s.(i2a_phys_blocks) pb) $
+          (* env proves that rs is updated correctly *)
           pp_prop (imp_to_asm_ret pb rs rsold v) $
+          (* env proves memory is updated correctly *)
           pp_prop (imp_to_asm_mem_rel (rs !!! "SP") mem memold) $
           pp_end ((i, EIReturn v h), I2A cs' pb rs))
   end.
@@ -108,162 +130,51 @@ Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string
       pp_quant $ λ pc,
       pp_quant $ λ rs,
       pp_quant $ λ mem,
+      (* program chooses return address *)
       pp_quant $ λ ret,
+      (* program chooses new physical blocks *)
       pp_quant $ λ pb,
+      (* program proves that this function is external *)
       pp_prop (f ∉ fns) $
+      (* program proves that the address is correct *)
       pp_prop (f2i !! f = Some pc) $
+      (* program proves that ret is in ins *)
       pp_prop (ret ∈ ins) $
+      (* prog proves pb is an increment *)
       pp_prop (imp_to_asm_phys_blocks_extend s.(i2a_phys_blocks) pb) $
+      (* program proves that rs corresponds to vs and ret  *)
       pp_prop (imp_to_asm_args pb ret rs vs) $
+      (* program proves it only touched a specific set of registers *)
       pp_prop (map_scramble touched_registers s.(i2a_last_regs) rs) $
+      (* track the registers and return address (true means ret belongs to program) *)
       pp_end ((Outgoing, EAJump pc rs mem), (I2A ((I2AI true ret rs mem h)::s.(i2a_calls)) pb s.(i2a_last_regs)))
   | (i, EIReturn v h) =>
       pp_quant $ λ pc,
       pp_quant $ λ rs,
       pp_quant $ λ mem,
+      (* program chooses new physical blocks *)
       pp_quant $ λ pb,
+      (* program chooses old registers *)
       pp_quant $ λ rsold,
+      (* program chooses old mem *)
       pp_quant $ λ memold,
+      (* program chooses old heap *)
       pp_quant $ λ hold,
+      (* program chooses rest of cs *)
       pp_quant $ λ cs',
+      (* get registers from stack (false means pc belongs to the env) *)
       pp_prop (s.(i2a_calls) = (I2AI false pc rsold memold hold)::cs') $
+      (* prog proves pb is an increment *)
       pp_prop (imp_to_asm_phys_blocks_extend s.(i2a_phys_blocks) pb) $
+      (* prog proves that rs is updated correctly *)
       pp_prop (imp_to_asm_ret pb rs rsold v) $
+      (* prog proves memory is updated correctly *)
       pp_prop (imp_to_asm_mem_rel (rs !!! "SP") mem memold) $
+      (* program proves it only touched a specific set of registers *)
       pp_prop (map_scramble touched_registers s.(i2a_last_regs) rs) $
       pp_end ((Outgoing, EAJump pc rs mem), (I2A cs' pb s.(i2a_last_regs)))
   end.
 
-Definition imp_to_asm_itree_from_env (ins : gset Z) (fns : gset string) (f2i : gmap string Z) : itree (moduleE (imp_event + asm_event) imp_to_asm_state) () :=
-  pc ← TExist Z;;;
-  rs ← TExist _;;;
-  mem ← TExist _;;;
-  s ← TGet;;;
-  TVis (inr (Incoming, EAJump pc rs mem));;;;
-  (* env chooses if this is a function call or return *)
-  b ← TAll bool;;;
-  if b then
-    (* env chooses return address *)
-    ret ← TAll _;;;
-    (* env chooses function name *)
-    f ← TAll _;;;
-    (* env chooses arguments *)
-    vs ← TAll _;;;
-    (* env chooses heap *)
-    h ← TAll _;;;
-    (* env chooses new physical blocks *)
-    pb ← TAll _;;;
-    (* env proves that function name is valid *)
-    TAssume (f ∈ fns);;;;
-    (* env proves it calls the right address *)
-    TAssume (f2i !! f = Some pc);;;;
-    (* env proves that ret is not in invs *)
-    TAssume (ret ∉ ins);;;;
-    (* env proves pb is an increment *)
-    TAssume (imp_to_asm_phys_blocks_extend s.(i2a_phys_blocks) pb);;;;
-    (* env proves that rs corresponds to vs and ret *)
-    TAssume (imp_to_asm_args pb ret rs vs);;;;
-    (* track the registers and return address (false means ret belongs to env) *)
-    TPut (I2A ((I2AI false ret rs mem h)::s.(i2a_calls)) pb rs);;;;
-    TVis (inl (Incoming, EICall f vs h))
-  else
-    (* env chooses return value *)
-    v ← TAll _;;;
-    (* env chooses heap *)
-    h ← TAll _;;;
-    (* env chooses new physical blocks *)
-    pb ← TAll _;;;
-    (* env chooses old registers *)
-    rsold ← TAll _;;;
-    (* env chooses old mem *)
-    memold ← TAll _;;;
-    (* env chooses old heap *)
-    hold ← TAll _;;;
-    (* env chooses rest of cs *)
-    cs' ← TAll _;;;
-    (* get registers from stack (true means pc belongs to the program) *)
-    TAssume (s.(i2a_calls) = (I2AI true pc rsold memold hold)::cs');;;;
-    (* env proves pb is an increment *)
-    TAssume (imp_to_asm_phys_blocks_extend s.(i2a_phys_blocks) pb);;;;
-    (* env proves that rs is updated correctly *)
-    TAssume (imp_to_asm_ret pb rs rsold v);;;;
-    (* env proves memory is updated correctly *)
-    TAssume (imp_to_asm_mem_rel (rs !!! "SP") mem memold);;;;
-    TPut (I2A cs' pb rs);;;;
-    TVis (inl (Incoming, EIReturn v h))
-.
-
-Definition imp_to_asm_itree_to_env (ins : gset Z) (fns : gset string) (f2i : gmap string Z) : itree (moduleE (imp_event + asm_event) imp_to_asm_state) () :=
-  pc ← TExist Z;;;
-  rs ← TExist _;;;
-  mem ← TExist _;;;
-  s ← TGet;;;
-  (* program chooses whether it returns or makes a function call *)
-  b ← TExist bool;;;
-  if b then
-    (* program chooses return address *)
-    ret ← TExist Z;;;
-    (* program chooses which function it calls *)
-    f ← TExist _;;;
-    (* program chooses the arguments of the function *)
-    vs ← TExist _;;;
-    (* program chooses heap *)
-    h ← TExist _;;;
-    (* program chooses new physical blocks *)
-    pb ← TExist _;;;
-    (* program proves that this function is external *)
-    TAssert (f ∉ fns);;;;
-    (* program proves that the address is correct *)
-    TAssert (f2i !! f = Some pc);;;;
-    (* program proves that ret is in ins *)
-    TAssert (ret ∈ ins);;;;
-    (* prog proves pb is an increment *)
-    TAssert (imp_to_asm_phys_blocks_extend s.(i2a_phys_blocks) pb);;;;
-    (* program proves that rs corresponds to vs and ret  *)
-    TAssert (imp_to_asm_args pb ret rs vs);;;;
-    (* program proves it only touched a specific set of registers *)
-    TAssert (map_scramble touched_registers s.(i2a_last_regs) rs);;;;
-    (* track the registers and return address (true means ret belongs to program) *)
-    TPut (I2A ((I2AI true ret rs mem h)::s.(i2a_calls)) pb s.(i2a_last_regs));;;;
-    TVis (inl (Outgoing, EICall f vs h));;;;
-    TVis (inr (Outgoing, EAJump pc rs mem))
-  else
-    (* program chooses return value *)
-    v ← TExist _;;;
-    (* program chooses heap *)
-    h ← TExist _;;;
-    (* program chooses new physical blocks *)
-    pb ← TExist _;;;
-    (* program chooses old registers *)
-    rsold ← TExist _;;;
-    (* program chooses old mem *)
-    memold ← TExist _;;;
-    (* program chooses old heap *)
-    hold ← TExist _;;;
-    (* program chooses rest of cs *)
-    cs' ← TExist _;;;
-    (* get registers from stack (false means pc belongs to the env) *)
-    TAssert (s.(i2a_calls) = (I2AI false pc rsold memold hold)::cs');;;;
-    (* prog proves pb is an increment *)
-    TAssert (imp_to_asm_phys_blocks_extend s.(i2a_phys_blocks) pb);;;;
-    (* prog proves that rs is updated correctly *)
-    TAssert (imp_to_asm_ret pb rs rsold v);;;;
-    (* prog proves memory is updated correctly *)
-    TAssert (imp_to_asm_mem_rel (rs !!! "SP") mem memold);;;;
-    (* program proves it only touched a specific set of registers *)
-    TAssert (map_scramble touched_registers s.(i2a_last_regs) rs);;;;
-    TPut (I2A cs' pb s.(i2a_last_regs));;;;
-    TVis (inl (Outgoing, EIReturn v h));;;;
-    TVis (inr (Outgoing, EAJump pc rs mem)).
-
-Definition imp_to_asm_itree' (ins : gset Z) (fns : gset string) (f2i : gmap string Z) : itree (moduleE (imp_event + asm_event) imp_to_asm_state) () :=
-  (ITree.forever (imp_to_asm_itree_from_env ins fns f2i;;;; imp_to_asm_itree_to_env ins fns f2i)).
-Definition imp_to_asm_itree :=
-(* This is sadly necessary as assumption goes crazy in some cases without it. *)
-  locked imp_to_asm_itree'.
-
-(* Definition imp_to_asm (m : module imp_event) : module asm_event := *)
-  (* mod_seq_map m (mod_itree (imp_event + asm_event) imp_to_asm_state). *)
 Definition imp_to_asm (ins : gset Z) (fns : gset string) (f2i : gmap string Z)
            (m : module imp_event) : module asm_event :=
   mod_prepost (imp_to_asm_pre ins fns f2i) (imp_to_asm_post ins fns f2i) m.
@@ -357,12 +268,7 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
       ∧ imp_to_asm_phys_blocks_extend pb pb2
       ∧ imp_to_asm_phys_blocks_extend pb1 pb2)).
 
-Lemma itree_tstep_imp_to_asm_itree ins fns f2i b:
-  ITreeTStep false b (imp_to_asm_itree ins fns f2i) (imp_to_asm_itree_from_env ins fns f2i;;;; imp_to_asm_itree_to_env ins fns f2i;;;; imp_to_asm_itree ins fns f2i).
-Proof. rewrite /imp_to_asm_itree. unlock. constructor. rewrite -bind_bind. eapply itree_tstep_forever. Qed.
-Global Hint Resolve itree_tstep_imp_to_asm_itree : tstep.
-
-Local Ltac go := clear_itree; repeat match goal with | x : asm_ev |- _ => destruct x end;
+Local Ltac go := repeat match goal with | x : asm_ev |- _ => destruct x end;
                  destruct_all?; simplify_eq/=; destruct_all?; simplify_eq/=.
 Local Ltac go_i := tstep_i; intros; go.
 Local Ltac go_s := tstep_s; go.

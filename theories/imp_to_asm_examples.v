@@ -6,7 +6,6 @@ Require Import refframe.seq_product.
 Require Import refframe.proof_techniques.
 Require Import refframe.imp.
 Require Import refframe.asm.
-Require Import refframe.itree.
 Require Import refframe.imp_to_asm.
 
 Local Open Scope Z_scope.
@@ -77,7 +76,7 @@ Definition imp_add_client : fndef := {|
 Definition imp_add_client_prog : gmap string fndef :=
   <[ "add_client" := imp_add_client ]> ∅.
 
-Local Ltac go := clear_itree; destruct_all?; simplify_eq/=.
+Local Ltac go := destruct_all?; simplify_eq/=.
 Local Ltac go_i := tstep_i; go.
 Local Ltac go_s := tstep_s; go.
 
