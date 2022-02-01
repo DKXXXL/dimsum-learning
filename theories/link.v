@@ -57,6 +57,17 @@ Section mod_link.
     mod_state_transform (mod_map (mod_seq_product m1 m2) (mod_link_filter R))
                         (λ σ σ', σ' = mod_link_trans R m1 m2 σ).
 
+  Global Instance mod_link_vis_no_all R m1 m2 `{!VisNoAll m1} `{!VisNoAll m2}:
+    VisNoAll (mod_link R m1 m2).
+  Proof.
+    apply: mod_state_transform_vis_no_all.
+    move => ??? [[[sp σ1]σ2][σ s]] ?.
+    eexists (σ, s, σ1, σ2) => -[[[??]?]?]/=.
+    split => ?; simplify_eq => //.
+    invert_all @m_step; invert_all @mod_link_filter; destruct_all?; simplify_eq.
+    all: unfold mod_link_to_state in *; repeat case_match => //; by simplify_eq.
+  Qed.
+
   Lemma mod_link_trefines R m1 m2 m1' m2' σ1 σ2 σ1' σ2' σ `{!VisNoAll m1} `{!VisNoAll m2}:
     trefines (MS m1 σ1) (MS m1' σ1') →
     trefines (MS m2 σ2) (MS m2' σ2') →

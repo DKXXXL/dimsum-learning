@@ -13,6 +13,16 @@ Inductive state_transform_step {EV S} (m : module EV) (R : S → m.(m_state) →
 Definition mod_state_transform {EV S} (m : module EV) (R : S → m.(m_state) → Prop) :=
   Mod (state_transform_step m R).
 
+Lemma mod_state_transform_vis_no_all {EV S} (m : module EV) (R : S → m.(m_state) → Prop) `{!VisNoAll m}:
+  (∀ σ e Pσ σ'', m_step m σ (Some e) Pσ → Pσ σ'' → ∃ σs, ∀ σs', R σs' σ'' ↔ σs = σs') →
+  VisNoAll (mod_state_transform m R).
+Proof.
+  move => Hs ????. invert_all @m_step.
+  have [σ'' Hσ'']:= vis_no_all _ _ _ ltac:(done).
+  have [σs Hσs]:= Hs _ _ _ _ ltac:(done) ltac:(naive_solver).
+  eexists σs. naive_solver.
+Qed.
+
 Lemma mod_state_transform_nil {EV S} (m : module EV) (R : S → m.(m_state) → Prop) σ σ' (Pσ Pσ' : _ → Prop):
   σ' ~{ m, tnil }~>ₜ Pσ' →
   R σ σ' →

@@ -3,6 +3,7 @@ Require Import refframe.trefines.
 Require Import refframe.filter.
 Require Import refframe.product.
 Require Import refframe.seq_product.
+Require Import refframe.link.
 Require Import refframe.proof_techniques.
 
 Local Open Scope Z_scope.
@@ -775,146 +776,82 @@ Definition imp_ctx_refines (fnsi fnss : gmap string fndef) :=
                 (MS imp_module (initial_imp_state (imp_link fnss C))).
 
 (** * semantic linking *)
-Inductive imp_prod_filter_enum :=
-| IPFLeft | IPFRight | IPFNone
-| IPFLeftRecv (e : imp_ev)
-| IPFRightRecv (e : imp_ev).
-
-Record imp_prod_filter_state := IPFState {
-  ipf_cur : imp_prod_filter_enum;
-  (* list of returns *)
-  ipf_stack : list imp_prod_filter_enum
-}.
-Add Printing Constructor imp_prod_filter_state.
-
-Inductive imp_prod_filter (fns1 fns2 : gset string) :
-  imp_prod_filter_state → (seq_product_event imp_event imp_event) →
-  option imp_event → imp_prod_filter_state → Prop :=
-(* call l -> r *)
-| IPFCallLeftToRight f vs cs h:
-  f ∉ fns1 → f ∈ fns2 →
-  imp_prod_filter fns1 fns2 (IPFState IPFLeft cs) (SPELeft (Outgoing, EICall f vs h) SPRight)
-                  None (IPFState (IPFRightRecv (EICall f vs h)) (IPFLeft :: cs))
-(* call l -> r step 2 *)
-| IPFCallLeftToRight2 cs e:
-  imp_prod_filter fns1 fns2 (IPFState (IPFRightRecv e) cs) (SPERight (Incoming, e) SPRight)
-                  None (IPFState IPFRight cs)
-(* call r -> l *)
-| IPFCallRightToLeft f vs cs h:
-  f ∈ fns1 → f ∉ fns2 →
-  imp_prod_filter fns1 fns2 (IPFState IPFRight cs) (SPERight (Outgoing, EICall f vs h) SPLeft)
-                  None (IPFState (IPFLeftRecv (EICall f vs h)) (IPFRight :: cs))
-(* call r -> l step 2*)
-| IPFCallRightToLeft2 e cs:
-  imp_prod_filter fns1 fns2 (IPFState (IPFLeftRecv e) cs) (SPELeft (Incoming, e) SPLeft)
-                  None (IPFState IPFLeft cs)
-(* call l -> ext *)
-| IPFCallLeftToExt f vs cs h:
-  f ∉ fns1 → f ∉ fns2 →
-  imp_prod_filter fns1 fns2 (IPFState IPFLeft cs) (SPELeft (Outgoing, EICall f vs h) SPNone)
-                  (Some (Outgoing, EICall f vs h)) (IPFState IPFNone (IPFLeft :: cs))
-(* call r -> ext *)
-| IPFCallRightToExt f vs cs h:
-  f ∉ fns1 → f ∉ fns2 →
-  imp_prod_filter fns1 fns2 (IPFState IPFRight cs) (SPERight (Outgoing, EICall f vs h) SPNone)
-                  (Some (Outgoing, EICall f vs h)) (IPFState IPFNone (IPFRight :: cs))
-(* call ext -> l *)
-| IPFCallExtToLeft f vs cs h:
-  f ∈ fns1 → f ∉ fns2 →
-  imp_prod_filter fns1 fns2 (IPFState IPFNone cs) (SPENone SPLeft)
-                  (Some (Incoming, EICall f vs h)) (IPFState (IPFLeftRecv (EICall f vs h)) (IPFNone :: cs))
-(* call ext -> r *)
-| IPFCallExtToRight f vs cs h:
-  f ∉ fns1 → f ∈ fns2 →
-  imp_prod_filter fns1 fns2 (IPFState IPFNone cs) (SPENone SPRight)
-                  (Some (Incoming, EICall f vs h)) (IPFState (IPFRightRecv (EICall f vs h)) (IPFNone :: cs))
-(* ret l -> r *)
-| IPFReturnLeftToRight v cs h:
-  imp_prod_filter fns1 fns2 (IPFState IPFLeft (IPFRight :: cs)) (SPELeft (Outgoing, EIReturn v h) SPRight)
-                  None (IPFState (IPFRightRecv (EIReturn v h)) cs)
-(* ret r -> l *)
-| IPFReturnRightToLeft v cs h:
-  imp_prod_filter fns1 fns2 (IPFState IPFRight (IPFLeft :: cs)) (SPERight (Outgoing, EIReturn v h) SPLeft)
-                  None (IPFState (IPFLeftRecv (EIReturn v h)) cs)
-(* ret l -> ext *)
-| IPFReturnLeftToExt v cs h:
-  imp_prod_filter fns1 fns2 (IPFState IPFLeft (IPFNone :: cs)) (SPELeft (Outgoing, EIReturn v h) SPNone)
-                  (Some (Outgoing, EIReturn v h)) (IPFState IPFNone cs)
-(* ret r -> ext *)
-| IPFReturnRightToExt v cs h:
-  imp_prod_filter fns1 fns2 (IPFState IPFRight (IPFNone :: cs)) (SPERight (Outgoing, EIReturn v h) SPNone)
-                  (Some (Outgoing, EIReturn v h)) (IPFState IPFNone cs)
-(* ret ext -> l *)
-| IPFReturnExtToLeft v cs h:
-  imp_prod_filter fns1 fns2 (IPFState IPFNone (IPFLeft :: cs)) (SPENone SPLeft)
-                  (Some (Incoming, EIReturn v h)) (IPFState (IPFLeftRecv (EIReturn v h)) cs)
-(* ret ext -> r *)
-| IPFReturnExtToRight v cs h:
-  imp_prod_filter fns1 fns2 (IPFState IPFNone (IPFRight :: cs)) (SPENone SPRight)
-                  (Some (Incoming, EIReturn v h)) (IPFState (IPFRightRecv (EIReturn v h)) cs)
-.
+Definition imp_prod_filter (fns1 fns2 : gset string) : seq_product_state → list seq_product_state → imp_ev → seq_product_state → list seq_product_state → imp_ev → Prop :=
+  λ p cs e p' cs' e',
+    e' = e ∧
+    match e with
+    | EICall f vs h =>
+        p' = (if bool_decide (f ∈ fns1) then SPLeft else if bool_decide (f ∈ fns2) then SPRight else SPNone) ∧
+        (if p is SPNone then f ∈ (fns1 ∪ fns2) else True) ∧
+        (cs' = p::cs) ∧
+        p ≠ p'
+    | EIReturn v h =>
+        cs = p'::cs' ∧
+        p ≠ p'
+    end.
+Arguments imp_prod_filter _ _ _ _ !_ _ _ _ /.
 
 Definition imp_prod (fns1 fns2 : gset string) (m1 m2 : module imp_event) : module imp_event :=
-  mod_map (mod_seq_product m1 m2) (imp_prod_filter fns1 fns2).
+  mod_link (imp_prod_filter fns1 fns2) m1 m2.
 
 Lemma imp_prod_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
   trefines (MS m1 σ1) (MS m1' σ1') →
   trefines (MS m2 σ2) (MS m2' σ2') →
-  trefines (MS (imp_prod ins1 ins2 m1 m2) (SPNone, σ1, σ2, σ))
-           (MS (imp_prod ins1 ins2 m1' m2') (SPNone, σ1', σ2', σ)).
-Proof. move => ??. apply mod_map_trefines. by apply mod_seq_product_trefines. Qed.
+  trefines (MS (imp_prod ins1 ins2 m1 m2) (σ, σ1, σ2))
+           (MS (imp_prod ins1 ins2 m1' m2') (σ, σ1', σ2')).
+Proof. move => ??. by apply mod_link_trefines. Qed.
 
 Inductive imp_link_prod_combine_ectx :
-  nat → bool → bool → imp_prod_filter_state → list expr_ectx → list expr_ectx → list expr_ectx → Prop :=
+  nat → bool → bool → mod_link_state imp_ev → list seq_product_state → list expr_ectx → list expr_ectx → list expr_ectx → Prop :=
 | IPCENil:
-  imp_link_prod_combine_ectx 0 false false (IPFState IPFNone []) [] [] []
+  imp_link_prod_combine_ectx 0 false false MLFNone [] [] [] []
 | IPCENoneToLeft n cs K Kl Kr bl br:
-  imp_link_prod_combine_ectx n bl br (IPFState IPFNone cs) K Kl Kr →
-  imp_link_prod_combine_ectx (S n) bl br (IPFState IPFLeft (IPFNone :: cs))
+  imp_link_prod_combine_ectx n bl br MLFNone cs K Kl Kr →
+  imp_link_prod_combine_ectx (S n) bl br MLFLeft (SPNone :: cs)
                              (ReturnExtCtx (bl || br)::K) (ReturnExtCtx bl::Kl) Kr
 | IPCENoneToRight n cs K Kl Kr bl br:
-  imp_link_prod_combine_ectx n bl br (IPFState IPFNone cs) K Kl Kr →
-  imp_link_prod_combine_ectx (S n) bl br (IPFState IPFRight (IPFNone :: cs))
+  imp_link_prod_combine_ectx n bl br MLFNone cs K Kl Kr →
+  imp_link_prod_combine_ectx (S n) bl br MLFRight (SPNone :: cs)
                              (ReturnExtCtx (bl || br)::K) Kl (ReturnExtCtx br::Kr)
 | IPCELeftToRight n cs K Kl Kl' Kr bl br:
-  imp_link_prod_combine_ectx n bl br (IPFState IPFLeft cs) K Kl Kr →
+  imp_link_prod_combine_ectx n bl br MLFLeft cs K Kl Kr →
   static_expr (expr_fill Kl' (Var "")) →
-  imp_link_prod_combine_ectx (S n) true br (IPFState IPFRight (IPFLeft :: cs))
+  imp_link_prod_combine_ectx (S n) true br MLFRight (SPLeft :: cs)
                              (Kl' ++ K) (Kl' ++ Kl) (ReturnExtCtx br::Kr)
 | IPCELeftToNone n cs K Kl Kl' Kr bl br:
-  imp_link_prod_combine_ectx n bl br (IPFState IPFLeft cs) K Kl Kr →
+  imp_link_prod_combine_ectx n bl br MLFLeft cs K Kl Kr →
   static_expr (expr_fill Kl' (Var "")) →
-  imp_link_prod_combine_ectx (S n) true br (IPFState IPFNone (IPFLeft :: cs))
+  imp_link_prod_combine_ectx (S n) true br MLFNone (SPLeft :: cs)
                              (Kl' ++ K) (Kl' ++ Kl) Kr
 | IPCERightToLeft n cs K Kl Kr' Kr bl br:
-  imp_link_prod_combine_ectx n bl br (IPFState IPFRight cs) K Kl Kr →
+  imp_link_prod_combine_ectx n bl br MLFRight cs K Kl Kr →
   static_expr (expr_fill Kr' (Var "")) →
-  imp_link_prod_combine_ectx (S n) bl true (IPFState IPFLeft (IPFRight :: cs))
+  imp_link_prod_combine_ectx (S n) bl true MLFLeft (SPRight :: cs)
                              (Kr' ++ K) (ReturnExtCtx bl::Kl) (Kr' ++ Kr)
 | IPCERightToNone n cs K Kl Kr' Kr bl br:
-  imp_link_prod_combine_ectx n bl br (IPFState IPFRight cs) K Kl Kr →
+  imp_link_prod_combine_ectx n bl br MLFRight cs K Kl Kr →
   static_expr (expr_fill Kr' (Var "")) →
-  imp_link_prod_combine_ectx (S n) bl true (IPFState IPFNone (IPFRight :: cs))
+  imp_link_prod_combine_ectx (S n) bl true MLFNone (SPRight :: cs)
                              (Kr' ++ K) Kl (Kr' ++ Kr)
 .
 
-Definition imp_link_prod_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : imp_module.(m_state)) (σ2 : ((seq_product_state * imp_state * imp_state) * imp_prod_filter_state)) : Prop :=
+Definition imp_link_prod_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : imp_module.(m_state)) (σ2 : mod_link_state imp_ev * list seq_product_state * imp_state * imp_state) : Prop :=
   let 'Imp e1 h1 fns1' := σ1 in
-  let '((σsp, Imp el hl fnsl, Imp er hr fnsr), σf) := σ2 in
+  let '(σf, cs, Imp el hl fnsl, Imp er hr fnsr) := σ2 in
   ∃ n K Kl Kr e1' el' er' bl br,
   fns1' = fns1 ∪ fns2 ∧
   fnsl = fns1 ∧
   fnsr = fns2 ∧
-  imp_link_prod_combine_ectx n bl br σf K Kl Kr ∧
+  imp_link_prod_combine_ectx n bl br σf cs K Kl Kr ∧
   e1 = expr_fill K e1' ∧
   el = expr_fill Kl el' ∧
   er = expr_fill Kr er' ∧
-  match σf.(ipf_cur) with
-  | IPFLeft => σsp = SPLeft ∧ e1' = el' ∧ static_expr el' ∧ er' = Waiting br ∧ h1 = hl
+  match σf with
+  | MLFLeft => e1' = el' ∧ static_expr el' ∧ er' = Waiting br ∧ h1 = hl
               ∧ (if bv then to_val el' = None else True)
-  | IPFRight => σsp = SPRight ∧ e1' = er' ∧ static_expr er' ∧ el' = Waiting bl ∧ h1 = hr
+  | MLFRight => e1' = er' ∧ static_expr er' ∧ el' = Waiting bl ∧ h1 = hr
                ∧ (if bv then to_val er' = None else True)
-  | IPFNone => σsp = SPNone ∧ e1' = Waiting (bl || br) ∧ el' = Waiting bl ∧ er' = Waiting br
+  | MLFNone => e1' = Waiting (bl || br) ∧ el' = Waiting bl ∧ er' = Waiting br
   | _ => False
   end.
 
@@ -922,35 +859,35 @@ Lemma imp_link_refines_prod fns1 fns2:
   fns1 ##ₘ fns2 →
   trefines (MS imp_module (initial_imp_state (imp_link fns1 fns2)))
            (MS (imp_prod (dom _ fns1) (dom _ fns2) imp_module imp_module)
-               (SPNone, initial_imp_state fns1, initial_imp_state fns2, (IPFState IPFNone []))).
+               (MLFNone, [], initial_imp_state fns1, initial_imp_state fns2)).
 Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { exact: (λ _, imp_link_prod_inv true fns1 fns2). }
   { split!. 1: by econs. all: done. } { done. }
-  move => /= {}n _ Hloop [e1 h1 fns1'] [[[? [el hl fnsl]] [er hr fnsr] [ipfs cs]]] [m [K [Kl [Kr ?]]]].
+  move => /= {}n _ Hloop [e1 h1 fns1'] [[[ipfs cs] [el hl fnsl]] [er hr fnsr]] [m [K [Kl [Kr ?]]]].
   have {}Hloop : ∀ σi σs,
             imp_link_prod_inv false fns1 fns2 σi σs
             → σi ⪯{imp_module, imp_prod (dom (gset string) fns1) (dom (gset string) fns2) imp_module imp_module, n, true} σs. {
-    clear -Hloop. move => [e1 h1 fns1'] [[[sp [el hl fnsl]] [er hr fnsr] [ipfs cs]]].
+    clear -Hloop. move => [e1 h1 fns1'] [[[ipfs cs] [el hl fnsl]] [er hr fnsr]].
     move => [m [K [Kl [Kr [e1' [el' [er' [bl [br [?[?[?[HK[?[?[? Hm]]]]]]]]]]]]]]]]; simplify_eq.
-    elim/lt_wf_ind: m sp ipfs h1 hl hr cs K Kl Kr e1' el' er' bl br HK Hm => m IHm.
-    move => ipfs h1 hl hr cs sp K Kl Kr e1' el' er' bl br HK Hmatch.
+    elim/lt_wf_ind: m ipfs h1 hl hr cs K Kl Kr e1' el' er' bl br HK Hm => m IHm.
+    move => ipfs h1 hl hr cs K Kl Kr e1' el' er' bl br HK Hmatch.
     case_match; destruct_all?; simplify_eq/=.
     - destruct (to_val el') eqn:?; [ |apply: Hloop; naive_solver].
       destruct el'; simplify_eq/=.
       inversion HK; clear HK; simplify_eq/=.
-      * tstep_i. tstep_s. split!; [econs|] => /=. split!.
+      * tstep_i. tstep_s. split!; [done..|] => /=. split!.
         apply: Hloop. by split!.
-      * tstep_s. split!; [econs|] => /=.
-        tstep_s. right. split!; [econs|] => /=.
+      * tstep_s. split!; [done..|] => /=.
+        tstep_s. right. split!; [done|] => /=.
         rewrite !expr_fill_app. apply: IHm; [|done|]; [lia|]. split!. by apply static_expr_expr_fill.
     - destruct (to_val er') eqn:?; [ |apply: Hloop; naive_solver].
       destruct er'; simplify_eq/=.
       inversion HK; clear HK; simplify_eq/=.
-      * tstep_i. tstep_s. split!; [econs|] => /=. split!. apply: Hloop. by split!.
-      * tstep_s. split!; [econs|] => /=.
-        tstep_s. right. split!; [econs|] => /=.
+      * tstep_i. tstep_s. split!; [done..|] => /=. split!. apply: Hloop. by split!.
+      * tstep_s. split!; [done..|] => /=.
+        tstep_s. right. split!; [done|] => /=.
         rewrite !expr_fill_app. apply: IHm; [|done|]; [lia|]. split!. by apply static_expr_expr_fill.
     - apply: Hloop; naive_solver.
   }
@@ -988,14 +925,13 @@ Proof.
       * tstep_s. left. split!; [done..|] => /=. tend. split!; [done..|].
         apply: Hloop. rewrite !expr_fill_app. split!; [done..|].
         apply static_expr_expr_fill. split!. apply static_expr_subst_l; [|done]. apply fd_static.
-      * tstep_s. right. split!; [econs|].
-        { by apply not_elem_of_dom. } { by apply elem_of_dom. } simpl.
-        tstep_s. left. split!; [done|econs|] => /=. case_bool_decide.
+      * tstep_s. right. simpl_map_decide. split!; [done..|] => /=.
+        tstep_s. left. split!; [done..|] => /=. case_bool_decide.
         2: { tstep_s. naive_solver. }
         tend. split!; [done..|]. apply: Hloop. split!; [by econs|done..|].
         apply static_expr_subst_l; [|done]. apply fd_static.
     + revert select ((_ ∪ _) !! _ = None) => /lookup_union_None[??].
-      tstep_s. right. split!; [apply IPFCallLeftToExt; by apply not_elem_of_dom|] => /=.
+      tstep_s. right. simpl_map_decide. split! => /=.
       split!; [done|]. tend. split!; [done..|].
       apply: Hloop. split!; [by econs|done..].
   - tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]].
@@ -1029,9 +965,8 @@ Proof.
     + tstep_s. by split!.
     + revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|[??]].
       * have ? : fns2 !! f = None by apply: map_disjoint_Some_l.
-        tstep_s. right. split!; [econs|].
-        { by apply elem_of_dom. } { by apply not_elem_of_dom. } simpl.
-        tstep_s. left. split!; [done|econs|] => /=. case_bool_decide.
+        tstep_s. right. simpl_map_decide. split! => /=.
+        tstep_s. left. split!; [done..|] => /=. case_bool_decide.
         2: { tstep_s. naive_solver. }
         tend. split!; [done..|]. apply: Hloop. split!; [by econs|done..|].
         apply static_expr_subst_l; [|done]. apply fd_static.
@@ -1039,55 +974,55 @@ Proof.
         apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
         apply static_expr_expr_fill. split!. apply static_expr_subst_l; [|done]. apply fd_static.
     + revert select ((_ ∪ _) !! _ = None) => /lookup_union_None[??].
-      tstep_s. right. split!; [apply IPFCallRightToExt; by apply not_elem_of_dom|] => /=.
+      tstep_s. right. simpl_map_decide. split! => /=.
       split!; [done|]. tend. split!; [done..|].
       apply: Hloop. split!; [by econs|rewrite ?orb_true_r; done..].
   - tstep_i. split.
     + move => f fn vs h' /lookup_union_Some_raw[?|[??]].
       * have ?: fns2 !! f = None by apply: map_disjoint_Some_l.
-        tstep_s. split!; [econs|]. { by apply elem_of_dom. } { by apply not_elem_of_dom. }
-        simpl. split!; [done|].
-        tstep_s. left. split!; [done|by econs|] => /=. case_bool_decide. 2: { tstep_s. naive_solver. }
+        tstep_s. eexists (EICall _ _ _) => /=. simpl. simpl_map_decide. split!; [|done|].
+        { rewrite elem_of_union !elem_of_dom. naive_solver. }
+        tstep_s. left. split!; [done|done|] => /=. case_bool_decide. 2: { tstep_s. naive_solver. }
         apply Hloop. split!; [by econs|done..| ].
         apply static_expr_subst_l; [|done]. apply fd_static.
-      * tstep_s. split!; [apply IPFCallExtToRight|]. { by apply not_elem_of_dom. } { by apply elem_of_dom. }
-        split!; [done|].
-        tstep_s. left. split!; [done|econs|] => /=. case_bool_decide. 2: { tstep_s. naive_solver. }
+      * tstep_s. eexists (EICall _ _ _) => /=. simpl. simpl_map_decide. split!; [|done|].
+        { rewrite elem_of_union !elem_of_dom. naive_solver. }
+        tstep_s. left. split!; [done..|] => /=. case_bool_decide. 2: { tstep_s. naive_solver. }
         apply Hloop. split!; [by econs|done..| ].
         apply static_expr_subst_l; [|done]. apply fd_static.
     + move => v h' ?.
-      revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _) => HK.
+      revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _ _) => HK.
       inversion HK; clear HK; simplify_eq/= => //.
-      * tstep_s. split!;[apply IPFReturnExtToLeft|] => /=. split!; [done|].
-        tstep_s. right. split!; [econs|] => /=.
+      * tstep_s. eexists (EIReturn _ _) => /=. split!; [done..|].
+        tstep_s. right. split!; [done..|] => /=.
         apply Hloop. rewrite !expr_fill_app. split!; [done..|].
         by apply static_expr_expr_fill.
-      * tstep_s. split!; [apply IPFReturnExtToRight|] => /=. split!; [done|].
-        tstep_s. right. split!; [econs|] => /=.
-        apply Hloop. rewrite !expr_fill_app. split!;[done..| ].
+      * tstep_s. eexists (EIReturn _ _) => /=. split!; [done..|].
+        tstep_s. right. split!; [done..|] => /=.
+        apply Hloop. rewrite !expr_fill_app. split!; [done..|].
         by apply static_expr_expr_fill.
 Qed.
 
 Lemma imp_prod_refines_link fns1 fns2:
   fns1 ##ₘ fns2 →
   trefines (MS (imp_prod (dom _ fns1) (dom _ fns2) imp_module imp_module)
-               (SPNone, initial_imp_state fns1, initial_imp_state fns2, (IPFState IPFNone [])))
+               (MLFNone, [], initial_imp_state fns1, initial_imp_state fns2))
            (MS imp_module (initial_imp_state (imp_link fns1 fns2))).
 Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { exact: (λ _, flip (imp_link_prod_inv false fns1 fns2)). }
   { split!. 1: by econs. all: done. } { done. }
-  move => /= {}n _ Hloop [[[? [el hl fnsl]] [er hr fnsr] [ipfs cs]]] [e1 h1 fns1'] [m [K [Kl [Kr ?]]]].
+  move => /= {}n _ Hloop [[[ipfs cs] [el hl fnsl]] [er hr fnsr]] [e1 h1 fns1'] [m [K [Kl [Kr ?]]]].
   destruct_all?; simplify_eq/=. case_match; destruct_all?; simplify_eq.
   - destruct (to_val el') eqn:?.
     + destruct el'; simplify_eq/=.
-      revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _) => HK.
+      revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _ _) => HK.
       inversion HK; clear HK; simplify_eq/=.
-      * tstep_i => *. invert_all imp_prod_filter. tstep_s. split!.
+      * tstep_i => *; destruct_all?; simplify_eq. tstep_s. split!.
         apply Hloop. by split!.
-      * tstep_i => *. invert_all imp_prod_filter.
-        tstep_i; split => *; invert_all imp_prod_filter.
+      * tstep_i => *; destruct_all?; simplify_eq/=.
+        tstep_i; split => *; simplify_eq.
         apply Hloop. rewrite !expr_fill_app. split!; [done..|].
         by apply static_expr_expr_fill.
     + tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]] *.
@@ -1122,22 +1057,22 @@ Proof.
         apply: Hloop. rewrite !expr_fill_app. split!; [done..|].
         apply static_expr_expr_fill. split!. apply static_expr_subst_l; [|done].
         apply fd_static.
-      * invert_all imp_prod_filter.
+      * move => *. destruct_all?; simplify_eq/=. repeat case_bool_decide => //.
         -- have [??] : is_Some (fns2 !! f) by apply elem_of_dom.
            tstep_s. left. split!; [apply lookup_union_Some; naive_solver|] => ?. tend. split!; [done|].
-           tstep_i. split => *; invert_all imp_prod_filter. case_bool_decide => //.
+           tstep_i. split => *; simplify_eq. case_bool_decide => //.
            apply: Hloop. split!; [by econs|done..|].
            apply static_expr_subst_l; [|done]. apply fd_static.
         -- tstep_s. right. split!; [apply lookup_union_None;split!;by apply not_elem_of_dom| done|].
            tend. split!; [done|]. apply: Hloop. split!; [by econs|done..].
   - destruct (to_val er') eqn:?.
     + destruct er'; simplify_eq/=.
-      revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _) => HK.
+      revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _ _) => HK.
       inversion HK; clear HK; simplify_eq/=.
-      * tstep_i => *. invert_all imp_prod_filter. tstep_s. split!.
+      * tstep_i => *; destruct_all?; simplify_eq. tstep_s. split!.
         apply Hloop. by split!.
-      * tstep_i => *. invert_all imp_prod_filter.
-        tstep_i; split => *; invert_all imp_prod_filter.
+      * tstep_i => *; destruct_all?; simplify_eq/=.
+        tstep_i; split => *; simplify_eq.
         apply Hloop. rewrite !expr_fill_app. split!; [done..|].
         by apply static_expr_expr_fill.
     + tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]] *.
@@ -1172,7 +1107,7 @@ Proof.
         apply: Hloop. rewrite !expr_fill_app. split!; [done..|].
         apply static_expr_expr_fill. split!. apply static_expr_subst_l; [|done].
         apply fd_static.
-      * invert_all imp_prod_filter.
+      * move => *. destruct_all?; simplify_eq/=. repeat case_bool_decide => //.
         -- have [??] : is_Some (fns1 !! f) by apply elem_of_dom.
            tstep_s. left. split!; [apply lookup_union_Some; naive_solver|] => ?.
            tend. split!; [done|].
@@ -1181,27 +1116,29 @@ Proof.
            apply static_expr_subst_l; [|done]. apply fd_static.
         -- tstep_s. right. split!; [apply lookup_union_None;split!;by apply not_elem_of_dom|done|].
            tend. split!; [done|]. apply: Hloop. split!; [by econs|rewrite ?orb_true_r; done..].
-  - tstep_i => *. invert_all imp_prod_filter; try (revert select (_ ∈ dom _ _) => /elem_of_dom[??]).
-    + tstep_s. left. split!; [apply lookup_union_Some; naive_solver|done|].
-      case_bool_decide. 2: { tstep_s; naive_solver. }
-      tstep_i. split => *; invert_all imp_prod_filter. case_bool_decide => //.
-      apply Hloop. split!; [by econs|done..|]. apply static_expr_subst_l; [|done]. apply fd_static.
-    + tstep_s. left. split!; [apply lookup_union_Some; naive_solver|done|].
-      case_bool_decide. 2: { tstep_s; naive_solver. }
-      tstep_i. split => *; invert_all imp_prod_filter. case_bool_decide => //.
-      apply Hloop. split!; [by econs|done..|]. apply static_expr_subst_l; [|done]. apply fd_static.
-    + revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _) => HK.
-      inversion HK; clear HK; simplify_eq.
-      tstep_s. right. split!; [done|].
-      tstep_i. split => *; invert_all imp_prod_filter.
-      apply Hloop. rewrite !expr_fill_app. split!; [done|done..|].
-      by apply static_expr_expr_fill.
-    + revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _) => HK.
-      inversion HK; clear HK; simplify_eq.
-      tstep_s. right. rewrite orb_true_r. split!; [done|].
-      tstep_i. split => *; invert_all imp_prod_filter.
-      apply Hloop. rewrite !expr_fill_app. split!; [done|done..|].
-      by apply static_expr_expr_fill.
+  - tstep_i => *.
+    repeat match goal with | x : imp_ev |- _ => destruct x end; simplify_eq/=; destruct_all?; simplify_eq/=.
+    + revert select (_ ∈ dom _ _ ∪ dom _ _) => Hdom. rewrite -dom_union_L in Hdom.
+      move: Hdom => /elem_of_dom[? Hin].
+      tstep_s. left. split!; [done..|].
+      repeat case_bool_decide => //. 2, 4: by tstep_s; naive_solver.
+      * move: Hin => /lookup_union_Some_raw[?|[??]]. 2: { revert select (_ ∈ _) => /elem_of_dom[??]. naive_solver. }
+        tstep_i. split => *; destruct_all?; simplify_eq/=. case_bool_decide => //.
+        apply Hloop. split!; [by econs|done..|]. apply static_expr_subst_l; [|done]. apply fd_static.
+      * move: Hin => /lookup_union_Some_raw[?|[??]]. 1: { revert select (_ ∉ _) => /not_elem_of_dom. naive_solver. }
+        tstep_i. split => *; destruct_all?; simplify_eq/=. case_bool_decide => //.
+        apply Hloop. split!; [by econs|done..|]. apply static_expr_subst_l; [|done]. apply fd_static.
+    + tstep_s. right.
+      revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _ _) => HK.
+      inversion HK; clear HK; simplify_eq; rewrite ?orb_true_r.
+      * split!; [done|].
+        tstep_i. split => *; destruct_all?; simplify_eq/=.
+        apply Hloop. rewrite !expr_fill_app. split!; [done|done..|].
+        by apply static_expr_expr_fill.
+      * split!; [done|].
+        tstep_i. split => *; destruct_all?; simplify_eq/=.
+        apply Hloop. rewrite !expr_fill_app. split!; [done|done..|].
+        by apply static_expr_expr_fill.
 Qed.
 
 Lemma imp_trefines_implies_ctx_refines fnsi fnss :
@@ -1213,8 +1150,7 @@ Proof.
   etrans. { apply imp_link_refines_prod. apply map_disjoint_difference_r'. }
   etrans. 2: { apply imp_prod_refines_link. apply map_disjoint_difference_r'. }
   rewrite !dom_difference_L Hdom.
-  apply mod_map_trefines.
-  apply: mod_seq_product_trefines.
+  apply imp_prod_trefines; [apply _..| |].
   - apply: Href.
   - erewrite map_difference_eq_dom_L => //. apply _.
 Qed.

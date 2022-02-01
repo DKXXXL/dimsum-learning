@@ -386,6 +386,16 @@ Definition mod_seq_map {EV1 EV2} (m : module EV1) (f : module (EV1 + EV2)) : mod
   (mod_state_transform (mod_map (mod_seq_product m f) mod_seq_map_filter)
                        (λ σ σ', σ' = mod_seq_map_trans m f σ)).
 
+Global Instance mod_seq_map_vis_no_all {EV1 EV2} (m : module EV1) (f : module (EV1 + EV2)) `{!VisNoAll m} `{!VisNoAll f}:
+  VisNoAll (mod_seq_map m f).
+Proof.
+  apply: mod_state_transform_vis_no_all.
+  move => ??? [[[sp σ1]σf]σ] ??. eexists (σ, σ1, σf) => -[[??]?].
+  invert_all @m_step; invert_all @mod_seq_map_filter; destruct_all?; simplify_eq.
+  all: repeat case_match => //; simplify_eq/=.
+  naive_solver.
+Qed.
+
 Lemma mod_seq_map_trefines {EV1 EV2} (m1 m2 : module EV1) (f : module (EV1 + EV2)) σ1 σ2 σ σf `{!VisNoAll m1} `{!VisNoAll f}:
   trefines (MS m1 σ1) (MS m2 σ2) →
   trefines (MS (mod_seq_map m1 f) (σ, σ1, σf)) (MS (mod_seq_map m2 f) (σ, σ2, σf)).
