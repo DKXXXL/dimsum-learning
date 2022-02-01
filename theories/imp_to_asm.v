@@ -337,7 +337,7 @@ Proof.
       go_s => ?; go.
       go_s => ?; go.
       go_s. go_s. go_s.
-      eexists (EICall _ _ _). split!; [..|done|]. { set_solver. } { repeat case_bool_decide => //; set_solver. }
+      eexists (EICall _ _ _). split!; [..|done|]. { repeat case_bool_decide => //; set_solver. }
       have [[?[??]]|[?[??]]]: (pc0 ∈ ins1 ∧ f ∈ fns1 ∧ f2i1 !! f = Some pc0 ∨
                          pc0 ∈ ins2 ∧ f ∈ fns2 ∧ f2i2 !! f = Some pc0). {
         move: Hin => /elem_of_union [Hf|Hf]; [left|right];

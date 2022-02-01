@@ -207,7 +207,6 @@ Definition asm_prod_filter (ins1 ins2 : gset Z) : seq_product_state → unit →
     | EAJump pc rs mem =>
         p' = (if bool_decide (pc ∈ ins1) then SPLeft else if bool_decide (pc ∈ ins2) then SPRight else SPNone) ∧
         rs !! "PC" = Some pc ∧
-        (if p is SPNone then pc ∈ (ins1 ∪ ins2) else True) ∧
         p ≠ p'
     end.
 Arguments asm_prod_filter _ _ _ _ !_ _ _ _ /.
@@ -273,8 +272,7 @@ Proof.
     + tstep_both. tstep_s => *. tend. split!; [done..|]. apply: Hloop. naive_solver.
     + tstep_both. tstep_s => *. tend. split!; [done..|]. apply: Hloop. naive_solver.
   - tstep_i => pc???? Hin.
-    tstep_s. eexists (EAJump _ _ _). split!; [done| | |done|].
-    { move: Hin => /lookup_union_Some_raw?. rewrite elem_of_union !elem_of_dom; naive_solver. }
+    tstep_s. eexists (EAJump _ _ _). split!; [done| |done|].
     { move: Hin => /lookup_union_Some_raw[?|[??]]; by simpl_map_decide. }
     move: Hin => /lookup_union_Some_raw[?|[??]]; simpl_map_decide.
     all: tstep_s; split!; [done|done|econs|] => /=; apply: Hloop; naive_solver.
@@ -314,10 +312,10 @@ Proof.
     + tstep_both => *. tstep_s => ?. tend. split!; [done..|]. apply: Hloop. naive_solver.
     + tstep_both => *. tstep_s => ?. tend. split!; [done..|]. apply: Hloop. naive_solver.
   - tstep_i => -[] /= *; destruct_all?; simplify_eq/=.
-    revert select (_ ∈ dom _ _ ∪ dom _ _) => Hpc. rewrite -dom_union_L in Hpc.
-    move: Hpc => /elem_of_dom[? Hin].
-    tstep_s. split!; [done..|].
-    move: Hin => /lookup_union_Some_raw[?|[??]]; simpl_map_decide.
+    tstep_s.
+    repeat case_bool_decide => //.
+    all: revert select (_ ∈ dom _ _) => /elem_of_dom[? Hin];
+           split!; [done|rewrite lookup_union_Some //;naive_solver|done|].
     all: tstep_i => *; simplify_eq; apply: Hloop; naive_solver.
 Qed.
 

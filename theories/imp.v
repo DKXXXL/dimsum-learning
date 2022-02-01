@@ -782,7 +782,6 @@ Definition imp_prod_filter (fns1 fns2 : gset string) : seq_product_state → lis
     match e with
     | EICall f vs h =>
         p' = (if bool_decide (f ∈ fns1) then SPLeft else if bool_decide (f ∈ fns2) then SPRight else SPNone) ∧
-        (if p is SPNone then f ∈ (fns1 ∪ fns2) else True) ∧
         (cs' = p::cs) ∧
         p ≠ p'
     | EIReturn v h =>
@@ -980,13 +979,11 @@ Proof.
   - tstep_i. split.
     + move => f fn vs h' /lookup_union_Some_raw[?|[??]].
       * have ?: fns2 !! f = None by apply: map_disjoint_Some_l.
-        tstep_s. eexists (EICall _ _ _) => /=. simpl. simpl_map_decide. split!; [|done|].
-        { rewrite elem_of_union !elem_of_dom. naive_solver. }
+        tstep_s. eexists (EICall _ _ _) => /=. simpl. simpl_map_decide. split!; [done|].
         tstep_s. left. split!; [done|done|] => /=. case_bool_decide. 2: { tstep_s. naive_solver. }
         apply Hloop. split!; [by econs|done..| ].
         apply static_expr_subst_l; [|done]. apply fd_static.
-      * tstep_s. eexists (EICall _ _ _) => /=. simpl. simpl_map_decide. split!; [|done|].
-        { rewrite elem_of_union !elem_of_dom. naive_solver. }
+      * tstep_s. eexists (EICall _ _ _) => /=. simpl. simpl_map_decide. split!; [done|].
         tstep_s. left. split!; [done..|] => /=. case_bool_decide. 2: { tstep_s. naive_solver. }
         apply Hloop. split!; [by econs|done..| ].
         apply static_expr_subst_l; [|done]. apply fd_static.
@@ -1118,14 +1115,13 @@ Proof.
            tend. split!; [done|]. apply: Hloop. split!; [by econs|rewrite ?orb_true_r; done..].
   - tstep_i => *.
     repeat match goal with | x : imp_ev |- _ => destruct x end; simplify_eq/=; destruct_all?; simplify_eq/=.
-    + revert select (_ ∈ dom _ _ ∪ dom _ _) => Hdom. rewrite -dom_union_L in Hdom.
-      move: Hdom => /elem_of_dom[? Hin].
-      tstep_s. left. split!; [done..|].
-      repeat case_bool_decide => //. 2, 4: by tstep_s; naive_solver.
-      * move: Hin => /lookup_union_Some_raw[?|[??]]. 2: { revert select (_ ∈ _) => /elem_of_dom[??]. naive_solver. }
+    + tstep_s. left. repeat case_bool_decide => //.
+      all: revert select (_ ∈ dom _ _) => /elem_of_dom[??]; split!;
+               [rewrite lookup_union_Some //; naive_solver |done|].
+      * case_bool_decide. 2: { by tstep_s. }
         tstep_i. split => *; destruct_all?; simplify_eq/=. case_bool_decide => //.
         apply Hloop. split!; [by econs|done..|]. apply static_expr_subst_l; [|done]. apply fd_static.
-      * move: Hin => /lookup_union_Some_raw[?|[??]]. 1: { revert select (_ ∉ _) => /not_elem_of_dom. naive_solver. }
+      * case_bool_decide. 2: { by tstep_s. }
         tstep_i. split => *; destruct_all?; simplify_eq/=. case_bool_decide => //.
         apply Hloop. split!; [by econs|done..|]. apply static_expr_subst_l; [|done]. apply fd_static.
     + tstep_s. right.
