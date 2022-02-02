@@ -33,11 +33,31 @@ Lemma pp_to_ex_exists {R} pp Q:
   @pp_to_ex R pp Q ↔ ∃ r, Q r ∧ pp_to_ex pp (r =.).
 Proof. elim: pp => /=; naive_solver. Qed.
 
+Lemma pp_to_all_forall {R} pp Q:
+  @pp_to_all R pp Q ↔ (∀ r, pp_to_ex pp (r =.) → Q r).
+Proof. elim: pp => /=; naive_solver. Qed.
+Lemma pp_to_all_forall_2 {R} pp Q:
+  @pp_to_all R pp Q →
+  ∀ r, pp_to_ex pp (r =.) → Q r.
+Proof. apply pp_to_all_forall. Qed.
+
+Lemma pp_to_all_mono {R} pp (Q1 Q2 : _ → Prop):
+  @pp_to_all R pp Q1 →
+  (∀ r, Q1 r → Q2 r) →
+  @pp_to_all R pp Q2.
+Proof. elim: pp => /=; naive_solver. Qed.
+
+Lemma pp_to_ex_mono {R} pp (Q1 Q2 : _ → Prop):
+  @pp_to_ex R pp Q1 →
+  (∀ r, Q1 r → Q2 r) →
+  @pp_to_ex R pp Q2.
+Proof. elim: pp => /=; naive_solver. Qed.
+
 Lemma pp_to_all_ex {R} pp Q1 Q2:
   @pp_to_all R pp Q1 →
   pp_to_ex pp Q2 →
   ∃ r, Q1 r ∧ Q2 r.
-Proof. elim: pp => /=; naive_solver. Qed.
+Proof. move => /pp_to_all_forall ? /pp_to_ex_exists. naive_solver. Qed.
 
 (** * mod_prepost *)
 Section prepost.
@@ -126,7 +146,7 @@ Section prepost.
     TStepS (mod_prepost i o m) (SMFilter, σ, (PPOutside, s)) (λ G,
         ∃ e, G (Some e) (λ G', G' (SMFilter, σ, (PPRecv1 e, s)))).
   Proof.
-    constructor => G /= [??]. split!; [done|] => /= ??. tstep_s. eexists (Some (inr _)). split!; [done|].
+    constructor => G /= [??]. split!; [done|] => /= ??. tstep_s. eexists (Some (inr _)). split!.
     apply: steps_spec_step_end; [by econs|]. naive_solver.
   Qed.
 
@@ -149,7 +169,7 @@ Section prepost.
   Proof.
     constructor => G /= /pp_to_ex_exists[?[??]]. split!; [done|] => /= ??.
     apply steps_spec_step_trans. tstep_s. eexists (Some _). split!.
-    apply: steps_spec_step_end; [by econs|] => /= ? ->. tstep_s. eexists (Some (inr _)). split!; [done|].
+    apply: steps_spec_step_end; [by econs|] => /= ? ->. tstep_s. eexists (Some (inr _)). split!.
     apply: steps_spec_step; [by econs|] => /= ? ->.
     apply: steps_spec_step_end; [by econs|] => /= ? ->.
     done.
@@ -164,3 +184,222 @@ Global Hint Resolve
        mod_prepost_step_Recv1_s
        mod_prepost_step_Inside_s
  | 3 : tstep.
+
+
+Section prepost.
+
+  Lemma mod_prepost_link
+        {EV1 EV2 S1 S2 S' Sr1 Sr2 : Type}
+        (INV : seq_product_state → S1 → S2 → S' → Sr1 → Sr2 → Prop)
+        (i1 : io_event EV2 → S1 → prepost (io_event EV1 * S1))
+        (o1 : io_event EV1 → S1 → prepost (io_event EV2 * S1))
+        (i2 : io_event EV2 → S2 → prepost (io_event EV1 * S2))
+        (o2 : io_event EV1 → S2 → prepost (io_event EV2 * S2))
+        (i : io_event EV2 → S' → prepost (io_event EV1 * S'))
+        (o : io_event EV1 → S' → prepost (io_event EV2 * S'))
+        (R1 : seq_product_state → Sr1 → EV2 → seq_product_state → Sr1 → EV2 → Prop)
+        (R2 : seq_product_state → Sr2 → EV1 → seq_product_state → Sr2 → EV1 → Prop)
+        (m1 m2 : module (io_event EV1))
+        σ1 σ2 s1 s2 sr1 sr2 s
+        `{!VisNoAll m1} `{!VisNoAll m2}
+        :
+
+       (∀ p s e p' s' e', R1 p s e p' s' e' → p ≠ p') →
+       INV SPNone s1 s2 s sr1 sr2 →
+       (∀ s1 s2 s sr1 sr2 e sr1' e',
+          R1 SPNone sr1 e SPLeft sr1' e' →
+          INV SPNone s1 s2 s sr1 sr2 →
+          pp_to_all (i (Incoming, e') s) (λ r1,
+          pp_to_ex (i1 (Incoming, e') s1) (λ r2, ∃ e sr2',
+            r1.1.1 = Incoming ∧
+            r2.1.1 = Incoming ∧
+            r1.1.2 = r2.1.2 ∧
+            R2 SPNone sr2 e SPLeft sr2' r1.1.2 ∧
+            INV SPLeft r2.2 s2 r1.2 sr1' sr2'))) →
+       (∀ s1 s2 s sr1 sr2 e sr1' e',
+          R1 SPNone sr1 e SPRight sr1' e' →
+          INV SPNone s1 s2 s sr1 sr2 →
+          pp_to_all (i (Incoming, e') s) (λ r1,
+          pp_to_ex (i2 (Incoming, e') s2) (λ r2, ∃ e sr2',
+            r1.1.1 = Incoming ∧
+            r2.1.1 = Incoming ∧
+            r1.1.2 = r2.1.2 ∧
+            R2 SPNone sr2 e SPRight sr2' r1.1.2 ∧
+            INV SPRight s1 r2.2 r1.2 sr1' sr2'))) →
+       (∀ s1 s2 s sr1 sr2 e,
+           INV SPLeft s1 s2 s sr1 sr2 →
+           pp_to_all (o1 e s1) (λ r1, ∀ sr1' e',
+             r1.1.1 = Outgoing →
+             R1 SPLeft sr1 r1.1.2 SPRight sr1' e' →
+             pp_to_ex (i2 (Incoming, e') s2) (λ r2, ∃ sr2',
+               e.1 = Outgoing ∧
+               r2.1.1 = Incoming ∧
+               INV SPRight r1.2 r2.2 s sr1' sr2' ∧
+               R2 SPLeft sr2 e.2 SPRight sr2' r2.1.2))) →
+       (∀ s1 s2 s sr1 sr2 e,
+           INV SPLeft s1 s2 s sr1 sr2 →
+           pp_to_all (o1 e s1) (λ r1, ∀ sr1' e',
+             r1.1.1 = Outgoing →
+             R1 SPLeft sr1 r1.1.2 SPNone sr1' e' →
+             ∃ e'' sr2',
+               e.1 = Outgoing ∧
+               R2 SPLeft sr2 e.2 SPNone sr2' e'' ∧
+               pp_to_ex (o (Outgoing, e'') s) (λ r2,
+                 r2.1.1 = Outgoing ∧
+                 r2.1.2 = e' ∧
+                 INV SPNone r1.2 s2 r2.2 sr1' sr2'))) →
+       (∀ s1 s2 s sr1 sr2 e,
+           INV SPRight s1 s2 s sr1 sr2 →
+           pp_to_all (o2 e s2) (λ r1, ∀ sr1' e',
+             r1.1.1 = Outgoing →
+             R1 SPRight sr1 r1.1.2 SPLeft sr1' e' →
+             pp_to_ex (i1 (Incoming, e') s1) (λ r2, ∃ sr2',
+               e.1 = Outgoing ∧
+               r2.1.1 = Incoming ∧
+               INV SPLeft r2.2 r1.2 s sr1' sr2' ∧
+               R2 SPRight sr2 e.2 SPLeft sr2' r2.1.2))) →
+       (∀ s1 s2 s sr1 sr2 e,
+           INV SPRight s1 s2 s sr1 sr2 →
+           pp_to_all (o2 e s2) (λ r1, ∀ sr1' e',
+             r1.1.1 = Outgoing →
+             R1 SPRight sr1 r1.1.2 SPNone sr1' e' →
+             ∃ e'' sr2',
+               e.1 = Outgoing ∧
+               R2 SPRight sr2 e.2 SPNone sr2' e'' ∧
+               pp_to_ex (o (Outgoing, e'') s) (λ r2,
+                 r2.1.1 = Outgoing ∧
+                 r2.1.2 = e' ∧
+                 INV SPNone s1 r1.2 r2.2 sr1' sr2'))) →
+    trefines (MS (mod_link R1 (mod_prepost i1 o1 m1) (mod_prepost i2 o2 m2))
+                 (MLFNone, sr1, (SMFilter, σ1, (PPOutside, s1)), (SMFilter, σ2, (PPOutside, s2))))
+             (MS (mod_prepost i o (mod_link R2 m1 m2))
+                 (SMFilter, (MLFNone, sr2, σ1, σ2), (PPOutside, s))).
+    Proof.
+      move => Hneq Hinv HN2L HN2R HL2R HL2N HR2L HR2N.
+      apply tsim_implies_trefines => /= n.
+      unshelve apply: tsim_remember. { simpl. exact (λ _
+          '(σl1, sr1, (σf1, σ1, (σpp1, s1)), (σf2, σ2, (σpp2, s2)))
+          '(σf, (σl2, sr2, σ1', σ2'), (σpp, s)),
+           ∃ sp,
+           σ1 = σ1' ∧ σ2 = σ2' ∧ INV sp s1 s2 s sr1 sr2 ∧
+          (( sp = SPNone ∧
+              σl1 = MLFNone ∧ σf = SMFilter
+            ∧ σpp1 = PPOutside ∧ σpp2 = PPOutside ∧ σpp = PPOutside
+            ∧ σf1 = SMFilter ∧ σf2 = SMFilter
+            ∧ σl2 = MLFNone)
+           ∨ (sp = SPLeft ∧
+              ((∃ e, σl2 = MLFRecvL e ∧ σf1 = SMProgRecv (Incoming, e))
+               ∨ (σl2 = MLFLeft ∧ σf1 = SMProg))
+            ∧ σpp1 = PPInside ∧ σpp2 = PPOutside ∧ σpp = PPInside
+            ∧ σf = SMProg ∧ σf2 = SMFilter
+            ∧ σl1 = MLFLeft)
+           ∨ (sp = SPRight ∧
+              ((∃ e, σl2 = MLFRecvR e ∧ σf2 = SMProgRecv (Incoming, e))
+               ∨ (σl2 = MLFRight ∧ σf2 = SMProg))
+            ∧ σpp1 = PPOutside ∧ σpp2 = PPInside ∧ σpp = PPInside
+            ∧ σf = SMProg ∧ σf1 = SMFilter
+            ∧ σl1 = MLFRight) )). }
+      { split!. } { done. }
+      move => {}n _ /= Hloop {Hinv}.
+      move => [[[σl1 {}sr1] [[σf1 {}σ1] [σpp1 {}s1]]] [[σf2 {}σ2] [σpp2 {}s2]]].
+      move => [[σf [[[σl2 {}sr2] σ1'] σ2']] [σpp {}s]] ?. destruct_all?; simplify_eq.
+      - tstep_i => ? p' ???.
+        tstep_s. split!.
+        tstep_s. apply pp_to_all_forall => ri Hi.
+        destruct p' => /=. 3: naive_solver.
+        + tstep_i => ??. simplify_eq.
+          tstep_i. move: ri Hi. apply pp_to_all_forall.
+          apply: pp_to_all_mono; [by apply: HN2L|].
+          move => [[??]?] /= Hcont. apply: pp_to_ex_mono; [done|].
+          move => [[??]?] /= *. destruct_all?; simplify_eq.
+          tstep_s.
+          split!; [done..|] => /=.
+          apply: Hloop. by split!.
+        + tstep_i => ??. simplify_eq.
+          tstep_i. move: ri Hi. apply pp_to_all_forall.
+          apply: pp_to_all_mono; [by apply: HN2R|].
+          move => [[??]?] /= Hcont. apply: pp_to_ex_mono; [done|].
+          move => [[??]?] /= *. destruct_all?; simplify_eq.
+          tstep_s.
+          split!; [done..|] => /=.
+          apply: Hloop. by split!.
+      - tstep_both.
+        apply steps_impl_step_end => κ Pσ2 ?. case_match; intros; simplify_eq.
+        + tstep_s. eexists (Some (Incoming, _)). split!.
+          apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+          apply: Hloop. by split!.
+        + tstep_s. eexists None.
+          apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+          apply: Hloop. by split!.
+      - tstep_both.
+        apply steps_impl_step_end => κ Pσ2 ? *. destruct κ as [e|]. 2: {
+          tstep_s. eexists None. split!.
+          apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
+          apply: Hloop. by split!.
+        }
+        tend. have [σ' Hσ'] := vis_no_all _ _ _ ltac:(done). eexists σ'. split; [naive_solver|].
+        tstep_i. apply pp_to_all_forall => ri Hi p' sr1' e' HR1 Hri.
+        destruct p' => /=. 1: naive_solver.
+        + tstep_i => ??; simplify_eq.
+          tstep_i.
+          move: ri Hi sr1' e' Hri HR1. apply: pp_to_all_forall_2.
+          apply: pp_to_all_mono; [ by apply: HL2R|].
+          move => [[??]?] /= Hcont ????.
+          apply: pp_to_ex_mono; [ by apply: Hcont|].
+          move => [[??]?] /=?. destruct_all?; simplify_eq.
+          tstep_s. eexists (Some (Outgoing, _)). split!; [done|].
+          destruct e; simplify_eq/=.
+          apply: steps_spec_step_end; [done|] => ??.
+          apply Hloop. split!; [naive_solver|done..].
+        + move: ri Hi sr1' e' Hri HR1. apply: pp_to_all_forall_2.
+          apply: pp_to_all_mono; [by apply: HL2N|].
+          move => [[??]?] /= Hcont ????.
+          have {}Hcont := Hcont _ _ ltac:(done) ltac:(done). destruct_all?.
+          destruct e; simplify_eq/=.
+          tstep_s. eexists (Some (Outgoing, _)). split!; [done|].
+          apply: steps_spec_step_end; [done|] => ??.
+          tstep_s.
+          apply: pp_to_ex_mono; [done|].
+          move => [[??]?] /= *. destruct_all?; simplify_eq. split!.
+          apply Hloop. split!; [naive_solver|done..].
+      - tstep_both.
+        apply steps_impl_step_end => κ Pσ2 ?. case_match; intros; simplify_eq.
+        + tstep_s. eexists (Some (Incoming, _)). split!.
+          apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+          apply: Hloop. by split!.
+        + tstep_s. eexists None.
+          apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+          apply: Hloop. by split!.
+      - tstep_both.
+        apply steps_impl_step_end => κ Pσ2 ? *. destruct κ as [e|]. 2: {
+          tstep_s. eexists None. split!.
+          apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
+          apply: Hloop. by split!.
+        }
+        tend. have [σ' Hσ'] := vis_no_all _ _ _ ltac:(done). eexists σ'. split; [naive_solver|].
+        tstep_i. apply pp_to_all_forall => ri Hi p' sr1' e' HR1 Hri.
+        destruct p' => /=. 2: naive_solver.
+        + tstep_i => ??; simplify_eq.
+          tstep_i.
+          move: ri Hi sr1' e' Hri HR1. apply: pp_to_all_forall_2.
+          apply: pp_to_all_mono; [ by apply: HR2L|].
+          move => [[??]?] /= Hcont ????.
+          apply: pp_to_ex_mono; [ by apply: Hcont|].
+          move => [[??]?] /= *. destruct_all?; simplify_eq.
+          tstep_s. eexists (Some (Outgoing, _)). split!; [done|].
+          destruct e; simplify_eq/=.
+          apply: steps_spec_step_end; [done|] => ??.
+          apply Hloop. split!; [naive_solver|done..].
+        + move: ri Hi sr1' e' Hri HR1. apply: pp_to_all_forall_2.
+          apply: pp_to_all_mono; [by apply: HR2N|].
+          move => [[??]?] /= Hcont ????.
+          have {}Hcont := Hcont _ _ ltac:(done) ltac:(done). destruct_all?.
+          destruct e; simplify_eq/=.
+          tstep_s. eexists (Some (Outgoing, _)). split!; [done|].
+          apply: steps_spec_step_end; [done|] => ??.
+          tstep_s.
+          apply: pp_to_ex_mono; [done|].
+          move => [[??]?] /= *. destruct_all?; simplify_eq. split!.
+          apply Hloop. split!; [naive_solver|done..].
+    Qed.
+End prepost.

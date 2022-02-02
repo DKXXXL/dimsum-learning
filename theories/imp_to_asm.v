@@ -189,37 +189,37 @@ Lemma imp_to_asm_trefines m m' σ σ' ins fns f2i `{!VisNoAll m}:
 Proof. move => ?. by apply: mod_prepost_trefines. Qed.
 
 Inductive imp_to_asm_combine_stacks (ins1 ins2 : gset Z) :
-  mod_link_state imp_ev → list seq_product_state →
+  seq_product_state → list seq_product_state →
   list imp_to_asm_stack_item → list imp_to_asm_stack_item → list imp_to_asm_stack_item →
  Prop :=
 | IAC_nil :
-  imp_to_asm_combine_stacks ins1 ins2 MLFNone [] [] [] []
+  imp_to_asm_combine_stacks ins1 ins2 SPNone [] [] [] []
 | IAC_NoneLeft ret rs ics cs cs1 cs2 mem h:
   ret ∉ ins1 →
   ret ∉ ins2 →
-  imp_to_asm_combine_stacks ins1 ins2 MLFNone ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 MLFLeft (SPNone :: ics) ((I2AI false ret rs mem h) :: cs) ((I2AI false ret rs mem h) :: cs1) cs2
+  imp_to_asm_combine_stacks ins1 ins2 SPNone ics cs cs1 cs2 →
+  imp_to_asm_combine_stacks ins1 ins2 SPLeft (SPNone :: ics) ((I2AI false ret rs mem h) :: cs) ((I2AI false ret rs mem h) :: cs1) cs2
 | IAC_NoneRight ret rs ics cs cs1 cs2 mem h:
   ret ∉ ins1 →
   ret ∉ ins2 →
-  imp_to_asm_combine_stacks ins1 ins2 MLFNone ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 MLFRight (SPNone :: ics) ((I2AI false ret rs mem h) :: cs) cs1 ((I2AI false ret rs mem h) :: cs2)
+  imp_to_asm_combine_stacks ins1 ins2 SPNone ics cs cs1 cs2 →
+  imp_to_asm_combine_stacks ins1 ins2 SPRight (SPNone :: ics) ((I2AI false ret rs mem h) :: cs) cs1 ((I2AI false ret rs mem h) :: cs2)
 | IAC_LeftRight ret rs ics cs cs1 cs2 mem h:
   ret ∈ ins1 →
-  imp_to_asm_combine_stacks ins1 ins2 MLFLeft ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 MLFRight (SPLeft :: ics) cs ((I2AI true ret rs mem h) :: cs1) ((I2AI false ret rs mem h) :: cs2)
+  imp_to_asm_combine_stacks ins1 ins2 SPLeft ics cs cs1 cs2 →
+  imp_to_asm_combine_stacks ins1 ins2 SPRight (SPLeft :: ics) cs ((I2AI true ret rs mem h) :: cs1) ((I2AI false ret rs mem h) :: cs2)
 | IAC_LeftNone ret rs ics cs cs1 cs2 mem h:
   ret ∈ ins1 →
-  imp_to_asm_combine_stacks ins1 ins2 MLFLeft ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 MLFNone (SPLeft :: ics) ((I2AI true ret rs mem h) :: cs) ((I2AI true ret rs mem h) :: cs1) cs2
+  imp_to_asm_combine_stacks ins1 ins2 SPLeft ics cs cs1 cs2 →
+  imp_to_asm_combine_stacks ins1 ins2 SPNone (SPLeft :: ics) ((I2AI true ret rs mem h) :: cs) ((I2AI true ret rs mem h) :: cs1) cs2
 | IAC_RightLeft ret rs ics cs cs1 cs2 mem h:
   ret ∈ ins2 →
-  imp_to_asm_combine_stacks ins1 ins2 MLFRight ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 MLFLeft (SPRight :: ics) cs ((I2AI false ret rs mem h) :: cs1) ((I2AI true ret rs mem h) :: cs2)
+  imp_to_asm_combine_stacks ins1 ins2 SPRight ics cs cs1 cs2 →
+  imp_to_asm_combine_stacks ins1 ins2 SPLeft (SPRight :: ics) cs ((I2AI false ret rs mem h) :: cs1) ((I2AI true ret rs mem h) :: cs2)
 | IAC_RightNone ret rs ics cs cs1 cs2 mem h:
   ret ∈ ins2 →
-  imp_to_asm_combine_stacks ins1 ins2 MLFRight ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 MLFNone (SPRight :: ics) ((I2AI true ret rs mem h) :: cs) cs1 ((I2AI true ret rs mem h) :: cs2)
+  imp_to_asm_combine_stacks ins1 ins2 SPRight ics cs cs1 cs2 →
+  imp_to_asm_combine_stacks ins1 ins2 SPNone (SPRight :: ics) ((I2AI true ret rs mem h) :: cs) cs1 ((I2AI true ret rs mem h) :: cs2)
 .
 
 Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
@@ -241,7 +241,7 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
       ∧ t2 = PPOutside
       ∧ σf1 = SMFilter ∧ σf2 = SMFilter
       ∧ σpi = MLFNone
-      ∧ ips = MLFNone
+      ∧ ips = SPNone
       ∧ imp_to_asm_phys_blocks_extend pb1 pb
       ∧ imp_to_asm_phys_blocks_extend pb2 pb
     ) ∨
@@ -252,7 +252,7 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
       ∧ t1 = PPInside
       ∧ t2 = PPOutside
       ∧ σf2 = SMFilter
-      ∧ ips = MLFLeft
+      ∧ ips = SPLeft
       ∧ map_scramble touched_registers lr lr1
       ∧ imp_to_asm_phys_blocks_extend pb pb1
       ∧ imp_to_asm_phys_blocks_extend pb2 pb1) ∨
@@ -263,7 +263,7 @@ Definition imp_to_asm_combine_inv (m1 m2 : module imp_event)
       ∧ t1 = PPOutside
       ∧ t2 = PPInside
       ∧ σf1 = SMFilter
-      ∧ ips = MLFRight
+      ∧ ips = SPRight
       ∧ map_scramble touched_registers lr lr2
       ∧ imp_to_asm_phys_blocks_extend pb pb2
       ∧ imp_to_asm_phys_blocks_extend pb1 pb2)).
@@ -272,6 +272,18 @@ Local Ltac go := repeat match goal with | x : asm_ev |- _ => destruct x end;
                  destruct_all?; simplify_eq/=; destruct_all?; simplify_eq/=.
 Local Ltac go_i := tstep_i; intros; go.
 Local Ltac go_s := tstep_s; go.
+
+Local Ltac split_solve :=
+  match goal with
+  | |- imp_to_asm_args _ _ _ _ => eassumption
+  | |- imp_to_asm_ret _ _ _ _ => eassumption
+  | |- imp_to_asm_phys_blocks_extend ?a ?b =>
+      assert_fails (has_evar a); assert_fails (has_evar b); by etrans
+  | |- map_scramble ?r ?a ?b =>
+      assert_fails (has_evar r); assert_fails (has_evar a); assert_fails (has_evar b); by etrans
+  end.
+Local Ltac split_tac ::=
+  repeat (original_split_tac; try split_solve).
 
 Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m2}:
   ins1 ## ins2 →
@@ -290,133 +302,96 @@ Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 m1 m2 σ1 σ2 `{!VisNoAll
 ).
 Proof.
   move => Hdisji Hdisjf Hin1 Hin2 Hagree Ho1 Ho2.
-  apply tsim_implies_trefines => /= n.
-  unshelve apply: tsim_remember. { exact (λ _, imp_to_asm_combine_inv _ _ _ _ _ _ f2i1 f2i2). }
-  { split!. econs. } { done. }
-  move => /= {σ1 σ2} {}n _ Hloop [[[σfa []] [[σf1 σi1] [t1 [cs1 pb1 lr1]]] [[σf2 σi2] [t2 [cs2 pb2 lr2]]]]].
-  move => [[σfs [[[σpi ics] σs1] σs2]] [t [cs pb lr]]] /= ?.
-  destruct_all?; simplify_eq.
-  - go_i.
-    go_s. split!.
-    go_s => -[] ? /=.
-    + move => pc f vs h pb' Hin Hf2i /not_elem_of_union[??] ??.
-      go_s.
-      eexists (EICall _ _ _). split!; [..|done|]. { repeat case_bool_decide => //; set_solver. }
-      have [[?[??]]|[?[??]]]: (pc0 ∈ ins1 ∧ f ∈ fns1 ∧ f2i1 !! f = Some pc0 ∨
-                         pc0 ∈ ins2 ∧ f ∈ fns2 ∧ f2i2 !! f = Some pc0). {
-        move: Hin => /elem_of_union [Hf|Hf]; [left|right];
-          move: (Hf); [move=>/Hin1[?[??]]|move=>/Hin2[?[??]]].
-        all: move: Hf2i => /lookup_union_Some_raw[?|[??]]; simplify_eq => //; naive_solver.
-      }
-      all: simpl_map_decide.
-      * go_i. go_i. eexists true => /=.
-        split!; [done..|by etrans|done|].
-        apply Hloop. split!; [by econs|done|done|by etrans].
-      * go_i. go_i. eexists true => /=.
-        split!; [done..|by etrans|done|].
-        apply Hloop. split!; [by econs|done|done|by etrans].
-    + move => v h pb' rsold memold hold cs' ????; go.
-      go_s.
+  unshelve apply: mod_prepost_link. { exact (λ ips '(I2A cs1 pb1 lr1) '(I2A cs2 pb2 lr2) '(I2A cs pb lr) _ ics,
+  imp_to_asm_combine_stacks ins1 ins2 ips ics cs cs1 cs2 ∧
+  ((ips = SPNone ∧ imp_to_asm_phys_blocks_extend pb1 pb ∧ imp_to_asm_phys_blocks_extend pb2 pb) ∨
+  ((ips = SPLeft
+      ∧ map_scramble touched_registers lr lr1
+      ∧ imp_to_asm_phys_blocks_extend pb pb1
+      ∧ imp_to_asm_phys_blocks_extend pb2 pb1) ∨
+  (ips = SPRight
+      ∧ map_scramble touched_registers lr lr2
+      ∧ imp_to_asm_phys_blocks_extend pb pb2
+      ∧ imp_to_asm_phys_blocks_extend pb1 pb2)))). }
+  { move => ?? [] /=*. naive_solver. }
+  { split!. econs. }
+  all: move => [cs1 pb1 lr1] [cs2 pb2 lr2] [cs pb lr] [] ics.
+  - move => [pc rs mem] [] [pc' rs' mem'] /= ?? b ?.
+    destruct_all?; simplify_eq. destruct b => /=.
+    + move => ret f vs h pb' Hin Hf2i /not_elem_of_union[??] ??.
+      repeat case_bool_decide => //. eexists true => /=.
+      move: Hin => /elem_of_union[?|/Hin2[?[??]]].
+      2: { exfalso. move: Hf2i => /lookup_union_Some_raw. naive_solver. }
+      split!.
+      1: move: Hf2i => /lookup_union_Some_raw; naive_solver.
+      1: by simpl_map_decide.
+      1: by econs.
+    + move => v h pb' rsold memold hold cs' ????.
+      repeat case_bool_decide => //. eexists false => /=.
+      revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
+      inversion Hstack; simplify_eq/= => //. 2: { exfalso. set_solver. }
+      split!.
+  - move => [pc rs mem] [] [pc' rs' mem'] /= ?? b ?.
+    destruct_all?; simplify_eq. destruct b => /=.
+    + move => ret f vs h pb' Hin Hf2i /not_elem_of_union[??] ??.
+      repeat case_bool_decide => //. eexists true => /=.
+      move: Hin => /elem_of_union[/Hin1[?[??]]|?].
+      1: { exfalso. move: Hf2i => /lookup_union_Some_raw. naive_solver. }
+      split!.
+      1: move: Hf2i => /lookup_union_Some_raw; naive_solver.
+      1: by simpl_map_decide.
+      1: by econs.
+    + move => v h pb' rsold memold hold cs' ????.
+      repeat case_bool_decide => //. eexists false => /=.
       revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
       inversion Hstack; simplify_eq/= => //.
-      * eexists (EIReturn _ _). split!; [done..|]. simpl_map_decide.
-        go_i. go_i. eexists false => /=.
-        split!; [done|by etrans|done..|].
-        apply Hloop. split!; [done..|]. by etrans.
-      * eexists (EIReturn _ _). split!; [done..|]. simpl_map_decide.
-        go_i. go_i. eexists false => /=.
-        split!; [done|by etrans|done..|].
-        apply Hloop. split!; [done..|]. by etrans.
-  - tstep_both.
-    apply steps_impl_step_end => κ Pσ2 ?. case_match; intros; go.
-    + tstep_s. eexists (Some (Incoming, _)). split!.
-      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-      apply: Hloop. by split!.
-    + tstep_s. eexists None.
-      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-      apply: Hloop. by split!.
-  - tstep_both.
-    apply steps_impl_step_end => κ Pσ2 ? *. go. destruct κ as [e|]; go.
-    + tend. have [σ' Hσ'] := vis_no_all _ _ _ ltac:(done). eexists σ'. split; [naive_solver|].
-      go_i. destruct e as [? []]; go.
-      * move => pc rs mem ret pb' ?????? *; go.
-        repeat case_bool_decide => //.
-        -- go_i. go_i. eexists true => /=.
-           split!. { naive_solver. } { naive_solver. } { by apply: Hdisji. } { by etrans. } { done. }
-           go_s. eexists (Some (Outgoing, (EICall fn _ _))), SPRight.
-           split!. { repeat case_bool_decide => //; naive_solver. }
-           apply: steps_spec_step_end; [done|] => ??.
-           apply: Hloop. split!; [ naive_solver| by econs| done| done|by etrans|by etrans].
-        -- have ?: fn ∉ fns2. { revert select (_ ∉ ins2) => Hin. contradict Hin. naive_solver. }
-           go_s. eexists (Some (Outgoing, (EICall fn _ _))), SPNone. split!; simpl_map_decide => //.
-           apply: steps_spec_step_end; [done|] => ??.
-           go_s. split!. { apply not_elem_of_union. naive_solver. }
-           { apply lookup_union_Some_raw. naive_solver. } { apply elem_of_union; by left. }
-           { by etrans. } { done. } { by etrans. } { done. }
-           apply: Hloop. split!; [naive_solver|by econs|by etrans].
-      * move => pc rs mem pb' rsold memold hold cs' *; go.
-        repeat case_bool_decide => //.
-        -- revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
-           inversion Hstack; simplify_eq/= => //.
-           go_i. go_i. eexists false => /=.
-           split!; [done|by etrans|done..|].
-           go_s. eexists (Some (Outgoing, (EIReturn _ _))). split!; [done..|].
-           apply: steps_spec_step_end; [done|] => ??.
-           apply: Hloop. split!; [naive_solver|done|done|done|by etrans|by etrans].
-        -- revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
-           inversion Hstack; simplify_eq/= => //.
-           go_s. eexists (Some (Outgoing, EIReturn _ _)). split!; [done..|].
-           apply: steps_spec_step_end; [done|] => ??.
-           go_s. split!; [done| by etrans|done|done|by etrans|done|].
-           apply: Hloop. split!; [naive_solver|done|by etrans].
-    + tstep_s. eexists None. split!.
-      apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
-      apply: Hloop. by split!.
-  - tstep_both.
-    apply steps_impl_step_end => κ Pσ2 ?. case_match; intros; go.
-    + tstep_s. eexists (Some (Incoming, _)). split!.
-      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-      apply: Hloop. by split!.
-    + tstep_s. eexists None.
-      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-      apply: Hloop. by split!.
-  - tstep_both.
-    apply steps_impl_step_end => κ Pσ2 ? *. go. destruct κ as [e|]; go.
-    + tend. have [σ' Hσ'] := vis_no_all _ _ _ ltac:(done). eexists σ'. split; [naive_solver|].
-      go_i. destruct e as [? []]; go.
-      * move => pc rs mem ret pb' ?????? *; go.
-        repeat case_bool_decide => //.
-        -- go_i. go_i. eexists true => /=.
-           split!. { naive_solver. } { naive_solver. } { move => ?. by apply: Hdisji. } { by etrans. } { done. }
-           go_s. eexists (Some (Outgoing, (EICall fn _ _))), SPLeft.
-           split!. { repeat case_bool_decide => //; naive_solver. }
-           apply: steps_spec_step_end; [done|] => ??.
-           apply: Hloop. split!; [ naive_solver| by econs| done| done|by etrans|by etrans].
-        -- have ?: fn ∉ fns1. { revert select (_ ∉ ins1) => Hin. contradict Hin. naive_solver. }
-           go_s. eexists (Some (Outgoing, (EICall fn _ _))), SPNone. split!; simpl_map_decide => //.
-           apply: steps_spec_step_end; [done|] => ??.
-           go_s. split!. { apply not_elem_of_union. naive_solver. }
-           { apply lookup_union_Some_raw. destruct (f2i1 !! fn) eqn:?; naive_solver. }
-           { apply elem_of_union; by right. } { by etrans. } { done. } { by etrans. } { done. }
-           apply: Hloop. split!; [naive_solver|by econs|by etrans].
-      * move => pc rs mem pb' rsold memold hold cs' *; go.
-        repeat case_bool_decide => //.
-        -- revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
-           inversion Hstack; simplify_eq/= => //.
-           go_i. go_i. eexists false => /=.
-           split!; [done|by etrans|done..|].
-           go_s. eexists (Some (Outgoing, (EIReturn _ _))). split!; [done..|].
-           apply: steps_spec_step_end; [done|] => ??.
-           apply: Hloop. split!; [naive_solver|done|done|done|by etrans|by etrans].
-        -- revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
-           inversion Hstack; simplify_eq/= => //.
-           go_s. eexists (Some (Outgoing, EIReturn _ _)). split!; [done..|].
-           apply: steps_spec_step_end; [done|] => ??.
-           go_s. split!; [done| by etrans|done|done|by etrans|done|].
-           apply: Hloop. split!; [naive_solver|done|by etrans].
-    + tstep_s. eexists None. split!.
-      apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
-      apply: Hloop. by split!.
+      split!.
+  - move => [? [f vs h|v h]] ? /= *.
+    all: destruct_all?; simplify_eq/=.
+    + repeat case_bool_decide => //. 2: { exfalso. set_solver. } eexists true => /=.
+      split!.
+      1: naive_solver.
+      1: set_solver.
+      1: by econs.
+    + repeat case_bool_decide => //. eexists false => /=.
+      revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
+      inversion Hstack; simplify_eq/= => //.
+      split!.
+  - move => [? [f vs h|v h]] ? /= *.
+    all: destruct_all?; simplify_eq/=.
+    + repeat case_bool_decide => //. 1: { exfalso. set_solver. }
+      split!.
+      1: set_solver.
+      1: apply lookup_union_Some_raw; naive_solver.
+      1: set_solver.
+      1: by econs.
+    + repeat case_bool_decide => //.
+      revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
+      inversion Hstack; simplify_eq/= => //.
+      split!.
+  - move => [? [f vs h|v h]] ? /= *.
+    all: destruct_all?; simplify_eq/=.
+    + repeat case_bool_decide => //. 2: { exfalso. set_solver. } eexists true.
+      split!.
+      1: naive_solver.
+      1: set_solver.
+      1: by econs.
+    + repeat case_bool_decide => //.
+      revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
+      inversion Hstack; simplify_eq/= => //. eexists false.
+      split!.
+  - move => [? [f vs h|v h]] ? /= *.
+    all: destruct_all?; simplify_eq/=.
+    + repeat case_bool_decide => //. 1: { exfalso. set_solver. }
+      split!.
+      1: set_solver.
+      1: apply lookup_union_Some_raw; destruct (f2i1 !! f) eqn:?; naive_solver.
+      1: set_solver.
+      1: by econs.
+    + repeat case_bool_decide => //.
+      revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
+      inversion Hstack; simplify_eq/= => //.
+      split!.
 Qed.
 
 (* Lemma tsim_remember_stack {EV} {mi ms : module EV} (Pσ : _ → _ → Prop) σi σs b n : *)
@@ -514,7 +489,7 @@ Proof.
               imp_to_asm_phys_blocks_extend pb' pb ∧
               imp_to_asm_proof_stack n' ins fns f2i b K (I2A cs pb' lr')
 ). }
-  { eexists []. split!; [done|done|]. econs. } {
+  { eexists []. split!; [done|]. econs. } {
     clear => /= n n' [????] [[?[???]][?[???]]] Hsub ?. destruct_all?; simplify_eq. split!; [done..|].
     instantiate (1:=lr').
     elim: H7 n' Hsub; [by econs|].
@@ -525,7 +500,7 @@ Proof.
   go_s. split!.
   go_s => -[] ? /=.
   - move => ret fn vs h pb /elem_of_dom[??] ? /not_elem_of_dom ? ??.
-    go_s. split!; [done|done|]. case_bool_decide; [|by go_s].
+    go_s. split!. case_bool_decide; [|by go_s].
     match goal with | |- context [ReturnExt b ?e] => change (ReturnExt b e) with (expr_fill [ReturnExtCtx b] e) end.
     rewrite -expr_fill_app.
     apply: tsim_mono_b.
@@ -534,8 +509,7 @@ Proof.
       have ?: es = Val <$> vs'. { clear -Hall. elim: Hall; naive_solver. } subst.
       tstep_i => ??. simplify_map_eq. rewrite orb_true_r.
       go_s. right. split!.
-      go_s. split!. { by apply not_elem_of_dom. } { done. } { by apply elem_of_dom. }
-      { done. } { done. } { done. } { done. }
+      go_s. split!. { by apply not_elem_of_dom. } { by apply elem_of_dom. }
       apply IH.
       split!; [done..|reflexivity|].
       econs; [done..| |]. by etrans; [done|etrans]. move => *. simplify_map_eq.
@@ -551,7 +525,7 @@ Proof.
   - move => *.
     revert select (imp_to_asm_proof_stack _ _ _ _ _ _ _) => HK.
     inversion HK; clear HK; simplify_eq.
-    go_s. split!; [done|].
+    go_s. split!.
     apply: H7; [done..|]. by etrans.
     Unshelve. apply: inhabitant.
 Qed.

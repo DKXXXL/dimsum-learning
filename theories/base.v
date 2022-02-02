@@ -77,10 +77,14 @@ Tactic Notation "destruct_all" "!" :=
 Ltac simpl_or :=
   repeat match goal with
          | |- ?P ∨ _ =>
-             assert_succeeds (exfalso; assert P; [| destruct_all?; done]);
+             assert_succeeds (exfalso; assert P; [| destruct_all?;
+                  repeat match goal with | H : ?Q |- _ => has_evar Q; clear H end;
+                                                    done]);
              right
          | |- _ ∨ ?P =>
-             assert_succeeds (exfalso; assert P; [| destruct_all?; done]);
+             assert_succeeds (exfalso; assert P; [| destruct_all?;
+                  repeat match goal with | H : ?Q |- _ => has_evar Q; clear H end;
+                                                    done]);
              left
          end.
 
@@ -92,10 +96,29 @@ Ltac split_step :=
   | |- ?e1 = ?e2 => is_evar e1; reflexivity
   | |- ?e1 = ?e2 => is_evar e2; reflexivity
   | |- ?G => assert_fails (has_evar G); done
+  | H : ?o = Some ?x |- ?o = Some ?y => assert (x = y); [|congruence]
+  | |- ?x = ?y  =>
+      (* simplify goals where the head are constructors, like
+         EICall f vs h = EICall ?Goal7 ?Goal8 ?Goal9 *)
+      once (first [ has_evar x | has_evar y]);
+      let hx := get_head x in
+      is_constructor hx;
+      let hy := get_head y in
+      match hx with
+      | hy => idtac
+      end;
+      apply f_equal_help
   end; simpl.
 
-Tactic Notation "split!" :=
-  simpl; repeat split_step.
+Ltac original_split_tac :=
+  (* The outer repeat is because later split_steps may have
+  instantiated evars and thus we try earlier goals again. *)
+  repeat (simpl; repeat split_step).
+
+Ltac split_tac :=
+  original_split_tac.
+
+Tactic Notation "split!" := split_tac.
 
 Ltac simpl_map_ext tac := idtac.
 

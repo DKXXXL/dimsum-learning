@@ -100,7 +100,7 @@ Section mod_link.
       + case_match; simplify_eq. invert_all @mod_link_filter.
         split!; [done| |done] => /=?. destruct_all?.
         split!; [naive_solver..|]. move => /= ? HP. move: HP => /H2[?[??]]. eexists (_, _, _, _).
-        split!; [|naive_solver] => /=. by destruct s0.
+        split!; [|done|naive_solver] => /=. by destruct s0.
   Qed.
 
   Lemma mod_link_step_right_i R m1 m2 s σ1 σ2 P `{!TStepI m2 σ2 P} :
@@ -120,7 +120,7 @@ Section mod_link.
       + case_match; simplify_eq. invert_all @mod_link_filter.
         split!; [done| |done] => /=?. destruct_all?.
         split!; [naive_solver..|]. move => /= ? HP. move: HP => /H2[?[??]]. eexists (_, _, _, _).
-        split!; [|naive_solver] => /=. by destruct s0.
+        split!; [|done|naive_solver] => /=. by destruct s0.
   Qed.
 
   Lemma mod_link_step_left_recv_i R m1 m2 s σ1 σ2 e P `{!TStepI m1 σ1 P} :
@@ -159,7 +159,7 @@ Section mod_link.
   Proof.
     constructor => G HG. apply steps_impl_step_end => ???.
     invert_all' @m_step; simplify_eq/=; invert_all' mod_link_filter; simplify_eq/=.
-    split!; [naive_solver|done|] => /= ??. eexists (_, _, _, _). split!; [|done] => /=. by destruct s0.
+    split!; [naive_solver|done|] => /= ??. eexists (_, _, _, _). split!. by destruct s0.
   Qed.
 
   Lemma mod_link_step_left_s R m1 m2 s σ1 σ2 P `{!TStepS m1 σ1 P} :
