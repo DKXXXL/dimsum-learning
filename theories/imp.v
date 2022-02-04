@@ -852,13 +852,73 @@ Proof.
 Qed.
 Global Hint Resolve imp_step_If_s | 10 : tstep.
 
+(** * closing *)
+Definition imp_closed_val_to_Z (v : val) (z : Z) : Prop :=
+  match v with
+  | ValNum z' => z = z'
+  | ValBool b => z = bool_to_Z b
+  | ValLoc l => True
+  end.
+
+Inductive imp_closed_event : Type :=
+| EICStart (f : string) (args: list Z)
+| EICCall (f : string) (args: list Z) (ret : Z)
+| EICEnd (ret : val)
+.
+
+Inductive imp_closed_state :=
+| ICStart
+| ICRecvStart (f : string) (vs : list Z)
+| ICRunning
+| ICRecvCall1 (f : string) (args : list val) (h : heap_state)
+| ICRecvCall2 (f : string) (args : list Z) (h : heap_state)
+| ICRecvRet (v : Z) (h : heap_state)
+| ICRecvEnd1 (v : val)
+| ICRecvEnd2 (v : Z)
+| ICEnd.
+
+Inductive imp_closed_step :
+  imp_closed_state → option (imp_event + imp_closed_event) → (imp_closed_state → Prop) → Prop :=
+| ICStartS f vs:
+  imp_closed_step ICStart (Some (inr (EICStart f vs))) (λ σ, σ = ICRecvStart f vs)
+| ICRecvStartS f vs:
+  imp_closed_step (ICRecvStart f vs)
+                  (Some (inl (Incoming, EICall f (ValNum <$> vs) initial_heap_state))) (λ σ, σ = ICRunning)
+| ICRunningS f vs h:
+  imp_closed_step ICRunning (Some (inl (Outgoing, EICall f vs h))) (λ σ, σ = ICRecvCall1 f vs h)
+| ICRecvCall1S f vs h:
+  imp_closed_step (ICRecvCall1 f vs h) None (λ σ,
+         ∃ vs', vs = ValNum <$> vs' ∧ σ = ICRecvCall2 f vs' h)
+| ICRecvCall2S f vs rv h:
+  imp_closed_step (ICRecvCall2 f vs h)
+                  (Some (inr (EICCall f vs rv))) (λ σ, σ = ICRecvRet rv h)
+| ICRecvRetS v h:
+  imp_closed_step (ICRecvRet v h)
+                  (Some (inl (Incoming, EIReturn (ValNum v) h))) (λ σ, σ = ICRunning)
+| ICRunningEndS v h:
+  imp_closed_step ICRunning (Some (inl (Outgoing, EIReturn v h))) (λ σ, σ = ICRecvEnd1 v)
+| ICRecvEnd1EndS v:
+  imp_closed_step (ICRecvEnd1 v) None (λ σ, ∃ v', v = ValNum v' ∧ σ = ICRecvEnd2 v')
+| ICEndS v:
+  imp_closed_step (ICRecvEnd2 v) (Some (inr (EICEnd v))) (λ σ, σ = ICEnd)
+.
+
+Definition imp_closed_filter_module : module (imp_event + imp_closed_event) :=
+  Mod imp_closed_step.
+
+Global Instance imp_closed_filter_module_vis_no_all : VisNoAll imp_closed_filter_module.
+Proof. move => ????. invert_all @m_step; naive_solver. Qed.
+
+Definition imp_closed (m : module imp_event) : module imp_closed_event :=
+  mod_seq_map m imp_closed_filter_module.
+
 (** * syntactic linking *)
 Definition imp_link (fns1 fns2 : gmap string fndef) : gmap string fndef :=
   fns1 ∪ fns2.
 
 Definition imp_ctx_refines (fnsi fnss : gmap string fndef) :=
-  ∀ C, trefines (MS imp_module (initial_imp_state (imp_link fnsi C)))
-                (MS imp_module (initial_imp_state (imp_link fnss C))).
+  ∀ C, trefines (MS (imp_closed imp_module) (SMFilter, initial_imp_state (imp_link fnsi C), ICStart))
+                (MS (imp_closed imp_module) (SMFilter, initial_imp_state (imp_link fnss C), ICStart)).
 
 (** * semantic linking *)
 Definition imp_prod_filter (fns1 fns2 : gset string) : seq_product_state → list seq_product_state → imp_ev → seq_product_state → list seq_product_state → imp_ev → Prop :=
@@ -1206,6 +1266,7 @@ Lemma imp_trefines_implies_ctx_refines fnsi fnss :
   imp_ctx_refines fnsi fnss.
 Proof.
   move => Hdom Href C. rewrite /imp_link map_difference_union_r (map_difference_union_r fnss).
+  apply mod_seq_map_trefines. { apply _. } { apply _. }
   etrans. { apply imp_link_refines_prod. apply map_disjoint_difference_r'. }
   etrans. 2: { apply imp_prod_refines_link. apply map_disjoint_difference_r'. }
   rewrite !dom_difference_L Hdom.
@@ -1928,4 +1989,68 @@ Proof.
         simplify_eq. tstep_s. right. split! => *. tstep_s.
         eexists bij'. split!. 1: split; split!; set_solver. 1,2,3,4: done. tend.
         split!. 1: by apply: IHBRE_Ctx. 1: reflexivity. all: split!.
+Qed.
+
+Lemma imp_heap_bij_imp_closed m σ:
+  trefines (MS (imp_closed (imp_heap_bij m)) (SMFilter, initial_imp_heap_bij_state m σ, ICStart))
+           (MS (imp_closed m) (SMFilter, σ, ICStart)).
+Proof.
+  apply tsim_implies_trefines => /= n.
+  unshelve apply: tsim_remember. { simpl. exact (λ _
+          '(σm1, (σf, σ1, (pp, ImpHeapBij bij hi)), σc1)
+          '(σm2, σ2, σc2),
+           σ1 = σ2 ∧ σc1 = σc2 ∧
+             ((σc1 = ICStart ∧ σf = SMFilter ∧ pp = PPOutside ∧ σm1 = σm2 ∧ σm2 = SMFilter ∧ bij = ∅) ∨
+              ( ((∃ e, σf = SMProgRecv e ∧ σm2 = SMProgRecv e) ∨ (σf = SMProg ∧ σm2 = SMProg)
+                 ) ∧ σm1 = SMProg ∧ σc1 = ICRunning ∧ pp = PPInside))
+                             ). }
+  { split!. } { done. }
+  move => {}n _ /= Hloop [[σm1 [[σf σ1] [pp [bij hi]]]] σc1] [[σm2 σ2] σc2] ?. destruct_all?; simplify_eq/=.
+  - tstep_i. apply steps_impl_step_end => ???. invert_all' @m_step; simplify_eq/=. split!.
+    tstep_s. eexists (Some (inr _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
+    tstep_i. apply steps_impl_step_end => ???. invert_all @m_step. split!.
+    tstep_s. eexists (Some (inl _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
+    tstep_i => ??; simplify_eq/=.
+    tstep_i. eexists ∅, (ValNum <$> vs), initial_heap_state. split!.
+    1: { apply Forall2_fmap. apply Forall_Forall2_diag. by apply Forall_true. }
+    apply: Hloop. split!.
+  - tstep_both. apply steps_impl_step_end => κ ??. case_match => *; simplify_eq.
+    + tstep_s.  eexists (Some _). split; [done|]. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop. split!.
+    + tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop. split!.
+  - tstep_both. apply steps_impl_step_end => κ ??. tstep_s. eexists _. apply: steps_spec_step_end; [done|] => ??.
+    case_match; tend; (split!; [done|]). 2: { apply: Hloop. split!. }
+    tstep_i => ? vs *. tstep_both => *.
+    apply steps_impl_step_end => ???. invert_all @m_step => ?; simplify_eq.
+    + destruct i as [? [? vs' |]]; simplify_eq/=.
+      tstep_s. eexists (Some _). split!.
+      apply: steps_spec_step_end; [econs|]=> /=??. destruct_all?; simplify_eq/=. tend.
+      split!.
+      tstep_both. apply steps_impl_step_end => ???. invert_all @m_step.
+      tstep_s. eexists (None). apply: steps_spec_step_end; [econs|]=> /=??. destruct_all?; simplify_eq/=. tend.
+      have ?: vs0 = ValNum <$> vs'0. {
+        revert select (m_step _ _ _ _) => _.
+        revert select (Forall2 _ _ _). elim: vs'0 vs0; csimpl => *; decompose_Forall_hyps => //.
+        match goal with |- ?x :: _ = _ => destruct x; simplify_eq/= => // end. naive_solver.
+      } subst.
+      split!; [done|].
+      tstep_i. apply steps_impl_step_end => ???. invert_all @m_step. split!.
+      tstep_s. eexists (Some (inr _)). split!. apply: steps_spec_step_end; [econs|] => /=? ->.
+      tstep_i. apply steps_impl_step_end => ???. invert_all @m_step. split!.
+      tstep_s. eexists (Some (inl _)). split!. apply: steps_spec_step_end; [econs|] => /=? ->.
+      tstep_i => ? <-.
+      tstep_i. eexists _, [ValNum _]. split!. 1: done. 1: done. 1: econs; [done|econs]. 1: done. 1: done.
+      apply: Hloop. split!.
+    + destruct i as [? []]; simplify_eq/=.
+      tstep_s. eexists (Some _). split!.
+      apply: steps_spec_step_end; [econs|]=> /=??. destruct_all?; simplify_eq/=.
+      tstep_s. eexists None. apply: steps_spec_step_end; [econs|]=> /=??. destruct_all?; simplify_eq/=.
+      destruct vs as [|v ?]; decompose_Forall_hyps. destruct v => //; simplify_eq/=.
+      tend. split!.
+      tstep_i. apply: steps_impl_step_end => ???. invert_all @m_step. split!.
+      tstep_i. apply: steps_impl_step_end => ???. invert_all @m_step. split!.
+      tstep_s. eexists (Some (inr _)). split!.
+      apply: steps_spec_step_end; [econs|]=> /=? ->.
+      tstep_i. apply: steps_impl_step_end => ???. invert_all @m_step.
 Qed.
