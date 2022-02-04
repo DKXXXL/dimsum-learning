@@ -497,3 +497,17 @@ Section semi_set.
     X ⊆ Y'.
   Proof. set_solver. Qed.
 End semi_set.
+
+Lemma Forall_zip_with_1 {A B} l1 l2 (f : A → B → Prop):
+  Forall id (zip_with f l1 l2) →
+  length l1 = length l2 →
+  Forall2 f l1 l2.
+Proof.
+  elim: l1 l2 => /=. { case => //; econs. }
+  move => ?? IH []//?? /(Forall_cons_1 _ _)[??] [?]. econs; [done|]. by apply: IH.
+Qed.
+
+Lemma Forall_zip_with_2 {A B} l1 l2 (f : A → B → Prop):
+  Forall2 f l1 l2 →
+  Forall id (zip_with f l1 l2).
+Proof. elim => /=; by econs. Qed.

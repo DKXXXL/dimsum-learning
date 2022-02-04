@@ -1223,12 +1223,11 @@ Record heap_bij := HeapBij {
   hb_disj_env : hb_env ## set_map snd hb_bij;
   hb_disj_prog : hb_prog ## set_map snd hb_bij;
   hb_disj_priv : hb_prog ## hb_env;
-  hb_inj_left i x1 x2 : (i, x1) ∈ hb_bij → (i, x2) ∈ hb_bij → x1 = x2;
-  hb_inj_right i x1 x2 : (x1, i) ∈ hb_bij → (x2, i) ∈ hb_bij → x1 = x2;
+  hb_iff p1 p2 p1' p2' : (p1, p2) ∈ hb_bij → (p1', p2') ∈ hb_bij → p1 = p1' ↔ p2 = p2'
 }.
 
 Global Program Instance imp_heap_bij_empty : Empty heap_bij :=
-  HeapBij ∅ ∅ ∅ _ _ _ _ _.
+  HeapBij ∅ ∅ ∅ _ _ _ _.
 Solve Obligations with set_solver.
 
 Definition hb_provs_right (bij : heap_bij) : gset prov :=
@@ -1249,7 +1248,7 @@ Global Typeclasses Opaque heap_bij_extend.
 
 Program Definition heap_bij_add_loc (p1 p2 : prov) (bij : heap_bij)
         (H : p1 ∉ set_map (D:=gset _) fst (hb_bij bij)) (_ : p2 ∉ hb_provs_right bij) :=
-  HeapBij ({[ (p1, p2 )]} ∪ hb_bij bij) (hb_env bij) (hb_prog bij) _ _ _ _ _.
+  HeapBij ({[ (p1, p2 )]} ∪ hb_bij bij) (hb_env bij) (hb_prog bij) _ _ _ _.
 Next Obligation.
   move => ?????. rewrite set_map_union_L. apply disjoint_union_r. split; [|apply hb_disj_env].
   rewrite set_map_singleton_L disjoint_singleton_r. set_solver.
@@ -1260,25 +1259,12 @@ Next Obligation.
 Qed.
 Next Obligation. move => *. apply hb_disj_priv. Qed.
 Next Obligation.
-  move => ??? Hl Hr?????. set_unfold.
+  move => ??? Hl Hr??????. set_unfold.
   destruct_all?; simplify_eq => //.
-  - contradict Hl. eexists (_,_). naive_solver.
-  - contradict Hl. eexists (_,_). naive_solver.
-  - by apply: hb_inj_left.
+  - split => ?;  [contradict Hl | contradict Hr; left; left]; eexists (_,_); naive_solver.
+  - split => ?;  [contradict Hl | contradict Hr; left; left]; eexists (_,_); naive_solver.
+  - by apply: hb_iff.
 Qed.
-Next Obligation.
-  move => ??? Hl Hr?????. set_unfold.
-  destruct_all?; simplify_eq => //.
-  - contradict Hr. left. left. eexists (_,_). naive_solver.
-  - contradict Hr. left. left. eexists (_,_). naive_solver.
-  - by apply: hb_inj_right.
-Qed.
-
-Lemma heap_bij_iff p1 p2 p1' p2' bij:
-  (p1, p2) ∈ hb_bij bij →
-  (p1', p2') ∈ hb_bij bij →
-  p1 = p1' ↔ p2 = p2'.
-Proof. move => ??. split => ?; subst; [by apply: hb_inj_left| by apply: hb_inj_right]. Qed.
 
 (** ** val_in_bij *)
 Definition val_in_bij (bij : gset (prov * prov)) (v1 v2 : val) : Prop :=
@@ -1314,20 +1300,6 @@ Fixpoint expr_in_bij (bij : gset (prov * prov)) (e1 e2 : expr) {struct e1} : Pro
   | Waiting b, Waiting b' => b = b'
   | _, _ => False
   end.
-
-Lemma Forall_zip_with_1 {A B} l1 l2 (f : A → B → Prop):
-  Forall id (zip_with f l1 l2) →
-  length l1 = length l2 →
-  Forall2 f l1 l2.
-Proof.
-  elim: l1 l2 => /=. { case => //; econs. }
-  move => ?? IH []//?? /(Forall_cons_1 _ _)[??] [?]. econs; [done|]. by apply: IH.
-Qed.
-
-Lemma Forall_zip_with_2 {A B} l1 l2 (f : A → B → Prop):
-  Forall2 f l1 l2 →
-  Forall id (zip_with f l1 l2).
-Proof. elim => /=; by econs. Qed.
 
 Lemma Forall2_bij_val_inv_l bij vl el :
   Forall2 (expr_in_bij bij) (Val <$> vl) el →
@@ -1508,6 +1480,85 @@ Definition heap_in_bij (bij : gset (prov * prov)) (h h' : heap_state) : Prop :=
   h.(h_heap)  !! (p1, o) = Some v1 →
   h'.(h_heap) !! (p2, o) = Some v2 →
   val_in_bij bij v1 v2.
+
+Lemma heap_in_bij_alive bij h1 h2 l1 l2:
+  heap_in_bij bij h1 h2 →
+  heap_alive h2 l2 →
+  (l1.1, l2.1) ∈ bij →
+  l1.2 = l2.2 →
+  heap_alive h1 l1.
+Proof.
+  move => ? Hbij ??. destruct l1 as [p1 ?], l2 as [p2 o]; simplify_eq/=.
+  unfold heap_in_bij, heap_alive in *. naive_solver.
+Qed.
+
+Lemma heap_in_bij_lookup bij h1 h2 l1 l2 v:
+  h_heap h2 !! l2 = Some v →
+  heap_in_bij bij h1 h2 →
+  (l1.1, l2.1) ∈ bij →
+  l1.2 = l2.2 →
+  ∃ v', h_heap h1 !! l1 = Some v' ∧ val_in_bij bij v' v.
+Proof.
+  move => ? Hbij ??. destruct l1 as [p1 ?], l2 as [p2 o]; simplify_eq/=.
+  have [[? H2]?]:= Hbij _ _ o ltac:(done).
+  have [??]:= H2 ltac:(done).
+  naive_solver.
+Qed.
+
+Lemma heap_in_bij_update bij h1 h2 l1 l2 v1 v2:
+  heap_in_bij (hb_bij bij) h1 h2 →
+  val_in_bij (hb_bij bij) v1 v2 →
+  (l1.1, l2.1) ∈ (hb_bij bij) →
+  l1.2 = l2.2 →
+  heap_in_bij (hb_bij bij) (heap_update h1 l1 v1) (heap_update h2 l2 v2).
+Proof.
+  move => Hbij ???. destruct l1 as [p1 ?], l2 as [p2 o]; simplify_eq/=.
+  move => p1' p2' o' /=?. have : p1 = p1' ↔ p2 = p2' by apply: hb_iff.
+  split.
+  - rewrite !lookup_alter_is_Some. by apply Hbij.
+  - move => ?? /lookup_alter_Some[[?[?[??]]]|[??]] /lookup_alter_Some[[?[?[??]]]|[??]]; simplify_eq.
+    all: try by eapply Hbij. all: naive_solver.
+Qed.
+
+Lemma heap_in_bij_alloc l1 l2 hi hs n bij H1 H2:
+  heap_in_bij (hb_bij bij) hi hs →
+  heap_is_fresh hi l1 →
+  heap_is_fresh hs l2 →
+  heap_in_bij (hb_bij (heap_bij_add_loc l1.1 l2.1 bij H1 H2)) (heap_alloc hi l1 n) (heap_alloc hs l2 n).
+Proof.
+  move => /= Hbij [Hi1 ?] [Hi2 ?] p1 p2 o /= /elem_of_union[?|?].
+  - set_unfold; simplify_eq. destruct l1 as [p1 ?], l2 as [p2 ?]; simplify_eq/=.
+    rewrite !lookup_union_l'.
+    { apply eq_None_ne_Some => ??. apply Hi1. by apply: (heap_wf _ (_, _)). }
+    { apply eq_None_ne_Some => ??. apply Hi2. by apply: (heap_wf _ (_, _)). }
+    split.
+    + rewrite !list_to_map_lookup_is_Some. f_equiv => ?. rewrite !elem_of_list_fmap. f_equiv => ?. naive_solver.
+    + move => ?? /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap[?[??]].
+      move => /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap[?[??]]. by simplify_eq/=.
+  - have ? : p1 ≠ l1.1 by contradict H1; set_unfold; eexists (_, _); naive_solver.
+    have ? : p2 ≠ l2.1 by contradict H2; set_unfold; left; left; eexists (_, _); naive_solver.
+    have [Hbij1 Hbij2]:= Hbij p1 p2 o ltac:(set_solver).
+    rewrite !lookup_union_r.
+    1, 2: apply not_elem_of_list_to_map_1;
+        move => /elem_of_list_fmap[[[??]?] [?/elem_of_list_fmap[?[??]]]]; simplify_eq/=.
+    split; [done|] => *. apply: val_in_bij_mono; [naive_solver|]. set_solver.
+Qed.
+
+
+Lemma heap_in_bij_free hi hs l1 l2 bij:
+  heap_in_bij (hb_bij bij) hi hs →
+  (l1.1, l2.1) ∈ hb_bij bij →
+  heap_in_bij (hb_bij bij) (heap_free hi l1) (heap_free hs l2).
+Proof.
+  move => Hbij Hin p1 p2 o /=?.
+  have [Hbij1 Hbij2]:= Hbij p1 p2 o ltac:(done).
+  have ?: p1 = l1.1 ↔ p2 = l2.1 by apply: hb_iff.
+  split.
+  - rewrite !map_filter_lookup /=. destruct (h_heap hi !! (p1, o)), (h_heap hs !! (p2, o)) => //=.
+    all: repeat case_option_guard => //; naive_solver.
+  - move => ??. rewrite !map_filter_lookup => /bind_Some[?[??]] /bind_Some[?[??]].
+    repeat case_option_guard => //; naive_solver.
+Qed.
 
 (** *** heap_preserved *)
 Definition heap_preserved (ps : gset prov) (h h' : heap_state) :=
@@ -1718,8 +1769,7 @@ Proof.
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
     Unshelve.
     (* We need to use abstract here as otherwise Qed does not terminate. *)
-    all: try abstract (by apply hb_inj_left).
-    all: try abstract (by apply hb_inj_right).
+    all: try abstract (by apply hb_iff).
     all: abstract (
       try (apply disjoint_union_l; split);
       try (apply disjoint_union_r; split);
@@ -1762,85 +1812,6 @@ Local Ltac split_tac ::=
   repeat (original_split_tac; try split_solve).
 
 (* Local Ltac split_tac ::= original_split_tac. *)
-
-Lemma heap_in_bij_alive bij h1 h2 l1 l2:
-  heap_in_bij bij h1 h2 →
-  heap_alive h2 l2 →
-  (l1.1, l2.1) ∈ bij →
-  l1.2 = l2.2 →
-  heap_alive h1 l1.
-Proof.
-  move => ? Hbij ??. destruct l1 as [p1 ?], l2 as [p2 o]; simplify_eq/=.
-  unfold heap_in_bij, heap_alive in *. naive_solver.
-Qed.
-
-Lemma heap_in_bij_lookup bij h1 h2 l1 l2 v:
-  h_heap h2 !! l2 = Some v →
-  heap_in_bij bij h1 h2 →
-  (l1.1, l2.1) ∈ bij →
-  l1.2 = l2.2 →
-  ∃ v', h_heap h1 !! l1 = Some v' ∧ val_in_bij bij v' v.
-Proof.
-  move => ? Hbij ??. destruct l1 as [p1 ?], l2 as [p2 o]; simplify_eq/=.
-  have [[? H2]?]:= Hbij _ _ o ltac:(done).
-  have [??]:= H2 ltac:(done).
-  naive_solver.
-Qed.
-
-Lemma heap_in_bij_update bij h1 h2 l1 l2 v1 v2:
-  heap_in_bij (hb_bij bij) h1 h2 →
-  val_in_bij (hb_bij bij) v1 v2 →
-  (l1.1, l2.1) ∈ (hb_bij bij) →
-  l1.2 = l2.2 →
-  heap_in_bij (hb_bij bij) (heap_update h1 l1 v1) (heap_update h2 l2 v2).
-Proof.
-  move => Hbij ???. destruct l1 as [p1 ?], l2 as [p2 o]; simplify_eq/=.
-  move => p1' p2' o' /=?. have ?: p1 = p1' ↔ p2 = p2' by apply: heap_bij_iff.
-  split.
-  - rewrite !lookup_alter_is_Some. by apply Hbij.
-  - move => ?? /lookup_alter_Some[[?[?[??]]]|[??]] /lookup_alter_Some[[?[?[??]]]|[??]]; simplify_eq.
-    all: try by eapply Hbij. all: naive_solver.
-Qed.
-
-Lemma heap_in_bij_alloc l1 l2 hi hs n bij H1 H2:
-  heap_in_bij (hb_bij bij) hi hs →
-  heap_is_fresh hi l1 →
-  heap_is_fresh hs l2 →
-  heap_in_bij (hb_bij (heap_bij_add_loc l1.1 l2.1 bij H1 H2)) (heap_alloc hi l1 n) (heap_alloc hs l2 n).
-Proof.
-  move => /= Hbij [Hi1 ?] [Hi2 ?] p1 p2 o /= /elem_of_union[?|?].
-  - set_unfold; simplify_eq. destruct l1 as [p1 ?], l2 as [p2 ?]; simplify_eq/=.
-    rewrite !lookup_union_l'.
-    { apply eq_None_ne_Some => ??. apply Hi1. by apply: (heap_wf _ (_, _)). }
-    { apply eq_None_ne_Some => ??. apply Hi2. by apply: (heap_wf _ (_, _)). }
-    split.
-    + rewrite !list_to_map_lookup_is_Some. f_equiv => ?. rewrite !elem_of_list_fmap. f_equiv => ?. naive_solver.
-    + move => ?? /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap[?[??]].
-      move => /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap[?[??]]. by simplify_eq/=.
-  - have ? : p1 ≠ l1.1 by contradict H1; set_unfold; eexists (_, _); naive_solver.
-    have ? : p2 ≠ l2.1 by contradict H2; set_unfold; left; left; eexists (_, _); naive_solver.
-    have [Hbij1 Hbij2]:= Hbij p1 p2 o ltac:(set_solver).
-    rewrite !lookup_union_r.
-    1, 2: apply not_elem_of_list_to_map_1;
-        move => /elem_of_list_fmap[[[??]?] [?/elem_of_list_fmap[?[??]]]]; simplify_eq/=.
-    split; [done|] => *. apply: val_in_bij_mono; [naive_solver|]. set_solver.
-Qed.
-
-
-Lemma heap_in_bij_free hi hs l1 l2 bij:
-  heap_in_bij (hb_bij bij) hi hs →
-  (l1.1, l2.1) ∈ hb_bij bij →
-  heap_in_bij (hb_bij bij) (heap_free hi l1) (heap_free hs l2).
-Proof.
-  move => Hbij Hin p1 p2 o /=?.
-  have [Hbij1 Hbij2]:= Hbij p1 p2 o ltac:(done).
-  have ?: p1 = l1.1 ↔ p2 = l2.1 by apply: heap_bij_iff.
-  split.
-  - rewrite !map_filter_lookup /=. destruct (h_heap hi !! (p1, o)), (h_heap hs !! (p2, o)) => //=.
-    all: repeat case_option_guard => //; naive_solver.
-  - move => ??. rewrite !map_filter_lookup => /bind_Some[?[??]] /bind_Some[?[??]].
-    repeat case_option_guard => //; naive_solver.
-Qed.
 
 Lemma imp_heap_bij_imp_refl fns:
   trefines (MS imp_module (initial_imp_state fns))
