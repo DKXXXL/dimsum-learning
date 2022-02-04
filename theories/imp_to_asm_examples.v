@@ -167,7 +167,7 @@ Proof.
   tstep_i; simplify_map_eq'. split; [done|].
   tstep_i; simplify_map_eq'. split; [done|].
   sort_map_insert. simplify_map_eq'.
-  tstep_s. split!; [apply fresh_loc_fresh|]. move => *; simplify_eq.
+  tstep_s. split!; [apply (heap_fresh_is_fresh ∅)|]. move => *; simplify_eq.
   tstep_s.
   tstep_s => *; simplify_eq.
   tstep_s.

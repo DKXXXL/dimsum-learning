@@ -34,3 +34,6 @@ Inductive io_type : Set :=
 | Incoming | Outgoing.
 
 Definition io_event (EV : Type) : Type := io_type * EV.
+
+Inductive player :=
+| Prog | Env.

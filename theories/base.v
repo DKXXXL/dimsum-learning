@@ -181,12 +181,29 @@ End theorems.
 
 Section map.
   Context `{FinMap K M}.
-  Context {A} (f : A → A → option A).
+  Context {A : Type} .
   Implicit Types m : M A.
 Lemma lookup_union_l' (m1 m2 : M A) i :
   m2 !! i = None → (m1 ∪ m2) !! i = m1 !! i.
 Proof using Type*. intros Hi. rewrite lookup_union Hi. by destruct (m1 !! i). Qed.
 End map.
+
+Section theorems.
+Context `{FinMap K M}.
+Lemma list_to_map_lookup_is_Some {A} (l : list (K * A)) i :
+  is_Some ((list_to_map l : M A) !! i) ↔ ∃ x, (i,x) ∈ l.
+Proof.
+  split.
+  - move => [? /(elem_of_list_to_map_2 _ _ _)]. naive_solver.
+  - move => [?]. induction l as [|i' l]. { by intros ?%elem_of_nil. }
+    intros [?|?]%elem_of_cons; simplify_eq/=.
+    { by rewrite lookup_insert. }
+    destruct (decide (i'.1 = i)); subst.
+    { by rewrite lookup_insert. }
+    rewrite lookup_insert_ne; [done|].
+    naive_solver.
+Qed.
+End theorems.
 
 Section dom.
 Context `{FinMapDom K M D}.
@@ -462,3 +479,21 @@ Lemma map_preserved_eq' {K A} `{Countable K} ns (m : gmap K A):
 Proof. unfold map_preserved. naive_solver. Qed.
 
 Global Opaque map_list_included map_scramble map_preserved.
+
+Section semi_set.
+  Context `{SemiSet A C}.
+  Implicit Types x y : A.
+  Implicit Types X Y : C.
+  Implicit Types Xs Ys : list C.
+  Lemma disjoint_mono X Y X' Y' :
+    X' ## Y' →
+    X ⊆ X' →
+    Y ⊆ Y' →
+    X ## Y.
+  Proof. set_solver. Qed.
+  Lemma subseteq_mono_eq_r X Y Y' :
+    X ⊆ Y →
+    Y = Y' →
+    X ⊆ Y'.
+  Proof. set_solver. Qed.
+End semi_set.
