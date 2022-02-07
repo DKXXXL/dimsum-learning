@@ -511,7 +511,7 @@ Proof.
       tstep_i => ??. simplify_map_eq. rewrite orb_true_r.
       go_s. right. split!.
       go_s. split!. { by apply not_elem_of_dom. } { by apply elem_of_dom. }
-      apply IH.
+      apply IH; [done|].
       split!; [done..|reflexivity|].
       econs; [done..| |]. by etrans; [done|etrans]. move => *. simplify_map_eq.
       rewrite !expr_fill_app /=.
@@ -522,7 +522,7 @@ Proof.
       tstep_i => ??. simplify_map_eq. rewrite orb_true_r.
       go_s.
       go_s. split!; [done..|].
-      apply IH. split!; [done| |done]. by etrans; [done|etrans].
+      apply IH; [done|]. split!; [done| |done]. by etrans; [done|etrans].
   - move => *.
     revert select (imp_to_asm_proof_stack _ _ _ _ _ _ _) => HK.
     inversion HK; clear HK; simplify_eq.

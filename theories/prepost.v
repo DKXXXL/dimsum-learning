@@ -185,6 +185,15 @@ Global Hint Resolve
        mod_prepost_step_Inside_s
  | 3 : tstep.
 
+(* Definition prepost_id {EV} : EV → unit → prepost (EV * unit) := *)
+(*   λ x _, pp_end (x, tt). *)
+
+(* Lemma prepost_id_l EV (m : module EV) σ s: *)
+(*   trefines (MS (mod_prepost prepost_id prepost_id m) (SMFilter, σ, (PPOutside, s))) (MS m σ). *)
+(* Proof. *)
+  (* apply tsim_implies_trefines => /= n. *)
+  (* tstep_i. *)
+
 
 Section prepost.
 
@@ -314,7 +323,7 @@ Section prepost.
           move => [[??]?] /= *. destruct_all?; simplify_eq.
           tstep_s.
           split!; [done..|] => /=.
-          apply: Hloop. by split!.
+          apply: Hloop; [done|]. by split!.
         + tstep_i => ??. simplify_eq.
           tstep_i. move: ri Hi. apply pp_to_all_forall.
           apply: pp_to_all_mono; [by apply: HN2R|].
@@ -322,20 +331,20 @@ Section prepost.
           move => [[??]?] /= *. destruct_all?; simplify_eq.
           tstep_s.
           split!; [done..|] => /=.
-          apply: Hloop. by split!.
+          apply: Hloop; [done|]. by split!.
       - tstep_both.
         apply steps_impl_step_end => κ Pσ2 ?. case_match; intros; simplify_eq.
         + tstep_s. eexists (Some (Incoming, _)). split!.
           apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-          apply: Hloop. by split!.
+          apply: Hloop; [done|]. by split!.
         + tstep_s. eexists None.
           apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-          apply: Hloop. by split!.
+          apply: Hloop; [done|]. by split!.
       - tstep_both.
         apply steps_impl_step_end => κ Pσ2 ? *. destruct κ as [e|]. 2: {
           tstep_s. eexists None. split!.
           apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
-          apply: Hloop. by split!.
+          apply: Hloop; [done|]. by split!.
         }
         tend. have [σ' Hσ'] := vis_no_all _ _ _ ltac:(done). eexists σ'. split; [naive_solver|].
         tstep_i. apply pp_to_all_forall => ri Hi p' sr1' e' HR1 Hri.
@@ -350,7 +359,7 @@ Section prepost.
           tstep_s. eexists (Some (Outgoing, _)). split!; [done|].
           destruct e; simplify_eq/=.
           apply: steps_spec_step_end; [done|] => ??.
-          apply Hloop. split!; [naive_solver|done..].
+          apply: Hloop; [done|]. split!; [naive_solver|done..].
         + move: ri Hi sr1' e' Hri HR1. apply: pp_to_all_forall_2.
           apply: pp_to_all_mono; [by apply: HL2N|].
           move => [[??]?] /= Hcont ????.
@@ -361,20 +370,20 @@ Section prepost.
           tstep_s.
           apply: pp_to_ex_mono; [done|].
           move => [[??]?] /= *. destruct_all?; simplify_eq. split!.
-          apply Hloop. split!; [naive_solver|done..].
+          apply: Hloop; [done|]. split!; [naive_solver|done..].
       - tstep_both.
         apply steps_impl_step_end => κ Pσ2 ?. case_match; intros; simplify_eq.
         + tstep_s. eexists (Some (Incoming, _)). split!.
           apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-          apply: Hloop. by split!.
+          apply: Hloop; [done|]. by split!.
         + tstep_s. eexists None.
           apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-          apply: Hloop. by split!.
+          apply: Hloop; [done|]. by split!.
       - tstep_both.
         apply steps_impl_step_end => κ Pσ2 ? *. destruct κ as [e|]. 2: {
           tstep_s. eexists None. split!.
           apply: steps_spec_step_end; [done|] => ??. tend. eexists _. split; [done|].
-          apply: Hloop. by split!.
+          apply: Hloop; [done|]. by split!.
         }
         tend. have [σ' Hσ'] := vis_no_all _ _ _ ltac:(done). eexists σ'. split; [naive_solver|].
         tstep_i. apply pp_to_all_forall => ri Hi p' sr1' e' HR1 Hri.
@@ -389,7 +398,7 @@ Section prepost.
           tstep_s. eexists (Some (Outgoing, _)). split!; [done|].
           destruct e; simplify_eq/=.
           apply: steps_spec_step_end; [done|] => ??.
-          apply Hloop. split!; [naive_solver|done..].
+          apply: Hloop; [done|]. split!; [naive_solver|done..].
         + move: ri Hi sr1' e' Hri HR1. apply: pp_to_all_forall_2.
           apply: pp_to_all_mono; [by apply: HR2N|].
           move => [[??]?] /= Hcont ????.
@@ -400,6 +409,6 @@ Section prepost.
           tstep_s.
           apply: pp_to_ex_mono; [done|].
           move => [[??]?] /= *. destruct_all?; simplify_eq. split!.
-          apply Hloop. split!; [naive_solver|done..].
+          apply: Hloop; [done|]. split!; [naive_solver|done..].
     Qed.
 End prepost.

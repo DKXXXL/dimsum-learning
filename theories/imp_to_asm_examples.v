@@ -76,6 +76,27 @@ Definition imp_add_client : fndef := {|
 Definition imp_add_client_prog : gmap string fndef :=
   <[ "add_client" := imp_add_client ]> ∅.
 
+Definition imp_add' : fndef := {|
+  fd_args := ["a"; "b"];
+  fd_body := UbE;
+  fd_static := I
+|}.
+
+Definition imp_add_client' : fndef := {|
+  fd_args := [];
+  fd_body := (Val 2);
+  fd_static := I
+|}.
+
+Definition full_asm_add : gmap Z asm_instr :=
+  asm_add ∪ asm_add_client.
+
+Definition full_imp_add_prog : gmap string fndef :=
+  imp_add_prog ∪ imp_add_client_prog.
+
+Definition full_imp_add_prog' : gmap string fndef :=
+  <[ "add_client" := imp_add_client' ]> $ <[ "add" := imp_add' ]> ∅.
+
 Local Ltac go := destruct_all?; simplify_eq/=.
 Local Ltac go_i := tstep_i; go.
 Local Ltac go_s := tstep_s; go.
@@ -194,17 +215,18 @@ Proof.
   apply lookup_lookup_total; simplify_map_eq'.
 Qed.
 
-Definition full_asm_add : gmap Z asm_instr :=
-  asm_add ∪ asm_add_client.
+(* TODO: prove the following: *)
+(* Lemma imp_add_refines_imp_add' : *)
+(*   trefines (MS imp_module (initial_imp_state full_imp_add_prog)) *)
+(*            (MS imp_module (initial_imp_state full_imp_add_prog')). *)
+(* Proof. *)
 
-Definition full_imp_add : gmap string fndef :=
-  imp_add_prog ∪ imp_add_client_prog.
 
 Lemma full_add_stack :
   trefines (MS asm_module (initial_asm_state full_asm_add))
            (MS (imp_to_asm {[ 100; 104; 200; 204; 208; 212; 216; 220 ]} {[ "add"; "add_client" ]}
                            (<["add_client" := 200]> $ <["add" := 100]> ∅) imp_module)
-               (initial_imp_to_asm_state imp_module (initial_imp_state full_imp_add))).
+               (initial_imp_to_asm_state imp_module (initial_imp_state full_imp_add_prog))).
 Proof.
   etrans. { apply asm_link_refines_prod. unfold asm_add, asm_add_client. eauto with map_disjoint. }
   etrans. {

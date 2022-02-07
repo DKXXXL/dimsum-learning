@@ -248,27 +248,27 @@ Proof.
   case_match; destruct_all?; simplify_eq.
   - revert select (is_Some i1) => -[[|[??|???|???]?] ->].
     + tstep_i => pc ?. case_match as Hunion. 1: move: Hunion => /lookup_union_Some_raw[Hl|[? Hl]].
-      * tstep_s. split!. simplify_option_eq. apply: Hloop. naive_solver.
+      * tstep_s. split!. simplify_option_eq. apply: Hloop; [done|]. naive_solver.
       * tstep_s. split!. simpl_map_decide. simplify_option_eq. split! => /=.
-        tstep_s. split!. apply: Hloop. naive_solver.
+        tstep_s. split!. apply: Hloop; [done|]. naive_solver.
       * move: Hunion => /lookup_union_None[??]. tstep_s.
         split!. simpl_map_decide. simplify_option_eq. split! => /=.
-        apply: Hloop. naive_solver.
-    + tstep_both. tstep_s => *. tend. split!. apply: Hloop. naive_solver.
-    + tstep_both. tstep_s => *. tend. split!. apply: Hloop. naive_solver.
-    + tstep_both. tstep_s => *. tend. split!. apply: Hloop. naive_solver.
+        apply: Hloop; [done|]. naive_solver.
+    + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
+    + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
+    + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
   - revert select (is_Some i1) => -[[|[??|???|???]?] ->].
     + tstep_i => pc ?. case_match as Hunion. 1: move: Hunion => /lookup_union_Some_raw[Hl|[? Hl]].
       * have ?: ins2 !! pc = None by apply: map_disjoint_Some_l.
         tstep_s. split!. simpl_map_decide. simplify_option_eq. split! => /=.
-        tstep_s. split!. apply: Hloop. naive_solver.
-      * tstep_s. split!. simplify_option_eq. apply: Hloop. naive_solver.
+        tstep_s. split!. apply: Hloop; [done|]. naive_solver.
+      * tstep_s. split!. simplify_option_eq. apply: Hloop; [done|]. naive_solver.
       * move: Hunion => /lookup_union_None[??]. tstep_s.
         split!. simpl_map_decide. simplify_option_eq. split!.
-        apply: Hloop. naive_solver.
-    + tstep_both. tstep_s => *. tend. split!. apply: Hloop. naive_solver.
-    + tstep_both. tstep_s => *. tend. split!. apply: Hloop. naive_solver.
-    + tstep_both. tstep_s => *. tend. split!. apply: Hloop. naive_solver.
+        apply: Hloop; [done|]. naive_solver.
+    + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
+    + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
+    + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
   - tstep_i => pc???? Hin.
     tstep_s. eexists (EAJump _ _ _). split!.
     { move: Hin => /lookup_union_Some_raw[?|[??]]; by simpl_map_decide. }
@@ -290,25 +290,25 @@ Proof.
   - revert select (is_Some i1) => -[[|[??|???|???]?] ->].
     + tstep_i => pc ?. case_match => *; destruct_all?; simplify_eq/=.
       * tstep_s. split!. erewrite lookup_union_Some_l by done.
-        apply: Hloop. naive_solver.
+        apply: Hloop; [done|]. naive_solver.
       * tstep_s. split!. rewrite lookup_union_r //.
         destruct (ins2 !! pc) eqn:? => /=; simpl_map_decide.
-        -- tstep_i => *; simplify_eq. apply: Hloop. naive_solver.
-        -- split!. apply: Hloop. naive_solver.
-    + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop. naive_solver.
-    + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop. naive_solver.
-    + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop. naive_solver.
+        -- tstep_i => *; simplify_eq. apply: Hloop; [done|]. naive_solver.
+        -- split!. apply: Hloop; [done|]. naive_solver.
+    + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
+    + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
+    + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
   - revert select (is_Some i1) => -[[|[??|???|???]?] ->].
     + tstep_i => pc ?. case_match => *; destruct_all?; simplify_eq/=.
       * tstep_s. split!. erewrite lookup_union_Some_r by done.
-        apply: Hloop. naive_solver.
+        apply: Hloop; [done|]. naive_solver.
       * tstep_s. split!. rewrite lookup_union_l' //.
         destruct (ins1 !! pc) eqn:? => /=; simpl_map_decide.
-        -- tstep_i => *; simplify_eq. apply: Hloop. naive_solver.
-        -- split!. apply: Hloop. naive_solver.
-    + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop. naive_solver.
-    + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop. naive_solver.
-    + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop. naive_solver.
+        -- tstep_i => *; simplify_eq. apply: Hloop; [done|]. naive_solver.
+        -- split!. apply: Hloop; [done|]. naive_solver.
+    + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
+    + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
+    + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
   - tstep_i => -[] /= *; destruct_all?; simplify_eq/=.
     tstep_s.
     repeat case_bool_decide => //.

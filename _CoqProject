@@ -27,6 +27,7 @@ theories/refines_meta.v
 theories/proof_techniques.v
 theories/asm.v
 theories/imp.v
+theories/imp_heap_bij.v
 theories/imp_to_asm.v
 theories/imp_to_asm_examples.v
 theories/iris/wp.v
