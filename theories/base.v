@@ -205,6 +205,16 @@ Proof.
 Qed.
 End theorems.
 
+Section map_filter_lookup.
+  Local Set Default Proof Using "Type*".
+  Context `{FinMap K M}.
+  Context {A} (P : K * A → Prop) `{!∀ x, Decision (P x)}.
+  Implicit Types m : M A.
+  Lemma map_filter_lookup_true m i :
+    (∀ x, m !! i = Some x → P (i, x)) → filter P m !! i = m !! i.
+  Proof. move => ?. rewrite map_filter_lookup. destruct (m !! i) => //=. case_option_guard; naive_solver. Qed.
+End map_filter_lookup.
+
 Section dom.
 Context `{FinMapDom K M D}.
 Lemma map_difference_eq_dom {A} (m m1 m2 : M A) :

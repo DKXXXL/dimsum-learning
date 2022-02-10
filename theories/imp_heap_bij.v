@@ -59,6 +59,19 @@ Next Obligation.
   - by apply: hb_iff.
 Qed.
 
+Program Definition heap_bij_add_prog (p2 : prov) (bij : heap_bij) (_ : p2 ∉ hb_provs_right bij) :=
+  HeapBij (hb_bij bij) (hb_env bij) ({[ p2 ]} ∪ hb_prog bij) _ _ _ _.
+Next Obligation. move => ???. apply: hb_disj_env. Qed.
+Next Obligation.
+  move => ???. apply disjoint_union_l. split; [|apply hb_disj_prog].
+  rewrite disjoint_singleton_l. set_solver.
+Qed.
+Next Obligation.
+  move => ???. apply disjoint_union_l. split; [|apply hb_disj_priv].
+  rewrite disjoint_singleton_l. set_solver.
+Qed.
+Next Obligation. move => ????. apply: hb_iff. Qed.
+
 (** ** val_in_bij *)
 Definition val_in_bij (bij : gset (prov * prov)) (v1 v2 : val) : Prop :=
   match v1, v2 with
@@ -313,6 +326,17 @@ Proof.
     all: try by eapply Hbij. all: naive_solver.
 Qed.
 
+Lemma heap_in_bij_update_r bij h1 h2 l2 v2:
+  heap_in_bij bij h1 h2 →
+  l2.1 ∉ set_map (D:=gset _) snd bij →
+  heap_in_bij bij h1 (heap_update h2 l2 v2).
+Proof.
+  move => Hbij Hin ? ??? /=.
+  rewrite !lookup_alter_ne. 2: by apply Hbij.
+  contradict Hin; subst => /=. apply elem_of_map.
+  eexists (_, _). naive_solver.
+Qed.
+
 Lemma heap_in_bij_alloc l1 l2 hi hs n bij H1 H2:
   heap_in_bij (hb_bij bij) hi hs →
   heap_is_fresh hi l1 →
@@ -337,6 +361,16 @@ Proof.
     split; [done|] => *. apply: val_in_bij_mono; [naive_solver|]. set_solver.
 Qed.
 
+Lemma heap_in_bij_alloc_r l2 hi hs n bij:
+  heap_in_bij bij hi hs →
+  l2.1 ∉ set_map (D:=gset _) snd bij →
+  heap_in_bij bij hi (heap_alloc hs l2 n).
+Proof.
+  move => /= Hbij Hin ???? /=. rewrite lookup_union_r. 2: by apply Hbij.
+  apply not_elem_of_list_to_map_1. contradict Hin.
+  move: Hin => /elem_of_list_fmap[[??][?/elem_of_list_fmap[?[??]]]]; simplify_eq/=.
+  apply elem_of_map. eexists (_, _). naive_solver.
+Qed.
 
 Lemma heap_in_bij_free hi hs l1 l2 bij:
   heap_in_bij (hb_bij bij) hi hs →
@@ -351,6 +385,15 @@ Proof.
     all: repeat case_option_guard => //; naive_solver.
   - move => ??. rewrite !map_filter_lookup => /bind_Some[?[??]] /bind_Some[?[??]].
     repeat case_option_guard => //; naive_solver.
+Qed.
+
+Lemma heap_in_bij_free_r hi hs l2 bij:
+  heap_in_bij bij hi hs →
+  l2.1 ∉ set_map (D:=gset _) snd bij →
+  heap_in_bij bij hi (heap_free hs l2).
+Proof.
+  move => /= Hbij Hin ???? /=. rewrite map_filter_lookup_true. 2: by apply Hbij.
+  move => ??. contradict Hin. apply elem_of_map. eexists (_, _). naive_solver.
 Qed.
 
 (** *** heap_preserved *)
@@ -371,15 +414,29 @@ Lemma heap_preserved_mono ps1 ps2 h h':
   heap_preserved ps2 h h'.
 Proof. unfold heap_preserved => Hp ????. apply: Hp. set_solver. Qed.
 
+Lemma heap_preserved_lookup_r ps h h' l v:
+  h_heap h' !! l = Some v →
+  heap_preserved ps h h' →
+  l.1 ∈ ps →
+  h_heap h !! l = Some v.
+Proof. move => Hl Hp ?. destruct l. by rewrite Hp. Qed.
+
+Lemma heap_preserved_update_r l v he hp ps:
+  heap_preserved ps he hp →
+  l.1 ∉ ps →
+  heap_preserved ps he (heap_update hp l v).
+Proof.
+  move => Hp ? p o /=?. rewrite lookup_alter_ne; [set_solver|by eapply Hp].
+Qed.
+
 Lemma heap_preserved_bij_env p1 p2 l v he hp bij:
   (p1, p2) ∈ hb_bij bij →
   l.1 = p2 →
   heap_preserved (hb_env bij) he hp →
   heap_preserved (hb_env bij) he (heap_update hp l v).
 Proof.
-  move => ?? Hp p o /=?. destruct (decide (l = (p, o))); subst; simplify_map_eq.
-  - exfalso. have := hb_disj_env bij. apply; [done|]. apply elem_of_map. by eexists (_, _).
-  - by apply Hp.
+  move => ???. apply heap_preserved_update_r; [done|].
+  move => ?. have := hb_disj_env bij. apply; [done|]. apply elem_of_map. by eexists (_, _).
 Qed.
 
 Lemma heap_preserved_bij_env_free p1 p2 l he hp bij:
@@ -393,7 +450,7 @@ Proof.
   exfalso. have := hb_disj_env bij. apply; [done|]. apply elem_of_map. eexists (_, _). naive_solver.
 Qed.
 
-Lemma heap_preserved_bij_env_alloc l n he hp bij:
+Lemma heap_preserved_alloc_r l n he hp bij:
   l.1 ∉ bij →
   heap_preserved bij he hp →
   heap_preserved bij he (heap_alloc hp l n).
@@ -402,6 +459,12 @@ Proof.
   apply not_elem_of_list_to_map_1 => /elem_of_list_fmap[[[??]?] [?/elem_of_list_fmap[?[??]]]]; simplify_eq/=.
   done.
 Qed.
+
+Lemma heap_preserved_free_r l he hp bij:
+  l.1 ∉ bij →
+  heap_preserved bij he hp →
+  heap_preserved bij he (heap_free hp l).
+Proof. move => Hni Hp p o /= ?. rewrite map_filter_lookup_true; [| by apply Hp]. set_solver. Qed.
 
 Record imp_heap_bij_state := ImpHeapBij {
   ihb_bij : heap_bij;
@@ -692,7 +755,7 @@ Proof.
         { apply: heap_fresh_not_in. }
         split!.
         1: bij_solver.
-        1: { apply heap_preserved_bij_env_alloc; [|done] => ?.
+        1: { apply heap_preserved_alloc_r; [|done] => ?.
              apply: (heap_fresh_not_in (hb_provs_right bij') hs). bij_solver. }
         1: { apply: ectx_in_bij_mono; [done|bij_solver]. }
         1: bij_solver.
@@ -804,3 +867,91 @@ Proof.
   erewrite map_difference_eq_dom_L => //.
   apply _.
 Qed.
+
+Module imp_heap_bij_example.
+
+Local Open Scope Z_scope.
+
+Definition bij_alloc : fndef := {|
+  fd_args := [];
+  fd_body := (LetE "tmp" (Alloc (Val 1))
+             (LetE "_" (Store (Var "tmp") (Val 1))
+             (LetE "_" (Call "ext" [])
+             (LetE "res" (Load (Var "tmp"))
+             (LetE "_" (Free (Var "tmp"))
+             (Var "res"))))));
+  fd_static := I;
+|}.
+
+Definition bij_alloc_opt : fndef := {|
+  fd_args := [];
+  fd_body := (LetE "_" (Call "ext" [])
+             (Val 1));
+  fd_static := I;
+|}.
+
+Lemma bij_alloc_opt_refines :
+  trefines (MS imp_module (initial_imp_state (<["f" := bij_alloc_opt]> ∅)))
+           (MS (imp_heap_bij imp_module) (initial_imp_heap_bij_state imp_module
+                                            (initial_imp_state (<["f" := bij_alloc]> ∅)))).
+Proof.
+  pose (R := λ (b : bool) '(ImpHeapBij bij1 h1) '(ImpHeapBij bij2 h2),
+          hb_prog bij1 ⊆ hb_prog bij2 ∧ heap_preserved (hb_prog bij1) h1 h2).
+  apply: (imp_prepost_proof R); unfold R in *.
+  { constructor. { move => [??]. naive_solver. }
+    { move => [??] [??] [??] [??] [??]. split; [by etrans|]. etrans; [done|].
+      by apply: heap_preserved_mono. } }
+  { move => [??] [??]. naive_solver. }
+  move => n K1 K2 f fn1 vs1 h0 [bij0 ?] ?.
+  rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
+  move => bij1 ? h1 *. split!. move => ?. split!; [solve_length|].
+  move => Hcall Hret.
+  pose (l := (heap_fresh (hb_provs_right bij1) h1)).
+  have Hf := heap_fresh_not_in (hb_provs_right bij1) h1.
+  tstep_s. eexists l. split!. { apply heap_fresh_is_fresh. }
+  move => *; simplify_eq.
+  tstep_s. tstep_s. move => ? [<-] ?.
+  tstep_s.
+  apply: (Hcall _ _ ([LetECtx _ _]) ([LetECtx _ _])); [done|..].
+  1, 2: by simplify_map_eq. 1,2: by econs.
+  unshelve eexists (heap_bij_add_prog l.1 bij1 _), []. { apply Hf. }
+  split!.
+  { unfold heap_bij_extend. split!. set_solver. }
+  { apply heap_in_bij_update_r; [|set_solver]. apply heap_in_bij_alloc_r; [done|set_solver]. }
+  { apply heap_preserved_update_r; [|set_solver]. apply heap_preserved_alloc_r; [set_solver|done]. }
+  { bij_solver. }
+  { etrans; [apply: heap_preserved_mono; [done|bij_solver]|].
+    apply heap_preserved_update_r; [|bij_solver].
+    apply heap_preserved_alloc_r; [bij_solver|done]. }
+  move => ? h2 [bij2 h3] [??] bij4 ? h4 *. decompose_Forall_hyps.
+  split!.
+  tstep_i.
+  tstep_s.
+  tstep_s.
+  move => ?? [<-] /heap_preserved_lookup_r Hlookup.
+  efeed pose proof Hlookup as Hlookup'.
+  { etrans. 2: apply: heap_preserved_mono; [done|]. 1: done. bij_solver. }
+  { bij_solver. } simplify_map_eq/=.
+  tstep_s.
+  tstep_s => *. simplify_eq.
+  tstep_s.
+  apply: Hret; [done|].
+  eexists _, [ValNum 1]. split!. done. all: split!. 1: by econs.
+  { apply heap_in_bij_free_r; [done|]. have ? := hb_disj_prog bij4. bij_solver. }
+  { apply: heap_preserved_free_r; [|done]. have ? := hb_disj_priv bij4. bij_solver. }
+  1: bij_solver.
+  { apply: heap_preserved_free_r. { have ? := hb_disj_priv bij4. bij_solver. }
+    apply: heap_preserved_mono. 1: etrans; [done|]. 2: bij_solver.
+    etrans. 2: apply: heap_preserved_mono; [done|bij_solver].
+    etrans. 2: apply: heap_preserved_mono; [done|bij_solver].
+    apply heap_preserved_update_r; [|bij_solver].
+    apply heap_preserved_alloc_r; [bij_solver|done]. }
+Qed.
+
+Lemma bij_alloc_ctx_refines :
+  imp_ctx_refines (<["f" := bij_alloc_opt]> ∅) (<["f" := bij_alloc]> ∅).
+Proof.
+  apply: imp_heap_bij_trefines_implies_ctx_refines. { set_solver. }
+  apply bij_alloc_opt_refines.
+Qed.
+End imp_heap_bij_example.

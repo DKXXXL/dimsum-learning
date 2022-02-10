@@ -21,6 +21,10 @@ Definition shift_loc (l : loc) (z : Z) : loc := (l.1, l.2 + z).
 Notation "l +ₗ z" := (shift_loc l%L z%Z) (at level 50, left associativity) : loc_scope.
 Global Typeclasses Opaque shift_loc.
 
+Lemma shift_loc_0 l :
+  l +ₗ 0 = l.
+Proof. rewrite /shift_loc. destruct l => /=. f_equal. lia. Qed.
+
 Inductive binop : Set :=
 | AddOp | ShiftOp | EqOp.
 
@@ -259,13 +263,24 @@ Record fndef : Type := {
 Record heap_state := Heap {
   h_heap : gmap loc val;
   h_provs : gset prov;
-  heap_wf l : is_Some (h_heap !! l) → l.1 ∈ h_provs;
+  heap_wf' : bool_decide (set_map fst (dom (gset _) h_heap) ⊆ h_provs);
 }.
 Add Printing Constructor heap_state.
 
+Lemma heap_state_eq h1 h2:
+  h1 = h2 ↔ h1.(h_heap) = h2.(h_heap) ∧ h1.(h_provs) = h2.(h_provs).
+Proof. split; [naive_solver|]. destruct h1, h2 => /= -[??]; subst. f_equal. apply proof_irrel. Qed.
+
+Lemma heap_wf h l:
+  is_Some (h_heap h !! l) → l.1 ∈ h_provs h.
+Proof.
+  move => ?. have /bool_decide_unpack := heap_wf' h. apply.
+  apply elem_of_map. eexists l. split; [done|]. by apply elem_of_dom.
+Qed.
+
 Program Definition initial_heap_state : heap_state :=
   Heap ∅ ∅ _.
-Next Obligation. move => ?. rewrite lookup_empty => -[??]. done. Qed.
+Next Obligation. apply bool_decide_spec. set_solver. Qed.
 
 Definition heap_alive (h : heap_state) (l : loc) : Prop :=
   is_Some (h.(h_heap) !! l).
@@ -278,18 +293,25 @@ Definition heap_fresh (ps : gset prov) (h : heap_state) : loc :=
 
 Program Definition heap_update (h : heap_state) (l : loc) (v : val) : heap_state :=
   Heap (alter (λ _, v) l h.(h_heap)) h.(h_provs) _.
-Next Obligation. move => ????. rewrite lookup_alter_is_Some. apply heap_wf. Qed.
+Next Obligation.
+  move => ???. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]].
+  rewrite lookup_alter_is_Some. subst. apply heap_wf.
+Qed.
 
 Program Definition heap_alloc (h : heap_state) (l : loc) (n : Z) : heap_state :=
   Heap (list_to_map ((λ z, (l +ₗ z, ValNum 0)) <$> seqZ 0 n) ∪ h.(h_heap)) ({[l.1]} ∪ h.(h_provs)) _.
 Next Obligation.
-  move => ???? [? /lookup_union_Some_raw[Hl|[? Hh]]]; apply elem_of_union; [left|right; by apply heap_wf].
+  move => ???. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]]. subst.
+  move => [? /lookup_union_Some_raw[Hl|[? Hh]]]; apply elem_of_union; [left|right; by apply heap_wf].
   move: Hl => /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap. set_solver.
 Qed.
 
 Program Definition heap_free (h : heap_state) (l : loc) : heap_state :=
   Heap (filter (λ '(l', v), l'.1 ≠ l.1) h.(h_heap)) h.(h_provs) _.
-Next Obligation. move => ???. rewrite map_filter_lookup => -[?/bind_Some[?[??]]]. by apply heap_wf. Qed.
+Next Obligation.
+  move => ??. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]]. subst.
+  rewrite map_filter_lookup => -[?/bind_Some[?[??]]]. by apply heap_wf.
+Qed.
 
 Lemma heap_fresh_is_fresh ps h:
   heap_is_fresh h (heap_fresh ps h).
@@ -305,6 +327,32 @@ Proof.
   unfold heap_fresh => /=.
   match goal with | |- context [fresh ?X] => pose proof (is_fresh X) as H; revert H; move: {1 3}(X) => l Hl end.
   set_solver.
+Qed.
+
+Lemma heap_alive_alloc h l l' n :
+  l.1 = l'.1 →
+  l'.2 ≤ l.2 < l'.2 + n →
+  heap_alive (heap_alloc h l' n) l.
+Proof.
+  destruct l as [p o], l' as [p' o'].
+  move => ??. simplify_eq/=. rewrite /heap_alive/=/shift_loc/=.
+  apply lookup_union_is_Some. left. apply list_to_map_lookup_is_Some.
+  eexists 0. apply elem_of_list_fmap. eexists (o - o').
+  split; [do 2 f_equal; lia|]. apply elem_of_seqZ. lia.
+Qed.
+
+Lemma heap_alive_update h l l' v :
+  heap_alive h l →
+  heap_alive (heap_update h l' v) l.
+Proof. move => ?. rewrite /heap_alive/=. by apply lookup_alter_is_Some. Qed.
+
+Lemma heap_free_update h l l' v :
+  l'.1 = l.1 →
+  heap_free (heap_update h l' v) l = heap_free h l.
+Proof.
+  move => ?. apply heap_state_eq => /=. split; [|done].
+  apply map_filter_strong_ext_1 => l'' ?. destruct l'', l', l; simplify_eq/=.
+  split => -[?]; rewrite lookup_alter_ne //; congruence.
 Qed.
 
 (** ** state *)

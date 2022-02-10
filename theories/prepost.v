@@ -8,56 +8,61 @@ Require Import refframe.proof_techniques.
 Set Default Proof Using "Type".
 
 (** * prepost *)
-Inductive prepost {R : Type} : Type :=
+Section prepost.
+Context {R : Type}.
+
+Inductive prepost : Type :=
 | pp_end (r : R)
 | pp_prop (P : Prop) (pp : prepost)
 | pp_quant {T} (pp : T → prepost)
 .
-Arguments prepost : clear implicits.
 
-Fixpoint pp_to_ex {R} (pp : prepost R) (Q : R → Prop) : Prop :=
+Fixpoint pp_to_ex (pp : prepost) (Q : R → Prop) : Prop :=
   match pp with
   | pp_end r => Q r
   | pp_prop P pp' => P ∧ pp_to_ex pp' Q
   | pp_quant pp' => ∃ x, pp_to_ex (pp' x) Q
   end.
 
-Fixpoint pp_to_all {R} (pp : prepost R) (Q : R → Prop) : Prop :=
+Fixpoint pp_to_all (pp : prepost) (Q : R → Prop) : Prop :=
   match pp with
   | pp_end r => Q r
   | pp_prop P pp' => P → pp_to_all pp' Q
   | pp_quant pp' => ∀ x, pp_to_all (pp' x) Q
   end.
 
-Lemma pp_to_ex_exists {R} pp Q:
-  @pp_to_ex R pp Q ↔ ∃ r, Q r ∧ pp_to_ex pp (r =.).
+Lemma pp_to_ex_exists pp Q:
+  pp_to_ex pp Q ↔ ∃ r, Q r ∧ pp_to_ex pp (r =.).
 Proof. elim: pp => /=; naive_solver. Qed.
 
-Lemma pp_to_all_forall {R} pp Q:
-  @pp_to_all R pp Q ↔ (∀ r, pp_to_ex pp (r =.) → Q r).
+Lemma pp_to_all_forall pp Q:
+  pp_to_all pp Q ↔ (∀ r, pp_to_ex pp (r =.) → Q r).
 Proof. elim: pp => /=; naive_solver. Qed.
-Lemma pp_to_all_forall_2 {R} pp Q:
-  @pp_to_all R pp Q →
+Lemma pp_to_all_forall_2 pp Q:
+  pp_to_all pp Q →
   ∀ r, pp_to_ex pp (r =.) → Q r.
 Proof. apply pp_to_all_forall. Qed.
 
-Lemma pp_to_all_mono {R} pp (Q1 Q2 : _ → Prop):
-  @pp_to_all R pp Q1 →
+Lemma pp_to_all_mono pp (Q1 Q2 : _ → Prop):
+  pp_to_all pp Q1 →
   (∀ r, Q1 r → Q2 r) →
-  @pp_to_all R pp Q2.
+  pp_to_all pp Q2.
 Proof. elim: pp => /=; naive_solver. Qed.
 
-Lemma pp_to_ex_mono {R} pp (Q1 Q2 : _ → Prop):
-  @pp_to_ex R pp Q1 →
+Lemma pp_to_ex_mono pp (Q1 Q2 : _ → Prop):
+  pp_to_ex pp Q1 →
   (∀ r, Q1 r → Q2 r) →
-  @pp_to_ex R pp Q2.
+  pp_to_ex pp Q2.
 Proof. elim: pp => /=; naive_solver. Qed.
 
-Lemma pp_to_all_ex {R} pp Q1 Q2:
-  @pp_to_all R pp Q1 →
+Lemma pp_to_all_ex pp Q1 Q2:
+  pp_to_all pp Q1 →
   pp_to_ex pp Q2 →
   ∃ r, Q1 r ∧ Q2 r.
 Proof. move => /pp_to_all_forall ? /pp_to_ex_exists. naive_solver. Qed.
+End prepost.
+
+Arguments prepost : clear implicits.
 
 (** * mod_prepost *)
 Section prepost.
@@ -185,8 +190,49 @@ Global Hint Resolve
        mod_prepost_step_Inside_s
  | 3 : tstep.
 
-(* Definition prepost_id {EV} : EV → unit → prepost (EV * unit) := *)
-(*   λ x _, pp_end (x, tt). *)
+Definition prepost_id {EV} : EV → unit → prepost (EV * unit) :=
+  λ x _, pp_end (x, tt).
+
+Lemma prepost_id_l S EV1 EV2 (m : module EV1) σ i o s:
+  trefines (MS (mod_prepost i o (mod_prepost prepost_id prepost_id m))
+               (SMFilter, (SMFilter, σ, (PPOutside, tt)), (PPOutside, s)))
+           (MS (mod_prepost (S:=S) (EV2:=EV2) i o m) (SMFilter, σ, (PPOutside, s))).
+Proof.
+  apply tsim_implies_trefines => /= n.
+  tstep_i => ?.
+  tstep_s. split!.
+  tstep_s. apply pp_to_all_forall => ??.
+  tstep_i. apply: pp_to_ex_mono; [done|].
+  move => ? <-.
+  tstep_i => ? <-.
+  tstep_i.
+  unshelve apply: tsim_remember. { simpl. exact (λ _
+      '(σf1, (σf1', σ1, (σpp1', _)), (σpp1, s1)) '(σf2, σ2, (σpp2, s2)),
+         σf1 = SMProg ∧ σf1' = σf2 ∧ σ1 = σ2 ∧ σpp1 = PPInside
+         ∧ σpp1' = PPInside ∧ σpp2 = PPInside ∧ s1 = s2 ∧
+         ((∃ e, σf1' = SMProgRecv e) ∨ σf1' = SMProg)). }
+  { split!. } { done. }
+  move => {}n _ Hloop [[σf1 [[σf1' σ1] [σpp1' []]] [σpp1 s1]]] [[σf2 σ2] [σpp2 s2]] ?.
+  destruct_all?; simplify_eq.
+  - tstep_both. apply: steps_impl_step_end => κ ??. case_match => *.
+    + subst. tstep_s. eexists (Some _). split!.
+      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop; [done|]. split!.
+    + tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop; [done|]. split!.
+  - tstep_both. apply: steps_impl_step_end => κ ??.
+    tstep_s. eexists _. apply: steps_spec_step_end; [done|] => ??.
+    case_match; tend; (split!; [done|]). 2: { apply: Hloop; [done|]. split!. }
+    tstep_i. tstep_i. apply pp_to_all_forall => ??.
+    tstep_s. apply: pp_to_ex_mono; [done|]. move => ? <-. split!.
+    tstep_i => ?.
+    tstep_s. split!.
+    tstep_s. apply pp_to_all_forall => ??.
+    tstep_i. apply: pp_to_ex_mono; [done|]. move => ? <-.
+    tstep_i => ? <-.
+    tstep_i.
+    apply Hloop; [done|]. split!.
+Qed.
 
 (* Lemma prepost_id_l EV (m : module EV) σ s: *)
 (*   trefines (MS (mod_prepost prepost_id prepost_id m) (SMFilter, σ, (PPOutside, s))) (MS m σ). *)
