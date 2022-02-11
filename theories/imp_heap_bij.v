@@ -592,7 +592,7 @@ Proof.
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
     1: by destruct e.
     1: by destruct e.
-  - move => [? e] /= *. unfold heap_bij_extend in *; destruct_all?; simplify_eq/=.
+  - move => [? e] /= ?? [] *. unfold heap_bij_extend in *; destruct_all?; simplify_eq/=.
     unshelve split!. 1: econstructor. all: shelve_unifiable.
     all: split!; rewrite ?heap_of_event_event_set_vals_heap; split!. all: split!.
     1: by destruct e.
@@ -614,7 +614,7 @@ Proof.
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
     1: by destruct e.
     1: by destruct e.
-  - move => [? e] /= *. unfold heap_bij_extend in *; destruct_all?; simplify_eq/=.
+  - move => [? e] /= ?? [] *. unfold heap_bij_extend in *; destruct_all?; simplify_eq/=.
     unshelve split!. 1: econstructor. all: shelve_unifiable.
     all: split!; rewrite ?heap_of_event_event_set_vals_heap; split!. all: split!.
     1: by destruct e.
