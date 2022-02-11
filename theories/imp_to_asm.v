@@ -11,6 +11,59 @@ Require Import refframe.asm.
 
 Local Open Scope Z_scope.
 
+(*
+Idea for new ghost state:
+
+asm_mem: gmap Z Z
+-> like points-to predicate
+- asm_mem_auth (mem : gmap Z Z)
+- asm_mem_ptsto (a : Z) (v : Z)
+
+imp_heap: gmap prov (gmap Z val))
+- imp_heap_auth ih
+- imp_heap_block (b : gmap Z val)
+  - exclusive
+- imp_heap_dead (p : prov)
+  - persistent
+  - defined as p -> ∅
+
+physical_blocks: gmap prov Z
+-> persistent, only allows extension
+
+Invariant :
+λ h mem sp pb, ∃ ih amem,
+  asm_mem_auth amem ∗
+  imp_heap_auth ih ∗
+  physical_blocks pb ∗
+  asm_imp_agree pb ∧
+  asm_mem_agree mem amem ∧
+  imp_heap_agree h ih ∧
+  (∀ z, z < sp → amem !! z = None) ∧
+
+imp_heap_agree h ih :=
+  dom _ ih ⊆ h_provs h ∧
+  ∀ l x, ih !! l.1 = Some b → h !! l = b !! l.2
+
+asm_mem_agree mem amem :=
+  ∀ a v, amem !! a = Some v → mem !!! a = v
+
+asm_imp_agree pb :=
+  ∀ p a, pb !! p = Some a →
+     imp_heap_dead p ∨ ∃ b, imp_heap_block b ∗ [∗ map] o↦v,
+       ∃ v', imp_val_to_asm_val pb v = Some v' ∧ asm_mem_ptsto (a + o) v'
+
+-> Idea: if there is an access in the imp program, one can deduce that the heap
+   cell cannot be dead and thus there is an asm points to in asm_imp_agree.
+   For private blocks, one does not need to put the asm_mem_ptsto into asm_imp_agree
+   and thus one can freely modify them. If the source frees a memory block, one
+   knows that it is not dead and thus one gets the imp_heap_block and the asm_mem_ptstos
+   One probably also needs to know that the block still has the same size as when it
+   was allocated, but that could work e.g. by turning h_provs into gmap prov positive
+   which tracks the size of blocks.
+
+pb is also used to translate values
+*)
+
 (** * imp_to_asm *)
 Definition imp_val_to_asm_val (pb : gmap prov (option Z)) (v : val) : option Z :=
   match v with
