@@ -5,6 +5,12 @@ Require Export stdpp.strings.
 
 Global Unset Program Cases.
 
+(* from Iris prelude.v*)
+Global Open Scope general_if_scope.
+Global Set SsrOldRewriteGoalsOrder. (* See Coq issue #5706 *)
+Ltac done := stdpp.tactics.done.
+
+
 Definition LEM (P : Prop) := P ∨ ¬ P.
 
 Lemma snoc_inv {A} (l : list A):
@@ -146,15 +152,15 @@ Ltac sort_map_insert :=
              is_closed_term i;
              is_closed_term j;
              assert_succeeds (assert (encode j <? encode i)%positive; [vm_compute; exact I|]);
-             rewrite (insert_commute m i j x y); [done|]
+             rewrite (insert_commute m i j x y); [|done]
          end.
 
 Ltac simpl_map_decide :=
   let go' := first [done | by apply elem_of_dom | by apply not_elem_of_dom] in
   let go := solve [ first [go' | by match goal with | H : _ ## _ |- _ => move => ?; apply: H; go' end] ] in
   repeat (match goal with
-  | |- context [bool_decide (?P)] => rewrite (bool_decide_true P); [go|]
-  | |- context [bool_decide (?P)] => rewrite (bool_decide_false P); [go|]
+  | |- context [bool_decide (?P)] => rewrite (bool_decide_true P); [|go]
+  | |- context [bool_decide (?P)] => rewrite (bool_decide_false P); [|go]
   end; simpl).
 
 Section theorems.
@@ -200,7 +206,7 @@ Proof.
     { by rewrite lookup_insert. }
     destruct (decide (i'.1 = i)); subst.
     { by rewrite lookup_insert. }
-    rewrite lookup_insert_ne; [done|].
+    rewrite lookup_insert_ne; [|done].
     naive_solver.
 Qed.
 End theorems.
@@ -424,8 +430,8 @@ Lemma map_scramble_insert_r_not_in {K A} `{Countable K} ns (m m' : gmap K A) i x
   map_scramble ns m (<[i:=x]>m') ↔ m !! i = Some x ∧ map_scramble (i :: ns) m m'.
 Proof.
   unfold map_scramble. move => ?. split.
-  - move => Hm. split; [rewrite Hm //; by simplify_map_eq|]. move => ??. rewrite Hm; [set_solver|].
-    rewrite lookup_insert_ne; [set_solver|]. done.
+  - move => Hm. split; [rewrite Hm //; by simplify_map_eq|]. move => ??. rewrite Hm; [|set_solver].
+    rewrite lookup_insert_ne; [|set_solver]. done.
   - move => [? Hm] i' ?. destruct (decide (i = i')); simplify_map_eq => //. apply Hm. set_solver.
 Qed.
 

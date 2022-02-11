@@ -431,7 +431,7 @@ Proof.
   destruct Ha. simplify_eq.
   tstep_i => pc HPC. simplify_eq.
   case_match.
-  - rewrite {1}rec_as_interp {2}/rc. rewrite bool_decide_true. { apply Hins. naive_solver. }
+  - rewrite {1}rec_as_interp {2}/rc. rewrite bool_decide_true. 2: { apply Hins. naive_solver. }
     go_s. split. { apply Hins. naive_solver. } go.
     go_s => -[]; go.
     { go_s. apply: tsim_mono_b. revert select (eqit eq _ _ _ _) => ->. apply HCONT. naive_solver. }
@@ -442,7 +442,7 @@ Proof.
     + move => ????????. rewrite interp_recursive_call.
       apply Hloop. { naive_solver. }
       move => ? [[??]?] [] [?[??]]. apply: HCONT. naive_solver.
-  - rewrite {1}rec_as_interp {2}/rc. rewrite bool_decide_false. { move => /Hins[??]. naive_solver. }
+  - rewrite {1}rec_as_interp {2}/rc. rewrite bool_decide_false. 2: { move => /Hins[??]. naive_solver. }
     go_s. split; [done|]. go.
     tstep_i => pc i {}rs {}mem HPC Hi.
     go_s. eexists _. go.
@@ -500,7 +500,7 @@ Module asm_examples.
     }
     move => {}n rc pc rs mem i CONT HPC Hi Hloop HCONT.
     move: Hi. rewrite !lookup_insert_Some !lookup_empty => Hi. destruct_all!; simplify_eq.
-    all: repeat (rewrite bool_decide_false; [done|]); rewrite bool_decide_true //.
+    all: repeat (rewrite bool_decide_false; [|done]); rewrite bool_decide_true //.
     all: try by go_s.
 
     go_s => r1 HR1; go.
@@ -579,7 +579,7 @@ Module asm_examples.
     }
     move=> {}n rc pc rs mem i CONT HPC Hi Hloop HCONT.
     move: Hi. rewrite !lookup_insert_Some !lookup_empty => Hi. destruct_all!; simplify_eq.
-    all: repeat (rewrite bool_decide_false; [done|]); rewrite bool_decide_true //.
+    all: repeat (rewrite bool_decide_false; [|done]); rewrite bool_decide_true //.
     all: try by go_s.
 
     go_s => -[r1 HR1]; go.

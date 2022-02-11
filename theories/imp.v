@@ -540,7 +540,7 @@ Lemma prim_step_inv_head K e fns h κ Pσ:
 Proof.
   move => Hprim Hsub ?.
   move: Hprim => /prim_step_inv[|?[?[?[?[Hstep ?]]]]]. { done. } subst.
-  have ->:= Hsub _ _ ltac:(done). { by apply: val_head_stuck. }
+  have ->:= Hsub _ _ ltac:(done). 2: { by apply: val_head_stuck. }
   naive_solver.
 Qed.
 
@@ -922,89 +922,90 @@ Qed.
 Global Hint Resolve imp_step_If_s | 10 : tstep.
 
 (** * proof technique for prepost *)
-Inductive imp_prepost_proof_stack {S} (n : trace_index) (fnsi fnss : gmap string fndef) i o R :
-  bool → S → list expr_ectx → list expr_ectx → Prop :=
-| IPSNil s :
-  imp_prepost_proof_stack n fnsi fnss i o R false s [] []
-| IPSStep b Ki Ki' Ks Ks' s0 s1:
-  imp_prepost_proof_stack n fnsi fnss i o R b s0 Ki Ks →
+Inductive imp_prepost_proof_stack {S} {A : cmra} (n : trace_index) (fnsi fnss : gmap string fndef) i o R :
+  bool → S → A → list expr_ectx → list expr_ectx → Prop :=
+| IPSNil s r :
+  imp_prepost_proof_stack n fnsi fnss i o R false s r [] []
+| IPSStep b Ki Ki' Ks Ks' s0 s1 r0 r1:
+  imp_prepost_proof_stack n fnsi fnss i o R b s0 r0 Ki Ks →
   (∀ hi vi s2,
       R true s1 s2 →
-      pp_to_all (i (Incoming, EIReturn vi hi) s2) (λ '(e', s3),
+      pp_to_all (i (Incoming, EIReturn vi hi) s2) r1 (λ '(e', s3) r2,
       ∃ vs hs, e' = (Incoming, EIReturn vs hs) ∧
       Imp (expr_fill (Ki' ++ Ki) (Val vi)) hi fnsi
         ⪯{imp_module, mod_prepost (S:=S) i o imp_module, n, true}
-        (SMProg, Imp (expr_fill (Ks' ++ Ks) (Val vs)) hs fnss, (PPInside, s3)))) →
-  imp_prepost_proof_stack n fnsi fnss i o R true s1 (Ki' ++ Ki) (Ks' ++ Ks)
+        (SMProg, Imp (expr_fill (Ks' ++ Ks) (Val vs)) hs fnss, (PPInside, s3, r2)))) →
+  imp_prepost_proof_stack n fnsi fnss i o R true s1 r1 (Ki' ++ Ki) (Ks' ++ Ks)
 .
 
-Lemma imp_prepost_proof_stack_mono S n n' fns1 fns2 i o R s b Ki Ks:
-  imp_prepost_proof_stack n fns1 fns2 i o R b s Ki Ks →
+Lemma imp_prepost_proof_stack_mono S A n n' fns1 fns2 i o R s r b Ki Ks:
+  imp_prepost_proof_stack n fns1 fns2 i o R b s r Ki Ks →
   n' ⊆ n →
-  imp_prepost_proof_stack (S:=S) n' fns1 fns2 i o R b s Ki Ks.
+  imp_prepost_proof_stack (A:=A) (S:=S) n' fns1 fns2 i o R b s r Ki Ks.
 Proof.
   move => Hs. elim: Hs n'; [by econs|].
   move => *. econs; [naive_solver|] => *.
-  apply: pp_to_all_mono; [naive_solver|]. move => [??] ?. destruct_all?; subst. split!.
+  apply: pp_to_all_mono; [naive_solver|]. move => [??] ??. destruct_all?; subst. split!.
   by apply: tsim_mono.
 Qed.
 
-Lemma imp_prepost_proof_stack_mono_R S n fns1 fns2 i o R s s' b Ki Ks `{!Transitive (R true)}:
-  imp_prepost_proof_stack n fns1 fns2 i o R b s Ki Ks →
+Lemma imp_prepost_proof_stack_mono_R A S n fns1 fns2 i o R s s' r b Ki Ks `{!Transitive (R true)}:
+  imp_prepost_proof_stack n fns1 fns2 i o R b s r Ki Ks →
   R true s s' →
-  imp_prepost_proof_stack (S:=S) n fns1 fns2 i o R b s' Ki Ks.
+  imp_prepost_proof_stack (A:=A) (S:=S) n fns1 fns2 i o R b s' r Ki Ks.
 Proof.
   move => Hs. elim: Hs s'; [by econs|].
-  move => ????????? Hcont ??. econs; [naive_solver|] => *.
+  move => ??????????? Hcont ??. econs; [naive_solver|] => *.
   apply: pp_to_all_mono. { apply Hcont. by etrans. } done.
 Qed.
 
-Lemma imp_prepost_proof {S} R `{!∀ b, PreOrder (R b)} i o fns1 fns2 s0:
+Lemma imp_prepost_proof {S} {A : ucmra} R `{!∀ b, PreOrder (R b)} i o fns1 fns2 s0 (r0 : A):
   (* R true: public transition relation, R false: private transition relation *)
   (∀ s s', R true s s' → R false s s') →
-  (∀ n K1 K2 f fn1 vs1 h1 s1,
+  (∀ n K1 K2 f fn1 vs1 h1 s1 r1,
       R false s0 s1 →
+      r0 ≼ r1 →
       fns1 !! f = Some fn1 →
-      pp_to_all (i (Incoming, EICall f vs1 h1) s1) (λ '(e', s2),
+      pp_to_all (i (Incoming, EICall f vs1 h1) s1) r1 (λ '(e', s2) r2,
       ∃ vs2 h2 fn2, e' = (Incoming, EICall f vs2 h2) ∧ fns2 !! f = Some fn2 ∧ (
         length vs2 = length (fd_args fn2) →
           length vs1 = length (fd_args fn1) ∧ (
       (* Call *)
-      (∀ n' f K1' K2' es1 es2 vs1' vs2' h1' h2' b s3,
+      (∀ n' f K1' K2' es1 es2 vs1' vs2' h1' h2' b s3 r3,
          n' ⊆ n →
          fns1 !! f = None →
          fns2 !! f = None →
          Forall2 (λ e v, e = Val v) es1 vs1' →
          Forall2 (λ e v, e = Val v) es2 vs2' →
-         pp_to_ex (o (Outgoing, EICall f vs2' h2') s3) (λ '(e''', s4),
-            e''' = (Outgoing, EICall f vs1' h1') ∧ R false s1 s4 ∧
-           ∀ v1'' h1'' s5, R true s4 s5 → pp_to_all (i (Incoming, EIReturn v1'' h1'') s5) (λ '(e''''', s6),
+         pp_to_ex (o (Outgoing, EICall f vs2' h2') s3) r3 (λ '(e''', s4) r4,
+            e''' = (Outgoing, EICall f vs1' h1') ∧ R false s1 s4 ∧ r1 ≼ r4 ∧
+           ∀ v1'' h1'' s5, R true s4 s5 → pp_to_all (i (Incoming, EIReturn v1'' h1'') s5) r4 (λ '(e''''', s6) r6,
             ∃ v2'' h2'', e''''' = (Incoming, EIReturn v2'' h2'') ∧
           Imp (expr_fill K1 (expr_fill K1' (Val v1''))) h1'' fns1
               ⪯{imp_module, mod_prepost i o imp_module, n', true}
-          (SMProg, Imp (expr_fill K2 (expr_fill K2' (Val v2''))) h2'' fns2, (PPInside, s6)))) →
+          (SMProg, Imp (expr_fill K2 (expr_fill K2' (Val v2''))) h2'' fns2, (PPInside, s6, r6)))) →
 
           Imp (expr_fill K1 (expr_fill K1' (Call f es1))) h1' fns1
               ⪯{imp_module, mod_prepost i o imp_module, n', b}
-          (SMProg, Imp (expr_fill K2 (expr_fill K2' (Call f es2))) h2' fns2, (PPInside, s3))) →
+          (SMProg, Imp (expr_fill K2 (expr_fill K2' (Call f es2))) h2' fns2, (PPInside, s3, r3))) →
       (* Return *)
-      (∀ n' v1 v2 h1' h2' b s3,
+      (∀ n' v1 v2 h1' h2' b s3 r3,
          n' ⊆ n →
-         pp_to_ex (o (Outgoing, EIReturn v2 h2') s3) (λ '(e''', s4),
-               e''' = (Outgoing, EIReturn v1 h1') ∧ R true s1 s4) →
+         pp_to_ex (o (Outgoing, EIReturn v2 h2') s3) r3 (λ '(e''', s4) r4,
+               e''' = (Outgoing, EIReturn v1 h1') ∧ R true s1 s4 ∧ r1 = r4) →
           Imp (expr_fill K1 (Val v1)) h1' fns1
               ⪯{imp_module, mod_prepost i o imp_module, n', b}
-          (SMProg, Imp (expr_fill K2 (Val v2)) h2' fns2, (PPInside, s3))) →
+          (SMProg, Imp (expr_fill K2 (Val v2)) h2' fns2, (PPInside, s3, r3))) →
       Imp (expr_fill K1 (subst_l fn1.(fd_args) vs1 fn1.(fd_body))) h1 fns1
           ⪯{imp_module, mod_prepost i o imp_module, n, false}
-          (SMProg, Imp (expr_fill K2 (subst_l fn2.(fd_args) vs2 fn2.(fd_body))) h2 fns2, (PPInside, s2)))))) →
+          (SMProg, Imp (expr_fill K2 (subst_l fn2.(fd_args) vs2 fn2.(fd_body))) h2 fns2, (PPInside, s2, r2)))))) →
   trefines (MS imp_module (initial_imp_state fns1))
            (MS (mod_prepost (S:=S) i o imp_module)
-               (SMFilter, initial_imp_state fns2, (PPOutside, s0))).
+               (SMFilter, initial_imp_state fns2, (PPOutside, s0, r0))).
 Proof.
   move => HR Hcall.
   apply: tsim_implies_trefines => n.
-  unshelve apply: tsim_remember. { simpl. exact (λ n '(Imp ei hi fnsi) '(ips, Imp es hs fnss, (pp, s)),
+  unshelve apply: tsim_remember. { simpl. exact (λ n '(Imp ei hi fnsi) '(ips, Imp es hs fnss, (pp, s, r)),
     ∃ Ki Ks b,
       fnsi = fns1 ∧
       fnss = fns2 ∧
@@ -1013,41 +1014,42 @@ Proof.
       pp = PPOutside ∧
       ips = SMFilter ∧
       R false s0 s ∧
-      imp_prepost_proof_stack n fns1 fns2 i o R b s Ki Ks
+      r0 ≼ r ∧
+      imp_prepost_proof_stack n fns1 fns2 i o R b s r Ki Ks
 ). }
   { eexists [], []. split!. econs. } {
-    move => ? n' [ei hi fnsi] [[ips [es hs fnss]] [pp {}s]] /= Hsub ?. destruct_all?.
+    move => ? n' [ei hi fnsi] [[ips [es hs fnss]] [[pp {}s] r]] /= Hsub ?. destruct_all?.
     split!. 1, 2: done. by apply: imp_prepost_proof_stack_mono.
   }
-  move => {}n _ /= Hloop [ei hi fnsi] [[ips [es hs fnss]] [pp {}s]] [Ki [Ks ?]].
+  move => {}n _ /= Hloop [ei hi fnsi] [[ips [es hs fnss]] [[pp {}s] r]] [Ki [Ks ?]].
   destruct_all?; simplify_eq.
   tstep_i. split => *.
   - tstep_s. split!.
     tstep_s. apply: pp_to_all_mono. { by eapply (Hcall n (ReturnExtCtx b :: Ki) (ReturnExtCtx b :: Ks)). }
-    move => -[??] [?[?[?[?[? Hcall']]]]]. simplify_eq/=.
+    move => -[??] ? [?[?[?[?[? Hcall']]]]]. simplify_eq/=.
     tstep_s. left. split!. repeat case_bool_decide; try by tstep_s. 2: naive_solver.
     have [//|? {}Hcall'] := Hcall'. apply: tsim_mono_b. apply: Hcall'.
-    + move => n' f K1' K2' es1 es2 vs1' vs2' ??????? Hall1 Hall2 ?.
+    + move => n' f K1' K2' es1 es2 vs1' vs2' ???????? Hall1 Hall2 ?.
       have ?: es1 = Val <$> vs1'. { clear -Hall1. elim: Hall1; naive_solver. } subst.
       have ?: es2 = Val <$> vs2'. { clear -Hall2. elim: Hall2; naive_solver. } subst.
       tstep_i. split => *; simplify_eq. rewrite orb_true_r. tstep_s. right. split!.
       tstep_s. apply: pp_to_ex_mono; [done|].
-      move => [??] /= [?[??]]. simplify_eq. split!.
+      move => [??] ? /= [?[?[??]]]. simplify_eq. split!.
       apply: Hloop; [done|].
-      split!; [done..|by etrans|]. econs; [by apply: imp_prepost_proof_stack_mono|].
+      split!; [done..|by etrans|by etrans|]. econs; [by apply: imp_prepost_proof_stack_mono|].
       move => ????. apply: pp_to_all_mono; [naive_solver|].
-      move => [??] /= ?. destruct_all?. subst. split!.
+      move => [??] ? /= ?. destruct_all?. subst. split!.
       rewrite !expr_fill_app /=. done.
     + move => *. tstep_s. tstep_i. rewrite orb_true_r. tstep_s. apply: pp_to_ex_mono; [done|].
-      move => [??] [-> ?] /=. split!. apply: tsim_mono; [|done]. apply: Hloop; [done|].
+      move => [??] ? [-> [? <-]] /=. split!. apply: tsim_mono; [|done]. apply: Hloop; [done|].
       split!. 1, 2: done.
       { etrans; [done|]. by apply: HR. }
       { by apply: imp_prepost_proof_stack_mono_R. }
-  - revert select (imp_prepost_proof_stack _ _ _ _ _ _ _ _ _ _) => Hs.
+  - revert select (imp_prepost_proof_stack _ _ _ _ _ _ _ _ _ _ _) => Hs.
     inversion Hs; clear Hs; simplify_eq/= => //.
     tstep_s. split!.
     tstep_s. apply: pp_to_all_mono; [naive_solver|].
-    move => [??] [?[?[? Hsim]]]; simplify_eq/=.
+    move => [??] ? [?[?[? Hsim]]]; simplify_eq/=.
     tstep_s. right. split!.
 Qed.
 

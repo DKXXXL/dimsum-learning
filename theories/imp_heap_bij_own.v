@@ -12,56 +12,12 @@ Require Import refframe.imp.
 
 Set Default Proof Using "Type".
 
-Section updates.
-  Context {A : cmra}.
-  Lemma cmra_update_included (x y : A) :
-    x ≼ y → y ~~> x.
-  Proof. move => [? ->]. apply cmra_update_op_l. Qed.
-End updates.
-
-Section total_updates.
-  Local Set Default Proof Using "Type*".
-  Context {A : ucmra}.
-  Context `{CmraTotal A} `{CmraDiscrete A}.
-  Lemma ucmra_discrete_update_valid (x y : A) :
-    x ~~> y → ✓ x → ✓ y.
-  Proof.
-    move => /cmra_discrete_update Hv. have := (Hv (@ε A (ucmra_unit A))).
-    rewrite comm left_id comm left_id. naive_solver.
-  Qed.
-End total_updates.
-
-Section included.
-  Context {A : cmra}.
-  Implicit Types (x y z : A).
-  Lemma cmra_included_op_l x y z : x ≼ y → x ≼ y ⋅ z.
-  Proof. intros ?. etrans; [done|]. apply cmra_included_l. Qed.
-  Lemma cmra_included_op_r x y z : x ≼ y → x ≼ z ⋅ y.
-  Proof. intros ?. etrans; [done|]. apply cmra_included_r. Qed.
-End included.
-
-
-Section prepost.
-Context {R : Type} {A : cmra}.
-
-Definition pp_update (P x : A) (pp : A → prepost R) : prepost R :=
-  pp_quant $ λ y,
-  pp_prop (x ~~> P ⋅ y) $
-  pp y.
-
-Definition pp_own (P x : A) (pp : A → prepost R) : prepost R :=
-  pp_prop (✓ (P ⋅ x)) $
-  pp (P ⋅ x).
-End prepost.
-
-
 (** * camera definition *)
 Inductive heap_bij_elem :=
 | HBShared (p : prov) | HBConstant (h : Z → option val) | HBChanging.
 Canonical Structure heap_bij_elemO := leibnizO heap_bij_elem.
 
 Definition heap_bijUR : cmra := gmap_viewUR prov heap_bij_elemO.
-(* Eval simpl in cmra_car heap_bijR. *)
 
 (** * imp_heap_bij_own *)
 Record heap_bij := HeapBij {
@@ -566,39 +522,39 @@ Proof.
   apply: Hp => /=. rewrite lookup_delete_Some. done.
 Qed.
 
-Definition imp_heap_bij_pre (e : imp_event) (s : heap_bijUR) : prepost (imp_event * heap_bijUR) :=
+Definition imp_heap_bij_pre (e : imp_event) (s : unit) : prepost (imp_event * unit) heap_bijUR :=
   let ho := heap_of_event e.2 in
   pp_quant $ λ bij,
   pp_quant $ λ vsi,
   pp_quant $ λ hi,
   pp_quant $ λ r',
-  pp_own (heap_bij_auth bij ⋅ r') s $ λ y,
+  pp_add (heap_bij_auth bij ⋅ r') $
   (* TODO: should we also have the following for hi? We don't need it so far... *)
   pp_prop (hb_shared_provs bij ⊆ h_provs ho) $
   pp_prop (Forall2 (val_in_bij r') (vals_of_event e.2) vsi) $
   pp_prop (heap_in_bij bij r' ho hi) $
   pp_prop (heap_preserved bij hi) $
-  pp_end ((e.1, event_set_vals_heap e.2 vsi hi), y).
+  pp_end ((e.1, event_set_vals_heap e.2 vsi hi), tt).
 
-Definition imp_heap_bij_post (e : imp_event) (s : heap_bijUR) : prepost (imp_event * heap_bijUR) :=
+Definition imp_heap_bij_post (e : imp_event) (s : unit) : prepost (imp_event * unit) heap_bijUR :=
   let hi := heap_of_event e.2 in
   pp_quant $ λ bij,
   pp_quant $ λ vso,
   pp_quant $ λ ho,
   pp_quant $ λ r',
-  pp_update (heap_bij_auth bij ⋅ r') s $ λ y,
+  pp_remove (heap_bij_auth bij ⋅ r') $
   (* TODO: should we also have the following for hi? We don't need it so far... *)
   pp_prop (hb_shared_provs bij ⊆ h_provs ho) $
   pp_prop (Forall2 (val_in_bij r') vso (vals_of_event e.2)) $
   pp_prop (heap_in_bij bij r' ho hi) $
   pp_prop (heap_preserved bij hi) $
-  pp_end ((e.1, event_set_vals_heap e.2 vso ho), y).
+  pp_end ((e.1, event_set_vals_heap e.2 vso ho), tt).
 
 Definition imp_heap_bij (m : module imp_event) : module imp_event :=
   mod_prepost imp_heap_bij_pre imp_heap_bij_post m.
 
 Definition initial_imp_heap_bij_state (m : module imp_event) (σ : m.(m_state)) :=
-  (@SMFilter imp_event, σ, (@PPOutside imp_event imp_event, @ε heap_bijUR _)).
+  (@SMFilter imp_event, σ, (@PPOutside imp_event imp_event, tt, @ε heap_bijUR _)).
 
 Local Ltac split_solve :=
   match goal with
@@ -624,72 +580,58 @@ Lemma imp_heap_bij_combine fns1 fns2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m
 ).
 Proof.
   unshelve apply: mod_prepost_link. { exact
-      (λ ips r1 r2 r ics1 ics2,
-          ics1 = ics2 ∧
-            ✓ r ∧
-       ((ips = SPNone ∧
-          r ≡ r1 ⋅ r2) ∨
-        ((ips = SPLeft ∧
-          r ~~> r1 ⋅ r2) ∨
-         (ips = SPRight ∧
-          r ~~> r1 ⋅ r2)))). }
+      (λ ips s1 s2 s r1 r2 ics1 ics2, ics1 = ics2). }
   { move => ?? [] /=*; naive_solver. }
-  { split!. 1: apply ucmra_unit_valid. 1: by rewrite left_id.  }
-  all: move => r1 r2 r ics1 ics2.
-  - move => e ics' e' /= ? [? [Hvalid [[? Hequiv]|[?|?]]]] *; destruct_all?; simplify_eq/=.
+  { by rewrite left_id. }
+  { by apply ucmra_unit_valid. }
+  { split!. }
+  all: move => [] [] [] r1 r2 ics1 ics2.
+  - move => e ics' e' /= ? ? *; destruct_all?; simplify_eq/=.
     split!.
-    { apply: cmra_valid_included; [done|]. apply cmra_mono_l.
-      rewrite Hequiv. by apply cmra_included_l. }
-    all: split!.
+    { apply: cmra_valid_included; [done|]. apply cmra_mono_l. by apply cmra_included_l. }
+    { by rewrite assoc. }
+    { by destruct e. }
+  - move => e ics' e' /= ? ? *; destruct_all?; simplify_eq/=.
+    split!.
+    { apply: cmra_valid_included; [done|]. apply cmra_mono_l. by apply cmra_included_r. }
+    1: { rewrite assoc (comm _ r1) -!assoc. do 2 (apply cmra_update_op; [done|]). by rewrite comm. }
     1: by destruct e.
-    1: by rewrite Hequiv assoc.
-  - move => e ics' e' /= ? [? [Hvalid [[? Hequiv]|[?|?]]]] *; destruct_all?; simplify_eq/=.
+  - move => [? e] /= ? Hr *; destruct_all?; simplify_eq/=.
     split!.
-    { apply: cmra_valid_included; [done|]. apply cmra_mono_l.
-      rewrite Hequiv. by apply cmra_included_r. }
-    all: split!.
-    1: by destruct e.
-    1: by rewrite (comm _ r1) -(assoc _ _ r2) (comm _ r2) Hequiv.
-  - move => [? e] /= [? [Hvalid [?|[[? Hr]|?]]]] *; destruct_all?; simplify_eq/=.
-    revert select (_ ~~> _) => Hupdate. rewrite Hupdate in Hr.
-    split!.
-    1: { apply: cmra_valid_included; [by apply: ucmra_discrete_update_valid|].
-         apply cmra_mono_r. by apply cmra_included_l. }
+    1: { apply: cmra_update_valid; [|done]. apply cmra_update_op; [|done]. etrans; [done|].
+         apply cmra_update_op_l. }
     all: rewrite ?heap_of_event_event_set_vals_heap; split!.
     1: { rewrite vals_of_event_event_set_vals_heap //. by apply: Forall2_length. }
     1: done.
     all: split!.
-    1: { rewrite comm -assoc (comm _ r2) assoc. done. }
+    1: { etrans; [by apply cmra_update_op|].
+         rewrite assoc. apply cmra_update_op; [|done].
+         rewrite comm. by apply cmra_update_op. }
     1: by destruct e.
     1: by destruct e.
-  - move => [? e] /= [? [Hvalid [?|[[? Hr]|?]]]] *; destruct_all?; simplify_eq/=.
-    revert select (_ ~~> _) => Hupdate. rewrite Hupdate in Hr.
+  - move => [? e] /= *; destruct_all?; simplify_eq/=.
     split!.
     1: by destruct e.
-    3: done.
-    1: { rewrite assoc. done. }
-    1: { apply: cmra_valid_included; [by apply: ucmra_discrete_update_valid|].
-         apply cmra_mono_r. by apply cmra_included_r. }
-  - move => [? e] /= [? [Hvalid [?|[?|[? Hr]]]]] *; destruct_all?; simplify_eq/=.
-    revert select (_ ~~> _) => Hupdate. rewrite Hupdate in Hr.
+    1: { etrans; [done|]. etrans; [by apply cmra_update_op|]. by rewrite assoc. }
+  - move => [? e] /= ? *; destruct_all?; simplify_eq/=.
     split!.
-    1: { apply: cmra_valid_included; [by apply: ucmra_discrete_update_valid|].
-         rewrite comm. apply cmra_mono_l. by apply cmra_included_l. }
+    1: { apply: cmra_update_valid; [|done]. rewrite comm. apply cmra_update_op; [|done].
+         etrans; [done|]. apply cmra_update_op_l. }
     all: rewrite ?heap_of_event_event_set_vals_heap; split!.
     1: { rewrite vals_of_event_event_set_vals_heap //. by apply: Forall2_length. }
     1: done.
     all: split!.
-    1: { rewrite -assoc (comm _ r1) assoc comm. done. }
+    1: { etrans; [by apply cmra_update_op|].
+         rewrite assoc. apply cmra_update_op; [|done].
+         rewrite comm. by apply cmra_update_op. }
     1: by destruct e.
     1: by destruct e.
-  - move => [? e] /= [? [Hvalid [?|[?|[? Hr]]]]] *; destruct_all?; simplify_eq/=.
-    revert select (_ ~~> _) => Hupdate. rewrite Hupdate in Hr.
+  - move => [? e] /= ? *; destruct_all?; simplify_eq/=.
     split!.
     1: by destruct e.
-    3: done.
-    1: { rewrite (comm _ r1) assoc comm. done. }
-    1: { apply: cmra_valid_included. 1: by apply: ucmra_discrete_update_valid.
-         apply cmra_mono_l. by apply cmra_included_r. }
+    1: { etrans; [done|]. etrans; [by apply cmra_update_op|].
+         rewrite comm -!assoc. do 2 (apply cmra_update_op; [done|]).
+         by rewrite comm. }
 Qed.
 
 Local Ltac split_solve ::=
@@ -711,13 +653,13 @@ Lemma imp_heap_bij_imp_refl fns:
            (MS (imp_heap_bij imp_module)
                (initial_imp_heap_bij_state imp_module (initial_imp_state fns))).
 Proof.
-  pose (R := λ (b : bool) (r1 r2 : heap_bijUR), r1 ≼ r2).
+  pose (R := λ (b : bool) (s1 s2 : unit), True).
   apply: (imp_prepost_proof R); unfold R in *.
   { move => ? ?. naive_solver. }
-  move => n K1 K2 f fn1 vs1 h1 r0 ?? /= bij *.
+  move => n K1 K2 f fn1 vs1 h1 [] r0 ?? /= bij *.
   split!. move => ?. split; [solve_length|].
   move => Hcall Hret.
-  unshelve apply: tsim_remember. { simpl. exact (λ _ '(Imp ei hi fnsi) '(ips, Imp es hs fnss, (pp, r')),
+  unshelve apply: tsim_remember. { simpl. exact (λ _ '(Imp ei hi fnsi) '(ips, Imp es hs fnss, (pp, _, r')),
     ∃ bij' ei' es' rvs,
     fnsi = fns ∧ fnss = fns ∧
     r' ~~> heap_bij_auth bij' ⋅ core rvs ⋅ r0 ∧
@@ -789,7 +731,7 @@ Proof.
         destruct v1 => //; simplify_eq/=; destruct_all?; simplify_eq/=. tend.
         efeed pose proof heap_in_bij_lookup as Hl; [done|done| |done|destruct_all?].
         { apply heap_bij_shared_lookup.
-          apply: cmra_valid_included; [by apply: ucmra_discrete_update_valid|].
+          apply: cmra_valid_included; [by apply: cmra_update_valid|].
           apply: cmra_included_op_l. by apply: cmra_mono_l. }
         split!. 1: done.
         apply: Hloop; [done|]. split!. 1: done. all: split!.
@@ -797,7 +739,7 @@ Proof.
         destruct v1 => //; simplify_eq/=; destruct_all?; simplify_eq/=. tend.
         have ? : hb_bij bij' !! l'.1 = Some (HBShared l.1). {
           apply heap_bij_shared_lookup.
-          apply: cmra_valid_included; [by apply: ucmra_discrete_update_valid|].
+          apply: cmra_valid_included; [by apply: cmra_update_valid|].
           apply: cmra_included_op_l. by apply: cmra_mono_l.
         }
         split!.
@@ -831,7 +773,7 @@ Proof.
         destruct v => //; simplify_eq/=; destruct_all?; simplify_eq/=.
         have ? : hb_bij bij' !! l'.1 = Some (HBShared l.1). {
           apply heap_bij_shared_lookup.
-          apply: cmra_valid_included; [by apply: ucmra_discrete_update_valid|].
+          apply: cmra_valid_included; [by apply: cmra_update_valid|].
           apply: cmra_included_op_l. by apply: cmra_mono_l.
         }
         split!. 1: by apply: heap_in_bij_alive. apply: Hloop; [done|].
@@ -859,7 +801,7 @@ Lemma imp_heap_bij_imp_closed m σ:
 Proof.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { simpl. exact (λ _
-          '(σm1, (σf, σ1, (pp, r)), σc1)
+          '(σm1, (σf, σ1, (pp, _, r)), σc1)
           '(σm2, σ2, σc2),
            σ1 = σ2 ∧ σc1 = σc2 ∧ ✓ r ∧
              ((σc1 = ICStart ∧ σf = SMFilter ∧ pp = PPOutside ∧ σm1 = σm2 ∧ σm2 = SMFilter ∧ r = ε) ∨
@@ -867,7 +809,8 @@ Proof.
                  ) ∧ σm1 = SMProg ∧ σc1 = ICRunning ∧ pp = PPInside))
                              ). }
   { split!. apply ucmra_unit_valid. } { done. }
-  move => {}n _ /= Hloop [[σm1 [[σf σ1] [pp r]]] σc1] [[σm2 σ2] σc2] ?. destruct_all?; simplify_eq/=.
+  move => {}n _ /= Hloop [[σm1 [[σf σ1] [[pp []] r]]] σc1] [[σm2 σ2] σc2] ?.
+  destruct_all?; simplify_eq/=.
   - tstep_i. apply steps_impl_step_end => ???. invert_all' @m_step; simplify_eq/=. split!.
     tstep_s. eexists (Some (inr _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
     tstep_i. apply steps_impl_step_end => ???. invert_all @m_step. split!.
@@ -905,10 +848,10 @@ Proof.
       tstep_s. eexists (Some (inl _)). split!. apply: steps_spec_step_end; [econs|] => /=? ->.
       tstep_i => ? <-.
       tstep_i. eexists _, [ValNum _]. split!.
-      1: by apply: ucmra_discrete_update_valid.
+      1: by apply: cmra_update_valid.
       1: done. 1: econs; [done|econs]. 1: done. 1: done.
       apply: Hloop; [done|]. split!.
-      1: by apply: ucmra_discrete_update_valid.
+      1: by apply: cmra_update_valid.
     + destruct i as [? []]; simplify_eq/=.
       tstep_s. eexists (Some _). split!.
       apply: steps_spec_step_end; [econs|]=> /=??. destruct_all?; simplify_eq/=.
@@ -968,13 +911,13 @@ Lemma bij_alloc_opt_refines :
            (MS (imp_heap_bij imp_module) (initial_imp_heap_bij_state imp_module
                                             (initial_imp_state (<["f" := bij_alloc]> ∅)))).
 Proof.
-  pose (R := λ (b : bool) (r1 r2 : heap_bijUR), r1 ≼ r2).
+  pose (R := λ (b : bool) (s1 s2 : unit), True).
   apply: (imp_prepost_proof R); unfold R in *.
   (* { constructor. { move => [??]. naive_solver. } *)
   (*   { move => [??] [??] [??] [??] [??]. split; [by etrans|]. etrans; [done|]. *)
   (*     by apply: heap_preserved_mono. } } *)
-  { move => [??] [??]. naive_solver. }
-  move => n K1 K2 f fn1 vs1 h0 r0 ?.
+  { naive_solver. }
+  move => n K1 K2 f fn1 vs1 h0 [] r0 ? ?.
   rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   move => bij1 ? h1 *. split!. move => ?. split!; [solve_length|].
   move => Hcall Hret.
@@ -1002,7 +945,7 @@ Proof.
     apply heap_preserved_alloc; [|move => *; simplify_map_eq].
     apply: heap_preserved_mono; [done|]. move => ?? /=/lookup_delete_Some?. naive_solver. }
   { apply cmra_included_l. }
-  move => ? h2 r2 ? bij3 ? h3 *. decompose_Forall_hyps.
+  move => ? h2 [] ? bij3 ? h3 *. decompose_Forall_hyps.
   split!.
   tstep_i.
   tstep_s.

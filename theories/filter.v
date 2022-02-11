@@ -84,7 +84,7 @@ Lemma mod_ang_comm2_filter_traces Pκs:
   (Pκs [Nb] ∨
    ∃ n1 n2, (n1 = 4 ∨ n1 = 5) ∧ (n2 = 4 ∨ n2 = 5) ∧
    (Pκs [Vis n1] ∧ Pκs [Vis n2] ∧
-    ∃ b1 b2,
+    ∃ b1 b2 : bool,
       (if b1 then Pκs [Vis n1; Nb] else Pκs [Vis n1; Vis 2] ∧ Pκs [Vis n1; Vis 2; Nb])
       ∧
       (if b2 then Pκs [Vis n2; Nb] else Pκs [Vis n2; Vis 3] ∧ Pκs [Vis n2; Vis 3; Nb]))).

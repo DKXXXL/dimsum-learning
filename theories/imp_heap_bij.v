@@ -332,7 +332,7 @@ Lemma heap_in_bij_update_r bij h1 h2 l2 v2:
   heap_in_bij bij h1 (heap_update h2 l2 v2).
 Proof.
   move => Hbij Hin ? ??? /=.
-  rewrite !lookup_alter_ne. 2: by apply Hbij.
+  rewrite !lookup_alter_ne. 1: by apply Hbij.
   contradict Hin; subst => /=. apply elem_of_map.
   eexists (_, _). naive_solver.
 Qed.
@@ -346,8 +346,8 @@ Proof.
   move => /= Hbij [Hi1 ?] [Hi2 ?] p1 p2 o /= /elem_of_union[?|?].
   - set_unfold; simplify_eq. destruct l1 as [p1 ?], l2 as [p2 ?]; simplify_eq/=.
     rewrite !lookup_union_l'.
-    { apply eq_None_ne_Some => ??. apply Hi1. by apply: (heap_wf _ (_, _)). }
-    { apply eq_None_ne_Some => ??. apply Hi2. by apply: (heap_wf _ (_, _)). }
+    2: { apply eq_None_ne_Some => ??. apply Hi2. by apply: (heap_wf _ (_, _)). }
+    2: { apply eq_None_ne_Some => ??. apply Hi1. by apply: (heap_wf _ (_, _)). }
     split.
     + rewrite !list_to_map_lookup_is_Some. f_equiv => ?. rewrite !elem_of_list_fmap. f_equiv => ?. naive_solver.
     + move => ?? /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap[?[??]].
@@ -356,7 +356,7 @@ Proof.
     have ? : p2 ≠ l2.1 by contradict H2; set_unfold; left; left; eexists (_, _); naive_solver.
     have [Hbij1 Hbij2]:= Hbij p1 p2 o ltac:(set_solver).
     rewrite !lookup_union_r.
-    1, 2: apply not_elem_of_list_to_map_1;
+    2, 3: apply not_elem_of_list_to_map_1;
         move => /elem_of_list_fmap[[[??]?] [?/elem_of_list_fmap[?[??]]]]; simplify_eq/=.
     split; [done|] => *. apply: val_in_bij_mono; [naive_solver|]. set_solver.
 Qed.
@@ -366,7 +366,7 @@ Lemma heap_in_bij_alloc_r l2 hi hs n bij:
   l2.1 ∉ set_map (D:=gset _) snd bij →
   heap_in_bij bij hi (heap_alloc hs l2 n).
 Proof.
-  move => /= Hbij Hin ???? /=. rewrite lookup_union_r. 2: by apply Hbij.
+  move => /= Hbij Hin ???? /=. rewrite lookup_union_r. 1: by apply Hbij.
   apply not_elem_of_list_to_map_1. contradict Hin.
   move: Hin => /elem_of_list_fmap[[??][?/elem_of_list_fmap[?[??]]]]; simplify_eq/=.
   apply elem_of_map. eexists (_, _). naive_solver.
@@ -392,7 +392,7 @@ Lemma heap_in_bij_free_r hi hs l2 bij:
   l2.1 ∉ set_map (D:=gset _) snd bij →
   heap_in_bij bij hi (heap_free hs l2).
 Proof.
-  move => /= Hbij Hin ???? /=. rewrite map_filter_lookup_true. 2: by apply Hbij.
+  move => /= Hbij Hin ???? /=. rewrite map_filter_lookup_true. 1: by apply Hbij.
   move => ??. contradict Hin. apply elem_of_map. eexists (_, _). naive_solver.
 Qed.
 
@@ -426,7 +426,7 @@ Lemma heap_preserved_update_r l v he hp ps:
   l.1 ∉ ps →
   heap_preserved ps he (heap_update hp l v).
 Proof.
-  move => Hp ? p o /=?. rewrite lookup_alter_ne; [set_solver|by eapply Hp].
+  move => Hp ? p o /=?. rewrite lookup_alter_ne; [by eapply Hp|set_solver].
 Qed.
 
 Lemma heap_preserved_bij_env p1 p2 l v he hp bij:
@@ -455,7 +455,7 @@ Lemma heap_preserved_alloc_r l n he hp bij:
   heap_preserved bij he hp →
   heap_preserved bij he (heap_alloc hp l n).
 Proof.
-  move => Hni Hp p o /= ?. rewrite lookup_union_r; [| by apply Hp].
+  move => Hni Hp p o /= ?. rewrite lookup_union_r; [by apply Hp|].
   apply not_elem_of_list_to_map_1 => /elem_of_list_fmap[[[??]?] [?/elem_of_list_fmap[?[??]]]]; simplify_eq/=.
   done.
 Qed.
@@ -464,7 +464,7 @@ Lemma heap_preserved_free_r l he hp bij:
   l.1 ∉ bij →
   heap_preserved bij he hp →
   heap_preserved bij he (heap_free hp l).
-Proof. move => Hni Hp p o /= ?. rewrite map_filter_lookup_true; [| by apply Hp]. set_solver. Qed.
+Proof. move => Hni Hp p o /= ?. rewrite map_filter_lookup_true; [by apply Hp|]. set_solver. Qed.
 
 Record imp_heap_bij_state := ImpHeapBij {
   ihb_bij : heap_bij;
@@ -473,7 +473,7 @@ Record imp_heap_bij_state := ImpHeapBij {
 }.
 Add Printing Constructor imp_heap_bij_state.
 
-Definition imp_heap_bij_pre (e : imp_event) (s : imp_heap_bij_state) : prepost (imp_event * imp_heap_bij_state) :=
+Definition imp_heap_bij_pre (e : imp_event) (s : imp_heap_bij_state) : prepost (imp_event * imp_heap_bij_state) unitUR :=
   let ho := heap_of_event e.2 in
   pp_quant $ λ bij',
   pp_quant $ λ vsi,
@@ -486,7 +486,7 @@ Definition imp_heap_bij_pre (e : imp_event) (s : imp_heap_bij_state) : prepost (
   pp_prop (heap_preserved (hb_prog bij') s.(ihb_heap) hi) $
   pp_end ((e.1, event_set_vals_heap e.2 vsi hi), ImpHeapBij bij' hi).
 
-Definition imp_heap_bij_post (e : imp_event) (s : imp_heap_bij_state) : prepost (imp_event * imp_heap_bij_state) :=
+Definition imp_heap_bij_post (e : imp_event) (s : imp_heap_bij_state) : prepost (imp_event * imp_heap_bij_state) unitUR :=
   let hi := heap_of_event e.2 in
   pp_quant $ λ bij',
   pp_quant $ λ vso,
@@ -503,7 +503,7 @@ Definition imp_heap_bij (m : module imp_event) : module imp_event :=
   mod_prepost imp_heap_bij_pre imp_heap_bij_post m.
 
 Definition initial_imp_heap_bij_state (m : module imp_event) (σ : m.(m_state)) :=
-  (@SMFilter imp_event, σ, (@PPOutside imp_event imp_event, ImpHeapBij ∅ initial_heap_state)).
+  (@SMFilter imp_event, σ, (@PPOutside imp_event imp_event, ImpHeapBij ∅ initial_heap_state, tt)).
 
 Local Ltac split_solve :=
   match goal with
@@ -531,7 +531,7 @@ Lemma imp_heap_bij_combine fns1 fns2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m
 ).
 Proof.
   unshelve apply: mod_prepost_link. { exact
-      (λ ips '(ImpHeapBij bij1 hi1) '(ImpHeapBij bij2 hi2) '(ImpHeapBij bij hi) ics1 ics2,
+      (λ ips '(ImpHeapBij bij1 hi1) '(ImpHeapBij bij2 hi2) '(ImpHeapBij bij hi) _ _ ics1 ics2,
         ∃ bijm,
           ics1 = ics2 ∧
           hb_bij bij1 ⊆ bijm ∧
@@ -559,8 +559,9 @@ Proof.
           heap_preserved (hb_env bij) hi hi2 ∧
           heap_preserved (hb_prog bij1) hi1 hi2)))). }
   { move => ?? [] /=*; naive_solver. }
+  { done. } { done. }
   { split!. all: set_solver. }
-  all: move => [bij1 hi1] [bij2 hi2] [bij hi] ics1 ics2.
+  all: move => [bij1 hi1] [bij2 hi2] [bij hi] [] [] ics1 ics2.
   - move => e ics' e' /= *. unfold heap_bij_extend in *; destruct_all?; simplify_eq/=.
     unshelve split!. 1: econstructor. all: shelve_unifiable. all: split!. all: split!.
     1: { set_unfold; naive_solver. }
@@ -668,10 +669,10 @@ Proof.
   { constructor. { move => [??]. naive_solver. }
     { move => [??] [??] [??] [??] [??]. split. naive_solver. by etrans. } }
   { move => [??] [??]. naive_solver. }
-  move => n K1 K2 f fn1 vs1 h1 [bij0 ?] ?? /= bij1 *.
+  move => n K1 K2 f fn1 vs1 h1 [bij0 ?] [] ??? /= bij1 *.
   split!. move => ?. split; [solve_length|].
   move => Hcall Hret.
-  unshelve apply: tsim_remember. { simpl. exact (λ _ '(Imp ei hi fnsi) '(ips, Imp es hs fnss, (pp, ImpHeapBij bij he)),
+  unshelve apply: tsim_remember. { simpl. exact (λ _ '(Imp ei hi fnsi) '(ips, Imp es hs fnss, (pp, ImpHeapBij bij he, _)),
     (* bij' : current bijection, bij : bijection when last communicated with the environment,
      bij1: bijection at the start of the function (necessary to reestablish R) *)
     ∃ bij' ei' es',
@@ -696,7 +697,8 @@ Proof.
     { apply expr_in_bij_subst_l; [|done|solve_length]. apply expr_in_bij_static. apply fd_static. }
     { apply static_expr_subst_l; [|solve_length]. apply static_expr_mono. apply fd_static. }  }
   { naive_solver. }
-  move => /= n' ? Hloop [ei hi fnsi] [[ips [es hs fnss]] [pp [bij he]]] ?. destruct_all?; simplify_eq.
+  move => /= n' ? Hloop [ei hi fnsi] [[ips [es hs fnss]] [[pp [bij he]] []]] ?.
+  destruct_all?; simplify_eq.
   destruct (to_val ei') eqn:?.
   - destruct ei' => //; simplify_eq/=. destruct es' => //; simplify_eq/=.
     apply Hret; [done|]. clear Hloop Hret Hcall. split!.
@@ -791,7 +793,7 @@ Lemma imp_heap_bij_imp_closed m σ:
 Proof.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { simpl. exact (λ _
-          '(σm1, (σf, σ1, (pp, ImpHeapBij bij hi)), σc1)
+          '(σm1, (σf, σ1, (pp, ImpHeapBij bij hi, _)), σc1)
           '(σm2, σ2, σc2),
            σ1 = σ2 ∧ σc1 = σc2 ∧
              ((σc1 = ICStart ∧ σf = SMFilter ∧ pp = PPOutside ∧ σm1 = σm2 ∧ σm2 = SMFilter ∧ bij = ∅) ∨
@@ -799,7 +801,8 @@ Proof.
                  ) ∧ σm1 = SMProg ∧ σc1 = ICRunning ∧ pp = PPInside))
                              ). }
   { split!. } { done. }
-  move => {}n _ /= Hloop [[σm1 [[σf σ1] [pp [bij hi]]]] σc1] [[σm2 σ2] σc2] ?. destruct_all?; simplify_eq/=.
+  move => {}n _ /= Hloop [[σm1 [[σf σ1] [[pp [bij hi]] []]]] σc1] [[σm2 σ2] σc2] ?.
+  destruct_all?; simplify_eq/=.
   - tstep_i. apply steps_impl_step_end => ???. invert_all' @m_step; simplify_eq/=. split!.
     tstep_s. eexists (Some (inr _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
     tstep_i. apply steps_impl_step_end => ???. invert_all @m_step. split!.
@@ -902,7 +905,7 @@ Proof.
     { move => [??] [??] [??] [??] [??]. split; [by etrans|]. etrans; [done|].
       by apply: heap_preserved_mono. } }
   { move => [??] [??]. naive_solver. }
-  move => n K1 K2 f fn1 vs1 h0 [bij0 ?] ?.
+  move => n K1 K2 f fn1 vs1 h0 [bij0 ?] [] ? ?.
   rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   move => bij1 ? h1 *. split!. move => ?. split!; [solve_length|].
   move => Hcall Hret.
