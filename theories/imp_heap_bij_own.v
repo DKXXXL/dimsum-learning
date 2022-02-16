@@ -12,6 +12,11 @@ Require Import refframe.imp.
 
 Set Default Proof Using "Type".
 
+(* TODO: Allow also ownership of the outer heap, probably by adding a
+   second gmap prov (option Z → option val) and adding an new
+   heap_preserved and making sure that if hb_bij !! p2 = Some p1 then
+   we have the persistent fragment {[ p1 := None ]} *)
+
 (** * camera definition *)
 Inductive heap_bij_elem :=
 | HBShared (p : prov) | HBConstant (h : Z → option val) | HBChanging.

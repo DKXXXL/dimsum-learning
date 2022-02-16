@@ -1061,6 +1061,15 @@ Definition imp_closed_val_to_Z (v : val) (z : Z) : Prop :=
   | ValLoc l => True
   end.
 
+(*
+module imp_event:
+Incoming, Call f vs h -> Outgoing, Call f' vs' h' → Incoming, Return v h' -> Outgoing, Return v' h''
+
+
+module imp_closed_event:
+Start f vs            -> Call f' vs' v                                     -> Return v'
+*)
+
 Inductive imp_closed_event : Type :=
 | EICStart (f : string) (args: list Z)
 | EICCall (f : string) (args: list Z) (ret : Z)

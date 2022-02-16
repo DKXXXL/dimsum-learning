@@ -150,7 +150,7 @@ Lemma asm_add_refines_imp_add :
            (MS (imp_to_asm (dom _ asm_add) (dom _ imp_add_prog) (<["add" := 100]> ∅) imp_module) (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_prog))).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
-  move => n i rs mem K f fn vs h cs pc ret pb Hpc Hi Hf Hf2i Hargs Hvs Hcall Hret.
+  move => n i rs mem K f fn avs vs h cs pc ret ra r amem ih Hpc Hi Hf Hf2i Hvalid Hinv ? Hmem Hargs ? Hcall Hret.
   unfold imp_add_prog in Hf. unfold asm_add in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   destruct vs as [|v1 [|v2 []]] => //=.
@@ -160,8 +160,9 @@ Proof.
   tstep_i => ??. simplify_map_eq'.
   tstep_i; simplify_map_eq'. split!.
   go_s => n1 n2 ??; subst.
-  apply: Hret; [by simplify_map_eq| |done|done|by simplify_map_eq'].
-  unfold imp_to_asm_ret; split!; simplify_map_eq' => //.
+  apply: Hret. 1: by simplify_map_eq. 1: done. 1: by simplify_map_eq'. 1: done. 1: done.
+  1: { unfold imp_to_asm_ret; split!; simplify_map_eq' => //. }
+  1: by simplify_map_eq'.
 Qed.
 
 Lemma asm_add_client_refines_imp_add_client :
@@ -171,7 +172,7 @@ Lemma asm_add_client_refines_imp_add_client :
                (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_client_prog) )).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
-  move => n i rs mem K f fn vs h cs pc ret pb Hpc Hi Hf Hf2i Hargs Hvs Hcall Hret.
+  move => n i rs mem K f fn avs vs h cs pc ret ra r amem ih Hpc Hi Hf Hf2i Hvalid Hinv ? Hmem Hargs ? Hcall Hret.
   unfold imp_add_client_prog in Hf. unfold asm_add_client in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   destruct vs as [|] => //=.
@@ -199,22 +200,28 @@ Proof.
   tstep_s.
   change (imp.Call "add" [Val 1; Val 1]) with (expr_fill [] (imp.Call "add" [Val 1; Val 1])).
   apply: Hcall. { repeat econs. } { by simplify_map_eq. } { set_solver. } { set_solver. } { by simplify_map_eq. }
+  { done. } { simplify_map_eq'. admit. } { repeat econs. } { admit. }
   { unfold imp_to_asm_args. split!; decompose_Forall; by simplify_map_eq'. }
-  { by simplify_map_eq. } { done. } { by simplify_map_eq'. }
-  move => rs'' mem'' v h'' pb'' Hpc'' Hv Hmem ?.
-  move: Hv => [?[? Hm]]; simplify_map_eq'.
+  { by simplify_map_eq. } { by simplify_map_eq'. }
+  move => rs'' mem'' av v h'' amem'' ih'' rv'' Hpc'' Hvalid'' Hinv'' Hv Hmem'' Hr.
+  move: Hr => [?[? Hm]]; simplify_map_eq'.
   tstep_i; simplify_map_eq'. split!; [by simplify_map_eq'..|].
   tstep_i; simplify_map_eq'. split!; [done..|].
   tstep_i; simplify_map_eq'. split!; [done..|].
   tstep_i => ??. simplify_map_eq'.
   have ->: rs !!! "SP" - 1 + 1 = rs !!! "SP" by lia.
   tstep_i; simplify_map_eq'. split; [done|].
-  apply: Hret; [| | |done|by simplify_map_eq']. { simplify_map_eq'. f_equal. etrans; [eapply Hmem|]; by simplify_map_eq'. }
-  2 : { move => ?. simplify_map_eq' => ?. etrans; [eapply Hmem; simplify_map_eq'; lia|].
-        rewrite lookup_total_insert_ne //. lia. }
-  unfold imp_to_asm_ret; split!; simplify_map_eq'; split!.
-  apply lookup_lookup_total; simplify_map_eq'.
-Qed.
+  apply: Hret.
+  1: { simplify_map_eq'. admit. }
+  1: done.
+  1: { simplify_map_eq'. admit. }
+  1: done.
+  1: { admit. }
+  2 : { move => ?. simplify_map_eq' => ?. admit.
+        (* etrans; [eapply Hmem; simplify_map_eq'; lia|]. rewrite lookup_total_insert_ne //. lia. *)
+  }
+  1: { unfold imp_to_asm_ret; split!; simplify_map_eq'; split!. apply lookup_lookup_total; simplify_map_eq'. }
+Admitted.
 
 (*
 The following does not actually hold since the allocation adds a new provenance to h_heap provs
