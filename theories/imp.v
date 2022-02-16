@@ -1054,13 +1054,6 @@ Proof.
 Qed.
 
 (** * closing *)
-Definition imp_closed_val_to_Z (v : val) (z : Z) : Prop :=
-  match v with
-  | ValNum z' => z = z'
-  | ValBool b => z = bool_to_Z b
-  | ValLoc l => True
-  end.
-
 (*
 module imp_event:
 Incoming, Call f vs h -> Outgoing, Call f' vs' h' → Incoming, Return v h' -> Outgoing, Return v' h''

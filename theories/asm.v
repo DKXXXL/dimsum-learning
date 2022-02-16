@@ -190,13 +190,64 @@ Proof.
 Qed.
 Global Hint Resolve asm_step_None_s : tstep.
 
+(** * closing *)
+Inductive asm_closed_event : Type :=
+| EACStart (pc : Z) (rs: gmap string Z)
+| EACCall (pc : Z) (rs: gmap string Z) (pc' : Z) (rs': gmap string Z)
+| EACEnd (pc : Z) (rs: gmap string Z)
+.
+
+Inductive asm_closed_state :=
+| ACStart
+| ACRecv (pc : Z) (rs: gmap string Z) (mem : gmap Z Z)
+| ACRunning
+| ACJump (pc : Z) (rs: gmap string Z) (mem : gmap Z Z)
+| ACCall (pc : Z) (rs: gmap string Z) (mem : gmap Z Z)
+| ACEnd1 (pc : Z) (rs: gmap string Z)
+| ACEnd2.
+
+Inductive asm_closed_step :
+  asm_closed_state → option (asm_event + asm_closed_event) → (asm_closed_state → Prop) → Prop :=
+| ACStartS pc rs :
+  (* pc ∈ ins → *)
+  rs !! "PC" = Some pc →
+  asm_closed_step ACStart (Some (inr (EACStart pc rs))) (λ σ, σ = ACRecv pc rs ∅)
+| ACRecvStartS pc rs mem:
+  asm_closed_step (ACRecv pc rs mem) (Some (inl (Incoming, EAJump pc rs mem))) (λ σ, σ = ACRunning)
+| ACRunningS pc rs mem:
+  asm_closed_step ACRunning (Some (inl (Outgoing, EAJump pc rs mem))) (λ σ, σ = ACJump pc rs mem)
+| ACJumpS pc rs mem:
+  asm_closed_step (ACJump pc rs mem) None (λ σ,
+       (* pc ∉ ins → *)
+       rs !! "PC" = Some pc →
+       (* universal choice whether this jump ends the program or not
+       (This universal choice will be instantiated with return vs call
+       when translating from imp) *)
+       σ = ACCall pc rs mem ∨ σ = ACEnd1 pc rs)
+| ACCallS pc rs mem pc' rs':
+  (* pc' ∈ ins → *)
+  rs' !! "PC" = Some pc' →
+  asm_closed_step (ACCall pc rs mem) (Some (inr (EACCall pc rs pc' rs'))) (λ σ, σ = ACRecv pc' rs' mem)
+| ACEndS pc rs:
+  asm_closed_step (ACEnd1 pc rs) (Some (inr (EACEnd pc rs))) (λ σ, σ = ACEnd2)
+.
+
+Definition asm_closed_filter_module : module (asm_event + asm_closed_event) :=
+  Mod asm_closed_step.
+
+Global Instance asm_closed_filter_module_vis_no_all : VisNoAll asm_closed_filter_module.
+Proof. move => ????. invert_all @m_step; naive_solver. Qed.
+
+Definition asm_closed (m : module asm_event) : module asm_closed_event :=
+  mod_seq_map m asm_closed_filter_module.
+
 (** * syntactic linking *)
 Definition asm_link (instrs1 instrs2 : gmap Z asm_instr) : gmap Z asm_instr :=
   instrs1 ∪ instrs2.
 
 Definition asm_ctx_refines (instrsi instrss : gmap Z asm_instr) :=
-  ∀ C, trefines (MS asm_module (initial_asm_state (asm_link instrsi C)))
-                (MS asm_module (initial_asm_state (asm_link instrss C))).
+  ∀ C, trefines (MS (asm_closed asm_module) (SMFilter, initial_asm_state (asm_link instrsi C), ACStart))
+                (MS (asm_closed asm_module) (SMFilter, (initial_asm_state (asm_link instrss C)), ACStart)).
 
 (** * semantic linking *)
 Definition asm_prod_filter (ins1 ins2 : gset Z) : seq_product_state → unit → asm_ev → seq_product_state → unit → asm_ev → Prop :=
@@ -323,6 +374,7 @@ Lemma asm_trefines_implies_ctx_refines insi inss :
   asm_ctx_refines insi inss.
 Proof.
   move => Hdom Href C. rewrite /asm_link map_difference_union_r (map_difference_union_r inss).
+  apply mod_seq_map_trefines. { apply _. } { apply _. }
   etrans. { apply asm_link_refines_prod. apply map_disjoint_difference_r'. }
   etrans. 2: { apply asm_prod_refines_link. apply map_disjoint_difference_r'. }
   rewrite !dom_difference_L Hdom.
