@@ -922,26 +922,27 @@ Qed.
 Global Hint Resolve imp_step_If_s | 10 : tstep.
 
 (** * proof technique for prepost *)
-Inductive imp_prepost_proof_stack {S} {A : cmra} (n : trace_index) (fnsi fnss : gmap string fndef) i o R :
-  bool → S → A → list expr_ectx → list expr_ectx → Prop :=
+Inductive imp_prepost_proof_stack {S} {M : ucmra} (n : trace_index) (fnsi fnss : gmap string fndef) i o
+          (R : bool → _ → _ → Prop) :
+  bool → S → uPred M → list expr_ectx → list expr_ectx → Prop :=
 | IPSNil s r :
   imp_prepost_proof_stack n fnsi fnss i o R false s r [] []
 | IPSStep b Ki Ki' Ks Ks' s0 s1 r0 r1:
   imp_prepost_proof_stack n fnsi fnss i o R b s0 r0 Ki Ks →
-  (∀ hi vi s2,
-      R true s1 s2 →
-      pp_to_all (i (Incoming, EIReturn vi hi) s2) r1 (λ '(e', s3) r2,
+  (∀ hi vi s2 (r2 : uPred M),
+      R true (s1, r1) (s2, r2) →
+      pp_to_all (i (Incoming, EIReturn vi hi) s2) r2 (λ '(e', s3) r3,
       ∃ vs hs, e' = (Incoming, EIReturn vs hs) ∧
       Imp (expr_fill (Ki' ++ Ki) (Val vi)) hi fnsi
         ⪯{imp_module, mod_prepost (S:=S) i o imp_module, n, true}
-        (SMProg, Imp (expr_fill (Ks' ++ Ks) (Val vs)) hs fnss, (PPInside, s3, r2)))) →
+        (SMProg, Imp (expr_fill (Ks' ++ Ks) (Val vs)) hs fnss, (PPInside, s3, r3)))) →
   imp_prepost_proof_stack n fnsi fnss i o R true s1 r1 (Ki' ++ Ki) (Ks' ++ Ks)
 .
 
-Lemma imp_prepost_proof_stack_mono S A n n' fns1 fns2 i o R s r b Ki Ks:
+Lemma imp_prepost_proof_stack_mono S M n n' fns1 fns2 i o R s r b Ki Ks:
   imp_prepost_proof_stack n fns1 fns2 i o R b s r Ki Ks →
   n' ⊆ n →
-  imp_prepost_proof_stack (A:=A) (S:=S) n' fns1 fns2 i o R b s r Ki Ks.
+  imp_prepost_proof_stack (M:=M) (S:=S) n' fns1 fns2 i o R b s r Ki Ks.
 Proof.
   move => Hs. elim: Hs n'; [by econs|].
   move => *. econs; [naive_solver|] => *.
@@ -949,22 +950,21 @@ Proof.
   by apply: tsim_mono.
 Qed.
 
-Lemma imp_prepost_proof_stack_mono_R A S n fns1 fns2 i o R s s' r b Ki Ks `{!Transitive (R true)}:
+Lemma imp_prepost_proof_stack_mono_R M S n fns1 fns2 i o R s s' r r' b Ki Ks `{!Transitive (R true)}:
   imp_prepost_proof_stack n fns1 fns2 i o R b s r Ki Ks →
-  R true s s' →
-  imp_prepost_proof_stack (A:=A) (S:=S) n fns1 fns2 i o R b s' r Ki Ks.
+  R true (s, r) (s', r') →
+  imp_prepost_proof_stack (M:=M) (S:=S) n fns1 fns2 i o R b s' r' Ki Ks.
 Proof.
   move => Hs. elim: Hs s'; [by econs|].
   move => ??????????? Hcont ??. econs; [naive_solver|] => *.
   apply: pp_to_all_mono. { apply Hcont. by etrans. } done.
 Qed.
 
-Lemma imp_prepost_proof {S} {A : ucmra} R `{!∀ b, PreOrder (R b)} i o fns1 fns2 s0 (r0 : A):
+Lemma imp_prepost_proof {S} {M : ucmra} R `{!∀ b, PreOrder (R b)} i o fns1 fns2 s0 (r0 : uPred M):
   (* R true: public transition relation, R false: private transition relation *)
-  (∀ s s', R true s s' → R false s s') →
+  (∀ s r s' r', R true (s, r) (s', r') → R false (s, r) (s', r')) →
   (∀ n K1 K2 f fn1 vs1 h1 s1 r1,
-      R false s0 s1 →
-      r0 ≼ r1 →
+      R false (s0, r0) (s1, r1) →
       fns1 !! f = Some fn1 →
       pp_to_all (i (Incoming, EICall f vs1 h1) s1) r1 (λ '(e', s2) r2,
       ∃ vs2 h2 fn2, e' = (Incoming, EICall f vs2 h2) ∧ fns2 !! f = Some fn2 ∧ (
@@ -978,8 +978,9 @@ Lemma imp_prepost_proof {S} {A : ucmra} R `{!∀ b, PreOrder (R b)} i o fns1 fns
          Forall2 (λ e v, e = Val v) es1 vs1' →
          Forall2 (λ e v, e = Val v) es2 vs2' →
          pp_to_ex (o (Outgoing, EICall f vs2' h2') s3) r3 (λ '(e''', s4) r4,
-            e''' = (Outgoing, EICall f vs1' h1') ∧ R false s1 s4 ∧ r1 ≼ r4 ∧
-           ∀ v1'' h1'' s5, R true s4 s5 → pp_to_all (i (Incoming, EIReturn v1'' h1'') s5) r4 (λ '(e''''', s6) r6,
+            e''' = (Outgoing, EICall f vs1' h1') ∧ R false (s1, r1) (s4, r4) ∧
+           ∀ v1'' h1'' s5 r5, R true (s4, r4) (s5, r5) →
+                   pp_to_all (i (Incoming, EIReturn v1'' h1'') s5) r5 (λ '(e''''', s6) r6,
             ∃ v2'' h2'', e''''' = (Incoming, EIReturn v2'' h2'') ∧
           Imp (expr_fill K1 (expr_fill K1' (Val v1''))) h1'' fns1
               ⪯{imp_module, mod_prepost i o imp_module, n', true}
@@ -992,7 +993,7 @@ Lemma imp_prepost_proof {S} {A : ucmra} R `{!∀ b, PreOrder (R b)} i o fns1 fns
       (∀ n' v1 v2 h1' h2' b s3 r3,
          n' ⊆ n →
          pp_to_ex (o (Outgoing, EIReturn v2 h2') s3) r3 (λ '(e''', s4) r4,
-               e''' = (Outgoing, EIReturn v1 h1') ∧ R true s1 s4 ∧ r1 = r4) →
+               e''' = (Outgoing, EIReturn v1 h1') ∧ R true (s1, r1) (s4, r4)) →
           Imp (expr_fill K1 (Val v1)) h1' fns1
               ⪯{imp_module, mod_prepost i o imp_module, n', b}
           (SMProg, Imp (expr_fill K2 (Val v2)) h2' fns2, (PPInside, s3, r3))) →
@@ -1013,8 +1014,7 @@ Proof.
       es = expr_fill Ks (Waiting b) ∧
       pp = PPOutside ∧
       ips = SMFilter ∧
-      R false s0 s ∧
-      r0 ≼ r ∧
+      R false (s0, r0) (s, r) ∧
       imp_prepost_proof_stack n fns1 fns2 i o R b s r Ki Ks
 ). }
   { eexists [], []. split!. econs. } {
@@ -1034,14 +1034,15 @@ Proof.
       have ?: es2 = Val <$> vs2'. { clear -Hall2. elim: Hall2; naive_solver. } subst.
       tstep_i. split => *; simplify_eq. rewrite orb_true_r. tstep_s. right. split!.
       tstep_s. apply: pp_to_ex_mono; [done|].
-      move => [??] ? /= [?[?[??]]]. simplify_eq. split!.
+      move => [??] ? /= [?[??]]. simplify_eq. split!.
       apply: Hloop; [done|].
-      split!; [done..|by etrans|by etrans|]. econs; [by apply: imp_prepost_proof_stack_mono|].
-      move => ????. apply: pp_to_all_mono; [naive_solver|].
+      split!; [done..|by etrans|].
+      econs; [by apply: imp_prepost_proof_stack_mono|].
+      move => ?????. apply: pp_to_all_mono; [naive_solver|].
       move => [??] ? /= ?. destruct_all?. subst. split!.
       rewrite !expr_fill_app /=. done.
     + move => *. tstep_s. tstep_i. rewrite orb_true_r. tstep_s. apply: pp_to_ex_mono; [done|].
-      move => [??] ? [-> [? <-]] /=. split!. apply: tsim_mono; [|done]. apply: Hloop; [done|].
+      move => [??] ? [-> ?] /=. split!. apply: tsim_mono; [|done]. apply: Hloop; [done|].
       split!. 1, 2: done.
       { etrans; [done|]. by apply: HR. }
       { by apply: imp_prepost_proof_stack_mono_R. }

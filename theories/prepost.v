@@ -1,5 +1,7 @@
 Require Export iris.algebra.cmra.
 Require Export iris.algebra.updates.
+Require Export iris.base_logic.base_logic.
+Require Export iris.proofmode.proofmode.
 Require Export refframe.module.
 Require Import refframe.trefines.
 Require Import refframe.link.
@@ -37,39 +39,78 @@ Section included.
   Proof. intros ?. etrans; [done|]. apply cmra_included_r. Qed.
 End included.
 
+Section satisfiable.
+  Context {M : ucmra}.
+
+  Definition satisfiable (P: uPred M) := ∃ x : M, ✓{0} x ∧ uPred_holds P 0 x.
+
+  Global Instance satisfiable_proper : Proper ((≡) ==> iff) satisfiable.
+  Proof.
+    move => ?? Hequiv. unfold satisfiable. f_equiv => ?.
+    split => -[??]. all: split; [done|]. all: apply: uPred_holds_ne; [| |done..]; [|done]; by rewrite Hequiv.
+  Qed.
+
+  Lemma satisfiable_pure (ϕ : Prop):
+    ϕ →
+    satisfiable ⌜ϕ⌝.
+  Proof. move => ?. unfold satisfiable; uPred.unseal. eexists ε. split; [|done]. apply ucmra_unit_validN. Qed.
+
+  Lemma satisfiable_bupd x:
+    satisfiable (|==> x) →
+    satisfiable x.
+  Proof.
+    unfold satisfiable; uPred.unseal.
+    move => -[x'[Hv HP]].
+    destruct (HP 0 ε) as [y HP']; [done|by rewrite right_id|].
+    move: HP'. rewrite right_id; eauto.
+  Qed.
+
+  Lemma satisfiable_mono x y:
+    satisfiable x →
+    (x ⊢ y) →
+    satisfiable y.
+  Proof. move => [?[??]] Hentails. eexists _. split; [done|]. by apply Hentails. Qed.
+
+  Lemma satisfiable_bmono x y:
+    satisfiable x →
+    (x ==∗ y) →
+    satisfiable y.
+  Proof. move => ??. apply satisfiable_bupd. by apply: satisfiable_mono. Qed.
+End satisfiable.
+
 (** * prepost *)
 Section prepost.
 Context {R : Type}.
-Context {A : cmra}.
+Context {M : ucmra}.
 
 Inductive prepost : Type :=
 | pp_end (r : R)
 | pp_prop (P : Prop) (pp : prepost)
 | pp_quant {T} (pp : T → prepost)
-| pp_add (P : A) (pp : prepost)
-| pp_remove (P : A) (pp : prepost)
+| pp_add (P : uPred M) (pp : prepost)
+| pp_remove (P : uPred M) (pp : prepost)
 (* | pp_update (pp : prepost) *)
 .
 
-Fixpoint pp_to_ex (pp : prepost) (x : A) (Q : R → A → Prop) : Prop :=
+Fixpoint pp_to_ex (pp : prepost) (x : uPred M) (Q : R → uPred M → Prop) : Prop :=
   match pp with
   | pp_end r => Q r x
   | pp_prop P pp' => P ∧ pp_to_ex pp' x Q
   | pp_quant pp' => ∃ y, pp_to_ex (pp' y) x Q
-  | pp_add P pp' => ✓ (P ⋅ x) ∧ pp_to_ex pp' (P ⋅ x) Q
+  | pp_add P pp' => satisfiable (P ∗ x) ∧ pp_to_ex pp' (P ∗ x) Q
   (* We could also put and ≡ here but that makes it more annoying for
   the users because they probably always want an update. *)
-  | pp_remove P pp' => ∃ y, x ~~> (P ⋅ y) ∧ pp_to_ex pp' y Q
+  | pp_remove P pp' => ∃ y, (x ==∗ (P ∗ y)) ∧ pp_to_ex pp' y Q
   (* | pp_update pp' => ∃ y, x ~~> y ∧ pp_to_ex pp' y Q *)
   end.
 
-Fixpoint pp_to_all (pp : prepost) (x : A) (Q : R → A → Prop) : Prop :=
+Fixpoint pp_to_all (pp : prepost) (x : uPred M) (Q : R → uPred M → Prop) : Prop :=
   match pp with
   | pp_end r => Q r x
   | pp_prop P pp' => P → pp_to_all pp' x Q
   | pp_quant pp' => ∀ y, pp_to_all (pp' y) x Q
-  | pp_add P pp' => ✓ (P ⋅ x) → pp_to_all pp' (P ⋅ x) Q
-  | pp_remove P pp' => ∀ y, x ~~> P ⋅ y → pp_to_all pp' y Q
+  | pp_add P pp' => satisfiable (P ∗ x) → pp_to_all pp' (P ∗ x) Q
+  | pp_remove P pp' => ∀ y, (x ==∗ P ∗ y) → pp_to_all pp' y Q
   (* | pp_update pp' => ∀ y, x ~~> y → pp_to_all pp' y Q *)
   end.
 
@@ -103,12 +144,12 @@ Lemma pp_to_all_ex pp Q1 Q2 x:
   ∃ y r, Q1 r y ∧ Q2 r y.
 Proof. move => /pp_to_all_forall ? /pp_to_ex_exists. naive_solver. Qed.
 
-Definition pp_res_equiv (Q : R → A → Prop) (r : R) (x : A) : Prop :=
-  ∀ x', ✓ x' → x' ≡ x → Q r x'.
+Definition pp_res_equiv (Q : R → uPred M → Prop) (r : R) (x : uPred M) : Prop :=
+  ∀ x', satisfiable x' → x' ≡ x → Q r x'.
 
 Lemma pp_to_ex_mono_res pp (Q : _ → _ → Prop) x x':
   x' ≡ x →
-  ✓ x' →
+  satisfiable x' →
   pp_to_ex pp x (pp_res_equiv Q) →
   pp_to_ex pp x' Q.
 Proof.
@@ -119,15 +160,14 @@ Proof.
   - move => P pp IH x x' Hequiv Hvalid [??]. rewrite {1}Hequiv.
     split; [done|]. by apply: IH; [rewrite Hequiv..|done].
   - move => P pp IH x x' Hequiv Hvalid [?[??]]. eexists _.
-    rewrite Hequiv. split; [done|].  apply: IH; [..|done]; [done|].
-    apply: cmra_update_valid; [|done].
-    rewrite Hequiv. etrans; [done|].
-    apply cmra_update_op_r.
+    rewrite Hequiv. split; [done|]. apply: IH; [..|done]; [done|].
+    apply: satisfiable_bmono; [done|]. rewrite Hequiv. etrans; [done|].
+    by iIntros ">[_ $]".
 Qed.
 
 Lemma pp_to_all_mono_res pp (Q : _ → _ → Prop) x x':
   x' ≡ x →
-  ✓ x' →
+  satisfiable x' →
   pp_to_all pp x (pp_res_equiv Q) →
   pp_to_all pp x' Q.
 Proof.
@@ -139,9 +179,8 @@ Proof.
     apply: IH; [..|naive_solver]; by rewrite Hequiv.
   - move => P pp IH x x' Hequiv Hvalid Hpp ?. rewrite Hequiv => ?.
     apply: IH; [reflexivity| |naive_solver].
-    apply: cmra_update_valid; [|done].
-    rewrite Hequiv. etrans; [done|].
-    apply cmra_update_op_r.
+    apply: satisfiable_bmono; [done|]. rewrite Hequiv. etrans; [done|].
+    by iIntros ">[_ $]".
 Qed.
 
 (*
@@ -221,8 +260,8 @@ Arguments prepost : clear implicits.
 (** * mod_prepost *)
 Section prepost.
   Context {EV1 EV2 S : Type}.
-  Context {A : cmra}.
-  Implicit Types (i : EV2 → S → prepost (EV1 * S) A) (o : EV1 → S → prepost (EV2 * S) A).
+  Context {M : ucmra}.
+  Implicit Types (i : EV2 → S → prepost (EV1 * S) M) (o : EV1 → S → prepost (EV2 * S) M).
   Implicit Types (m : module EV1).
 
   Inductive pp_state : Type :=
@@ -235,7 +274,7 @@ Section prepost.
   .
 
   Inductive pp_filter_step i o :
-    (pp_state * S * A) → option (EV1 + EV2) → ((pp_state * S * A) → Prop) → Prop :=
+    (pp_state * S * uPred M) → option (EV1 + EV2) → ((pp_state * S * uPred M) → Prop) → Prop :=
   | PPOutsideS s x e:
     pp_filter_step i o (PPOutside, s, x) (Some (inr e)) (λ σ, σ = (PPRecv1 e, s, x))
   | PPRecv1S s x e:
@@ -345,13 +384,13 @@ Global Hint Resolve
        mod_prepost_step_Inside_s
  | 3 : tstep.
 
-Definition prepost_id {EV} : EV → unit → prepost (EV * unit) unitR :=
+Definition prepost_id {EV} : EV → unit → prepost (EV * unit) unitUR :=
   λ x _, pp_end (x, tt).
 
-Lemma prepost_id_l A S EV1 EV2 (m : module EV1) σ i o s x:
+Lemma prepost_id_l M S EV1 EV2 (m : module EV1) σ i o s x:
   trefines (MS (mod_prepost i o (mod_prepost prepost_id prepost_id m))
-               (SMFilter, (SMFilter, σ, (PPOutside, tt, tt)), (PPOutside, s, x)))
-           (MS (mod_prepost (A:=A) (S:=S) (EV2:=EV2) i o m) (SMFilter, σ, (PPOutside, s, x))).
+               (SMFilter, (SMFilter, σ, (PPOutside, tt, True%I)), (PPOutside, s, x)))
+           (MS (mod_prepost (M:=M) (S:=S) (EV2:=EV2) i o m) (SMFilter, σ, (PPOutside, s, x))).
 Proof.
   apply tsim_implies_trefines => /= n.
   tstep_i => ?.
@@ -400,14 +439,14 @@ Section prepost.
 
   Lemma mod_prepost_link
         {EV1 EV2 S1 S2 S' Sr1 Sr2 : Type}
-        {A : cmra}
-        (INV : seq_product_state → S1 → S2 → S' → A → A → Sr1 → Sr2 → Prop)
-        (i1 : io_event EV2 → S1 → prepost (io_event EV1 * S1) A)
-        (o1 : io_event EV1 → S1 → prepost (io_event EV2 * S1) A)
-        (i2 : io_event EV2 → S2 → prepost (io_event EV1 * S2) A)
-        (o2 : io_event EV1 → S2 → prepost (io_event EV2 * S2) A)
-        (i : io_event EV2 → S' → prepost (io_event EV1 * S') A)
-        (o : io_event EV1 → S' → prepost (io_event EV2 * S') A)
+        {M : ucmra}
+        (INV : seq_product_state → S1 → S2 → S' → uPred M → uPred M → Sr1 → Sr2 → Prop)
+        (i1 : io_event EV2 → S1 → prepost (io_event EV1 * S1) M)
+        (o1 : io_event EV1 → S1 → prepost (io_event EV2 * S1) M)
+        (i2 : io_event EV2 → S2 → prepost (io_event EV1 * S2) M)
+        (o2 : io_event EV1 → S2 → prepost (io_event EV2 * S2) M)
+        (i : io_event EV2 → S' → prepost (io_event EV1 * S') M)
+        (o : io_event EV1 → S' → prepost (io_event EV2 * S') M)
         (R1 : seq_product_state → Sr1 → EV2 → seq_product_state → Sr1 → EV2 → Prop)
         (R2 : seq_product_state → Sr2 → EV1 → seq_product_state → Sr2 → EV1 → Prop)
         (m1 m2 : module (io_event EV1))
@@ -416,49 +455,49 @@ Section prepost.
         :
 
        (∀ p s e p' s' e', R1 p s e p' s' e' → p ≠ p') →
-       x ≡ x1 ⋅ x2 →
-       ✓ x →
+       (x ⊣⊢ x1 ∗ x2) →
+       satisfiable x →
        INV SPNone s1 s2 s x1 x2 sr1 sr2 →
        (∀ s1 s2 s x1 x2 sr1 sr2 e sr1' e',
           INV SPNone s1 s2 s x1 x2 sr1 sr2 →
-          ✓ (x1 ⋅ x2) →
+          satisfiable (x1 ∗ x2) →
           R1 SPNone sr1 e SPLeft sr1' e' →
-          pp_to_all (i (Incoming, e') s) (x1 ⋅ x2) (λ r1 y1,
+          pp_to_all (i (Incoming, e') s) (x1 ∗ x2) (λ r1 y1,
           pp_to_ex (i1 (Incoming, e') s1) x1 (λ r2 y2, ∃ e sr2',
             r1.1.1 = Incoming ∧
             r2.1.1 = Incoming ∧
             r1.1.2 = r2.1.2 ∧
-            y1 ~~> y2 ⋅ x2 ∧
+            (y1 ==∗ y2 ∗ x2) ∧
             R2 SPNone sr2 e SPLeft sr2' r1.1.2 ∧
             INV SPLeft r2.2 s2 r1.2 y2 x2 sr1' sr2'))) →
        (∀ s1 s2 s x1 x2 sr1 sr2 e sr1' e',
           INV SPNone s1 s2 s x1 x2 sr1 sr2 →
-          ✓ (x1 ⋅ x2) →
+          satisfiable (x1 ∗ x2) →
           R1 SPNone sr1 e SPRight sr1' e' →
-          pp_to_all (i (Incoming, e') s) (x1 ⋅ x2) (λ r1 y1,
+          pp_to_all (i (Incoming, e') s) (x1 ∗ x2) (λ r1 y1,
           pp_to_ex (i2 (Incoming, e') s2) x2 (λ r2 y2, ∃ e sr2',
             r1.1.1 = Incoming ∧
             r2.1.1 = Incoming ∧
             r1.1.2 = r2.1.2 ∧
-            y1 ~~> x1 ⋅ y2 ∧
+            (y1 ==∗ x1 ∗ y2) ∧
             R2 SPNone sr2 e SPRight sr2' r1.1.2 ∧
             INV SPRight s1 r2.2 r1.2 x1 y2 sr1' sr2'))) →
        (∀ s1 s2 s x1 x2 sr1 sr2 e,
            INV SPLeft s1 s2 s x1 x2 sr1 sr2 →
-           ✓ (x1 ⋅ x2) →
+           satisfiable (x1 ∗ x2) →
            pp_to_all (o1 e s1) x1 (λ r1 y1, ∀ sr1' e',
              r1.1.1 = Outgoing →
              R1 SPLeft sr1 r1.1.2 SPRight sr1' e' →
              pp_to_ex (i2 (Incoming, e') s2) x2 (λ r2 y2, ∃ sr2',
                e.1 = Outgoing ∧
                r2.1.1 = Incoming ∧
-               x1 ⋅ x2 ~~> y1 ⋅ y2 ∧
+               (x1 ∗ x2 ==∗ y1 ∗ y2) ∧
                INV SPRight r1.2 r2.2 s y1 y2 sr1' sr2' ∧
                R2 SPLeft sr2 e.2 SPRight sr2' r2.1.2))) →
        (∀ s1 s2 s x1 x2 sr1 sr2 e,
            INV SPLeft s1 s2 s x1 x2 sr1 sr2 →
-           ✓ (x1 ⋅ x2) →
-           ∀ x, x ~~> (x1 ⋅ x2) →
+           satisfiable (x1 ∗ x2) →
+           ∀ x, (x ==∗ (x1 ∗ x2)) →
            pp_to_all (o1 e s1) x1 (λ r1 y1, ∀ sr1' e',
              r1.1.1 = Outgoing →
              R1 SPLeft sr1 r1.1.2 SPNone sr1' e' →
@@ -470,24 +509,24 @@ Section prepost.
                  r2.1.2 = e' ∧
                  (* This = instead of ≡ is fine because the pp_to_ex
                  must have a update in it. *)
-                 y2 = y1 ⋅ x2 ∧
+                 y2 = (y1 ∗ x2)%I ∧
                  INV SPNone r1.2 s2 r2.2 y1 x2 sr1' sr2'))) →
        (∀ s1 s2 s x1 x2 sr1 sr2 e,
            INV SPRight s1 s2 s x1 x2 sr1 sr2 →
-           ✓ (x1 ⋅ x2) →
+           satisfiable (x1 ∗ x2) →
            pp_to_all (o2 e s2) x2 (λ r1 y1, ∀ sr1' e',
              r1.1.1 = Outgoing →
              R1 SPRight sr1 r1.1.2 SPLeft sr1' e' →
              pp_to_ex (i1 (Incoming, e') s1) x1 (λ r2 y2, ∃ sr2',
                e.1 = Outgoing ∧
                r2.1.1 = Incoming ∧
-               x1 ⋅ x2 ~~> y2 ⋅ y1 ∧
+               (x1 ∗ x2 ==∗ y2 ∗ y1) ∧
                INV SPLeft r2.2 r1.2 s y2 y1 sr1' sr2' ∧
                R2 SPRight sr2 e.2 SPLeft sr2' r2.1.2))) →
        (∀ s1 s2 s x1 x2 sr1 sr2 e,
            INV SPRight s1 s2 s x1 x2 sr1 sr2 →
-           ✓ (x1 ⋅ x2) →
-           ∀ x, x ~~> (x1 ⋅ x2) →
+           satisfiable (x1 ∗ x2) →
+           ∀ x, (x ==∗ (x1 ∗ x2)) →
            pp_to_all (o2 e s2) x2 (λ r1 y1, ∀ sr1' e',
              r1.1.1 = Outgoing →
              R1 SPRight sr1 r1.1.2 SPNone sr1' e' →
@@ -499,7 +538,7 @@ Section prepost.
                  r2.1.2 = e' ∧
                  (* This = instead of ≡ is fine because the pp_to_ex
                  must have a update in it. *)
-                 y2 = x1 ⋅ y1 ∧
+                 y2 = (x1 ∗ y1)%I ∧
                  INV SPNone s1 r1.2 r2.2 x1 y1 sr1' sr2'))) →
     trefines (MS (mod_link R1 (mod_prepost i1 o1 m1) (mod_prepost i2 o2 m2))
                  (MLFNone, sr1, (SMFilter, σ1, (PPOutside, s1, x1)), (SMFilter, σ2, (PPOutside, s2, x2))))
@@ -512,22 +551,22 @@ Section prepost.
           '(σl1, sr1, (σf1, σ1, (σpp1, s1, x1)), (σf2, σ2, (σpp2, s2, x2)))
           '(σf, (σl2, sr2, σ1', σ2'), (σpp, s, x)),
            ∃ sp,
-           σ1 = σ1' ∧ σ2 = σ2' ∧ INV sp s1 s2 s x1 x2 sr1 sr2 ∧ ✓ x ∧
-          (* Here we have an ≡ instead of a ~~> since we know that the
+           σ1 = σ1' ∧ σ2 = σ2' ∧ INV sp s1 s2 s x1 x2 sr1 sr2 ∧ satisfiable x ∧
+          (* Here we have an ≡ instead of a ==∗ since we know that the
           resources in the spec must be up to date because the last
           interaction was with the environment *)
-          (( sp = SPNone ∧ x ≡ x1 ⋅ x2 ∧
+          (( sp = SPNone ∧ (x ⊣⊢ x1 ∗ x2) ∧
               σl1 = MLFNone ∧ σf = SMFilter
             ∧ σpp1 = PPOutside ∧ σpp2 = PPOutside ∧ σpp = PPOutside
             ∧ σf1 = SMFilter ∧ σf2 = SMFilter
             ∧ σl2 = MLFNone)
-           ∨ (sp = SPLeft ∧ x ~~> x1 ⋅ x2 ∧
+           ∨ (sp = SPLeft ∧ (x ==∗ x1 ∗ x2) ∧
               ((∃ e, σl2 = MLFRecvL e ∧ σf1 = SMProgRecv (Incoming, e))
                ∨ (σl2 = MLFLeft ∧ σf1 = SMProg))
             ∧ σpp1 = PPInside ∧ σpp2 = PPOutside ∧ σpp = PPInside
             ∧ σf = SMProg ∧ σf2 = SMFilter
             ∧ σl1 = MLFLeft)
-           ∨ (sp = SPRight ∧ x ~~> x1 ⋅ x2 ∧
+           ∨ (sp = SPRight ∧ (x ==∗ x1 ∗ x2) ∧
               ((∃ e, σl2 = MLFRecvR e ∧ σf2 = SMProgRecv (Incoming, e))
                ∨ (σl2 = MLFRight ∧ σf2 = SMProg))
             ∧ σpp1 = PPOutside ∧ σpp2 = PPInside ∧ σpp = PPInside
@@ -537,7 +576,7 @@ Section prepost.
       move => {}n _ /= Hloop {Hinv Hequiv Hvalid}.
       move => [[[σl1 {}sr1] [[σf1 {}σ1] [[σpp1 {}s1] {}x1]]] [[σf2 {}σ2] [[σpp2 {}s2] {}x2]]].
       move => [[σf [[[σl2 {}sr2] σ1'] σ2']] [[σpp {}s] {}x]] ?. destruct_all?; simplify_eq.
-      - revert select (✓ x) => Hvalid. revert select (x ≡ _) => Hequiv.
+      - revert select (satisfiable x) => Hvalid. revert select (x ⊣⊢ _) => Hequiv.
         move: (Hvalid) => Hvalid2. rewrite Hequiv in Hvalid2.
         tstep_i => ? p' ???.
         tstep_s. split!.
@@ -577,7 +616,7 @@ Section prepost.
         }
         tend. have [σ' Hσ'] := vis_no_all _ _ _ ltac:(done). eexists σ'. split; [naive_solver|].
         tstep_i. apply pp_to_all_forall => ri xi Hi p' sr1' e' HR1 Hri.
-        have ?:= cmra_update_valid _ _ ltac:(done) ltac:(done).
+        have ?:= satisfiable_bmono _ _ ltac:(done) ltac:(done).
         destruct p' => /=. 1: naive_solver.
         + tstep_i => ??; simplify_eq.
           tstep_i.
@@ -589,7 +628,8 @@ Section prepost.
           tstep_s. eexists (Some (Outgoing, _)). split!; [done|].
           destruct e; simplify_eq/=.
           apply: steps_spec_step_end; [done|] => ??.
-          apply: Hloop; [done|]. split!; [naive_solver|done..|by etrans].
+          apply: Hloop; [done|]. split!; [naive_solver|done..| ].
+          etrans; [done|]. etrans; [|apply bupd_trans]. by apply bupd_mono.
         + move: ri xi Hi sr1' e' Hri HR1. apply: pp_to_all_forall_2.
           apply: pp_to_all_mono; [by apply: HL2N|].
           move => [[??]?] ? /= Hcont ????.
@@ -618,7 +658,7 @@ Section prepost.
         }
         tend. have [σ' Hσ'] := vis_no_all _ _ _ ltac:(done). eexists σ'. split; [naive_solver|].
         tstep_i. apply pp_to_all_forall => ri xi Hi p' sr1' e' HR1 Hri.
-        have ?:= cmra_update_valid _ _ ltac:(done) ltac:(done).
+        have ?:= satisfiable_bmono _ _ ltac:(done) ltac:(done).
         destruct p' => /=. 2: naive_solver.
         + tstep_i => ??; simplify_eq.
           tstep_i.
@@ -630,7 +670,8 @@ Section prepost.
           tstep_s. eexists (Some (Outgoing, _)). split!; [done|].
           destruct e; simplify_eq/=.
           apply: steps_spec_step_end; [done|] => ??.
-          apply: Hloop; [done|]. split!; [naive_solver|done..|by etrans].
+          apply: Hloop; [done|]. split!; [naive_solver|done..| ].
+          etrans; [done|]. etrans; [|apply bupd_trans]. by apply bupd_mono.
         + move: ri xi Hi sr1' e' Hri HR1. apply: pp_to_all_forall_2.
           apply: pp_to_all_mono; [by apply: HR2N|].
           move => [[??]?] ? /= Hcont ????.
@@ -647,15 +688,15 @@ Section prepost.
 
   Lemma mod_prepost_combine
         {EV1 EV2 EV S1 S2 S : Type}
-        {A1 A2 A : cmra}
+        {M1 M2 M : ucmra}
         (m : module EV)
-        (INV : player → S1 → S2 → S → A1 → A2 → A → Prop)
-        (i1 : EV1 → S1 → prepost (EV2 * S1) A1)
-        (o1 : EV2 → S1 → prepost (EV1 * S1) A1)
-        (i2 : EV2 → S2 → prepost (EV * S2) A2)
-        (o2 : EV → S2 → prepost (EV2 * S2) A2)
-        (i : EV1 → S → prepost (EV * S) A)
-        (o : EV → S → prepost (EV1 * S) A)
+        (INV : player → S1 → S2 → S → uPred M1 → uPred M2 → uPred M → Prop)
+        (i1 : EV1 → S1 → prepost (EV2 * S1) M1)
+        (o1 : EV2 → S1 → prepost (EV1 * S1) M1)
+        (i2 : EV2 → S2 → prepost (EV * S2) M2)
+        (o2 : EV → S2 → prepost (EV2 * S2) M2)
+        (i : EV1 → S → prepost (EV * S) M)
+        (o : EV → S → prepost (EV1 * S) M)
         σ s1 s2 s x1 x2 x
         `{!VisNoAll m}
         :

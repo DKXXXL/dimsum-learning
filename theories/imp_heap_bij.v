@@ -497,13 +497,14 @@ Definition imp_heap_bij_post (e : imp_event) (s : imp_heap_bij_state) : prepost 
   pp_prop (Forall2 (val_in_bij (hb_bij bij')) vso (vals_of_event e.2)) $
   pp_prop (heap_in_bij (hb_bij bij') ho hi) $
   pp_prop (heap_preserved (hb_env bij') s.(ihb_heap) hi) $
+  pp_remove True $
   pp_end ((e.1, event_set_vals_heap e.2 vso ho), ImpHeapBij bij' hi).
 
 Definition imp_heap_bij (m : module imp_event) : module imp_event :=
   mod_prepost imp_heap_bij_pre imp_heap_bij_post m.
 
 Definition initial_imp_heap_bij_state (m : module imp_event) (σ : m.(m_state)) :=
-  (@SMFilter imp_event, σ, (@PPOutside imp_event imp_event, ImpHeapBij ∅ initial_heap_state, tt)).
+  (@SMFilter imp_event, σ, (@PPOutside imp_event imp_event, ImpHeapBij ∅ initial_heap_state, (True%I : uPred unitUR))).
 
 Local Ltac split_solve :=
   match goal with
@@ -559,13 +560,14 @@ Proof.
           heap_preserved (hb_env bij) hi hi2 ∧
           heap_preserved (hb_prog bij1) hi1 hi2)))). }
   { move => ?? [] /=*; naive_solver. }
-  { done. } { done. }
+  { by rewrite left_id. } { by apply satisfiable_pure. }
   { split!. all: set_solver. }
-  all: move => [bij1 hi1] [bij2 hi2] [bij hi] [] [] ics1 ics2.
+  all: move => [bij1 hi1] [bij2 hi2] [bij hi] ? ? ics1 ics2.
   - move => e ics' e' /= *. unfold heap_bij_extend in *; destruct_all?; simplify_eq/=.
     unshelve split!. 1: econstructor. all: shelve_unifiable. all: split!. all: split!.
     1: { set_unfold; naive_solver. }
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
+    1: by iIntros "$".
     1: by destruct e.
     1: { set_unfold; naive_solver. }
     1: { set_unfold; naive_solver. }
@@ -575,6 +577,7 @@ Proof.
     unshelve split!. 1: econstructor. all: shelve_unifiable. all: split!. all: split!.
     1: { set_unfold; naive_solver. }
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
+    1: by iIntros "$".
     1: by destruct e.
     1: { set_unfold; naive_solver. }
     1: { set_unfold; naive_solver. }
@@ -586,18 +589,20 @@ Proof.
     1: { set_unfold; naive_solver. }
     1: { rewrite vals_of_event_event_set_vals_heap //. by apply: Forall2_length. }
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
+    1: { iIntros "[? $]". iStopProof. etrans; [done|]. by iIntros ">[_ $]". }
     1: { set_unfold; naive_solver. }
     1: { set_unfold; naive_solver. }
     1: { apply: disjoint_mono; [apply hb_disj_priv|done|]. set_unfold; naive_solver. }
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
     1: by destruct e.
     1: by destruct e.
-  - move => [? e] /= ?? [] *. unfold heap_bij_extend in *; destruct_all?; simplify_eq/=.
+  - move => [? e] /= *. unfold heap_bij_extend in *; destruct_all?; simplify_eq/=.
     unshelve split!. 1: econstructor. all: shelve_unifiable.
     all: split!; rewrite ?heap_of_event_event_set_vals_heap; split!. all: split!.
     1: by destruct e.
     1: { set_unfold; naive_solver. }
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
+    1: { etrans; [done|]. iIntros ">[? $]". iStopProof. etrans; [done|]. by iIntros ">[_ $]". }
     1: { set_unfold; naive_solver. }
     1: { set_unfold; naive_solver. }
     1: { apply: disjoint_mono; [apply hb_disj_priv|done|]. set_unfold; naive_solver. }
@@ -608,18 +613,20 @@ Proof.
     1: { set_unfold; naive_solver. }
     1: { rewrite vals_of_event_event_set_vals_heap //. by apply: Forall2_length. }
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
+    1: { iIntros "[$ ?]". iStopProof. etrans; [done|]. by iIntros ">[_ $]". }
     1: { set_unfold; naive_solver. }
     1: { set_unfold; naive_solver. }
     1: { apply: disjoint_mono; [apply hb_disj_priv|done|]. set_unfold; naive_solver. }
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
     1: by destruct e.
     1: by destruct e.
-  - move => [? e] /= ?? [] *. unfold heap_bij_extend in *; destruct_all?; simplify_eq/=.
+  - move => [? e] /= *. unfold heap_bij_extend in *; destruct_all?; simplify_eq/=.
     unshelve split!. 1: econstructor. all: shelve_unifiable.
     all: split!; rewrite ?heap_of_event_event_set_vals_heap; split!. all: split!.
     1: by destruct e.
     1: { set_unfold; naive_solver. }
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
+    1: { etrans; [done|]. iIntros ">[$ ?]". iStopProof. etrans; [done|]. by iIntros ">[_ $]". }
     1: { set_unfold; naive_solver. }
     1: { set_unfold; naive_solver. }
     1: { symmetry. apply: disjoint_mono; [apply hb_disj_priv|done|]. set_unfold; naive_solver. }
@@ -663,16 +670,16 @@ Lemma imp_heap_bij_imp_refl fns:
            (MS (imp_heap_bij imp_module)
                (initial_imp_heap_bij_state imp_module (initial_imp_state fns))).
 Proof.
-  pose (R := λ (b : bool) '(ImpHeapBij bij1 h1) '(ImpHeapBij bij2 h2),
+  epose (R := λ (b : bool) '(ImpHeapBij bij1 h1, _) '(ImpHeapBij bij2 h2, _),
           (hb_prog bij1 = ∅ → hb_prog bij2 = ∅) ∧ hb_bij bij1 ⊆ hb_bij bij2).
   apply: (imp_prepost_proof R); unfold R in *.
-  { constructor. { move => [??]. naive_solver. }
-    { move => [??] [??] [??] [??] [??]. split. naive_solver. by etrans. } }
-  { move => [??] [??]. naive_solver. }
-  move => n K1 K2 f fn1 vs1 h1 [bij0 ?] [] ??? /= bij1 *.
+  { constructor. { move => [[??]?]. naive_solver. }
+    { move => [[??]?] [[??]?] [[??]?] [??] [??]. split. naive_solver. by etrans. } }
+  { move => [??] ? [??] ?. naive_solver. }
+  move => n K1 K2 f fn1 vs1 h1 [bij0 ?] ??? /= bij1 *.
   split!. move => ?. split; [solve_length|].
   move => Hcall Hret.
-  unshelve apply: tsim_remember. { simpl. exact (λ _ '(Imp ei hi fnsi) '(ips, Imp es hs fnss, (pp, ImpHeapBij bij he, _)),
+  unshelve apply: tsim_remember. { simpl. exact (λ _ '(Imp ei hi fnsi) '(ips, Imp es hs fnss, (pp, ImpHeapBij bij he, P)),
     (* bij' : current bijection, bij : bijection when last communicated with the environment,
      bij1: bijection at the start of the function (necessary to reestablish R) *)
     ∃ bij' ei' es',
@@ -695,15 +702,16 @@ Proof.
     { unfold heap_bij_extend in *. clear Hcall Hret. bij_solver. }
     { unfold heap_bij_extend in *. clear Hcall Hret. bij_solver. }
     { apply expr_in_bij_subst_l; [|done|solve_length]. apply expr_in_bij_static. apply fd_static. }
-    { apply static_expr_subst_l; [|solve_length]. apply static_expr_mono. apply fd_static. }  }
+    { apply static_expr_subst_l; [|solve_length]. apply static_expr_mono. apply fd_static. }   }
   { naive_solver. }
-  move => /= n' ? Hloop [ei hi fnsi] [[ips [es hs fnss]] [[pp [bij he]] []]] ?.
+  move => /= n' ? Hloop [ei hi fnsi] [[ips [es hs fnss]] [[pp [bij he]] ?]] ?.
   destruct_all?; simplify_eq.
   destruct (to_val ei') eqn:?.
   - destruct ei' => //; simplify_eq/=. destruct es' => //; simplify_eq/=.
     apply Hret; [done|]. clear Hloop Hret Hcall. split!.
     { unfold heap_bij_extend. split!; [done..|]. bij_solver. }
-    all: split!. by econs. done.
+    all: split!. by econs. { instantiate (1:=True%I). iIntros "? !>". done. }
+    { done. }
     { etrans; [|done]. etrans; [|done]. bij_solver. }
   - (* TODO: remove this use of EM *)
     have [?|?]:= EM (∃ K f vs, fns !! f = None ∧ ei' = expr_fill K (Call f (Val <$> vs))).
@@ -719,6 +727,7 @@ Proof.
       clear Hret. split!.
       { unfold heap_bij_extend. split!; [done..|]. bij_solver. }
       all: split!.
+      { instantiate (1:=True%I). iIntros "? !>". done. }
       { etrans; [|done]. etrans; [|done]. bij_solver. }
       move => ?? [??] *. decompose_Forall_hyps. split!.
       apply Hloop; [done|]. split!. 1: done. all: split!.
@@ -801,7 +810,7 @@ Proof.
                  ) ∧ σm1 = SMProg ∧ σc1 = ICRunning ∧ pp = PPInside))
                              ). }
   { split!. } { done. }
-  move => {}n _ /= Hloop [[σm1 [[σf σ1] [[pp [bij hi]] []]]] σc1] [[σm2 σ2] σc2] ?.
+  move => {}n _ /= Hloop [[σm1 [[σf σ1] [[pp [bij hi]] ?]]] σc1] [[σm2 σ2] σc2] ?.
   destruct_all?; simplify_eq/=.
   - tstep_i. apply steps_impl_step_end => ???. invert_all' @m_step; simplify_eq/=. split!.
     tstep_s. eexists (Some (inr _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
@@ -898,14 +907,14 @@ Lemma bij_alloc_opt_refines :
            (MS (imp_heap_bij imp_module) (initial_imp_heap_bij_state imp_module
                                             (initial_imp_state (<["f" := bij_alloc]> ∅)))).
 Proof.
-  pose (R := λ (b : bool) '(ImpHeapBij bij1 h1) '(ImpHeapBij bij2 h2),
+  epose (R := λ (b : bool) '(ImpHeapBij bij1 h1, _) '(ImpHeapBij bij2 h2, _),
           hb_prog bij1 ⊆ hb_prog bij2 ∧ heap_preserved (hb_prog bij1) h1 h2).
   apply: (imp_prepost_proof R); unfold R in *.
-  { constructor. { move => [??]. naive_solver. }
-    { move => [??] [??] [??] [??] [??]. split; [by etrans|]. etrans; [done|].
+  { constructor. { move => [[??]?]. naive_solver. }
+    { move => [[??]?] [[??]?] [[??]?] [??] [??]. split; [by etrans|]. etrans; [done|].
       by apply: heap_preserved_mono. } }
-  { move => [??] [??]. naive_solver. }
-  move => n K1 K2 f fn1 vs1 h0 [bij0 ?] [] ? ?.
+  { move => [??] ? [??] ?. naive_solver. }
+  move => n K1 K2 f fn1 vs1 h0 [bij0 ?] ? ?.
   rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   move => bij1 ? h1 *. split!. move => ?. split!; [solve_length|].
   move => Hcall Hret.
@@ -922,11 +931,12 @@ Proof.
   { unfold heap_bij_extend. split!. set_solver. }
   { apply heap_in_bij_update_r; [|set_solver]. apply heap_in_bij_alloc_r; [done|set_solver]. }
   { apply heap_preserved_update_r; [|set_solver]. apply heap_preserved_alloc_r; [set_solver|done]. }
+  { instantiate (1:=True%I). iIntros "? !>". done. }
   { bij_solver. }
   { etrans; [apply: heap_preserved_mono; [done|bij_solver]|].
     apply heap_preserved_update_r; [|bij_solver].
     apply heap_preserved_alloc_r; [bij_solver|done]. }
-  move => ? h2 [bij2 h3] [??] bij4 ? h4 *. decompose_Forall_hyps.
+  move => ? h2 [bij2 h3] ? [??] bij4 ? h4 *. decompose_Forall_hyps.
   split!.
   tstep_i.
   tstep_s.
@@ -942,6 +952,7 @@ Proof.
   eexists _, [ValNum 1]. split!. done. all: split!. 1: by econs.
   { apply heap_in_bij_free_r; [done|]. have ? := hb_disj_prog bij4. bij_solver. }
   { apply: heap_preserved_free_r; [|done]. have ? := hb_disj_priv bij4. bij_solver. }
+  { instantiate (1:=True%I). iIntros "? !>". done. }
   1: bij_solver.
   { apply: heap_preserved_free_r. { have ? := hb_disj_priv bij4. bij_solver. }
     apply: heap_preserved_mono. 1: etrans; [done|]. 2: bij_solver.
