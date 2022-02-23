@@ -527,3 +527,86 @@ Lemma Forall_zip_with_2 {A B} l1 l2 (f : A → B → Prop):
   Forall2 f l1 l2 →
   Forall id (zip_with f l1 l2).
 Proof. elim => /=; by econs. Qed.
+
+
+
+Lemma default_eq_Some {A} (x : A) o:
+  x = default x o ↔ (∀ y, o = Some y → x = y).
+Proof. destruct o; naive_solver. Qed.
+
+Lemma default_eq_Some' {A} (x : A) o:
+  default x o = x ↔ (∀ y, o = Some y → x = y).
+Proof. destruct o; naive_solver. Qed.
+
+Lemma default_eq_neq {A} (x y : A) o:
+  x ≠ y →
+  default x o = y ↔ o = Some y.
+Proof. destruct o; naive_solver. Qed.
+
+Lemma exists_Some_unique {A} (x : A) (P : A → Prop):
+  (∃ x', Some x = Some x' ∧ P x') ↔ P x.
+Proof. naive_solver. Qed.
+
+Lemma lookup_gset_to_gmap_Some {K A} `{Countable K} (X : gset K) (x y: A) i:
+  gset_to_gmap x X !! i = Some y ↔ x = y ∧ i ∈ X.
+Proof. rewrite lookup_gset_to_gmap. case_option_guard; naive_solver. Qed.
+
+Lemma lookup_gset_to_gmap_None {K A} `{Countable K} (X : gset K) (x: A) i:
+  gset_to_gmap x X !! i = None ↔ i ∉ X.
+Proof. rewrite lookup_gset_to_gmap. case_option_guard; naive_solver. Qed.
+
+Section fmap.
+  Context {A B : Type} (f : A → option B).
+  Implicit Types l : list A.
+
+  Lemma NoDup_omap_2_strong l :
+    (∀ x y z, x ∈ l → y ∈ l → f x = Some z → f y = Some z → x = y) →
+    NoDup l →
+    NoDup (omap f l).
+  Proof.
+    intros Hinj. induction 1 as [|x l Hnotin ? IH]; csimpl; [constructor|].
+    case_match. 2: apply IH; set_solver. constructor.
+    - intros [y [Hxy ?]]%elem_of_list_omap. contradict Hnotin.
+      erewrite (Hinj x); set_solver.
+    - apply IH. set_solver.
+  Qed.
+End fmap.
+
+
+Definition fresh_map `{Countable A} `{Countable B} `{Infinite B}
+    (S : gset A) (X : gset B) : gmap A B :=
+  list_to_map (zip (elements S) (fresh_list (length (elements S)) X)).
+
+Section fresh_map.
+  Context `{Countable A} `{Countable B} `{Infinite B}.
+  Implicit Types (S : gset A) (X : gset B).
+
+  Lemma fresh_map_lookup_Some (S : gset A) (X : gset B) i x:
+    fresh_map S X !! i = Some x → i ∈ S ∧ x ∉ X.
+  Proof.
+    rewrite -elem_of_list_to_map.
+    - move => /(elem_of_zip_with _ _ _ _)[?[?[?[??]]]]. simplify_eq. split; [set_solver|].
+      by apply: fresh_list_is_fresh.
+    - rewrite fst_zip ?fresh_list_length //. apply NoDup_elements.
+  Qed.
+
+  Lemma fresh_map_lookup_None (S : gset A) (X : gset B) i:
+    fresh_map S X !! i = None ↔ i ∉ S.
+  Proof. rewrite -not_elem_of_list_to_map. rewrite fst_zip; [set_solver|]. by rewrite fresh_list_length. Qed.
+
+
+  Lemma fresh_map_bij S X i1 i2 j :
+    fresh_map S X !! i1 = Some j →
+    fresh_map S X !! i2 = Some j →
+    i1 = i2.
+  Proof.
+    rewrite -!elem_of_list_to_map.
+    2: { rewrite fst_zip ?fresh_list_length //. apply NoDup_elements. }
+    2: { rewrite fst_zip ?fresh_list_length //. apply NoDup_elements. }
+    move => /elem_of_lookup_zip_with[i1'[?[?[?[??]]]]].
+    move => /elem_of_lookup_zip_with[i2'[?[?[?[??]]]]]. simplify_eq.
+    have ? : i1' = i2'  by apply: NoDup_lookup; [eapply (NoDup_fresh_list _ X)|..]. subst.
+    naive_solver.
+  Qed.
+
+End fresh_map.

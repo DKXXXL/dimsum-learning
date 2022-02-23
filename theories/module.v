@@ -37,3 +37,11 @@ Definition io_event (EV : Type) : Type := io_type * EV.
 
 Inductive player :=
 | Prog | Env.
+Global Instance player_eq_dec : EqDecision player.
+Proof. solve_decision. Qed.
+
+Definition opponent (p : player) : player :=
+  match p with
+  | Prog => Env
+  | Env => Prog
+  end.

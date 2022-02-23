@@ -50,12 +50,21 @@ Section satisfiable.
     split => -[??]. all: split; [done|]. all: apply: uPred_holds_ne; [| |done..]; [|done]; by rewrite Hequiv.
   Qed.
 
-  Lemma satisfiable_pure (ϕ : Prop):
+  Lemma satisfiable_valid x:
+    satisfiable (uPred_ownM x) → ✓{0} x.
+  Proof. unfold satisfiable; uPred.unseal. move => [?[??]]. by apply: cmra_validN_includedN. Qed.
+
+  Lemma satisfiable_pure_1 (ϕ : Prop):
     ϕ →
     satisfiable ⌜ϕ⌝.
   Proof. move => ?. unfold satisfiable; uPred.unseal. eexists ε. split; [|done]. apply ucmra_unit_validN. Qed.
 
-  Lemma satisfiable_bupd x:
+  Lemma satisfiable_pure_2 (ϕ : Prop):
+    satisfiable ⌜ϕ⌝ →
+    ϕ.
+  Proof. unfold satisfiable; uPred.unseal. naive_solver. Qed.
+
+  Lemma satisfiable_bupd_2 x:
     satisfiable (|==> x) →
     satisfiable x.
   Proof.
@@ -75,7 +84,7 @@ Section satisfiable.
     satisfiable x →
     (x ==∗ y) →
     satisfiable y.
-  Proof. move => ??. apply satisfiable_bupd. by apply: satisfiable_mono. Qed.
+  Proof. move => ??. apply satisfiable_bupd_2. by apply: satisfiable_mono. Qed.
 End satisfiable.
 
 (** * prepost *)

@@ -24,6 +24,8 @@ Axiom AxCHOICE : ∀ A B, FunctionalChoice_on A B.
 
 Axiom EM : ∀ P : Prop, LEM P.
 
+Axiom proof_irrelevance : ∀ A : Prop, ∀ p1 p2 : A, p1 = p2.
+
 Lemma CHOICE {A B} {P : _ → Prop} {R}:
   (∀ x : A, P x → ∃ y : B, R x y) → ∃ f : {x : A | P x} → B, ∀ x (H : P x), R x (f (exist _ x H)).
 Proof.

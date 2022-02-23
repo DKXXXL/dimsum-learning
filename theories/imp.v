@@ -313,6 +313,20 @@ Next Obligation.
   rewrite map_filter_lookup => -[?/bind_Some[?[??]]]. by apply heap_wf.
 Qed.
 
+Program Definition heap_merge (h1 h2 : heap_state) : heap_state :=
+  Heap (h_heap h1 ∪ h_heap h2) (h_provs h1 ∪ h_provs h2) _.
+Next Obligation.
+  move => ??. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]]. subst.
+  move => /lookup_union_is_Some[/heap_wf?|/heap_wf?]; set_solver.
+Qed.
+
+Program Definition heap_restrict (h : heap_state) (P : prov → Prop) `{!∀ x, Decision (P x)} : heap_state :=
+  Heap (filter (λ x, P x.1.1) h.(h_heap)) h.(h_provs) _.
+Next Obligation.
+  move => ???. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]]. subst.
+  rewrite map_filter_lookup => -[?/bind_Some[?[??]]]. by apply heap_wf.
+Qed.
+
 Lemma heap_fresh_is_fresh ps h:
   heap_is_fresh h (heap_fresh ps h).
 Proof.
@@ -400,6 +414,9 @@ Lemma vals_of_event_event_set_vals_heap e vs h :
   vals_of_event (event_set_vals_heap e vs h) = vs.
 Proof. destruct e => //=. destruct vs as [|? [|]] => //. Qed.
 
+Lemma event_set_vals_heap_idemp e vs1 h1 vs2 h2:
+  event_set_vals_heap (event_set_vals_heap e vs1 h1) vs2 h2 = event_set_vals_heap e vs2 h2.
+Proof. by destruct e. Qed.
 (** ** step *)
 Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
   match op with
