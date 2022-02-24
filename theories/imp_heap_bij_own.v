@@ -1,4 +1,3 @@
-Require Export iris.algebra.cmra.
 Require Export iris.algebra.lib.gmap_view.
 Require Export refframe.module.
 Require Import refframe.trefines.
@@ -12,6 +11,33 @@ Require Import refframe.imp.
 
 Set Default Proof Using "Type".
 
+Tactic Notation "iDestruct!" :=
+  repeat (
+     iMatchHyp (fun H P => match P with ⌜_ = _⌝%I => iDestruct H as %? end)
+  || iMatchHyp (fun H P => match P with (_ ∗ _)%I => iDestruct H as "[??]" end)
+  || simplify_eq/=).
+
+Tactic Notation "iIntros!" := iIntros; iDestruct!.
+
+Ltac iSplit_step :=
+  lazymatch goal with
+  | |- environments.envs_entails _ (∃ x, _)%I => iExists _
+  | |- environments.envs_entails _ (_ ∗ _)%I => iSplit
+  | |- environments.envs_entails _ (⌜_⌝)%I => iPureIntro
+  | |- _ => split_step
+  end; simpl.
+
+Ltac original_iSplit_tac :=
+  (* The outer repeat is because later split_steps may have
+  instantiated evars and thus we try earlier goals again. *)
+  repeat (simpl; repeat iSplit_step).
+
+Ltac iSplit_tac :=
+  original_iSplit_tac.
+
+Tactic Notation "iSplit!" := iSplit_tac.
+
+
 (* TODO: Allow also ownership of the outer heap, probably by adding a
    second gmap prov (option Z → option val) and adding an new
    heap_preserved and making sure that if hb_bij !! p2 = Some p1 then
@@ -22,16 +48,35 @@ Inductive heap_bij_elem :=
 | HBShared (p : prov) | HBConstant (h : Z → option val) | HBChanging.
 Canonical Structure heap_bij_elemO := leibnizO heap_bij_elem.
 
-Definition heap_bijUR : cmra := gmap_viewUR prov heap_bij_elemO.
+Definition heap_bijUR : ucmra := gmap_viewUR prov heap_bij_elemO.
 
 (** * imp_heap_bij_own *)
+(*
+
+                                   e_in'    e_out
+                                  ------> m ------
+                                 /                \
+                         e_in    |                v       e_out'
+IMP_HEAP_BIJ [ m ]     : ---> PRE e_in         POST e_out ------->
+
+
+
+*)
+
 Record heap_bij := HeapBij {
   hb_bij : gmap prov heap_bij_elem;
-  hb_iff p1 p2 p1' p2' :
-   hb_bij !! p2 = Some (HBShared p1) →
-   hb_bij !! p2' = Some (HBShared p1') →
-   p1 = p1' ↔ p2 = p2'
+  hb_iff pi ps ps' :
+   hb_bij !! ps = Some (HBShared pi) →
+   hb_bij !! ps' = Some (HBShared pi) →
+   ps = ps'
 }.
+
+Ltac simplify_bij :=
+  repeat (simplify_eq; match goal with
+         | H1 : hb_bij ?bij !! ?ps1 = Some (HBShared ?pi),
+             H2 : hb_bij ?bij !! ?ps2 = Some (HBShared ?pi) |- _ =>
+             pose proof (hb_iff bij pi ps1 ps2 H1 H2); clear H2
+         end); simplify_eq.
 
 Global Program Instance heap_bij_empty : Empty heap_bij := HeapBij ∅ _.
 Next Obligation. set_solver. Qed.
@@ -55,22 +100,22 @@ Program Definition heap_bij_add_shared (p1 p2 : prov) (bij : heap_bij)
         (H : p1 ∉ hb_shared_provs bij) :=
   HeapBij (<[p2 := HBShared p1]> (hb_bij bij)) _.
 Next Obligation.
-  move => ??? Hnotin ????.
+  move => ??? Hnotin ???.
   rewrite !lookup_insert_Some => ??. destruct_all?; simplify_eq/= => //. 3: by apply: hb_iff.
-  all: split => ?; simplify_eq; contradict Hnotin; apply elem_of_hb_shared_provs; naive_solver.
+  all: simplify_eq; contradict Hnotin; apply elem_of_hb_shared_provs; naive_solver.
 Qed.
 
 Program Definition heap_bij_update_const (p : prov) (h : gmap loc val) (bij : heap_bij) :=
   HeapBij (<[p := HBConstant (λ o, h !! (p, o))]> (hb_bij bij)) _.
 Next Obligation.
-  move => ???????.
+  move => ??????.
   rewrite !lookup_insert_Some => ??. destruct_all?; simplify_eq/= => //. by apply: hb_iff.
 Qed.
 
 Program Definition heap_bij_delete_prov (p : prov) (bij : heap_bij) :=
   HeapBij (delete p (hb_bij bij)) _.
 Next Obligation.
-  move => ??????.
+  move => ?????.
   rewrite !lookup_delete_Some => ??. destruct_all?; simplify_eq/= => //. by apply: hb_iff.
 Qed.
 
@@ -88,180 +133,180 @@ Proof.
   setoid_rewrite lookup_insert_Some. naive_solver.
 Qed.
 
-(* Global Instance heap_bij_subseteq : SubsetEq heap_bij := *)
-  (* λ bij1 bij2, ∀ p1 p2, hb_bij bij1 !! p2 = Some (HBShared p1) → hb_bij bij2 !! p2 = Some (HBShared p1). *)
+Definition heap_bij_auth (bij : heap_bij) : uPred heap_bijUR :=
+  uPred_ownM (gmap_view_auth (DfracOwn 1) (hb_bij bij)).
 
-Definition heap_bij_auth (bij : heap_bij) : heap_bijUR :=
-  gmap_view_auth (DfracOwn 1) (hb_bij bij).
+Definition heap_bij_shared (p1 p2 : prov) : uPred (heap_bijUR) :=
+  uPred_ownM (gmap_view_frag p2 DfracDiscarded (HBShared p1)).
 
-Definition heap_bij_shared (p1 p2 : prov) : heap_bijUR :=
-  gmap_view_frag p2 DfracDiscarded (HBShared p1).
-
-Definition heap_bij_const (p : prov) (f : Z → option val) : heap_bijUR :=
-  gmap_view_frag p (DfracOwn 1) (HBConstant f).
+Definition heap_bij_const (p : prov) (f : Z → option val) : uPred (heap_bijUR) :=
+  uPred_ownM (gmap_view_frag p (DfracOwn 1) (HBConstant f)).
 
 Lemma heap_bij_alloc_shared bij p1 p2 H:
   p2 ∉ dom (gset _) (hb_bij bij) →
-  heap_bij_auth bij ~~> heap_bij_auth (heap_bij_add_shared p1 p2 bij H) ⋅ heap_bij_shared p1 p2.
-Proof. move => ?. apply gmap_view_alloc; [|done]. by apply not_elem_of_dom. Qed.
+  heap_bij_auth bij ==∗ heap_bij_auth (heap_bij_add_shared p1 p2 bij H) ∗ heap_bij_shared p1 p2.
+Proof.
+  move => ?. rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update. apply gmap_view_alloc; [|done].
+  by apply not_elem_of_dom.
+Qed.
 
 Lemma heap_bij_shared_lookup p1 p2 bij :
-  ✓ (heap_bij_auth bij ⋅ heap_bij_shared p1 p2) →
+  satisfiable (heap_bij_auth bij ∗ heap_bij_shared p1 p2) →
   hb_bij bij !! p2 = Some (HBShared p1).
-Proof. move => /gmap_view_both_valid_L. naive_solver. Qed.
+Proof.
+  rewrite -uPred.ownM_op => /satisfiable_valid/cmra_discrete_valid/gmap_view_both_valid_L. naive_solver.
+Qed.
 
 Lemma heap_bij_alloc_const bij p h:
   p ∉ dom (gset _) (hb_bij bij) →
-  heap_bij_auth bij ~~> heap_bij_auth (heap_bij_update_const p h bij) ⋅ heap_bij_const p (λ o, h !! (p, o)).
-Proof. move => ?. apply gmap_view_alloc; [|done]. by apply not_elem_of_dom. Qed.
+  heap_bij_auth bij ==∗ heap_bij_auth (heap_bij_update_const p h bij) ∗ heap_bij_const p (λ o, h !! (p, o)).
+Proof.
+  move => ?. rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update. apply gmap_view_alloc; [|done].
+  by apply not_elem_of_dom.
+Qed.
 
 Lemma heap_bij_const_lookup p f bij :
-  ✓ (heap_bij_auth bij ⋅ heap_bij_const p f) →
+  satisfiable (heap_bij_auth bij ∗ heap_bij_const p f) →
   hb_bij bij !! p = Some (HBConstant f).
-Proof. move => /gmap_view_both_valid_L. naive_solver. Qed.
+Proof.
+  rewrite -uPred.ownM_op => /satisfiable_valid/cmra_discrete_valid/gmap_view_both_valid_L. naive_solver.
+Qed.
 
 Lemma heap_bij_frag_update_const bij p f h:
-  heap_bij_auth bij ⋅ heap_bij_const p f ~~>
-  heap_bij_auth (heap_bij_update_const p h bij) ⋅ heap_bij_const p (λ o, h !! (p, o)).
-Proof. apply gmap_view_update. Qed.
+  heap_bij_auth bij ∗ heap_bij_const p f ==∗
+  heap_bij_auth (heap_bij_update_const p h bij) ∗ heap_bij_const p (λ o, h !! (p, o)).
+Proof. rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update. apply gmap_view_update. Qed.
 
 (** ** val_in_bij *)
-Definition val_in_bij (r : heap_bijUR) (v1 v2 : val) : Prop :=
+Definition val_in_bij (v1 v2 : val) : uPred heap_bijUR :=
   match v1, v2 with
-  | ValNum n1, ValNum n2 => n1 = n2
-  | ValBool b1, ValBool b2 => b1 = b2
-  | ValLoc l1, ValLoc l2 => heap_bij_shared l1.1 l2.1 ≼ r /\ l1.2 = l2.2
+  | ValNum n1, ValNum n2 => ⌜n1 = n2⌝
+  | ValBool b1, ValBool b2 => ⌜b1 = b2⌝
+  | ValLoc l1, ValLoc l2 => ⌜l1.2 = l2.2⌝ ∗ heap_bij_shared l1.1 l2.1
   | _, _ => False
   end.
 
-Lemma val_in_bij_mono r r' v1 v2:
-  val_in_bij r v1 v2 →
-  core r ≼ r' →
-  val_in_bij r' v1 v2.
-Proof.
-  destruct v1, v2 => //=. move => [??] ?. split; [|done].
-  rewrite -(core_id_core (heap_bij_shared _ _)).
-  etrans; [|done]. by apply cmra_core_mono.
-Qed.
+Global Instance val_in_bij_Persistent v1 v2 : Persistent (val_in_bij v1 v2).
+Proof. destruct v1, v2 => /=; apply _. Qed.
 
 (** ** expr_in_bij *)
-Fixpoint expr_in_bij (r : heap_bijUR) (e1 e2 : expr) {struct e1} : Prop :=
+Fixpoint expr_in_bij (e1 e2 : expr) {struct e1} : uPred heap_bijUR :=
   match e1, e2 with
-  | Var v, Var v' => v = v'
-  | Val v, Val v' => val_in_bij r v v'
-  | BinOp e1 o e2, BinOp e1' o' e2' => o = o' ∧ expr_in_bij r e1 e1' ∧ expr_in_bij r e2 e2'
-  | Load e, Load e' => expr_in_bij r e e'
-  | Store e1 e2, Store e1' e2' => expr_in_bij r e1 e1' ∧ expr_in_bij r e2 e2'
-  | Alloc e, Alloc e' => expr_in_bij r e e'
-  | Free e, Free e' => expr_in_bij r e e'
-  | If e e1 e2, If e' e1' e2' => expr_in_bij r e e' ∧ expr_in_bij r e1 e1' ∧ expr_in_bij r e2 e2'
-  | LetE v e1 e2, LetE v' e1' e2' => v = v' ∧ expr_in_bij r e1 e1' ∧ expr_in_bij r e2 e2'
-  | Call f args, Call f' args' => f = f' ∧ length args = length args' ∧
-                                   Forall id (zip_with (expr_in_bij r) args args')
+  | Var v, Var v' => ⌜v = v'⌝
+  | Val v, Val v' => val_in_bij v v'
+  | BinOp e1 o e2, BinOp e1' o' e2' => ⌜o = o'⌝ ∗ expr_in_bij e1 e1' ∗ expr_in_bij e2 e2'
+  | Load e, Load e' => expr_in_bij e e'
+  | Store e1 e2, Store e1' e2' => expr_in_bij e1 e1' ∗ expr_in_bij e2 e2'
+  | Alloc e, Alloc e' => expr_in_bij e e'
+  | Free e, Free e' => expr_in_bij e e'
+  | If e e1 e2, If e' e1' e2' => expr_in_bij e e' ∗ expr_in_bij e1 e1' ∗ expr_in_bij e2 e2'
+  | LetE v e1 e2, LetE v' e1' e2' => ⌜v = v'⌝ ∗ expr_in_bij e1 e1' ∗ expr_in_bij e2 e2'
+  | Call f args, Call f' args' => ⌜f = f'⌝ ∗ ⌜length args = length args'⌝ ∗
+        [∗] zip_with expr_in_bij args args'
   | UbE, UbE => True
-  | ReturnExt b e, ReturnExt b' e' => b = b' ∧ expr_in_bij r e e'
-  | Waiting b, Waiting b' => b = b'
+  | ReturnExt b e, ReturnExt b' e' => ⌜b = b'⌝ ∗ expr_in_bij e e'
+  | Waiting b, Waiting b' => ⌜b = b'⌝
   | _, _ => False
   end.
 
-Lemma Forall2_bij_val_inv_l r vl el :
-  Forall2 (expr_in_bij r) (Val <$> vl) el →
-  ∃ vl', el = Val <$> vl' ∧ Forall2 (val_in_bij r) vl vl'.
+Global Instance expr_in_bij_Persistent e1 e2 : Persistent (expr_in_bij e1 e2).
 Proof.
-  elim: vl el; csimpl. { move => ? /Forall2_nil_inv_l->. by eexists []. }
-  move => ?? IH ? /(Forall2_cons_inv_l _ _)[v' [?[?[/IH[?[??]]?]]]]; subst.
-  destruct v' => //. eexists (_::_). split; [done|]. by econs.
+  revert e2. induction e1 => e2; destruct e2 => /=; try apply _.
+  apply bi.sep_persistent; [apply _ |].
+  apply bi.sep_persistent; [apply _ |].
+  apply big_sepL_persistent_id. apply TCForall_Forall.
+  apply: Forall_zip_with_fst; [done|]. apply Forall_forall.
+  naive_solver.
 Qed.
 
-Lemma Forall2_bij_val_inv_r r vl el :
-  Forall2 (expr_in_bij r) el (Val <$> vl) →
-  ∃ vl', el = Val <$> vl' ∧ Forall2 (val_in_bij r) vl' vl.
+(* Lemma Forall2_bij_val_inv_l r vl el : *)
+(*   Forall2 (expr_in_bij r) (Val <$> vl) el → *)
+(*   ∃ vl', el = Val <$> vl' ∧ Forall2 (val_in_bij r) vl vl'. *)
+(* Proof. *)
+(*   elim: vl el; csimpl. { move => ? /Forall2_nil_inv_l->. by eexists []. } *)
+(*   move => ?? IH ? /(Forall2_cons_inv_l _ _)[v' [?[?[/IH[?[??]]?]]]]; subst. *)
+(*   destruct v' => //. eexists (_::_). split; [done|]. by econs. *)
+(* Qed. *)
+
+(* Lemma Forall2_bij_val_inv_r r vl el : *)
+(*   Forall2 (expr_in_bij r) el (Val <$> vl) → *)
+(*   ∃ vl', el = Val <$> vl' ∧ Forall2 (val_in_bij r) vl' vl. *)
+(* Proof. *)
+(*   elim: vl el; csimpl. { move => ? /Forall2_nil_inv_r->. by eexists []. } *)
+(*   move => ?? IH ? /(Forall2_cons_inv_r _ _ _ _) [v' [?[?[/IH[?[??]] ?]]]]; subst. *)
+(*   destruct v' => //. eexists (_::_). split; [done|]. by econs. *)
+(* Qed. *)
+
+Lemma expr_in_bij_subst x v e v' e':
+  expr_in_bij e e' -∗
+  val_in_bij v v' -∗
+  expr_in_bij (subst x v e) (subst x v' e').
 Proof.
-  elim: vl el; csimpl. { move => ? /Forall2_nil_inv_r->. by eexists []. }
-  move => ?? IH ? /(Forall2_cons_inv_r _ _ _ _) [v' [?[?[/IH[?[??]] ?]]]]; subst.
-  destruct v' => //. eexists (_::_). split; [done|]. by econs.
+  revert e'. induction e; iIntros (e') "#He #Hv"; destruct e' => //=; iDestruct!.
+  all: repeat iSplit => //.
+  all: rewrite ?fmap_length //; try case_bool_decide => //.
+  all: try by [iApply IHe]; try by [iApply IHe1]; try by [iApply IHe2]; try by [iApply IHe3].
+  rewrite !big_sepL_zip_with. rewrite big_sepL_fmap.
+  iApply big_sepL_impl; [done|].
+  iIntros "!>" (?? ?) "#?". rewrite list_lookup_fmap. case_match => //=.
+  revert select (Forall _ _) => /Forall_forall IH. iApply IH => //. apply elem_of_list_lookup.
+  naive_solver.
 Qed.
 
-Lemma expr_in_bij_mono r r' e1 e2:
-  expr_in_bij r e1 e2 →
-  core r ≼ r' →
-  expr_in_bij r' e1 e2.
-Proof.
-  elim: e1 e2 => //=*; repeat case_match => //; try naive_solver (eauto using val_in_bij_mono).
-  destruct_all?; simplify_eq. split!.
-  revert select (Forall id _). generalize dependent args.
-  revert select (Forall _ _). elim. { by case. }
-  move => ????? []//=??? *; decompose_Forall_hyps. econs; naive_solver.
-Qed.
-
-Lemma expr_in_bij_subst r x v e v' e':
-  expr_in_bij r e e' →
-  val_in_bij r v v' →
-  expr_in_bij r (subst x v e) (subst x v' e').
-Proof.
-  elim: e e' => //= *; repeat (case_match => //); simplify_eq/=; repeat case_bool_decide => //; try naive_solver.
-  destruct_all?. rewrite !fmap_length. split!.
-  revert select (Forall _ _). generalize dependent args.
-  revert select (Forall _ _). elim. { by case. }
-  move => ????? []//=??? /(Forall_cons_1 _ _)[??]. econs; naive_solver.
-Qed.
-
-Lemma expr_in_bij_subst_l r xs vs e vs' e':
-  expr_in_bij r e e' →
-  Forall2 (val_in_bij r) vs vs' →
+Lemma expr_in_bij_subst_l xs vs e vs' e':
   length xs = length vs →
-  expr_in_bij r (subst_l xs vs e) (subst_l xs vs' e').
+  expr_in_bij e e' -∗
+  ([∗ list] v;v'∈vs;vs', val_in_bij v v') -∗
+  expr_in_bij (subst_l xs vs e) (subst_l xs vs' e').
 Proof.
-  move => He Hall. elim: Hall xs e e' He. { by case. }
-  move => ?????? IH []//=??????. apply: IH; [|lia]. by apply expr_in_bij_subst.
+  iIntros (Hlen) "He Hv".
+  iInduction xs as [] "IH" forall(vs vs' e e' Hlen); destruct vs, vs'; simplify_eq/= => //.
+  iDestruct "Hv" as "[Hv Hvs]".
+  iApply ("IH" with "[//] [He Hv] Hvs").
+  iApply (expr_in_bij_subst with "He Hv").
 Qed.
 
-Lemma expr_in_bij_static r e:
+Lemma expr_in_bij_static e:
   static_expr false e →
-  expr_in_bij r e e.
+  ⊢ expr_in_bij e e.
 Proof.
-  elim: e => //=; try naive_solver. { by case. }
-  move => ?? IH Hb. split!.
-  elim: IH Hb => //=; econs; naive_solver.
+  elim: e => //=; try naive_solver. { case => //= *; by iPureIntro. }
+  move => ?? IH Hb. iSplit; [done|]. iSplit; [done|]. iStopProof.
+  elim: IH Hb => //= ?? Hs ? IH ?. iIntros "_". iSplit.
+  - iApply Hs; naive_solver.
+  - iApply IH; naive_solver.
 Qed.
 
 (** ** ectx_in_bij *)
-Definition ectx_item_in_bij (r : heap_bijUR) (Ki Ki' : expr_ectx) : Prop :=
+Definition ectx_item_in_bij (Ki Ki' : expr_ectx) : uPred heap_bijUR :=
   match Ki, Ki' with
-  | BinOpLCtx op e2, BinOpLCtx op' e2' => op = op' ∧ expr_in_bij r e2 e2'
-  | BinOpRCtx v1 op, BinOpRCtx v1' op' => op = op' ∧ val_in_bij r v1 v1'
+  | BinOpLCtx op e2, BinOpLCtx op' e2' => ⌜op = op'⌝ ∗ expr_in_bij e2 e2'
+  | BinOpRCtx v1 op, BinOpRCtx v1' op' => ⌜op = op'⌝ ∗ val_in_bij v1 v1'
   | LoadCtx, LoadCtx => True
-  | StoreLCtx e2, StoreLCtx e2' => expr_in_bij r e2 e2'
-  | StoreRCtx v1, StoreRCtx v1' => val_in_bij r v1 v1'
+  | StoreLCtx e2, StoreLCtx e2' => expr_in_bij e2 e2'
+  | StoreRCtx v1, StoreRCtx v1' => val_in_bij v1 v1'
   | AllocCtx, AllocCtx => True
   | FreeCtx, FreeCtx => True
-  | IfCtx e2 e3, IfCtx e2' e3' => expr_in_bij r e2 e2' ∧ expr_in_bij r e3 e3'
-  | LetECtx v e2, LetECtx v' e2' => v = v' ∧ expr_in_bij r e2 e2'
-  | CallCtx f vl el, CallCtx f' vl' el' => f = f' ∧ Forall2 (val_in_bij r) vl vl' ∧
-                                            Forall2 (expr_in_bij r) el el'
-  | ReturnExtCtx b, ReturnExtCtx b' => b = b'
+  | IfCtx e2 e3, IfCtx e2' e3' => expr_in_bij e2 e2' ∗ expr_in_bij e3 e3'
+  | LetECtx v e2, LetECtx v' e2' => ⌜v = v'⌝ ∗ expr_in_bij e2 e2'
+  | CallCtx f vl el, CallCtx f' vl' el' =>
+      ⌜f = f'⌝ ∗ ([∗ list] v;v'∈vl;vl', val_in_bij v v') ∗ [∗ list] e;e'∈el;el', expr_in_bij e e'
+  | ReturnExtCtx b, ReturnExtCtx b' => ⌜b = b'⌝
   | _, _ => False
   end.
 
-Definition ectx_in_bij (r : heap_bijUR) (K1 K2 : list expr_ectx) : Prop :=
-  Forall2 (ectx_item_in_bij r) K1 K2.
+Definition ectx_in_bij (K1 K2 : list expr_ectx) : uPred heap_bijUR :=
+  [∗ list] Ki1;Ki2∈K1;K2, ectx_item_in_bij Ki1 Ki2.
 
-Lemma ectx_item_in_bij_mono r r' K1 K2:
-  ectx_item_in_bij r K1 K2 →
-  core r ≼ r' →
-  ectx_item_in_bij r' K1 K2.
-Proof.
-  destruct K1, K2 => //=; try naive_solver (eauto using expr_in_bij_mono, val_in_bij_mono).
-  move => [?[??]] ?. split_and!; [done|..].
-  all: apply: Forall2_impl; [done|]; eauto using expr_in_bij_mono, val_in_bij_mono.
-Qed.
+Global Instance ectx_item_in_bij_persistent Ki Ki' :
+  Persistent (ectx_item_in_bij Ki Ki').
+Proof. destruct Ki, Ki' => /=; apply _. Qed.
 
-Lemma ectx_in_bij_mono r r' K1 K2:
-  ectx_in_bij r K1 K2 →
-  core r ≼ r' →
-  ectx_in_bij r' K1 K2.
-Proof. move => ??. apply: Forall2_impl; [done|]. move => *; by apply: ectx_item_in_bij_mono.  Qed.
+Global Instance ectx_in_bij_persistent K K' :
+  Persistent (ectx_in_bij K K').
+Proof. destruct K, K' => /=; apply _. Qed.
 
+(*
 Lemma ectx_in_bij_cons r Ki K Ki' K':
   ectx_in_bij r (Ki :: K) (Ki' :: K') ↔ ectx_item_in_bij r Ki Ki' ∧ ectx_in_bij r K K'.
 Proof. apply Forall2_cons. Qed.
@@ -297,176 +342,184 @@ Proof.
   move => Ki1 K1 IH ??? /(Forall2_cons_inv_l _ _)[Ki2 [K2 [?[??]]]] ?; subst => /=.
   apply: IH; [done|]. by apply expr_in_bij_fill_item_2.
 Qed.
+*)
 
-Lemma expr_in_bij_fill_item_l r Ki e1 e2 :
-  expr_in_bij r (expr_fill_item Ki e1) e2 →
-  ∃ Ki' e', e2 = expr_fill_item Ki' e' ∧ ectx_item_in_bij r Ki Ki' ∧ expr_in_bij r e1 e'.
+Lemma expr_in_bij_fill_item_l Ki e1 e2 :
+  expr_in_bij (expr_fill_item Ki e1) e2 -∗
+  ∃ Ki' e', ⌜e2 = expr_fill_item Ki' e'⌝ ∗ ectx_item_in_bij Ki Ki' ∗ expr_in_bij e1 e'.
 Proof.
-  destruct Ki, e2 => //= *; destruct_all?; simplify_eq; try case_match => //; simplify_eq. 10: {
-    revert select (Forall _ _) => /Forall_zip_with_1 Hall.
-    move: (Hall ltac:(done)) => /Forall2_app_inv_l[?[?[Hv[/(Forall2_cons_inv_l _ _)[?[?[?[??]]]]?]]]]. simplify_eq.
-    move: Hv => /Forall2_bij_val_inv_l[?[??]]. simplify_eq.
-    by eexists (CallCtx _ _ _), _.
+  iIntros "He".
+  destruct Ki, e2 => //=; iDestruct!; destruct_all?; simplify_eq; try case_match => //; simplify_eq. 10: {
+    revert select (length _ = length _). rewrite app_length fmap_length/= => ?.
+    rewrite big_sepL_zip_with big_sepL_app big_sepL_fmap /=. iDestruct select (_ ∗ _)%I as "[Hv [He Hel]]".
+    iAssert (⌜∀ i, args !! i = ((Val <$> (((default inhabitant) ∘ to_val) <$> (take (length vl) args)))
+                       ++ (drop (length vl) args)) !! i⌝)%I as %Hargs%list_eq. {
+      iIntros (i). destruct (decide (i < length vl)) as [Hlt|].
+      - move: (Hlt) => /lookup_lt_is_Some_2[??].
+        have /lookup_lt_is_Some_2[a ?] : i < length args by lia.
+        rewrite lookup_app_l ?fmap_length ?take_length; [|lia]. rewrite !list_lookup_fmap.
+        rewrite lookup_take; [|lia].
+        iDestruct (big_sepL_lookup with "Hv") as "?"; [done|]. simplify_option_eq. destruct a => //.
+      - admit.
+    }
+    rewrite fmap_length Nat.add_0_r.
+    have /lookup_lt_is_Some_2[a ?] : length vl < length args by lia. simplify_option_eq.
+    iExists (CallCtx _ _ _), _.
+    iSplit!. { etrans; [done|]. f_equal. by erewrite drop_S. }
+    admit.
+    admit.
+    done.
   }
-  all: (unshelve eexists _); [econs; shelve| naive_solver].
-Qed.
+  all: (unshelve iExists _); [econs; shelve| naive_solver].
+Admitted.
 
-Lemma expr_in_bij_fill_l r K e1 e2 :
-  expr_in_bij r (expr_fill K e1) e2 →
-  ∃ K' e', e2 = expr_fill K' e' ∧ ectx_in_bij r K K' ∧ expr_in_bij r e1 e'.
+Lemma expr_in_bij_fill_l K e1 e2 :
+  expr_in_bij (expr_fill K e1) e2 -∗
+  ∃ K' e', ⌜e2 = expr_fill K' e'⌝ ∗ ectx_in_bij K K' ∗ expr_in_bij e1 e'.
 Proof.
-  elim: K e1 e2 => /=. { move => *. eexists [], _. split!. econs. }
-  move => Ki K IH e1 e2 /IH[K'[?[?[?/expr_in_bij_fill_item_l?]]]].
-  destruct_all?; simplify_eq. eexists (_ :: _), _ => /=. split_and!; [done| |done].
-  by econs.
+  elim: K e1 e2 => /=. { iIntros. iExists []. iSplit!. unfold ectx_in_bij. done. }
+  move => Ki K IH e1 e2. iIntros "He".
+  iDestruct (IH with "He") as (???) "[HK He]"; subst.
+  iDestruct (expr_in_bij_fill_item_l with "[$]") as (???) "[??]"; subst.
+  iExists (_::_). iSplit! => //; iFrame.
 Qed.
 
-Lemma eval_binop_bij o v1 v2 v1' v2' v r:
+Lemma eval_binop_bij o v1 v2 v1' v2' v:
   eval_binop o v1 v2 = Some v →
-  val_in_bij r v1' v1 →
-  val_in_bij r v2' v2 →
-  ∃ v', eval_binop o v1' v2' = Some v' ∧
-       val_in_bij r v' v.
+  val_in_bij v1' v1 -∗
+  val_in_bij v2' v2 -∗
+  ∃ v', ⌜eval_binop o v1' v2' = Some v'⌝ ∗ val_in_bij v' v.
 Proof.
-  destruct o, v1, v2, v1', v2' => //= *; destruct_all?; simplify_eq. all: split!.
+  iIntros (?) "??".
+  destruct o, v1, v2, v1', v2' => //= *; iDestruct!; iSplit!.
   lia.
 Qed.
 
 (** *** heap_in_bij *)
-Definition heap_in_bij (bij : heap_bij) (r : heap_bijUR) (h h' : heap_state) : Prop :=
+Definition heap_in_bij (bij : heap_bij) (h h' : heap_state) : uPred heap_bijUR :=
   ∀ p1 p2 o,
-  hb_bij bij !! p2 = Some (HBShared p1) →
+  ⌜hb_bij bij !! p2 = Some (HBShared p1)⌝ -∗
 
-  (is_Some (h.(h_heap) !! (p1, o)) ↔ is_Some (h'.(h_heap) !! (p2, o)))
-  /\
+  ⌜(is_Some (h.(h_heap) !! (p1, o)) ↔ is_Some (h'.(h_heap) !! (p2, o)))⌝
+  ∗
   ∀ v1 v2,
-  h.(h_heap)  !! (p1, o) = Some v1 →
-  h'.(h_heap) !! (p2, o) = Some v2 →
-  val_in_bij r v1 v2.
+  ⌜h.(h_heap)  !! (p1, o) = Some v1⌝ -∗
+  ⌜h'.(h_heap) !! (p2, o) = Some v2⌝ -∗
+  val_in_bij v1 v2.
 
-Lemma heap_in_bij_mono bij r r' h h':
-  heap_in_bij bij r h h' →
-  core r ≼ r' →
-  heap_in_bij bij r' h h'.
-Proof.
-  move => Hbij ? ????. split; [by apply Hbij|].
-  move => ????. apply: val_in_bij_mono; [|done].
-  by eapply Hbij.
-Qed.
+Global Instance heap_in_bij_Persitent bij h h': Persistent (heap_in_bij bij h h').
+Proof. apply _. Qed.
 
-Lemma heap_in_bij_mono_bij bij bij' r h h':
-  heap_in_bij bij r h h' →
+Lemma heap_in_bij_mono_bij bij bij' h h':
   (∀ p1 p2, hb_bij bij' !! p2 = Some (HBShared p1) → hb_bij bij !! p2 = Some (HBShared p1)) →
-  heap_in_bij bij' r h h'.
-Proof. unfold heap_in_bij => Hp ?????. apply: Hp. naive_solver. Qed.
+  heap_in_bij bij  h h' -∗
+  heap_in_bij bij' h h'.
+Proof. iIntros (?) "Hh". iIntros (????). iApply "Hh". iPureIntro. naive_solver. Qed.
 
-Lemma heap_in_bij_alive bij r h1 h2 l1 l2:
-  heap_in_bij bij r h1 h2 →
+Lemma heap_in_bij_alive bij h1 h2 l1 l2:
   heap_alive h2 l2 →
   hb_bij bij !! l2.1 = Some (HBShared l1.1) →
   l1.2 = l2.2 →
-  heap_alive h1 l1.
+  heap_in_bij bij h1 h2 -∗
+  ⌜heap_alive h1 l1⌝.
 Proof.
-  move => ? Hbij ??. destruct l1 as [p1 ?], l2 as [p2 o]; simplify_eq/=.
-  unfold heap_in_bij, heap_alive in *. naive_solver.
+  iIntros (???) "Hh". destruct l1 as [p1 ?], l2 as [p2 o]; simplify_eq/=.
+  unfold heap_in_bij, heap_alive in *. iDestruct ("Hh" with "[//]") as "[% ?]".
+  iPureIntro. naive_solver.
 Qed.
 
-Lemma heap_in_bij_lookup bij r h1 h2 l1 l2 v:
+Lemma heap_in_bij_lookup bij h1 h2 l1 l2 v:
   h_heap h2 !! l2 = Some v →
-  heap_in_bij bij r h1 h2 →
   hb_bij bij !! l2.1 = Some (HBShared l1.1) →
   l1.2 = l2.2 →
-  ∃ v', h_heap h1 !! l1 = Some v' ∧ val_in_bij r v' v.
+  heap_in_bij bij h1 h2 -∗
+  ∃ v', ⌜h_heap h1 !! l1 = Some v'⌝ ∗ val_in_bij v' v.
 Proof.
-  move => ? Hbij ??. destruct l1 as [p1 ?], l2 as [p2 o]; simplify_eq/=.
-  have [[? H2]?]:= Hbij _ _ o ltac:(done).
-  have [??]:= H2 ltac:(done).
-  naive_solver.
+  iIntros (???) "Hh". destruct l1 as [p1 ?], l2 as [p2 o]; simplify_eq/=.
+  iDestruct ("Hh" with "[//]") as "[%Hx Hv]". move: Hx => [_ Hx].
+  have [??]:= Hx ltac:(done). iSplit!. by iApply "Hv".
 Qed.
 
-Lemma heap_in_bij_update bij r h1 h2 l1 l2 v1 v2:
-  heap_in_bij bij r h1 h2 →
-  val_in_bij r v1 v2 →
+Lemma heap_in_bij_update bij h1 h2 l1 l2 v1 v2:
   hb_bij bij !! l2.1 = Some (HBShared l1.1) →
   l1.2 = l2.2 →
-  heap_in_bij bij r (heap_update h1 l1 v1) (heap_update h2 l2 v2).
+  heap_in_bij bij h1 h2 -∗
+  val_in_bij v1 v2 -∗
+  heap_in_bij bij (heap_update h1 l1 v1) (heap_update h2 l2 v2).
 Proof.
-  move => Hbij ???. destruct l1 as [p1 ?], l2 as [p2 o]; simplify_eq/=.
-  move => p1' p2' o' /=?. have : p1 = p1' ↔ p2 = p2' by apply: hb_iff.
-  split.
-  - rewrite !lookup_alter_is_Some. by apply Hbij.
-  - move => ?? /lookup_alter_Some[[?[?[??]]]|[??]] /lookup_alter_Some[[?[?[??]]]|[??]]; simplify_eq.
-    all: try by eapply Hbij. all: naive_solver.
+  iIntros (??) "Hh Hv". destruct l1 as [p1 ?], l2 as [p2 o]; simplify_eq/=.
+  iIntros (p1' p2' o' ?) => /=. iDestruct ("Hh" with "[//]") as "[%Hh1 Hh2]". iSplit.
+  - iPureIntro. by rewrite !lookup_alter_is_Some.
+  - iIntros (???%lookup_alter_Some?%lookup_alter_Some); destruct_all?; simplify_bij => //.
+    by iApply "Hh2".
 Qed.
 
-Lemma heap_in_bij_update_r bij r h1 h2 l2 v2:
-  heap_in_bij bij r h1 h2 →
+Lemma heap_in_bij_update_r bij h1 h2 l2 v2:
   (∀ p, hb_bij bij !! l2.1 = Some (HBShared p) → False) →
-  heap_in_bij bij r h1 (heap_update h2 l2 v2).
+  heap_in_bij bij h1 h2 -∗
+  heap_in_bij bij h1 (heap_update h2 l2 v2).
 Proof.
-  move => Hbij Hin ? ??? /=.
-  rewrite !lookup_alter_ne. 1: by apply Hbij.
+  iIntros (?) "Hh". iIntros (????).
+  rewrite !lookup_alter_ne. 1: by iApply "Hh".
   naive_solver.
 Qed.
 
-Lemma heap_in_bij_alloc l1 l2 hi hs n bij r H:
-  heap_in_bij bij r hi hs →
+Lemma heap_in_bij_alloc l1 l2 hi hs n bij H:
   heap_is_fresh hi l1 →
   heap_is_fresh hs l2 →
-  heap_in_bij (heap_bij_add_shared l1.1 l2.1 bij H) r (heap_alloc hi l1 n) (heap_alloc hs l2 n).
+  heap_in_bij bij hi hs -∗
+  heap_in_bij (heap_bij_add_shared l1.1 l2.1 bij H) (heap_alloc hi l1 n) (heap_alloc hs l2 n).
 Proof.
-  move => /= Hbij [Hi1 ?] [Hi2 ?]  p1 p2 o /= /lookup_insert_Some[[??]|[??]]; simplify_eq.
+  iIntros ([Hi1 ?] [Hi2 ?]) "Hh". iIntros (p1 p2 o) => /=. iIntros ([[??]|[??]]%lookup_insert_Some); simplify_eq.
   - destruct l1 as [p1 ?], l2 as [p2 ?]; simplify_eq/=.
     rewrite !lookup_union_l'.
     2: { apply eq_None_ne_Some => ??. apply Hi2. by apply: (heap_wf _ (_, _)). }
     2: { apply eq_None_ne_Some => ??. apply Hi1. by apply: (heap_wf _ (_, _)). }
-    split.
-    + rewrite !list_to_map_lookup_is_Some. f_equiv => ?. rewrite !elem_of_list_fmap.
+    iSplit.
+    + iPureIntro. rewrite !list_to_map_lookup_is_Some. f_equiv => ?. rewrite !elem_of_list_fmap.
       f_equiv => ?. naive_solver.
-    + move => ?? /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap[?[??]].
-      move => /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap[?[??]]. by simplify_eq/=.
-  -
-    have ? : p1 ≠ l1.1. { contradict H. apply elem_of_hb_shared_provs. naive_solver. }
-    (* have ? : p2 ≠ l2.1 by contradict H2; set_unfold; left; left; eexists (_, _); naive_solver. *)
-    have [Hbij1 Hbij2]:= Hbij p1 p2 o ltac:(set_solver).
-    rewrite !lookup_union_r.
-    2, 3: apply not_elem_of_list_to_map_1;
+    + iIntros (?? [?[??]]%elem_of_list_to_map_2%elem_of_list_fmap).
+      iIntros ([?[??]]%elem_of_list_to_map_2%elem_of_list_fmap).
+      by simplify_eq.
+  - have ? : p1 ≠ l1.1. { contradict H. apply elem_of_hb_shared_provs. naive_solver. }
+    iDestruct ("Hh" with "[//]") as "[Hh1 Hh2]".
+    rewrite !lookup_union_r. 1: by iSplit.
+    all: apply not_elem_of_list_to_map_1;
         move => /elem_of_list_fmap[[[??]?] [?/elem_of_list_fmap[?[??]]]]; simplify_eq/=.
-    split; [done|] => *. apply: val_in_bij_mono; [naive_solver|]. apply cmra_included_core.
 Qed.
 
-Lemma heap_in_bij_alloc_r l2 hi hs n bij r:
-  heap_in_bij bij r hi hs →
+Lemma heap_in_bij_alloc_r l2 hi hs n bij:
   (∀ p, hb_bij bij !! l2.1 = Some (HBShared p) → False) →
-  heap_in_bij bij r hi (heap_alloc hs l2 n).
+  heap_in_bij bij hi hs -∗
+  heap_in_bij bij hi (heap_alloc hs l2 n).
 Proof.
-  move => /= Hbij Hin ???? /=. rewrite lookup_union_r. 1: by apply Hbij.
+  iIntros (?) "Hh". iIntros (????). rewrite lookup_union_r. 1: by iApply "Hh".
   apply not_elem_of_list_to_map_1.
   move => /elem_of_list_fmap[[??][?/elem_of_list_fmap[?[??]]]]; simplify_eq/=.
   naive_solver.
 Qed.
 
-Lemma heap_in_bij_free r hi hs l1 l2 bij:
-  heap_in_bij bij r hi hs →
+Lemma heap_in_bij_free hi hs l1 l2 bij:
   hb_bij bij !! l2.1 = Some (HBShared l1.1) →
-  heap_in_bij bij r (heap_free hi l1) (heap_free hs l2).
+  heap_in_bij bij hi hs -∗
+  heap_in_bij bij (heap_free hi l1) (heap_free hs l2).
 Proof.
-  move => Hbij Hin p1 p2 o /=?.
-  have [Hbij1 Hbij2]:= Hbij p1 p2 o ltac:(done).
-  have ?: p1 = l1.1 ↔ p2 = l2.1 by apply: hb_iff.
-  split.
-  - rewrite !map_filter_lookup /=. destruct (h_heap hi !! (p1, o)), (h_heap hs !! (p2, o)) => //=.
-    all: repeat case_option_guard => //; naive_solver.
-  - move => ??. rewrite !map_filter_lookup => /bind_Some[?[??]] /bind_Some[?[??]].
-    repeat case_option_guard => //; naive_solver.
+  iIntros (?) "Hh". iIntros (p1 p2 o ?).
+  iDestruct ("Hh" $! p1 p2 o with "[//]") as "[%Hh1 Hh2]".
+  iSplit => /=.
+  - iPureIntro. rewrite !map_filter_lookup /=. destruct (h_heap hi !! (p1, o)), (h_heap hs !! (p2, o)) => //=.
+    all: repeat case_option_guard => //; simplify_bij; naive_solver.
+  - iIntros (??). rewrite !map_filter_lookup. iIntros ([?[??]]%bind_Some [?[??]]%bind_Some).
+    repeat case_option_guard => //; simplify_bij; try naive_solver.
+    by iApply "Hh2".
 Qed.
 
-Lemma heap_in_bij_free_r l2 hi hs bij r:
-  heap_in_bij bij r hi hs →
+Lemma heap_in_bij_free_r l2 hi hs bij:
   (∀ p, hb_bij bij !! l2.1 = Some (HBShared p) → False) →
-  heap_in_bij bij r hi (heap_free hs l2).
+  heap_in_bij bij hi hs -∗
+  heap_in_bij bij hi (heap_free hs l2).
 Proof.
-  move => /= Hbij Hin ???? /=. rewrite map_filter_lookup_true. 1: by apply Hbij.
+  iIntros (?) "Hh". iIntros (????) => /=. rewrite map_filter_lookup_true. 1: by iApply "Hh".
   naive_solver.
 Qed.
 
@@ -532,12 +585,9 @@ Definition imp_heap_bij_pre (e : imp_event) (s : unit) : prepost (imp_event * un
   pp_quant $ λ bij,
   pp_quant $ λ vsi,
   pp_quant $ λ hi,
-  pp_quant $ λ r',
-  pp_add (heap_bij_auth bij ⋅ r') $
+  pp_add (heap_bij_auth bij ∗ heap_in_bij bij ho hi ∗ [∗ list] v1;v2∈vals_of_event e.2; vsi, val_in_bij v1 v2) $
   (* TODO: should we also have the following for hi? We don't need it so far... *)
   pp_prop (hb_shared_provs bij ⊆ h_provs ho) $
-  pp_prop (Forall2 (val_in_bij r') (vals_of_event e.2) vsi) $
-  pp_prop (heap_in_bij bij r' ho hi) $
   pp_prop (heap_preserved bij hi) $
   pp_end ((e.1, event_set_vals_heap e.2 vsi hi), tt).
 
@@ -546,12 +596,9 @@ Definition imp_heap_bij_post (e : imp_event) (s : unit) : prepost (imp_event * u
   pp_quant $ λ bij,
   pp_quant $ λ vso,
   pp_quant $ λ ho,
-  pp_quant $ λ r',
-  pp_remove (heap_bij_auth bij ⋅ r') $
+  pp_remove (heap_bij_auth bij ∗ heap_in_bij bij ho hi ∗ [∗ list] v1;v2∈vso;vals_of_event e.2, val_in_bij v1 v2) $
   (* TODO: should we also have the following for hi? We don't need it so far... *)
   pp_prop (hb_shared_provs bij ⊆ h_provs ho) $
-  pp_prop (Forall2 (val_in_bij r') vso (vals_of_event e.2)) $
-  pp_prop (heap_in_bij bij r' ho hi) $
   pp_prop (heap_preserved bij hi) $
   pp_end ((e.1, event_set_vals_heap e.2 vso ho), tt).
 
@@ -559,11 +606,11 @@ Definition imp_heap_bij (m : module imp_event) : module imp_event :=
   mod_prepost imp_heap_bij_pre imp_heap_bij_post m.
 
 Definition initial_imp_heap_bij_state (m : module imp_event) (σ : m.(m_state)) :=
-  (@SMFilter imp_event, σ, (@PPOutside imp_event imp_event, tt, @ε heap_bijUR _)).
+  (@SMFilter imp_event, σ, (@PPOutside imp_event imp_event, tt, (True : uPred heap_bijUR)%I)).
 
 Local Ltac split_solve :=
   match goal with
-  | |- heap_in_bij ?p _ _ _ => is_evar p; eassumption
+  | |- heap_preserved ?p _ => is_evar p; eassumption
   | |- event_set_vals_heap _ _ _ = event_set_vals_heap _ _ _ => reflexivity
 (*   | |- ?a ⊆ ?b => *)
 (*       assert_fails (has_evar a); assert_fails (has_evar b); etrans; [eassumption|] *)
@@ -585,58 +632,56 @@ Lemma imp_heap_bij_combine fns1 fns2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m
 ).
 Proof.
   unshelve apply: mod_prepost_link. { exact
-      (λ ips s1 s2 s r1 r2 ics1 ics2, ics1 = ics2). }
+      (λ ips s1 s2 s _ _ ics1 ics2, ics1 = ics2). }
   { move => ?? [] /=*; naive_solver. }
   { by rewrite left_id. }
-  { by apply ucmra_unit_valid. }
+  { by apply satisfiable_pure_1. }
   { split!. }
-  all: move => [] [] [] r1 r2 ics1 ics2.
+  all: move => [] [] [] P1 P2 ics1 ics2.
   - move => e ics' e' /= ? ? *; destruct_all?; simplify_eq/=.
     split!.
-    { apply: cmra_valid_included; [done|]. apply cmra_mono_l. by apply cmra_included_l. }
-    { by rewrite assoc. }
+    { apply: satisfiable_mono; [done|]. iIntros!; iFrame. }
+    { iIntros!. iModIntro. iFrame. }
     { by destruct e. }
   - move => e ics' e' /= ? ? *; destruct_all?; simplify_eq/=.
     split!.
-    { apply: cmra_valid_included; [done|]. apply cmra_mono_l. by apply cmra_included_r. }
-    1: { rewrite assoc (comm _ r1) -!assoc. do 2 (apply cmra_update_op; [done|]). by rewrite comm. }
-    1: by destruct e.
+    { apply: satisfiable_mono; [done|]. iIntros!; iFrame. }
+    { iIntros!. iModIntro. iFrame. }
+    { by destruct e. }
   - move => [? e] /= ? Hr *; destruct_all?; simplify_eq/=.
-    split!.
-    1: { apply: cmra_update_valid; [|done]. apply cmra_update_op; [|done]. etrans; [done|].
-         apply cmra_update_op_l. }
+    revert select (_ ==∗ _) => Hbupd.
     all: rewrite ?heap_of_event_event_set_vals_heap; split!.
-    1: { rewrite vals_of_event_event_set_vals_heap //. by apply: Forall2_length. }
-    1: done.
-    all: split!.
-    1: { etrans; [by apply cmra_update_op|].
-         rewrite assoc. apply cmra_update_op; [|done].
-         rewrite comm. by apply cmra_update_op. }
-    1: by destruct e.
-    1: by destruct e.
+    split!.
+    { apply: satisfiable_bmono; [done|]. iIntros!. iMod (Hbupd with "[$]"). iModIntro.
+      iDestruct!. iDestruct (big_sepL2_length with "[$]") as %?. rewrite vals_of_event_event_set_vals_heap //.
+      iFrame. }
+    { iIntros. iDestruct!. iMod (Hbupd with "[$]"). iModIntro.
+      iDestruct!. iDestruct (big_sepL2_length with "[$]") as %?. rewrite vals_of_event_event_set_vals_heap //.
+      iFrame. }
+    { by destruct e. }
+    { by destruct e. }
   - move => [? e] /= *; destruct_all?; simplify_eq/=.
+    revert select (_ ==∗ _) => Hbupd.
     split!.
     1: by destruct e.
-    1: { etrans; [done|]. etrans; [by apply cmra_update_op|]. by rewrite assoc. }
+    1: { etrans; [done|]. iIntros ">[??]". iMod (Hbupd with "[$]"). iModIntro. by iFrame. }
   - move => [? e] /= ? *; destruct_all?; simplify_eq/=.
+    revert select (_ ==∗ _) => Hbupd.
     split!.
-    1: { apply: cmra_update_valid; [|done]. rewrite comm. apply cmra_update_op; [|done].
-         etrans; [done|]. apply cmra_update_op_l. }
     all: rewrite ?heap_of_event_event_set_vals_heap; split!.
-    1: { rewrite vals_of_event_event_set_vals_heap //. by apply: Forall2_length. }
-    1: done.
-    all: split!.
-    1: { etrans; [by apply cmra_update_op|].
-         rewrite assoc. apply cmra_update_op; [|done].
-         rewrite comm. by apply cmra_update_op. }
+    { apply: satisfiable_bmono; [done|]. iIntros. iDestruct!. iMod (Hbupd with "[$]"). iModIntro.
+      iDestruct!. iDestruct (big_sepL2_length with "[$]") as %?. rewrite vals_of_event_event_set_vals_heap //.
+      iFrame. }
+    { iIntros. iDestruct!. iMod (Hbupd with "[$]"). iModIntro.
+      iDestruct!. iDestruct (big_sepL2_length with "[$]") as %?. rewrite vals_of_event_event_set_vals_heap //.
+      iFrame. }
     1: by destruct e.
     1: by destruct e.
   - move => [? e] /= ? *; destruct_all?; simplify_eq/=.
+    revert select (_ ==∗ _) => Hbupd.
     split!.
     1: by destruct e.
-    1: { etrans; [done|]. etrans; [by apply cmra_update_op|].
-         rewrite comm -!assoc. do 2 (apply cmra_update_op; [done|]).
-         by rewrite comm. }
+    1: { etrans; [done|]. iIntros ">[??]". iMod (Hbupd with "[$]"). iModIntro. by iFrame. }
 Qed.
 
 Local Ltac split_solve ::=
@@ -646,9 +691,10 @@ Local Ltac split_solve ::=
   | |- expr_fill ?K _ = expr_fill ?K _ =>
       assert_fails (has_evar K); reflexivity
   | |- Is_true (static_expr _ (expr_fill _ _)) => apply static_expr_expr_fill
-  | |- expr_in_bij ?b (expr_fill _ _) (expr_fill _ _) =>
-      assert_fails (has_evar b); apply expr_in_bij_fill_2
-  | |- ectx_in_bij ?b (_ ++ _) (_ ++ _) => assert_fails (has_evar b); by apply ectx_in_bij_app
+  | |- _ ≡ _ => reflexivity
+  (* | |- expr_in_bij ?b (expr_fill _ _) (expr_fill _ _) => *)
+  (*     assert_fails (has_evar b); apply expr_in_bij_fill_2 *)
+  (* | |- ectx_in_bij ?b (_ ++ _) (_ ++ _) => assert_fails (has_evar b); by apply ectx_in_bij_app *)
   end.
 Local Ltac split_tac ::=
   repeat (original_split_tac; try split_solve).
@@ -658,44 +704,44 @@ Lemma imp_heap_bij_imp_refl fns:
            (MS (imp_heap_bij imp_module)
                (initial_imp_heap_bij_state imp_module (initial_imp_state fns))).
 Proof.
-  pose (R := λ (b : bool) (s1 s2 : unit), True).
+  pose (R := λ (b : bool) (s1 s2 : (unit * uPred heap_bijUR)), if b then s1.2 ≡ s2.2 else True).
   apply: (imp_prepost_proof R); unfold R in *.
-  { move => ? ?. naive_solver. }
-  move => n K1 K2 f fn1 vs1 h1 [] r0 ?? /= bij *.
-  split!. move => ?. split; [solve_length|].
+  { admit. }
+  { move => ????. naive_solver. }
+  move => n K1 K2 f fn1 vs1 h1 [] P1 ?? /= bij vs *.
+  have ?: length vs1 = length vs.
+  { apply: satisfiable_pure_2. apply: satisfiable_mono; [done|]. iIntros!. by iApply big_sepL2_length. }
+  split!. move => ?. split; [lia|].
   move => Hcall Hret.
-  unshelve apply: tsim_remember. { simpl. exact (λ _ '(Imp ei hi fnsi) '(ips, Imp es hs fnss, (pp, _, r')),
-    ∃ bij' ei' es' rvs,
+  unshelve apply: tsim_remember. { simpl. exact (λ _ '(Imp ei hi fnsi) '(ips, Imp es hs fnss, (pp, _, P')),
+    ∃ bij' ei' es',
     fnsi = fns ∧ fnss = fns ∧
-    r' ~~> heap_bij_auth bij' ⋅ core rvs ⋅ r0 ∧
-    ✓ r' ∧
+    (P' ==∗ heap_bij_auth bij' ∗ expr_in_bij ei' es' ∗ heap_in_bij bij' hi hs ∗ P1) ∧
+    satisfiable P' ∧
     heap_preserved bij' hs ∧
     ei = expr_fill K1 ei' ∧
     es = expr_fill K2 es' ∧
-    expr_in_bij (core rvs) ei' es' ∧
-    heap_in_bij bij' (core rvs) hi hs ∧
     hb_shared_provs bij' ⊆ h_provs hi ∧
     pp = PPInside ∧
     static_expr true ei' ∧
     ips = SMProg
  ). }
   { split!.
-    { apply cmra_update_op; [|done]. apply cmra_update_op; [done|]. apply cmra_update_included.
-      apply cmra_included_core. }
+    { iIntros. iModIntro. iDestruct!. iFrame.
+      iApply expr_in_bij_subst_l; [lia| |done]. iApply expr_in_bij_static. apply fd_static. }
     all: split!.
-    { apply expr_in_bij_subst_l; [| |solve_length].
-      - apply expr_in_bij_static. apply fd_static.
-      - apply: Forall2_impl; [done|]. move => ???. by apply: val_in_bij_mono. }
-    { by apply: heap_in_bij_mono. }
     { apply static_expr_subst_l; [|solve_length]. apply static_expr_mono. apply fd_static. }  }
   { naive_solver. }
-  move => /= n' ? Hloop [ei hi fnsi] [[ips [es hs fnss]] [pp r]] ?. destruct_all?; simplify_eq.
+  move => /= n' ? Hloop [ei hi fnsi] [[ips [es hs fnss]] [[pp []] P]] ?. destruct_all?; simplify_eq.
   destruct (to_val ei') eqn:?.
-  - destruct ei' => //; simplify_eq/=. destruct es' => //; simplify_eq/=.
-    apply Hret; [done|]. clear Hloop Hret Hcall. split!.
-    1: done. all: split!.
-    1: { by econs; [|done]. }
-    1: done.
+  - destruct ei' => //; simplify_eq/=.
+    have [??]: ∃ v, es' = Val v; simplify_eq/=. {
+      apply: satisfiable_pure_2. apply: satisfiable_bmono; [done|]. etrans; [done|].
+      iIntros ">?"; iDestruct!. destruct es' => //. naive_solver.
+    }
+    apply Hret; [done|]. clear Hloop Hret Hcall. eexists _, [_]. split!.
+    { etrans; [done|]. iIntros ">?". iDestruct!. by iFrame. }
+    all: split!.
   - (* TODO: remove this use of EM *)
     have [?|?]:= EM (∃ K f vs, fns !! f = None ∧ ei' = expr_fill K (Call f (Val <$> vs))).
     + destruct_all?; simplify_eq/=.
