@@ -2,13 +2,10 @@ From Coq Require Export ssreflect.
 Require Export stdpp.prelude.
 Require Export stdpp.gmap.
 Require Export stdpp.strings.
+Require Export iris.prelude.prelude.
+Require Import iris.proofmode.proofmode.
 
 Global Unset Program Cases.
-
-(* from Iris prelude.v*)
-Global Open Scope general_if_scope.
-Global Set SsrOldRewriteGoalsOrder. (* See Coq issue #5706 *)
-Ltac done := stdpp.tactics.done.
 
 
 Definition LEM (P : Prop) := P ∨ ¬ P.
@@ -610,3 +607,54 @@ Section fresh_map.
   Qed.
 
 End fresh_map.
+
+Section big_op.
+Context {PROP : bi}.
+Implicit Types P Q : PROP.
+Implicit Types Ps Qs : list PROP.
+Implicit Types A : Type.
+Lemma big_sepL_zip_with_same_length {A B C} (Φ : nat → A → PROP) f (l1 : list B) (l2 : list C) :
+  length l1 = length l2 →
+  ([∗ list] k↦x ∈ zip_with f l1 l2, Φ k x) ⊣⊢
+  ([∗ list] k↦x1;x2 ∈ l1;l2, Φ k (f x1 x2)).
+Proof.
+  intros Hlen.
+  rewrite big_sepL2_alt.
+  rewrite zip_with_zip big_sepL_fmap.
+  iSplit. 1: iIntros "?"; iSplit; [done|]. 2: iIntros "[_ ?]".
+  all: iApply (big_sepL_impl with "[$]"); iIntros "!>" (? [??] ?) "$".
+Qed.
+End big_op.
+
+Tactic Notation "iDestruct!" :=
+  repeat (
+     iMatchHyp (fun H P =>
+        match P with
+        | False%I => iDestruct H as %[]
+        | True%I => iDestruct H as %_
+        | emp%I => iDestruct H as "_"
+        | ⌜_⌝%I => iDestruct H as %?
+        | (_ ∗ _)%I => iDestruct H as "[??]"
+        | (□ _)%I => iDestruct H as "#?"
+        end)
+  || simplify_eq/=).
+
+Tactic Notation "iIntros!" := iIntros; iDestruct!.
+
+Ltac iSplit_step :=
+  lazymatch goal with
+  | |- environments.envs_entails _ (∃ x, _)%I => iExists _
+  | |- environments.envs_entails _ (_ ∗ _)%I => iSplit
+  | |- environments.envs_entails _ (⌜_⌝)%I => iPureIntro
+  | |- _ => split_step
+  end; simpl.
+
+Ltac original_iSplit_tac :=
+  (* The outer repeat is because later split_steps may have
+  instantiated evars and thus we try earlier goals again. *)
+  repeat (simpl; repeat iSplit_step).
+
+Ltac iSplit_tac :=
+  original_iSplit_tac.
+
+Tactic Notation "iSplit!" := iSplit_tac.

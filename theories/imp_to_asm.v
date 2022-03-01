@@ -13,6 +13,41 @@ Require Import refframe.asm.
 Local Open Scope Z_scope.
 
 (*
+
+
+P1 :=
+ X;;
+ Y
+
+P2 :=
+ A;;
+ B
+
+
+P1 :=
+ X;;
+ yield();;
+ Y
+
+P2 :=
+ A;;
+ yield();;
+ B
+
+
+Idea:
+- have an concurrent operational semantics without explicit and show
+  that it can be implemented by an premetive scheduler and a timer
+  interrupt
+ *)
+
+(* Interesting thing to consider: What if the assembly does two
+allocations? Do they necessarily correspond to two different
+allocations in IMP?
+
+-> No, build an example which exercises this part. *)
+
+(*
 Idea for new ghost state:
 
 asm_mem: gmap Z Z

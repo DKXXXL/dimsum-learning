@@ -9,6 +9,7 @@ Require Import refframe.proof_techniques.
 Require Import refframe.imp.
 
 
+Module pure_bij.
 Implicit Types (p : prov).
 
 (** * imp_heap_bij *)
@@ -175,6 +176,7 @@ Global Typeclasses Opaque heap_bij_extend.
 
 Local Ltac bij_solver := unfold heap_bij_extend, subseteq, heap_bij_subseteq in *; set_unfold; naive_solver.
 
+(** heap_bij constructors *)
 Program Definition heap_bij_add_shared (pi ps : prov) (bij : heap_bij)
         (H : pi ∉ hb_provs_i bij) :=
   HeapBij (<[ps := HBShared pi]> (hb_bij bij)) (hb_players_i bij) _ _.
@@ -861,7 +863,6 @@ Definition imp_heap_bij_post (e : imp_event) (s : imp_heap_bij_state) : prepost 
   pp_prop (heap_in_bij bij' hi hs) $
   pp_prop (heap_preserved (hb_player_i Env bij') s.(ihb_heap_i) hi) $
   pp_prop (heap_preserved (hb_player_s Env bij') s.(ihb_heap_s) hs) $
-  pp_remove True $
   pp_end ((e.1, event_set_vals_heap e.2 vsi hi), ImpHeapBij bij' hi hs).
 
 Definition imp_heap_bij (m : module imp_event) : module imp_event :=
@@ -1253,8 +1254,10 @@ Lemma imp_heap_bij_vertical m σ `{!VisNoAll m}:
 .
 Proof.
   unshelve apply: mod_prepost_combine. {
-    exact (λ pl '(ImpHeapBij bija hia hsa) '(ImpHeapBij bijb hib hsb) '(ImpHeapBij bij hi hs) _ _ _,
+    exact (λ pl '(ImpHeapBij bija hia hsa) '(ImpHeapBij bijb hib hsb) '(ImpHeapBij bij hi hs) xa xb x,
     hb_player_s Env bija = ∅
+    ∧ satisfiable xb
+    ∧ x = xa
     ∧ bij = heap_bij_merge bija bijb
     ∧ hsb = hs
     ∧ hia = hi
@@ -1270,6 +1273,7 @@ Proof.
 ). }
   { split!.
     - apply set_eq => ?. rewrite elem_of_hb_player_s. set_solver.
+    - by apply satisfiable_pure_1.
     - apply heap_bij_eq_parts => /=. split; [apply map_eq|move => pl; split; apply set_eq] => ?.
       + rewrite !hb_shared_lookup heap_bij_merge_lookup. by simplify_map_eq.
       + by rewrite elem_of_hb_player_s.
@@ -1361,6 +1365,8 @@ Proof.
       2: { apply map_filter_lookup_None. right. move => /=?/heap_through_bij_Some[?[?[/hb_disj??]]]. naive_solver. }
       rewrite map_filter_lookup_true //.
       move => ??. rewrite elem_of_hb_shared_i /=. right => -[? /hb_disj]. naive_solver.
+    + instantiate (1 := True%I). by rewrite !right_id.
+    + by apply: satisfiable_pure_1.
   - move => bijb' vsb hb' [Hextendb [Henvb_s Henvb_i]] Hdhb Hpsb Hvsb Hhb Hpb_i Hpb_s ??.
     move => bija' vsa ha' [Hextenda [Henva_s Henva_i]] Hdha Hpsa Hvsa Hha Hpa_i Hpa_s ??.
     destruct_all?; simplify_eq/=.
@@ -1388,9 +1394,14 @@ Proof.
     + apply: heap_preserved_mono; [done|].
       move => ?. rewrite heap_bij_merge_player_s elem_of_hb_player_s.
       setoid_rewrite default_eq_neq => //. setoid_rewrite <-elem_of_hb_player_s. set_solver.
-    + instantiate (1:=True%I). iIntros "? !>". done.
     + by rewrite -Henva_s.
+    + revert select (satisfiable _) => _. revert select (satisfiable _) => Hsat.
+      iSatMono Hsat. iIntros "[$ [??]]".
 Qed.
+
+End pure_bij.
+
+
 (*
 
 Local Ltac split_solve :=
