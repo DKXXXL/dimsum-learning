@@ -216,14 +216,14 @@ Tactic Notation "iSatMono" ident(H) :=
   apply (satisfiable_mono _ _ H); iSatStartProof.
 Tactic Notation "iSatMono" :=
   lazymatch goal with
-  | H1 : satisfiable _, H2 : satisfiable _ |- _ => fail "Multiple satisfiable! Pick one via iSatMono H"
-  | H : satisfiable _ |- _ => iSatMono H
+  | H1 : @satisfiable ?M _, H2 : @satisfiable ?M _ |- @satisfiable ?M _ => fail "Multiple satisfiable! Pick one via iSatMono H"
+  | H : @satisfiable ?M _ |- @satisfiable ?M _ => iSatMono H
   end.
 
 Tactic Notation "iSatMonoBupd" ident(H) :=
   apply (satisfiable_bmono _ _ H); iSatStartProof.
 Tactic Notation "iSatMonoBupd" :=
   lazymatch goal with
-  | H1 : satisfiable _, H2 : satisfiable _ |- _ => fail "Multiple satisfiable! Pick one via iSatMonoBupd H"
-  | H : satisfiable _ |- _ => iSatMonoBupd H
+  | H1 : @satisfiable ?M _, H2 : @satisfiable ?M _ |- @satisfiable ?M _ => fail "Multiple satisfiable! Pick one via iSatMonoBupd H"
+  | H : @satisfiable ?M _ |- @satisfiable ?M _ => iSatMonoBupd H
   end.
