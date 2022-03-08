@@ -67,6 +67,30 @@ Ltac simplify_bij :=
 Global Program Instance heap_bij_empty : Empty heap_bij := HeapBij ∅ ∅ _ _.
 Solve Obligations with set_solver.
 
+(** hb_shared *)
+Definition hb_shared (bij : heap_bij) : gmap prov prov :=
+  (omap (λ v, if v is HBShared p then Some p else None) (hb_bij bij)).
+
+Lemma hb_shared_lookup bij ps :
+  hb_shared bij !! ps = hb_bij bij !! ps ≫= λ v, if v is HBShared p then Some p else None.
+Proof. apply lookup_omap. Qed.
+
+Lemma hb_shared_lookup_Some bij ps pi :
+  hb_shared bij !! ps = Some pi ↔ hb_bij bij !! ps = Some (HBShared pi).
+Proof. rewrite hb_shared_lookup. destruct (hb_bij bij !! ps) => //=. case_match; naive_solver. Qed.
+
+Lemma hb_shared_lookup_None bij ps :
+  hb_shared bij !! ps = None ↔ ∀ pi, hb_bij bij !! ps = Some (HBShared pi) → False.
+Proof. rewrite hb_shared_lookup. destruct (hb_bij bij !! ps) => //=. case_match; naive_solver. Qed.
+
+(** hb_shared_s *)
+Definition hb_shared_s (bij : heap_bij) : gset prov :=
+  (locked (dom _) (hb_shared bij)).
+
+Lemma elem_of_hb_shared_s bij ps :
+  ps ∈ hb_shared_s bij ↔ ∃ pi, hb_bij bij !! ps = Some (HBShared pi).
+Proof. rewrite /hb_shared_s; unlock. rewrite elem_of_dom /is_Some. f_equiv => ?. apply hb_shared_lookup_Some. Qed.
+
 (** hb_shared_i *)
 Definition hb_shared_i (bij : heap_bij) : gset prov :=
   list_to_set (omap (λ x, if x.2 is HBShared p then Some p else None) (map_to_list (hb_bij bij))).

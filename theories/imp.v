@@ -327,6 +327,13 @@ Next Obligation.
   rewrite map_filter_lookup => -[?/bind_Some[?[??]]]. by apply heap_wf.
 Qed.
 
+Program Definition heap_add_provs (h : heap_state) (p : gset prov) : heap_state :=
+  Heap (h_heap h) (p ∪ h.(h_provs)) _.
+Next Obligation.
+  move => ??. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]] ?. subst.
+  apply: union_subseteq_r. by apply heap_wf.
+Qed.
+
 Lemma heap_fresh_is_fresh ps h:
   heap_is_fresh h (heap_fresh ps h).
 Proof.
@@ -367,6 +374,21 @@ Proof.
   move => ?. apply heap_state_eq => /=. split; [|done].
   apply map_filter_strong_ext_1 => l'' ?. destruct l'', l', l; simplify_eq/=.
   split => -[?]; rewrite lookup_alter_ne //; congruence.
+Qed.
+
+Lemma heap_free_alloc h l n :
+  l.1 ∉ h_provs h →
+  heap_free (heap_alloc h l n) l = heap_add_provs h {[l.1]}.
+Proof.
+  move => Hin.
+  apply heap_state_eq => /=. split; [|done].
+  rewrite map_filter_union.
+  2: { apply map_disjoint_list_to_map_l. rewrite Forall_fmap. apply Forall_forall.
+       move => ?? /=. apply eq_None_not_Some. by move => /heap_wf/=. }
+  rewrite (map_filter_id _ (h_heap h)).
+  2: { move => [??] ? /(mk_is_Some _ _) /heap_wf/=Hwf ?. subst. naive_solver. }
+  rewrite map_filter_empty_iff_2 ?left_id_L //.
+  move => ?? /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap[?[??]]. simplify_eq/=. by apply.
 Qed.
 
 (** ** state *)
