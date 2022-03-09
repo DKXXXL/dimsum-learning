@@ -285,6 +285,7 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
       (* env proves that rs is updated correctly *)
       pp_prop (imp_to_asm_ret rs rsold av) $
       pp_end ((i, EIReturn v h), I2A cs' rs)
+  | _ => pp_prop False $ pp_quant $ λ e, pp_end e
   end.
 
 Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string Z) (e : imp_event) (s : imp_to_asm_state) : prepost (asm_event * imp_to_asm_state) imp_to_asmUR :=
@@ -405,7 +406,7 @@ Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 m1 m2 σ1 σ2 `{!VisNoAll
   (∀ f i, f2i1 !! f = Some i → i ∈ ins2 → f ∈ fns2) →
   (∀ f i, f2i2 !! f = Some i → i ∈ ins1 → f ∈ fns1) →
   trefines (MS (asm_prod ins1 ins2 (imp_to_asm ins1 fns1 f2i1 m1) (imp_to_asm ins2 fns2 f2i2 m2))
-               (MLFNone, tt, initial_imp_to_asm_state m1 σ1,
+               (MLFNone, None, initial_imp_to_asm_state m1 σ1,
                  initial_imp_to_asm_state m2 σ2))
            (MS (imp_to_asm (ins1 ∪ ins2) (fns1 ∪ fns2) (f2i1 ∪ f2i2) (imp_prod fns1 fns2 m1 m2))
                (initial_imp_to_asm_state (imp_prod _ _ _ _)
@@ -413,19 +414,20 @@ Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 m1 m2 σ1 σ2 `{!VisNoAll
 ).
 Proof.
   move => Hdisji Hdisjf Hin1 Hin2 Hagree Ho1 Ho2.
-  unshelve apply: mod_prepost_link. { exact (λ ips '(I2A cs1 lr1) '(I2A cs2 lr2) '(I2A cs lr) x1 x2 x _ ics,
-  imp_to_asm_combine_stacks ins1 ins2 ips ics cs cs1 cs2 ∧
+  unshelve apply: mod_prepost_link. { exact (λ ips '(I2A cs1 lr1) '(I2A cs2 lr2) '(I2A cs lr) x1 x2 x s ics,
+  imp_to_asm_combine_stacks ins1 ins2 ips ics cs cs1 cs2 ∧ s = None ∧
   ((ips = SPNone ∧ (x ⊣⊢ x1 ∗ x2)) ∨
   ((ips = SPLeft ∧ x1 = (x ∗ x2)%I
       ∧ map_scramble touched_registers lr lr1) ∨
   (ips = SPRight ∧ x2 = (x ∗ x1)%I
       ∧ map_scramble touched_registers lr lr2)))). }
-  { move => ?? [] /=*. naive_solver. }
+  { move => ?? [] /=*; naive_solver. }
   { split!. econs. by rewrite right_id. }
-  all: move => [cs1 lr1] [cs2 lr2] [cs lr] x1 x2 x [] ics.
-  - move => [pc rs mem] [] [pc' rs' mem'] /= ? ? b ?.
+  all: move => [cs1 lr1] [cs2 lr2] [cs lr] x1 x2 x ? ics.
+  - move => e ? e' /= ? ?.
     destruct_all?; simplify_eq.
-    move => *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b. split!.
+    destruct e as [pc rs mem| |]; destruct_all?; simplify_eq/=.
+    move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b. split!.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
     + move => ret f vs avs Hin Hf2i /not_elem_of_union[??] ? ??.
       repeat case_bool_decide => //.
@@ -442,8 +444,10 @@ Proof.
       inversion Hstack; simplify_eq/= => //. 2: { exfalso. set_solver. }
       split!.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
-  - move => [pc rs mem] [] [pc' rs' mem'] /= ?? b ?.
-    move => *. destruct_all?; simplify_eq/=. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b. split!.
+  - move => e ? e' /= ? ?.
+    destruct_all?; simplify_eq.
+    destruct e as [pc rs mem| |]; destruct_all?; simplify_eq/=.
+    move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b. split!.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
     + move => ret f vs avs Hin Hf2i /not_elem_of_union[??] ???.
       repeat case_bool_decide => //.

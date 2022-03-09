@@ -4,20 +4,36 @@ Require Import refframe.filter.
 Require Import refframe.product.
 Require Import refframe.seq_product.
 Require Import refframe.link.
+Require Import refframe.prepost.
 Require Import refframe.proof_techniques.
 
 Local Open Scope Z_scope.
 
 (** * Assembly language *)
+(* see https://modexp.wordpress.com/2018/10/30/arm64-assembly/ or
+https://stackoverflow.com/questions/68711164/syscall-invoke-in-aarch64-assembly *)
+Definition syscall_arg_regs : list string :=
+  ["R0"; "R1"; "R2"; "R3"; "R4"; "R5"; "R6"; "R7"; "R8"].
+
+Definition extract_syscall_args (rs : gmap string Z) : list Z :=
+  (λ r, rs !!! r) <$> syscall_arg_regs.
+
 Inductive asm_instr_event :=
 | WriteReg (r : string) (f : gmap string Z → Z)
 (* ldr r1, [f r2] *)
 | ReadMem (r1 r2 : string) (f : Z → Z)
 (* str r1, [f r2] *)
 | WriteMem (r1 r2 : string) (f : Z → Z)
+| Syscall (waiting : bool)
 .
 
 Definition asm_instr := list asm_instr_event.
+
+Definition asm_instr_wf (i : asm_instr) : bool :=
+  forallb (λ e, if e is Syscall true then false else true) i.
+
+Definition asm_instrs_wf (ins : gmap Z asm_instr) : Prop :=
+  map_Forall (λ _, asm_instr_wf) ins.
 
 Inductive asm_state := AsmState {
   asm_cur_instr : option asm_instr;
@@ -30,7 +46,10 @@ Add Printing Constructor asm_state.
 Definition initial_asm_state (instrs : gmap Z asm_instr) := AsmState None ∅ ∅ instrs.
 
 Inductive asm_ev :=
-| EAJump (pc : Z) (regs : gmap string Z) (mem : gmap Z Z).
+| EAJump (pc : Z) (regs : gmap string Z) (mem : gmap Z Z)
+| EASyscallCall (args : list Z)
+| EASyscallRet (ret : Z)
+.
 
 Definition asm_event := io_event asm_ev.
 
@@ -52,6 +71,14 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
          (* TODO: Should we have the following constraint? *)
          (* is_Some (mem !! f a) ∧ *)
          σ' = AsmState (Some es) regs (<[f a := v]>mem) instrs)
+| SSyscallCall regs instrs es mem:
+  asm_step (AsmState (Some (Syscall false :: es)) regs mem instrs)
+           (Some (Outgoing, EASyscallCall (extract_syscall_args regs)))
+           (λ σ', σ' = AsmState (Some (Syscall true :: es)) regs mem instrs)
+| SSyscallRet regs instrs es mem ret:
+  asm_step (AsmState (Some (Syscall true :: es)) regs mem instrs)
+           (Some (Incoming, EASyscallRet ret))
+           (λ σ', σ' = AsmState (Some es) (<["R0" := ret]>regs) mem instrs)
 | SJumpInternal regs instrs pc es mem:
   regs !! "PC" = Some pc →
   instrs !! pc = Some es →
@@ -137,6 +164,48 @@ Proof.
 Qed.
 Global Hint Resolve asm_step_WriteMem_s : tstep.
 
+Lemma asm_step_Syscall_call_i es rs ins mem:
+  TStepI asm_module (AsmState (Some (Syscall false::es)) rs mem ins)
+            (λ G, G true (Some (Outgoing, EASyscallCall (extract_syscall_args rs)))
+                    (λ G', G' (AsmState (Some (Syscall true :: es)) rs mem ins))).
+Proof.
+  constructor => ? ?. apply steps_impl_step_end => ???.
+  invert_all @m_step. eexists _, _. split_and!; [done|done|].
+  move => ? /=. naive_solver.
+Qed.
+Global Hint Resolve asm_step_Syscall_call_i : tstep.
+
+Lemma asm_step_Syscall_call_s es rs ins mem:
+  TStepS asm_module (AsmState (Some (Syscall false::es)) rs mem ins)
+            (λ G, G (Some (Outgoing, EASyscallCall (extract_syscall_args rs)))
+                    (λ G', G' (AsmState (Some (Syscall true :: es)) rs mem ins))).
+Proof.
+  constructor => ??. eexists _, _. split; [done|] => ? /= ?.
+  apply: steps_spec_step_end. { econs. } naive_solver.
+Qed.
+Global Hint Resolve asm_step_Syscall_call_s : tstep.
+
+Lemma asm_step_Syscall_ret_i es rs ins mem:
+  TStepI asm_module (AsmState (Some (Syscall true::es)) rs mem ins)
+            (λ G, ∀ ret, G true (Some (Incoming, EASyscallRet ret))
+                    (λ G', G' (AsmState (Some es) (<["R0" := ret]> rs) mem ins))).
+Proof.
+  constructor => ? ?. apply steps_impl_step_end => ???.
+  invert_all @m_step. eexists _, _. split_and!; [naive_solver|done|].
+  move => ? /=. naive_solver.
+Qed.
+Global Hint Resolve asm_step_Syscall_ret_i : tstep.
+
+Lemma asm_step_Syscall_ret_s es rs ins mem:
+  TStepS asm_module (AsmState (Some (Syscall true::es)) rs mem ins)
+            (λ G, ∃ ret, G (Some (Incoming, EASyscallRet ret))
+                    (λ G', G' (AsmState (Some es) (<["R0":=ret]> rs) mem ins))).
+Proof.
+  constructor => ? [??]. eexists _, _. split; [done|] => ? /= ?.
+  apply: steps_spec_step_end. { econs. } naive_solver.
+Qed.
+Global Hint Resolve asm_step_Syscall_ret_s : tstep.
+
 Lemma asm_step_Jump_i rs ins mem:
   TStepI asm_module (AsmState (Some []) rs mem ins) (λ G,
     ∀ pc, rs !! "PC" = Some pc →
@@ -192,73 +261,77 @@ Global Hint Resolve asm_step_None_s : tstep.
 
 (** * closing *)
 Inductive asm_closed_event : Type :=
-| EACStart (pc : Z) (rs: gmap string Z)
-| EACCall (pc : Z) (rs: gmap string Z) (pc' : Z) (rs': gmap string Z)
-| EACEnd (pc : Z) (rs: gmap string Z)
+| EACStart (pc : Z) (rs : gmap string Z) (mem : gmap Z Z)
+| EACSyscallCall (args : list Z)
+| EACSyscallRet (ret : Z)
 .
 
-Inductive asm_closed_state :=
-| ACStart
-| ACRecv (pc : Z) (rs: gmap string Z) (mem : gmap Z Z)
-| ACRunning
-| ACJump (pc : Z) (rs: gmap string Z) (mem : gmap Z Z)
-| ACCall (pc : Z) (rs: gmap string Z) (mem : gmap Z Z)
-| ACEnd1 (pc : Z) (rs: gmap string Z)
-| ACEnd2.
-
-Inductive asm_closed_step :
-  asm_closed_state → option (asm_event + asm_closed_event) → (asm_closed_state → Prop) → Prop :=
-| ACStartS pc rs :
-  (* pc ∈ ins → *)
-  rs !! "PC" = Some pc →
-  asm_closed_step ACStart (Some (inr (EACStart pc rs))) (λ σ, σ = ACRecv pc rs ∅)
-| ACRecvStartS pc rs mem:
-  asm_closed_step (ACRecv pc rs mem) (Some (inl (Incoming, EAJump pc rs mem))) (λ σ, σ = ACRunning)
-| ACRunningS pc rs mem:
-  asm_closed_step ACRunning (Some (inl (Outgoing, EAJump pc rs mem))) (λ σ, σ = ACJump pc rs mem)
-| ACJumpS pc rs mem:
-  asm_closed_step (ACJump pc rs mem) None (λ σ,
-       (* pc ∉ ins → *)
-       rs !! "PC" = Some pc →
-       (* universal choice whether this jump ends the program or not
-       (This universal choice will be instantiated with return vs call
-       when translating from imp) *)
-       σ = ACCall pc rs mem ∨ σ = ACEnd1 pc rs)
-| ACCallS pc rs mem pc' rs':
-  (* pc' ∈ ins → *)
-  rs' !! "PC" = Some pc' →
-  asm_closed_step (ACCall pc rs mem) (Some (inr (EACCall pc rs pc' rs'))) (λ σ, σ = ACRecv pc' rs' mem)
-| ACEndS pc rs:
-  asm_closed_step (ACEnd1 pc rs) (Some (inr (EACEnd pc rs))) (λ σ, σ = ACEnd2)
+(* s tells us if we already started the execution *)
+Definition asm_closed_pre (e : asm_closed_event) (s : bool) :
+ prepost (asm_event * bool) unitUR :=
+  if s then
+    match e with
+    | EACSyscallRet ret => pp_end ((Incoming, EASyscallRet ret), true)
+    | _ => pp_prop False (pp_quant $ λ e', pp_end e')
+    end
+  else
+    match e with
+    | EACStart pc rs mem =>
+        pp_prop (rs !! "PC" = Some pc) $
+        pp_end ((Incoming, EAJump pc rs mem), true)
+    | _ => pp_prop False (pp_quant $ λ e', pp_end e')
+    end
 .
 
-Definition asm_closed_filter_module : module (asm_event + asm_closed_event) :=
-  Mod asm_closed_step.
-
-Global Instance asm_closed_filter_module_vis_no_all : VisNoAll asm_closed_filter_module.
-Proof. move => ????. invert_all @m_step; naive_solver. Qed.
+Definition asm_closed_post (e : asm_event) (s : bool) :
+  prepost (asm_closed_event * bool) unitUR :=
+  match e with
+  | (Outgoing, EASyscallCall args) => pp_end (EACSyscallCall args, s)
+  | _ => pp_prop False (pp_quant $ λ e', pp_end e')
+  end.
 
 Definition asm_closed (m : module asm_event) : module asm_closed_event :=
-  mod_seq_map m asm_closed_filter_module.
+  mod_prepost asm_closed_pre asm_closed_post m.
+
+Definition initial_asm_closed_state (m : module asm_event) (σ : m.(m_state)) :=
+  (@SMFilter asm_event, σ, (@PPOutside asm_event asm_closed_event, false, (True : uPred unitUR)%I)).
+
 
 (** * syntactic linking *)
 Definition asm_link (instrs1 instrs2 : gmap Z asm_instr) : gmap Z asm_instr :=
   instrs1 ∪ instrs2.
 
 Definition asm_ctx_refines (instrsi instrss : gmap Z asm_instr) :=
-  ∀ C, trefines (MS (asm_closed asm_module) (SMFilter, initial_asm_state (asm_link instrsi C), ACStart))
-                (MS (asm_closed asm_module) (SMFilter, (initial_asm_state (asm_link instrss C)), ACStart)).
+  ∀ C, asm_instrs_wf C →
+       trefines (MS (asm_closed asm_module)
+                    (initial_asm_closed_state asm_module (initial_asm_state (asm_link instrsi C))))
+                (MS (asm_closed asm_module)
+                    (initial_asm_closed_state asm_module (initial_asm_state (asm_link instrss C)))).
 
 (** * semantic linking *)
-Definition asm_prod_filter (ins1 ins2 : gset Z) : seq_product_state → unit → asm_ev → seq_product_state → unit → asm_ev → Prop :=
-  λ p _ e p' s' e',
-    s' = tt ∧
+
+(* State s says whether we are currently in the environment and expecting a syscall return *)
+(* TODO: instead of bool have option that tracks which side was last *)
+Definition asm_prod_filter (ins1 ins2 : gset Z) : seq_product_state → option seq_product_state → asm_ev → seq_product_state → option seq_product_state → asm_ev → Prop :=
+  λ p s e p' s' e',
     e' = e ∧
     match e with
     | EAJump pc rs mem =>
+        s = None ∧
+        s' = None ∧
         p' = (if bool_decide (pc ∈ ins1) then SPLeft else if bool_decide (pc ∈ ins2) then SPRight else SPNone) ∧
         rs !! "PC" = Some pc ∧
         p ≠ p'
+    | EASyscallCall _ =>
+        s = None ∧
+        s' = Some p ∧
+        p' = SPNone ∧
+        p ≠ SPNone
+    | EASyscallRet _ =>
+        s = Some p' ∧
+        s' = None ∧
+        p' ≠ SPNone ∧
+        p  = SPNone
     end.
 Arguments asm_prod_filter _ _ _ _ _ _ _ _ /.
 
@@ -272,32 +345,34 @@ Lemma asm_prod_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll
            (MS (asm_prod ins1 ins2 m1' m2') (σ, σ1', σ2')).
 Proof. move => ??. by apply mod_link_trefines. Qed.
 
-
-Definition asm_link_prod_inv (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_module.(m_state)) (σ2 : mod_link_state asm_ev * unit * asm_state * asm_state) : Prop :=
+Definition asm_link_prod_inv (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_module.(m_state)) (σ2 : mod_link_state asm_ev * option seq_product_state * asm_state * asm_state) : Prop :=
   let 'AsmState i1 rs1 mem1 ins1' := σ1 in
-  let '(σf, _, AsmState il rsl meml insl, AsmState ir rsr memr insr) := σ2 in
+  let '(σf, s, AsmState il rsl meml insl, AsmState ir rsr memr insr) := σ2 in
   ins1' = ins1 ∪ ins2 ∧
   insl = ins1 ∧
   insr = ins2 ∧
+  s = None ∧
   match σf with
-  | MLFLeft => is_Some i1 ∧ il = i1 ∧ rsl = rs1 ∧ meml = mem1 ∧ ir = None
-  | MLFRight => is_Some i1 ∧ ir = i1 ∧ rsr = rs1 ∧ memr = mem1 ∧ il = None
+  | MLFLeft => ∃ i, i1 = Some i ∧ il = i1 ∧ rsl = rs1 ∧ meml = mem1 ∧ ir = None ∧ asm_instr_wf i
+  | MLFRight => ∃ i, i1 = Some i ∧ ir = i1 ∧ rsr = rs1 ∧ memr = mem1 ∧ il = None ∧ asm_instr_wf i
   | MLFNone => i1 = None ∧ ir = None ∧ il = None
   | _ => False
   end.
 
 Lemma asm_link_refines_prod ins1 ins2:
   ins1 ##ₘ ins2 →
+  asm_instrs_wf ins1 →
+  asm_instrs_wf ins2 →
   trefines (MS asm_module (initial_asm_state (asm_link ins1 ins2)))
-           (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) (MLFNone, tt, initial_asm_state ins1, initial_asm_state ins2)).
+           (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) (MLFNone, None, initial_asm_state ins1, initial_asm_state ins2)).
 Proof.
-  move => Hdisj.
+  move => Hdisj ??.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { exact: (λ _, asm_link_prod_inv ins1 ins2). }
   { naive_solver. } { done. }
-  move => /= {}n _ Hloop [i1 rs1 mem1 ins1'] [[[σf []] [il rsl meml insl]] [ir rsr memr insr]] [? [? [? Hinv]]].
+  move => /= {}n _ Hloop [i1 rs1 mem1 ins1'] [[[σf s] [il rsl meml insl]] [ir rsr memr insr]] [? [? [? Hinv]]].
   case_match; destruct_all?; simplify_eq.
-  - revert select (is_Some i1) => -[[|[??|???|???]?] ->].
+  - destruct i as [|[??|???|???|[]]?].
     + tstep_i => pc ?. case_match as Hunion. 1: move: Hunion => /lookup_union_Some_raw[Hl|[? Hl]].
       * tstep_s. split!. simplify_option_eq. apply: Hloop; [done|]. naive_solver.
       * tstep_s. split!. simpl_map_decide. simplify_option_eq. split! => /=.
@@ -308,7 +383,11 @@ Proof.
     + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
     + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
     + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
-  - revert select (is_Some i1) => -[[|[??|???|???]?] ->].
+    + naive_solver.
+    + tstep_both. tstep_s => *. split!; [done|]. tend.
+      tstep_both => *. tstep_s => *. split!; [|done|]; [done|].
+      tstep_s. split!. tend. apply: Hloop; [done|]. naive_solver.
+  - destruct i as [|[??|???|???|[]]?].
     + tstep_i => pc ?. case_match as Hunion. 1: move: Hunion => /lookup_union_Some_raw[Hl|[? Hl]].
       * have ?: ins2 !! pc = None by apply: map_disjoint_Some_l.
         tstep_s. split!. simpl_map_decide. simplify_option_eq. split! => /=.
@@ -320,6 +399,10 @@ Proof.
     + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
     + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
     + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
+    + naive_solver.
+    + tstep_both. tstep_s => *. split!; [done|]. tend.
+      tstep_both => *. tstep_s => *. split!; [|done|]; [done|].
+      tstep_s. split!. tend. apply: Hloop; [done|]. naive_solver.
   - tstep_i => pc???? Hin.
     tstep_s. eexists (EAJump _ _ _). split!.
     { move: Hin => /lookup_union_Some_raw[?|[??]]; by simpl_map_decide. }
@@ -329,16 +412,18 @@ Qed.
 
 Lemma asm_prod_refines_link ins1 ins2:
   ins1 ##ₘ ins2 →
-  trefines (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) (MLFNone, tt, initial_asm_state ins1, initial_asm_state ins2))
+  asm_instrs_wf ins1 →
+  asm_instrs_wf ins2 →
+  trefines (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) (MLFNone, None, initial_asm_state ins1, initial_asm_state ins2))
            (MS asm_module (initial_asm_state (asm_link ins1 ins2))).
 Proof.
-  move => Hdisj.
+  move => Hdisj ??.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { exact: (λ _, flip (asm_link_prod_inv ins1 ins2)). }
   { naive_solver. } { done. }
-  move => /= {}n _ Hloop [[[σf []] [il rsl meml insl]] [ir rsr memr insr]] [i1 rs1 mem1 ins1'] [? [? [? Hinv]]].
+  move => /= {}n _ Hloop [[[σf ?] [il rsl meml insl]] [ir rsr memr insr]] [i1 rs1 mem1 ins1'] [? [? [? Hinv]]].
   case_match; destruct_all?; simplify_eq.
-  - revert select (is_Some i1) => -[[|[??|???|???]?] ->].
+  - destruct i as [|[??|???|???|[]]?].
     + tstep_i => pc ?. case_match => *; destruct_all?; simplify_eq/=.
       * tstep_s. split!. erewrite lookup_union_Some_l by done.
         apply: Hloop; [done|]. naive_solver.
@@ -349,7 +434,11 @@ Proof.
     + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
     + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
     + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
-  - revert select (is_Some i1) => -[[|[??|???|???]?] ->].
+    + naive_solver.
+    + tstep_both => *. destruct_all?; simplify_eq. tstep_s. split!; [done|]. tend.
+      tstep_both => *. destruct_all?; case_match; destruct_all?; simplify_eq/=. tstep_s. split!; [done|]. tend.
+      tstep_i => *. simplify_eq/=. apply: Hloop; [done|]. naive_solver.
+  - destruct i as [|[??|???|???|[]]?].
     + tstep_i => pc ?. case_match => *; destruct_all?; simplify_eq/=.
       * tstep_s. split!. erewrite lookup_union_Some_r by done.
         apply: Hloop; [done|]. naive_solver.
@@ -360,6 +449,10 @@ Proof.
     + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
     + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
     + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
+    + naive_solver.
+    + tstep_both => *. destruct_all?; simplify_eq. tstep_s. split!; [done|]. tend.
+      tstep_both => *. destruct_all?; case_match; destruct_all?; simplify_eq/=. tstep_s. split!; [done|]. tend.
+      tstep_i => *. simplify_eq/=. apply: Hloop; [done|]. naive_solver.
   - tstep_i => -[] /= *; destruct_all?; simplify_eq/=.
     tstep_s.
     repeat case_bool_decide => //.
@@ -370,13 +463,19 @@ Qed.
 
 Lemma asm_trefines_implies_ctx_refines insi inss :
   dom (gset _) insi = dom (gset _) inss →
+  asm_instrs_wf insi →
+  asm_instrs_wf inss →
   trefines (MS asm_module (initial_asm_state insi)) (MS asm_module (initial_asm_state inss)) →
   asm_ctx_refines insi inss.
 Proof.
-  move => Hdom Href C. rewrite /asm_link map_difference_union_r (map_difference_union_r inss).
+  move => Hdom ?? Href C ?. rewrite /asm_link map_difference_union_r (map_difference_union_r inss).
   apply mod_seq_map_trefines. { apply _. } { apply _. }
-  etrans. { apply asm_link_refines_prod. apply map_disjoint_difference_r'. }
-  etrans. 2: { apply asm_prod_refines_link. apply map_disjoint_difference_r'. }
+  etrans. {
+    apply asm_link_refines_prod; [apply map_disjoint_difference_r'|done|].
+    move => ??/lookup_difference_Some. naive_solver. }
+  etrans. 2: {
+    apply asm_prod_refines_link; [apply map_disjoint_difference_r'|done|].
+    move => ??/lookup_difference_Some. naive_solver. }
   rewrite !dom_difference_L Hdom.
   apply asm_prod_trefines; [apply _..| |].
   - apply: Href.

@@ -302,7 +302,9 @@ Lemma full_add_stack :
                            (<["add_client" := 200]> $ <["add" := 100]> ∅) imp_module)
                (initial_imp_to_asm_state imp_module (initial_imp_state full_imp_add_prog))).
 Proof.
-  etrans. { apply asm_link_refines_prod. unfold asm_add, asm_add_client. eauto with map_disjoint. }
+  etrans. {
+    apply asm_link_refines_prod. { unfold asm_add, asm_add_client. eauto with map_disjoint. }
+    all: compute_done. }
   etrans. {
     apply: asm_prod_trefines.
     - apply asm_add_refines_imp_add.

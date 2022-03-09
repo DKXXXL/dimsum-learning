@@ -218,6 +218,9 @@ Section prepost.
   Inductive pp_filter_step i o :
     (pp_state * S * uPred M) → option (EV1 + EV2) → ((pp_state * S * uPred M) → Prop) → Prop :=
   | PPOutsideS s x e:
+    (* TODO: Add a user-defined predicate here to rule out choosing
+    non-sensical events? E.g. allow only Incoming events or prevent
+    syscall events. *)
     pp_filter_step i o (PPOutside, s, x) (Some (inr e)) (λ σ, σ = (PPRecv1 e, s, x))
   | PPRecv1S s x e:
     pp_filter_step i o (PPRecv1 e, s, x) None (λ σ,
