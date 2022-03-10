@@ -160,6 +160,19 @@ Ltac simpl_map_decide :=
   | |- context [bool_decide (?P)] => rewrite (bool_decide_false P); [|go]
   end; simpl).
 
+Tactic Notation "case_bool_decide" open_constr(pat) "as" ident(Hd) :=
+  match goal with
+  | H : context [@bool_decide ?P ?dec] |- _ =>
+    unify P pat;
+    destruct_decide (@bool_decide_reflect P dec) as Hd
+  | |- context [@bool_decide ?P ?dec] =>
+    unify P pat;
+    destruct_decide (@bool_decide_reflect P dec) as Hd
+  end.
+Tactic Notation "case_bool_decide" open_constr(pat) :=
+  let H := fresh in case_bool_decide pat as H.
+
+
 Section theorems.
 Context `{FinMap K M}.
 Lemma map_disjoint_difference_l' {A} (m1 m2 : M A) : m2 ∖ m1 ##ₘ m1.

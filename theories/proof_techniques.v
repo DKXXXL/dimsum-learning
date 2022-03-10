@@ -274,6 +274,103 @@ Proof.
   all: naive_solver.
 Qed.
 
+Inductive tsim_remember_call_stack {EV} (n : trace_index) (mi ms : module EV)
+          (R : nat → bool → _ → _ → Prop) (RR : mi.(m_state) → ms.(m_state) → _ → _ → Prop) :
+  nat → mi.(m_state) → ms.(m_state) → Prop :=
+| IPSNil σi σs :
+  tsim_remember_call_stack n mi ms R RR 0 σi σs
+| IPSStep d σi0 σs0 σi1 σs1:
+  tsim_remember_call_stack n mi ms R RR d σi0 σs0 →
+  (∀ σi2 σs2 σi3 σs3,
+      R (S d) true (σi1, σs1) (σi2, σs2) →
+      RR σi2 σs2 σi3 σs3 →
+      σi3 ⪯{mi, ms, n, true} σs3) →
+  tsim_remember_call_stack n mi ms R RR (S d) σi1 σs1
+.
+
+Lemma tsim_remember_call_stack_mono EV mi ms n n' R RR d σi σs:
+  tsim_remember_call_stack n mi ms R RR d σi σs →
+  n' ⊆ n →
+  tsim_remember_call_stack (EV:=EV) n' mi ms R RR d σi σs.
+Proof.
+  move => Hs. elim: Hs n'; [by econs|].
+  move => ?????? IH Hsim ??. econs; [naive_solver|] => *.
+  apply: tsim_mono; [|done].
+  by apply: Hsim.
+Qed.
+
+Lemma tsim_remember_call_stack_mono_R EV mi ms n R RR σi σs σi' σs' d `{!Transitive (R d true)}:
+  tsim_remember_call_stack n mi ms R RR d σi σs →
+  R d true (σi, σs) (σi', σs') →
+  tsim_remember_call_stack (EV:=EV) n mi ms R RR d σi' σs'.
+Proof.
+  move => Hs. elim: Hs σi' σs' Transitive0; [by econs|].
+  move => ?????? IH Hcont σi' σs' ??. econs; [naive_solver|] => *.
+  apply: Hcont; [|done]. by etrans.
+Qed.
+
+Lemma tsim_remember_call {EV} (mi ms : module EV) R `{!∀ d b, Transitive (R d b)} σi0 σs0 (RR : _ → _ → _ → _ → Prop) b n0:
+  (* d: stack depth *)
+  (* R true: public transition relation, R false: private transition relation *)
+  (∀ d σi σs σi' σs', R d true (σi, σs) (σi', σs') → R d false (σi, σs) (σi', σs')) →
+  R 0%nat false (σi0, σs0) (σi0, σs0) →
+  (∀ n σi1 σs1 d,
+      tiS?b n ⊆ n0 →
+      R d false (σi0, σs0) (σi1, σs1) →
+      (* Stay *)
+      (∀ n' σi2 σs2,
+         n' ⊆ n →
+         R d true (σi1, σs1) (σi2, σs2) →
+          σi2 ⪯{mi, ms, n', true} σs2 ) →
+      (* Call *)
+      (∀ n' σi2 σs2,
+         n' ⊆ n →
+         (* TODO: can we require something weaker here (not starting
+         from 0) that exploits transitivity of R? *)
+         R (S d) false (σi0, σs0) (σi2, σs2) →
+         (∀ σi3 σs3 σi4 σs4,
+             R (S d) true (σi2, σs2) (σi3, σs3) →
+             RR σi3 σs3 σi4 σs4 →
+             σi4 ⪯{mi, ms, n', true} σs4
+         ) →
+         σi2 ⪯{mi, ms, n', true} σs2) →
+      (* Return *)
+      (∀ n' σi2 σs2,
+         n' ⊆ n →
+         d ≠ 0%nat →
+         R d true (σi1, σs1) (σi1, σs1) →
+         RR σi1 σs1 σi2 σs2 →
+          σi2 ⪯{mi, ms, n', true} σs2 ) →
+      σi1 ⪯{mi, ms, n, false} σs1) →
+  σi0 ⪯{mi, ms, n0, b} σs0.
+Proof.
+  move => HR ? Hcall.
+  unshelve apply: tsim_remember. { simpl. exact (λ n σi σs,
+      ∃ d,
+      R d false (σi0, σs0) (σi, σs)
+      ∧ tsim_remember_call_stack n mi ms R RR d σi σs
+). }
+  { split!. done. econs. } {
+    move => ? n' ?? /=??. destruct_all?. split!; [done|].
+    apply: tsim_remember_call_stack_mono; [done|]. etrans; [|done].
+    apply ti_le_S_maybe.
+  }
+  move => n ? /= Hloop σi1 σs1 ?.
+  destruct_all?; simplify_eq.
+  apply: Hcall; [done..| | |].
+  - move => ?????. apply Hloop; [done|]. split!. { etrans; [done|]. naive_solver. }
+    apply: tsim_remember_call_stack_mono; [|done].
+    by apply: tsim_remember_call_stack_mono_R.
+  - move => ??????. apply Hloop; [done|]. split!.
+    2: { apply: IPSStep. by apply: tsim_remember_call_stack_mono. done. }
+    done.
+  - move => ???????.
+    revert select (tsim_remember_call_stack _ _ _ _ _ _ _ _) => Hs.
+    inversion Hs; clear Hs; simplify_eq/= => //.
+    apply: tsim_mono; [|done].
+    naive_solver.
+Qed.
+
 Lemma tsim_step_l {EV} {mi ms : module EV} σi σs n b :
   (∀ κ Pσi,
       mi.(m_step) σi κ Pσi →

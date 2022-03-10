@@ -570,7 +570,6 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
       f2i !! f = Some pc →
       satisfiable (i2a_mem_auth amem ∗ i2a_heap_auth ih ∗ i2a_heap_shared_agree (h_heap h) ih ∗ ([∗ list] v;a∈vs;avs, imp_val_to_asm_val v a) ∗ rf ∗ rc) →
       i2a_inv mem amem h ih (rs !!! "SP") →
-      (* i2a_mem_heap_agree ra h ih → *)
       imp_to_asm_args ret rs avs →
       length vs = length (fd_args fn) →
       (* Call *)
@@ -583,7 +582,6 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
           satisfiable (i2a_mem_auth amem' ∗ i2a_heap_auth ih' ∗ i2a_heap_shared_agree (h_heap h') ih' ∗
                       ([∗ list] v;a∈vs;avs, imp_val_to_asm_val v a) ∗ rf' ∗ rc ∗ r') →
           i2a_inv mem' amem' h' ih' (rs' !!! "SP") →
-          (* i2a_mem_heap_agree rvs h' ih' → *)
           imp_to_asm_args ret' rs' avs →
           ins !! ret' = Some i' →
           map_scramble touched_registers lr rs' →
@@ -592,9 +590,8 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
               satisfiable (i2a_mem_auth amem'' ∗ i2a_heap_auth ih'' ∗ i2a_heap_shared_agree (h_heap h'') ih'' ∗
                            imp_val_to_asm_val v av ∗ rf'' ∗ rc ∗ r') →
               i2a_inv mem'' amem'' h'' ih'' (rs'' !!! "SP") →
-              (* i2a_mem_heap_agree rv'' h'' ih'' → *)
               imp_to_asm_ret rs'' rs' av →
-              AsmState (Some i') rs'' mem'' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, false}
+              AsmState (Some i') rs'' mem'' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K (expr_fill K' (Val v))) h'' fns, (PPInside, I2A cs rs'', rf''))) →
           AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, b}
                (SMProg, Imp (expr_fill K (expr_fill K' (imp.Call f' es))) h' fns, (PPInside, I2A cs lr, rf'))) →
@@ -604,7 +601,6 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
           satisfiable (i2a_mem_auth amem' ∗ i2a_heap_auth ih' ∗ i2a_heap_shared_agree (h_heap h') ih' ∗
                       imp_val_to_asm_val v av ∗ rf' ∗ rc) →
           i2a_inv mem' amem' h' ih' (rs' !!! "SP") →
-          (* i2a_mem_heap_agree rv h' ih' → *)
           imp_to_asm_ret rs' rs av  →
           map_scramble touched_registers lr rs' →
           AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, b}
@@ -617,55 +613,81 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
              (initial_imp_state fns))).
 Proof.
   move => -> -> Hf.
-  apply tsim_implies_trefines => /= n.
-  unshelve apply: tsim_remember. { simpl. exact: (
-   λ n' '(AsmState i rs mem ins') '(σfs, Imp e h fns', (t, I2A cs lr, r)),
-     ∃ K b lr', i = None ∧ ins = ins' ∧ e = expr_fill K (Waiting b) ∧ fns = fns' ∧
-              t = PPOutside ∧ σfs = SMFilter ∧ imp_to_asm_proof_stack n' ins fns f2i b K (I2A cs lr') r
+  apply: tsim_implies_trefines => n0 /=.
+  unshelve eapply tsim_remember_call.
+  { simpl. exact (λ d b '((AsmState i1 rs1 mem1 ins'1), (σfs1, Imp e1 h1 fns'1, (t1, I2A cs1 lr1, r1)))
+                        '((AsmState i2 rs2 mem2 ins'2), (σfs2, Imp e2 h2 fns'2, (t2, I2A cs2 lr2, r2))),
+      ∃ K, i2 = None ∧ ins = ins'2 ∧ e2 = expr_fill K (Waiting (bool_decide (d ≠ 0%nat))) ∧ fns = fns'2 ∧
+              t2 = PPOutside ∧ σfs2 = SMFilter ∧ (d = 0%nat ↔ cs2 = []) ∧
+      if b then
+        e2 = e1 ∧
+        cs2 = cs1 ∧
+        r1 = r2
+      else
+        True
+                 ). }
+  { simpl. exact (λ  '(AsmState i1 rs1 mem1 ins'1) '(σfs1, Imp e1 h1 fns'1, (t1, I2A cs1 lr1, r1))
+                     '(AsmState i2 rs2 mem2 ins'2) '(σfs2, Imp e2 h2 fns'2, (t2, I2A cs2 lr2, r2)),
+    ∃ i K av v pc lr' amem ih,
+      rs2 !! "PC" = Some pc ∧
+      ins !! pc = Some i ∧
+      satisfiable (i2a_mem_auth amem ∗ i2a_heap_auth ih ∗ i2a_heap_shared_agree (h_heap h2) ih ∗
+                   imp_val_to_asm_val v av ∗ r1 ∗ r2) ∧
+      i2a_inv mem2 amem h2 ih (rs2 !!! "SP") ∧
+      imp_to_asm_ret rs2 lr' av ∧
+      i2 = Some i ∧
+      ins'1 = ins'2 ∧
+      σfs2 = SMProg ∧
+      e1 = expr_fill K (Waiting true) ∧
+      e2 = expr_fill K (Val v) ∧
+      fns'1 = fns'2 ∧
+      t2 = PPInside ∧
+      cs1 = I2AI true pc lr' :: cs2 ∧
+      lr2 = rs2
 ). }
-  { eexists []. split!. econs. } {
-    clear => /= n n' [????] [[?[???]][[?[??]]?]] Hsub ?. destruct_all?; simplify_eq. split!; [done..|].
-    instantiate (1:=lr').
-    elim: H6 n' Hsub; [by econs|].
-    move => *. econs; [ naive_solver..|]. move => *. apply: tsim_mono; [|done]. naive_solver.
-  }
-  move => {}n _ /= IH [i rs mem ins'] [[?[???]][[?[??]]?]] ?. destruct_all?; simplify_eq/=.
+  { move => ??? *. destruct_all?. repeat case_match; naive_solver. }
+  { move => /= *. destruct_all?. repeat case_match. naive_solver. }
+  { move => /=. eexists []. split!. }
+  move => /= n [i rs mem ins'] [[?[???]][[?[??]]?]] d ? ? Hstay Hcall Hret. destruct_all?; simplify_eq/=.
   tstep_i => ??????.
   go_s. split!.
   go_s => -[] ? /=.
   - move => ???????? /elem_of_dom[??] ? /not_elem_of_dom ? ???.
-    go_s. split!. case_bool_decide; [|by go_s].
-    match goal with | |- context [ReturnExt b ?e] => change (ReturnExt b e) with (expr_fill [ReturnExtCtx b] e) end.
+    go_s. split!.
+    repeat case_bool_decide (_ = _); try by tstep_s.
+    match goal with| |- context [ReturnExt ?b ?e] => change (ReturnExt b e) with (expr_fill [ReturnExtCtx b] e) end.
     rewrite -expr_fill_app.
     apply: tsim_mono_b.
     apply: Hf; [try eassumption..| |].
     { iSatMono. iIntros!. iFrame. iAccu. }
     + iSatClear.
-      move => K' rs' mem' f' es avs' vs' pc i' ret' ? h' lr amem' ih' rf' r' Hall ????????? Hret. go.
+      move => K' rs' mem' f' es avs' vs' pc i' ret' ? h' lr amem' ih' rf' r' Hall ????????? Hret'. go.
       have ?: es = Val <$> vs'. { clear -Hall. elim: Hall; naive_solver. } subst.
       tstep_i => ??. simplify_map_eq. rewrite orb_true_r.
       tstep_s. right. split!.
       tstep_s. split!. { by apply not_elem_of_dom. } { by apply elem_of_dom. }
       { iSatMono. iIntros!. iFrame. iAccu. }
-      apply IH; [done|].
-      split!; [done..|].
-      econs; [done..|]. move => *. simplify_map_eq.
+      apply Hcall; [done| |]. { by split!. }
+      iSatClear.
+      move => [i2 rs2 mem2 ins'2] [[?[???]][[?[??]]?]].
+      move => [i3 rs3 mem3 ins'3] [[?[???]][[?[??]]?]] ??. destruct_all?; simplify_eq.
+      repeat match goal with | H : expr_fill _ _ = expr_fill _ _ |- _ => apply expr_fill_Waiting_inj in H end.
+      destruct_all?; simplify_eq.
       rewrite !expr_fill_app /=.
-      apply: tsim_mono_b.
-      apply: Hret; [done..].
+      eapply Hret' => //.
+      iSatMono. iIntros!. iFrame.
     + iSatClear. move => *. go.
       tstep_i => ??. simplify_map_eq. rewrite orb_true_r.
       tstep_s.
       tstep_s. split!; [try done..|].
       { iSatMono. iIntros!. iFrame. iAccu. }
-      apply IH; [done|]. by split!.
+      apply Hstay; [done|]. by split!.
   - move => *.
-    revert select (imp_to_asm_proof_stack _ _ _ _ _ _ _ _) => HK.
-    inversion HK; clear HK; simplify_eq.
-    tstep_s. split!.
-    apply: H5. all: try eassumption.
-    iSatMono. iIntros!. iFrame.
-    Unshelve. apply: inhabitant.
+    tstep_s. simplify_eq. destruct d; [exfalso; naive_solver|]. split!.
+    apply Hret; [done..| |].
+    + by split!.
+    + split!; [|done..].
+      iSatMono. iIntros!. iFrame.
 Qed.
 
 (*

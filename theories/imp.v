@@ -197,6 +197,22 @@ Proof.
   apply IH. by apply: fill_item_val.
 Qed.
 
+Lemma expr_fill_Waiting_inj K1 K2 b1 b2 :
+  expr_fill K1 (Waiting b1) = expr_fill K2 (Waiting b2) → K1 = K2 ∧ b1 = b2.
+Proof.
+  elim/rev_ind: K1 K2.
+  - move => K2. destruct K2 as [|Ki] using rev_ind; [naive_solver|] => /=.
+    rewrite expr_fill_app => /=. destruct Ki; naive_solver.
+  - move => Ki1 K1 IH K2. destruct K2 as [|Ki2 K2 IHK] using rev_ind => /=.
+    { rewrite expr_fill_app => /=. destruct Ki1; naive_solver. }
+    rewrite !expr_fill_app /= => Heq.
+    have ? : Ki1 = Ki2. {
+      apply: expr_fill_item_no_val_inj; [..|done].
+      all: apply eq_None_not_Some => /fill_val /=[??]//.
+    } subst.
+    naive_solver.
+Qed.
+
 Fixpoint static_expr (allow_loc : bool) (e : expr) : bool :=
   match e with
   | Var v => true
@@ -961,46 +977,6 @@ Qed.
 Global Hint Resolve imp_step_If_s | 10 : tstep.
 
 (** * proof technique for prepost *)
-Inductive imp_prepost_proof_stack {S} {M : ucmra} (n : trace_index) (fnsi fnss : gmap string fndef) i o
-          (R : bool → _ → _ → Prop) :
-  bool → S → uPred M → list expr_ectx → list expr_ectx → Prop :=
-| IPSNil s r :
-  imp_prepost_proof_stack n fnsi fnss i o R false s r [] []
-| IPSStep b Ki Ki' Ks Ks' s0 s1 r0 r1:
-  imp_prepost_proof_stack n fnsi fnss i o R b s0 r0 Ki Ks →
-  (∀ hi vi s2 (r2 : uPred M),
-      R true (s1, r1) (s2, r2) →
-      pp_to_all (i (Incoming, EIReturn vi hi) s2) (λ '(e', s3) r3, ∀ r3',
-      satisfiable (r2 ∗ r3 ∗ r3') →
-      ∃ vs hs, e' = (Incoming, EIReturn vs hs) ∧
-      Imp (expr_fill (Ki' ++ Ki) (Val vi)) hi fnsi
-        ⪯{imp_module, mod_prepost (M:=M) (S:=S) i o imp_module, n, true}
-        (SMProg, Imp (expr_fill (Ks' ++ Ks) (Val vs)) hs fnss, (PPInside, s3, r3')))) →
-  imp_prepost_proof_stack n fnsi fnss i o R true s1 r1 (Ki' ++ Ki) (Ks' ++ Ks)
-.
-
-Lemma imp_prepost_proof_stack_mono S M n n' fns1 fns2 i o R s r b Ki Ks:
-  imp_prepost_proof_stack n fns1 fns2 i o R b s r Ki Ks →
-  n' ⊆ n →
-  imp_prepost_proof_stack (M:=M) (S:=S) n' fns1 fns2 i o R b s r Ki Ks.
-Proof.
-  move => Hs. elim: Hs n'; [by econs|].
-  move => *. econs; [naive_solver|] => *.
-  apply: pp_to_all_mono; [naive_solver|]. move => [??] ? Hsim ??.
-  move: Hsim => /(_ _ ltac:(done))?. destruct_all?; subst. split!.
-  by apply: tsim_mono.
-Qed.
-
-Lemma imp_prepost_proof_stack_mono_R M S n fns1 fns2 i o R s s' r r' b Ki Ks `{!Transitive (R true)}:
-  imp_prepost_proof_stack n fns1 fns2 i o R b s r Ki Ks →
-  R true (s, r) (s', r') →
-  imp_prepost_proof_stack (M:=M) (S:=S) n fns1 fns2 i o R b s' r' Ki Ks.
-Proof.
-  move => Hs. elim: Hs s'; [by econs|].
-  move => ??????????? Hcont ??. econs; [naive_solver|] => *.
-  apply: pp_to_all_mono. { apply: Hcont. by etrans. } done.
-Qed.
-
 Lemma imp_prepost_proof {S} {M : ucmra} R `{!∀ b, PreOrder (R b)} i o fns1 fns2 s0 (r0 : uPred M):
   (* R true: public transition relation, R false: private transition relation *)
   (∀ s r s' r', R true (s, r) (s', r') → R false (s, r) (s', r')) →
@@ -1048,30 +1024,47 @@ Lemma imp_prepost_proof {S} {M : ucmra} R `{!∀ b, PreOrder (R b)} i o fns1 fns
            (MS (mod_prepost (S:=S) i o imp_module)
                (SMFilter, initial_imp_state fns2, (PPOutside, s0, r0))).
 Proof.
-  move => HR Hcall.
-  apply: tsim_implies_trefines => n.
-  unshelve apply: tsim_remember. { simpl. exact (λ n '(Imp ei hi fnsi) '(ips, Imp es hs fnss, (pp, s, r)),
-    ∃ Ki Ks b,
-      fnsi = fns1 ∧
-      fnss = fns2 ∧
-      ei = expr_fill Ki (Waiting b) ∧
-      es = expr_fill Ks (Waiting b) ∧
-      pp = PPOutside ∧
-      ips = SMFilter ∧
-      R false (s0, r0) (s, r) ∧
-      imp_prepost_proof_stack n fns1 fns2 i o R b s r Ki Ks
-). }
-  { eexists [], []. split!. econs. } {
-    move => ? n' [ei hi fnsi] [[ips [es hs fnss]] [[pp {}s] r]] /= Hsub ?. destruct_all?.
-    split!. 1, 2: done. by apply: imp_prepost_proof_stack_mono.
-  }
-  move => {}n _ /= Hloop [ei hi fnsi] [[ips [es hs fnss]] [[pp {}s] r]] [Ki [Ks ?]].
-  destruct_all?; simplify_eq.
+  move => HR Hc.
+  apply: tsim_implies_trefines => n0 /=.
+  unshelve eapply tsim_remember_call.
+  { simpl. exact (λ d b '((Imp ei1 hi1 fnsi1), (ips1, Imp es1 hs1 fnss1, (pp1, s1, r1)))
+                    '((Imp ei2 hi2 fnsi2), (ips2, Imp es2 hs2 fnss2, (pp2, s2, r2))),
+    ∃ Ki Ks,
+      fnsi2 = fns1 ∧
+      fnss2 = fns2 ∧
+      ei2 = expr_fill Ki (Waiting (bool_decide (d ≠ 0%nat))) ∧
+      es2 = expr_fill Ks (Waiting (bool_decide (d ≠ 0%nat))) ∧
+      pp2 = PPOutside ∧
+      ips2 = SMFilter ∧
+      R b (s1, r1) (s2, r2) ∧
+      if b then
+        ei2 = ei1 ∧
+        es2 = es1
+      else
+        True
+                 ). }
+  { simpl. exact (λ  '(Imp ei1 hi1 fnsi1) '(ips1, Imp es1 hs1 fnss1, (pp1, s1, r1))
+                     '(Imp ei2 hi2 fnsi2) '(ips2, Imp es2 hs2 fnss2, (pp2, s2, r2)),
+    ∃ Ki b v,
+      fnsi2 = fnsi1 ∧
+      fnss2 = fnss1 ∧
+      ei1 = expr_fill Ki (Waiting b) ∧
+      es2 = es1 ∧
+      ei2 = expr_fill Ki (Val v) ∧
+      ips2 = SMFilter ∧
+      hs2 = hs1 ∧
+      pp2 = PPRecv1 (Incoming, EIReturn v hi2) ∧
+      s2 = s1 ∧
+      r2 = r1). }
+  { move => ??? *. destruct_all?. repeat case_match; naive_solver. }
+  { move => /= *. destruct_all?. repeat case_match. naive_solver. }
+  { move => /=. eexists [], []. split!. }
+  move => /= n [ei hi fnsi] [[ips [es hs fnss]] [[pp {}s] r]] d ? ? Hstay Hcall Hret. destruct_all!; simplify_eq.
   tstep_i. split => *.
   - tstep_s. split!.
-    tstep_s. apply: pp_to_all_mono. { by eapply (Hcall n (ReturnExtCtx b :: Ki) (ReturnExtCtx b :: Ks)). }
+    tstep_s. apply: pp_to_all_mono. { by eapply (Hc n (ReturnExtCtx _ :: Ki) (ReturnExtCtx _ :: Ks)). }
     move => -[??] ? Hcall' ??. move: Hcall' => /(_ _ ltac:(done))[?[?[?[?[? Hcall']]]]]. simplify_eq/=.
-    tstep_s. left. split!. repeat case_bool_decide; try by tstep_s. 2: naive_solver.
+    tstep_s. left. split!. repeat case_bool_decide (_ = _); try by tstep_s. 2: naive_solver.
     have [//|? {}Hcall'] := Hcall'. apply: tsim_mono_b. apply: Hcall'.
     + move => n' f K1' K2' es1 es2 vs1' vs2' ???????? Hall1 Hall2 ?.
       have ?: es1 = Val <$> vs1'. { clear -Hall1. elim: Hall1; naive_solver. } subst.
@@ -1079,25 +1072,24 @@ Proof.
       tstep_i. split => *; simplify_eq. rewrite orb_true_r. tstep_s. right. split!.
       tstep_s. apply: pp_to_ex_mono; [done|].
       move => [??] ? /= [?[?[?[??]]]]. simplify_eq. split!; [done|].
-      apply: Hloop; [done|].
-      split!; [done..|by etrans|].
-      econs; [by apply: imp_prepost_proof_stack_mono|].
-      move => ?????. apply: pp_to_all_mono; [naive_solver|].
-      move => [??] ? /= Hsim ??. move: Hsim => /(_ _ ltac:(done))?. destruct_all?. subst. split!.
-      rewrite !expr_fill_app /=. done.
+      apply Hcall; [done| |]. { split!; [done..|]. by etrans. }
+      move => [ei2 hi2 fnsi2] [[ips2 [es2 hs2 fnss2]] [[pp2 {}s2] r2]].
+      move => [ei3 hi3 fnsi3] [[ips3 [es3 hs3 fnss3]] [[pp3 {}s3] r3]] ??.
+      destruct_all?; simplify_eq.
+      tstep_s. apply: pp_to_all_mono; [naive_solver|].
+      move => [??] ? Hsim ??. move: Hsim => /(_ _ ltac:(done))?. destruct_all?. simplify_eq/=.
+      tstep_s. right. split!.
+      repeat match goal with | H : expr_fill _ _ = expr_fill _ _ |- _ => apply expr_fill_Waiting_inj in H end.
+      destruct_all?; simplify_eq.
+      by rewrite !expr_fill_app.
     + move => *. tstep_s. tstep_i. rewrite orb_true_r. tstep_s. apply: pp_to_ex_mono; [done|].
-      move => [??] ? [?[?[??]]] /=. subst. split!; [done|]. apply: tsim_mono; [|done]. apply: Hloop; [done|].
-      split!. 1, 2: done.
-      { etrans; [done|]. by apply: HR. }
-      { by apply: imp_prepost_proof_stack_mono_R. }
-  - revert select (imp_prepost_proof_stack _ _ _ _ _ _ _ _ _ _ _) => Hs.
-    inversion Hs; clear Hs; simplify_eq/= => //.
-    tstep_s. split!.
-    tstep_s. apply: pp_to_all_mono; [naive_solver|].
-    move => [??] ? Hsim ??. move: Hsim => /(_ _ ltac:(done))?. destruct_all?. simplify_eq/=.
-    tstep_s. right. split!.
+      move => [??] ? [?[?[??]]] /=. subst. split!; [done|]. apply: tsim_mono; [|done].
+      apply: Hstay; [done|]. split!; [done..|]. naive_solver.
+  - tstep_s. split!.
+    apply: Hret; [done|naive_solver| |].
+    + by split!.
+    + by split!.
 Qed.
-
 (** * closing *)
 (*
 module imp_event:
