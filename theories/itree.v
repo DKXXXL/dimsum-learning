@@ -1,3 +1,42 @@
+(*
+(* Code to test universe errors: *)
+(* Global Unset Universe Minimization ToSet. *)
+From ExtLib Require Import
+     Data.Monads.OptionMonad
+     Data.Monads.EitherMonad.
+
+(* Require Import ExtLib.Structures.Monads. *)
+(* Local Open Scope monad_scope. *)
+
+(* Set Implicit Arguments. *)
+(* Set Strict Implicit. *)
+
+(* Global Instance Monad_option : Monad option := *)
+(* { ret  := @Some *)
+(* ; bind := fun _ _ c1 c2 => match c1 with *)
+(*                              | None => None *)
+(*                              | Some v => c2 v *)
+(*                            end *)
+(* }. *)
+
+(* Global Instance Zero_option : MonadZero option := *)
+(* { mzero := @None }. *)
+
+(* Global Instance Plus_option : MonadPlus option := *)
+(* { mplus _A _B aM bM := *)
+(*     match aM with *)
+(*     | None => liftM inr bM *)
+(*     | Some a => Some (inl a) *)
+(*     end *)
+(* }. *)
+
+(* From ExtLib Require Export MonadFix. *)
+(* From ITree Require Export Monad. *)
+Require Export stdpp.gmap.
+Set Printing Universes.
+Print gset.
+Constraint sum.u1 < gmap.u1.
+*)
 From Paco Require Import paco.
 From ITree Require Export ITree ITreeFacts.
 From ITree Require Export ITree.

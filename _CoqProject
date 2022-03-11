@@ -32,6 +32,7 @@ theories/imp_heap_bij.v
 theories/imp_heap_bij_own.v
 theories/imp_to_asm.v
 theories/imp_to_asm_examples.v
+theories/int_ptr_cast.v
 theories/iris/wp.v
 theories/iris/mono_ord.v
 theories/iris/ord_later.v

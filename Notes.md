@@ -1,3 +1,39 @@
+# TODOs
+
+- [ ] Verify imp code that links with spec of integer pointer casting.
+  - Maybe let x := Alloc 1 in x ← 1; let y = int_to_ptr(ptr_to_int(x)) in let r := !y in Free(y); Return r
+    - refines Return 1
+- [ ] Define pure_i2a.imp_to_asm
+- [ ] Prove vertical compositionality of pure_i2a.imp_to_asm and pure_bij.heap_bij
+  - Should be easier than vertical compositionality for heap_bij since
+    e.g. we don't need heap_in_bij for middle module to outside
+- [ ] Prove equivalence of pure_i2a.imp_to_asm and imp_to_asm
+- [ ] Prove equivalence of pure_bij.heap_bij and heap_bij
+- [ ] Add ghost state for f2i and add values of f2i to initial ownership
+- [ ] Add fnptrs to imp (should be easy when one has ghost state for f2i)
+- [ ] Add global variables
+- [ ] Make allocation in Imp like RefinedC allocation
+- [ ] Compiler
+- [ ] vertical compositionality? If necessary
+
+Done:
+- [X] Add system calls to asm
+- [X] Generalize imp_prepost for arbitrary imp_event modules on both sides (without prepost)
+- [X] Prove imp_to_asm refinement for integer pointer casting module
+  - at the imp level, the integer pointer casting can be represented
+    by an itree with state gmap prov Z which universally chooses which
+    provenance to return
+
+Postponed:
+- [ ] Make mod_seq_map only emit events when the inner module accepted them
+  - Tricky because the two events are not linked. Maybe it is not
+    necessary? With the current asm_closed it seems so since the env
+    can cause syscallrets at bad times but this would just cause UB.
+    Maybe bad events by the env should be UB instead of NB in general?
+    (e.g. in None state of asm allow Syscall events, but make them UB?
+    Does it matter?) Or maybe one should add a predicate to
+    mod_prepost to rule out non-sensical events from the env?
+
 # Notes
 
 module : state transition system

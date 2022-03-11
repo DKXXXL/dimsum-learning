@@ -276,15 +276,17 @@ Record fndef : Type := {
 }.
 
 (** ** heap *)
-Record heap_state := Heap {
+Record heap_state : Set := Heap {
   h_heap : gmap loc val;
-  h_provs : gset prov;
-  heap_wf' : bool_decide (set_map fst (dom (gset _) h_heap) ⊆ h_provs);
+  h_provs' : gmap prov unit; (* We need to use gmap because gset does not live in Set *)
+  heap_wf' : bool_decide (set_map fst (dom (gset _) h_heap) ⊆ dom (gset _) h_provs');
 }.
 Add Printing Constructor heap_state.
 
+Definition h_provs (h : heap_state) : gset prov := dom _ (h_provs' h).
+
 Lemma heap_state_eq h1 h2:
-  h1 = h2 ↔ h1.(h_heap) = h2.(h_heap) ∧ h1.(h_provs) = h2.(h_provs).
+  h1 = h2 ↔ h1.(h_heap) = h2.(h_heap) ∧ h1.(h_provs') = h2.(h_provs').
 Proof. split; [naive_solver|]. destruct h1, h2 => /= -[??]; subst. f_equal. apply proof_irrel. Qed.
 
 Lemma heap_wf h l:
@@ -302,53 +304,77 @@ Definition heap_alive (h : heap_state) (l : loc) : Prop :=
   is_Some (h.(h_heap) !! l).
 
 Definition heap_is_fresh (h : heap_state) (l : loc) : Prop :=
-  l.1 ∉ h.(h_provs) ∧ l.2 = 0.
+  l.1 ∉ h_provs h ∧ l.2 = 0.
 
 Definition heap_fresh (ps : gset prov) (h : heap_state) : loc :=
-  (fresh (ps ∪ h.(h_provs)), 0).
+  (fresh (ps ∪ h_provs h), 0).
 
 Program Definition heap_update (h : heap_state) (l : loc) (v : val) : heap_state :=
-  Heap (alter (λ _, v) l h.(h_heap)) h.(h_provs) _.
+  Heap (alter (λ _, v) l h.(h_heap)) h.(h_provs') _.
 Next Obligation.
   move => ???. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]].
   rewrite lookup_alter_is_Some. subst. apply heap_wf.
 Qed.
 
+Lemma heap_update_provs h l v :
+  h_provs (heap_update h l v) = h_provs h.
+Proof. done. Qed.
+
 Program Definition heap_alloc (h : heap_state) (l : loc) (n : Z) : heap_state :=
-  Heap (list_to_map ((λ z, (l +ₗ z, ValNum 0)) <$> seqZ 0 n) ∪ h.(h_heap)) ({[l.1]} ∪ h.(h_provs)) _.
+  Heap (list_to_map ((λ z, (l +ₗ z, ValNum 0)) <$> seqZ 0 n) ∪ h.(h_heap)) (gset_to_gmap tt ({[l.1]} ∪ h_provs h)) _.
 Next Obligation.
   move => ???. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]]. subst.
-  move => [? /lookup_union_Some_raw[Hl|[? Hh]]]; apply elem_of_union; [left|right; by apply heap_wf].
+  rewrite dom_gset_to_gmap. move => [? /lookup_union_Some_raw[Hl|[? Hh]]]; apply elem_of_union; [left|right; by apply heap_wf].
   move: Hl => /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap. set_solver.
 Qed.
 
+Lemma heap_alloc_provs h l n :
+  h_provs (heap_alloc h l n) = {[l.1]} ∪ h_provs h.
+Proof. by rewrite /h_provs /= dom_gset_to_gmap. Qed.
+
 Program Definition heap_free (h : heap_state) (l : loc) : heap_state :=
-  Heap (filter (λ '(l', v), l'.1 ≠ l.1) h.(h_heap)) h.(h_provs) _.
+  Heap (filter (λ '(l', v), l'.1 ≠ l.1) h.(h_heap)) h.(h_provs') _.
 Next Obligation.
   move => ??. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]]. subst.
   rewrite map_filter_lookup => -[?/bind_Some[?[??]]]. by apply heap_wf.
 Qed.
 
+Lemma heap_free_provs h l :
+  h_provs (heap_free h l) = h_provs h.
+Proof. done. Qed.
+
 Program Definition heap_merge (h1 h2 : heap_state) : heap_state :=
-  Heap (h_heap h1 ∪ h_heap h2) (h_provs h1 ∪ h_provs h2) _.
+  Heap (h_heap h1 ∪ h_heap h2) (h_provs' h1 ∪ h_provs' h2) _.
 Next Obligation.
   move => ??. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]]. subst.
   move => /lookup_union_is_Some[/heap_wf?|/heap_wf?]; set_solver.
 Qed.
 
+Lemma heap_merge_provs h1 h2 :
+  h_provs (heap_merge h1 h2) = h_provs h1 ∪ h_provs h2.
+Proof. by rewrite /h_provs/= dom_union_L. Qed.
+
 Program Definition heap_restrict (h : heap_state) (P : prov → Prop) `{!∀ x, Decision (P x)} : heap_state :=
-  Heap (filter (λ x, P x.1.1) h.(h_heap)) h.(h_provs) _.
+  Heap (filter (λ x, P x.1.1) h.(h_heap)) h.(h_provs') _.
 Next Obligation.
   move => ???. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]]. subst.
   rewrite map_filter_lookup => -[?/bind_Some[?[??]]]. by apply heap_wf.
 Qed.
 
+Lemma heap_restrict_provs h (P : prov → Prop) `{!∀ x, Decision (P x)} :
+  h_provs (heap_restrict h P) = h_provs h.
+Proof. done. Qed.
+
 Program Definition heap_add_provs (h : heap_state) (p : gset prov) : heap_state :=
-  Heap (h_heap h) (p ∪ h.(h_provs)) _.
+  Heap (h_heap h) (gset_to_gmap tt (p ∪ h_provs h)) _.
 Next Obligation.
   move => ??. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]] ?. subst.
-  apply: union_subseteq_r. by apply heap_wf.
+  rewrite dom_gset_to_gmap. apply: union_subseteq_r. by apply heap_wf.
 Qed.
+
+Lemma heap_add_provs_provs h p :
+  h_provs (heap_add_provs h p) = p ∪ h_provs h.
+Proof. by rewrite /h_provs/= dom_gset_to_gmap. Qed.
 
 Lemma heap_fresh_is_fresh ps h:
   heap_is_fresh h (heap_fresh ps h).

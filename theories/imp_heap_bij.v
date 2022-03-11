@@ -888,16 +888,18 @@ Proof. move => ?. destruct vs => //=. case_match; naive_solver. Qed.
 (** *** heap_through_bij *)
 Program Definition heap_through_bij (bij : heap_bij) (h : heap_state) : heap_state :=
   Heap (list_to_map $ omap (OMap:=list_omap) (λ '(l, v), if hb_bij bij !! l.1 is Some (HBShared p) then
-         Some ((p, l.2), val_through_bij bij v) else None) (map_to_list (h_heap h))) (hb_shared_i bij) _.
+         Some ((p, l.2), val_through_bij bij v) else None) (map_to_list (h_heap h)))
+       (gset_to_gmap tt $ hb_shared_i bij) _.
 Next Obligation.
   move => ??. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]]. subst.
+  rewrite dom_gset_to_gmap.
   rewrite list_to_map_lookup_is_Some => -[?]. rewrite elem_of_list_omap => -[[[??]?]]/=[??].
   repeat case_match; simplify_eq. rewrite elem_of_hb_shared_i. naive_solver.
 Qed.
 
 Lemma heap_through_bij_provs bij h :
   h_provs (heap_through_bij bij h) = hb_shared_i bij.
-Proof. done. Qed.
+Proof. by rewrite /h_provs dom_gset_to_gmap. Qed.
 
 Lemma heap_through_bij_Some bij h pi o vi:
   h_heap (heap_through_bij bij h) !! (pi, o) = Some vi ↔
@@ -1288,6 +1290,7 @@ Proof.
       (heap_merge (heap_restrict (heap_through_bij bijb' h') (λ p, p ∈ hb_shared_s bija'))
                   (heap_restrict hib (λ x, x ∉ hb_shared_s bija' ∨ x ∉ hb_shared_i bijb'))).
     split!; rewrite ?heap_of_event_event_set_vals_heap; split!; last done. all: split!.
+    + rewrite heap_merge_provs !heap_restrict_provs heap_through_bij_provs. done.
     + etrans; [|done]. move => ?. by rewrite heap_bij_merge_provs_i.
     + rewrite Forall2_fmap_r. apply: Forall2_impl; [done|] => v_ii v_s /=.
       destruct v_ii, v_s => //= -[/heap_bij_merge_shared[?[??]]?].
@@ -1326,6 +1329,7 @@ Proof.
     + apply: heap_preserved_mono; [done|]. move => ?.
       rewrite {1}elem_of_hb_player_i /= heap_bij_merge_player_i. naive_solver.
     + etrans; [|done]. by rewrite heap_bij_merge_dom.
+    + rewrite heap_merge_provs !heap_restrict_provs heap_through_bij_provs. done.
     + rewrite vals_of_event_event_set_vals_heap. 2: rewrite fmap_length; solve_length.
       rewrite Forall2_fmap_l. apply Forall_Forall2_diag, Forall_forall => ?/= /elem_of_list_lookup [? Hin].
       apply val_through_in_bij => ??. simplify_eq.

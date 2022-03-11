@@ -148,6 +148,25 @@ Definition i2a_mem_auth (amem : gmap Z Z) : uPred imp_to_asmUR :=
 Definition i2a_mem_constant (a : Z) (v : Z) : uPred imp_to_asmUR :=
   uPred_ownM (i2a_mem_inj (gmap_view_frag a (DfracOwn 1) v)).
 
+Lemma i2a_heap_shared_lookup h p a :
+  i2a_heap_auth h -∗
+  i2a_heap_shared p a -∗
+  ⌜h !! p = Some (I2AShared a)⌝.
+Proof.
+  apply bi.wand_intro_r. rewrite -uPred.ownM_op.
+  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [/gmap_view_both_valid_L??]. naive_solver.
+Qed.
+
+Lemma i2a_heap_shared_ag p a1 a2 :
+  i2a_heap_shared p a1 -∗
+  i2a_heap_shared p a2 -∗
+  ⌜a1 = a2⌝.
+Proof.
+  apply bi.wand_intro_r. rewrite -uPred.ownM_op.
+  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [/=/gmap_view_frag_op_valid[??]?].
+  naive_solver.
+Qed.
+
 Lemma i2a_mem_alloc a v amem :
   amem !! a = None →
   i2a_mem_auth amem ==∗ i2a_mem_auth (<[a := v]> amem) ∗ i2a_mem_constant a v.

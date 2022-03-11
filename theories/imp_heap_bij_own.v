@@ -900,8 +900,8 @@ Proof.
         1: { apply heap_preserved_alloc; [|rewrite hb_priv_s_lookup_None; by move => *; simplify_map_eq].
              rewrite hb_privs_s_share. apply: heap_preserved_mono; [done|]. apply delete_subseteq. }
         1: { apply heap_preserved_alloc; [done|]. apply not_elem_of_dom. unfold heap_is_fresh in *. set_solver. }
-        1: { etrans; [apply hb_provs_i_share|]. set_solver. }
-        1: { rewrite dom_insert_L. set_solver. }
+        1: { etrans; [apply hb_provs_i_share|]. rewrite heap_alloc_provs. set_solver. }
+        1: { rewrite dom_insert_L heap_alloc_provs. set_solver. }
       * tstep_s => l' *; simplify_eq/=. tend.
         iSatStart.
         destruct v => //; simplify_eq/=; iDestruct!; simplify_eq/=.
@@ -1082,7 +1082,7 @@ Proof.
   1, 2: by simplify_map_eq. 1,2: by econs.
   eexists (heap_bij_update_const_s l.1 _ bij1), [].
   split!.
-  { rewrite dom_insert_L. set_solver. }
+  { rewrite dom_insert_L heap_update_provs heap_alloc_provs. set_solver. }
   { etrans; [apply hb_provs_i_update_const_s|]. done. }
   { rewrite hb_priv_s_update_const_s. apply heap_preserved_insert_const.
     apply heap_preserved_update; [|by move => *; simplify_map_eq].

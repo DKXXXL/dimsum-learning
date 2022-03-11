@@ -243,6 +243,22 @@ Section map_filter.
 End map_filter.
 End theorems.
 
+Section theorems.
+Context `{FinMap K M}.
+
+Lemma lookup_total_partial_alter {A} `{Inhabited A} (f : option A → option A) (m : M A) i:
+  partial_alter f i m !!! i = default inhabitant (f (m !! i)).
+Proof. by rewrite lookup_total_alt lookup_partial_alter. Qed.
+
+Lemma lookup_partial_alter_Some {A} (f : option A → option A) (m : M A) i j x :
+  partial_alter f i m !! j = Some x ↔ (i = j ∧ f (m !! i) = Some x) ∨ (i ≠ j ∧ m !! j = Some x).
+Proof.
+  destruct (decide (i = j)); subst.
+  - rewrite lookup_partial_alter. naive_solver.
+  - rewrite lookup_partial_alter_ne; naive_solver.
+Qed.
+End theorems.
+
 Section dom.
 Context `{FinMapDom K M D}.
 Lemma map_difference_eq_dom {A} (m m1 m2 : M A) :
@@ -660,6 +676,7 @@ Tactic Notation "iDestruct!" :=
         | emp%I => iDestruct H as "_"
         | ⌜_⌝%I => iDestruct H as %?
         | (_ ∗ _)%I => iDestruct H as "[??]"
+        | (∃ x, _)%I => iDestruct H as (?) "?"
         | (□ _)%I => iDestruct H as "#?"
         end)
   || simplify_eq/=).

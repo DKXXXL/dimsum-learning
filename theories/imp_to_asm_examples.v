@@ -222,7 +222,7 @@ Proof.
   }
   { split_and!.
     - move => ?? /lookup_insert_Some?. destruct_all?; simplify_map_eq' => //. by apply Hmem.
-    - split. { apply union_subseteq_r'. apply Hheap. }
+    - split. { rewrite heap_free_provs heap_update_provs heap_alloc_provs. apply union_subseteq_r'. apply Hheap. }
       move => l ??. etrans; [|by eapply Hheap].
       rewrite heap_free_update // heap_free_alloc //=.
       rewrite left_id_L. apply is_fresh.
