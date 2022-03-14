@@ -482,6 +482,79 @@ Proof.
   - erewrite map_difference_eq_dom_L => //. apply _.
 Qed.
 
+(** * Deeply embedded assembly language *)
+Inductive asm_operand :=
+| RegisterOp (r : string) | ImmediateOp (z : Z).
+
+Definition op_lookup (rs : gmap string Z) (op : asm_operand) : Z :=
+  match op with
+  | RegisterOp r => rs !!! r
+  | ImmediateOp z => z
+  end.
+
+Inductive deep_asm_instr :=
+| Amov (rd : string) (o : asm_operand)
+| Aadd (rd r1 : string) (o : asm_operand)
+| Amul (rd r1 : string) (o : asm_operand)
+| Aload (r r1 : string) (o2 : Z) (* ldr r, [r1 + o2] *)
+| Astore (r r1: string) (o2 : Z) (* str r, [r1 + o2] *)
+| Abranch (abs : bool) (o : asm_operand) (* abs: absolute or relative address? *)
+| Abranch_eq (abs : bool) (od : asm_operand) (r1 : string) (o : asm_operand)
+| Abranch_link (abs : bool) (o : asm_operand)
+| Aret
+| ASyscall
+.
+
+Definition deep_to_asm_instr (di : deep_asm_instr) : asm_instr :=
+  match di with
+  | Amov rd o => [
+      WriteReg rd (λ rs, op_lookup rs o);
+      WriteReg "PC" (λ rs, rs !!! "PC" + 1)
+    ]
+  | Aadd rd r1 o => [
+      WriteReg rd (λ rs, rs !!! r1 + op_lookup rs o);
+      WriteReg "PC" (λ rs, rs !!! "PC" + 1)
+    ]
+  | Amul rd r1 o => [
+      WriteReg rd (λ rs, rs !!! r1 * op_lookup rs o);
+      WriteReg "PC" (λ rs, rs !!! "PC" + 1)
+    ]
+  | Aload r r1 o2 => [
+      ReadMem r r1 (λ v, v + o2);
+      WriteReg "PC" (λ rs, rs !!! "PC" + 1)
+    ]
+  | Astore r r1 o2 => [
+      WriteMem r r1 (λ v, v + o2);
+      WriteReg "PC" (λ rs, rs !!! "PC" + 1)
+    ]
+  | Abranch abs o => [
+      WriteReg "PC" (λ rs, if abs then op_lookup rs o else  rs !!! "PC" + op_lookup rs o)
+    ]
+  | Abranch_eq abs od r1 o => [
+      WriteReg "PC" (λ rs,
+        if bool_decide (rs !!! r1 = op_lookup rs o) then
+          if abs then op_lookup rs od else  rs !!! "PC" + op_lookup rs od
+        else
+          rs !!! "PC" + 1)
+    ]
+  | Abranch_link abs o => [
+      WriteReg "R30" (λ rs, rs !!! "PC" + 1);
+      WriteReg "PC" (λ rs, if abs then op_lookup rs o else  rs !!! "PC" + op_lookup rs o)
+    ]
+  | Aret => [
+      WriteReg "PC" (λ rs, rs !!! "R30")
+    ]
+  | Asyscall => [
+      Syscall false;
+      WriteReg "PC" (λ rs, rs !!! "PC" + 1)
+    ]
+  end.
+
+Definition deep_to_asm_instrs (s : Z) (di : list deep_asm_instr) : gmap Z asm_instr :=
+  map_seqZ s (deep_to_asm_instr <$> di).
+
+
+(** * itree examples *)
 Require Import refframe.itree.
 Local Ltac go :=
   clear_itree.
@@ -618,21 +691,21 @@ Module asm_examples.
     <[ 100 := [
           (* mul R1, R1, R2 *)
           WriteReg "R1" (λ rs, rs !!! "R1" * rs !!! "R2");
-          WriteReg "PC" (λ rs, rs !!! "PC" + 4)
+          WriteReg "PC" (λ rs, rs !!! "PC" + 1)
       ] ]> $
-    <[ 104 := [
+    <[ 101 := [
           (* ret *)
           WriteReg "PC" (λ rs, rs !!! "R30")
       ] ]> $ ∅.
 
   Definition itree_mul : itree (moduleE asm_event unit) unit :=
-    asm_loop [100; 104] (λ pc rs mem,
+    asm_loop [100; 101] (λ pc rs mem,
        if bool_decide (pc = 100) then
          r1 ← translate (inr_) (TAssumeOpt (rs !! "R1"));;;
          r2 ← translate (inr_) (TAssumeOpt (rs !! "R2"));;;
          r30 ← translate (inr_) (TAssumeOpt (rs !! "R30"));;;
          Ret (r30, (<["PC":=r30]> $ <["R1":=r1 * r2]> $ rs), mem)
-       else if bool_decide (pc = 104) then
+       else if bool_decide (pc = 101) then
          translate (inr_) TUb
        else
          translate (inr_) TNb
@@ -671,30 +744,30 @@ Module asm_examples.
           (* mov R1, 2; mov R2, 2; *)
           WriteReg "R1" (λ rs, 2);
           WriteReg "R2" (λ rs, 2);
-          WriteReg "PC" (λ rs, rs !!! "PC" + 4)
+          WriteReg "PC" (λ rs, rs !!! "PC" + 1)
       ] ]> $
-    <[ 204 := [
+    <[ 201 := [
           (* mov R29, R30; *)
           WriteReg "R29" (λ rs, rs !!! "R30");
-          WriteReg "PC" (λ rs, rs !!! "PC" + 4)
+          WriteReg "PC" (λ rs, rs !!! "PC" + 1)
       ] ]> $
-    <[ 208 := [
+    <[ 202 := [
           (* bl 100; *)
-          WriteReg "R30" (λ rs, rs !!! "PC" + 4);
+          WriteReg "R30" (λ rs, rs !!! "PC" + 1);
           WriteReg "PC" (λ rs, 100)
       ] ]> $
-    <[ 212 := [
+    <[ 203 := [
           (* mov R30, R29; *)
           WriteReg "R30" (λ rs, rs !!! "R29");
-          WriteReg "PC" (λ rs, rs !!! "PC" + 4)
+          WriteReg "PC" (λ rs, rs !!! "PC" + 1)
       ] ]> $
-    <[ 216 := [
+    <[ 204 := [
           (* ret; *)
           WriteReg "PC" (λ rs, rs !!! "R30")
       ] ]> $ ∅.
 
   Definition itree_mul_client : itree (moduleE asm_event unit) unit :=
-    asm_loop [200; 204; 208; 212; 216] (λ pc rs mem,
+    asm_loop [200; 201; 202; 203; 204] (λ pc rs mem,
        if bool_decide (pc = 200) then
          translate (inr_) (TAssume (is_Some (rs !! "R1")));;;;
          translate (inr_) (TAssume (is_Some (rs !! "R2")));;;;
@@ -702,18 +775,18 @@ Module asm_examples.
          r30 ← translate (inr_) (TAssumeOpt (rs !! "R30"));;;
          r29' ← translate (inr_) (TExist Z);;;
          (* translate (inr_) (TVis (EAJump 100 (<["PC":=100]> $ <["R30":= 212]> $ <["R29":= r29']> $ <["R2":= 2]> $ <["R1":= 2]> $ rs)));;;; *)
-         '(pc', rs', mem') ← call (Some (100, (<["PC":=100]> $ <["R30":= 212]> $ <["R29":= r29']> $ <["R2":= 2]> $ <["R1":= 2]> $ rs), mem));;;
-         translate (inr_) (TAssume (pc' = 212));;;;
+         '(pc', rs', mem') ← call (Some (100, (<["PC":=100]> $ <["R30":= 203]> $ <["R29":= r29']> $ <["R2":= 2]> $ <["R1":= 2]> $ rs), mem));;;
+         translate (inr_) (TAssume (pc' = 203));;;;
          translate (inr_) (TAssume (is_Some (rs' !! "R30")));;;;
          translate (inr_) (TAssume (rs' !! "R29" = Some r29'));;;;
-         translate (inr_) (TAssume (r30 ≠ 200 ∧ r30 ≠ 204 ∧ r30 ≠ 208 ∧ r30 ≠ 212 ∧ r30 ≠ 216));;;;
+         translate (inr_) (TAssume (r30 ≠ 200 ∧ r30 ≠ 201 ∧ r30 ≠ 202 ∧ r30 ≠ 203 ∧ r30 ≠ 204));;;;
          r30' ← translate (inr_) (TExist Z);;;
          (* translate (inr_) (TVis (EAJump r30 (<["PC":= r30]> $ <["R30":= r30']> rs')));;;; *)
          Ret (r30, (<["PC":= r30]> $ <["R30":= r30']> rs'), mem')
+       else if bool_decide (pc = 201) then translate (inr_) TUb
+       else if bool_decide (pc = 202) then translate (inr_) TUb
+       else if bool_decide (pc = 203) then translate (inr_) TUb
        else if bool_decide (pc = 204) then translate (inr_) TUb
-       else if bool_decide (pc = 208) then translate (inr_) TUb
-       else if bool_decide (pc = 212) then translate (inr_) TUb
-       else if bool_decide (pc = 216) then translate (inr_) TUb
        else translate (inr_) TNb
     ).
 

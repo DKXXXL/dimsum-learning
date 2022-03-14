@@ -15,9 +15,9 @@ Definition asm_add : gmap Z asm_instr :=
   <[ 100 := [
         (* add R0, R0, R1 *)
         WriteReg "R0" (λ rs, rs !!! "R0" + rs !!! "R1");
-        WriteReg "PC" (λ rs, rs !!! "PC" + 4)
+        WriteReg "PC" (λ rs, rs !!! "PC" + 1)
     ] ]> $
-  <[ 104 := [
+  <[ 101 := [
         (* ret *)
         WriteReg "PC" (λ rs, rs !!! "R30")
     ] ]> $ ∅.
@@ -35,31 +35,31 @@ Definition asm_add_client : gmap Z asm_instr :=
   <[ 200 := [
         (* mov R0, 1 *)
         WriteReg "R0" (λ rs, 1);
-        WriteReg "PC" (λ rs, rs !!! "PC" + 4)
+        WriteReg "PC" (λ rs, rs !!! "PC" + 1)
     ] ]> $
-  <[ 204 := [
+  <[ 201 := [
         (* mov R1, 1 *)
         WriteReg "R1" (λ rs, 1);
-        WriteReg "PC" (λ rs, rs !!! "PC" + 4)
+        WriteReg "PC" (λ rs, rs !!! "PC" + 1)
     ] ]> $
-  <[ 208 := [
+  <[ 202 := [
         (* push R30 *)
         WriteReg "SP" (λ rs, rs !!! "SP" - 1);
         WriteMem "R30" "SP" id;
-        WriteReg "PC" (λ rs, rs !!! "PC" + 4)
+        WriteReg "PC" (λ rs, rs !!! "PC" + 1)
     ] ]> $
-  <[ 212 := [
+  <[ 203 := [
         (* bl 100; *)
-        WriteReg "R30" (λ rs, rs !!! "PC" + 4);
+        WriteReg "R30" (λ rs, rs !!! "PC" + 1);
         WriteReg "PC" (λ rs, 100)
     ] ]> $
-  <[ 216 := [
+  <[ 204 := [
         (* pop R30 *)
         ReadMem "R30" "SP" id;
         WriteReg "SP" (λ rs, rs !!! "SP" + 1);
-        WriteReg "PC" (λ rs, rs !!! "PC" + 4)
+        WriteReg "PC" (λ rs, rs !!! "PC" + 1)
     ] ]> $
-  <[ 220 := [
+  <[ 205 := [
         (* ret *)
         WriteReg "PC" (λ rs, rs !!! "R30")
     ] ]> $ ∅.
@@ -150,7 +150,7 @@ Lemma asm_add_refines_imp_add :
            (MS (imp_to_asm (dom _ asm_add) (dom _ imp_add_prog) (<["add" := 100]> ∅) imp_module) (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_prog))).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
-  move => n i rs mem K f fn avs vs h cs pc ret rf rc amem ih Hpc Hi Hf Hf2i Hsat Hinv Hargs ? Hcall Hret.
+  move => n i rs mem K f fn avs vs h cs pc ret rf rc amem ih lr Hpc Hi Hf Hf2i Hsat Hinv Hargs ? ? Hcall Hret.
   unfold imp_add_prog in Hf. unfold asm_add in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   destruct vs as [|v1 [|v2 []]] => //=.
@@ -180,7 +180,7 @@ Lemma asm_add_client_refines_imp_add_client :
                (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_client_prog) )).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
-  move => n i rs mem K f fn avs vs h cs pc ret rf rc amem ih Hpc Hi Hf Hf2i Hsat [Hmem [Hheap Hsp]] Hargs ? Hcall Hret.
+  move => n i rs mem K f fn avs vs h cs pc ret rf rc amem ih lr Hpc Hi Hf Hf2i Hsat [Hmem [Hheap Hsp]] Hargs ? ? Hcall Hret.
   unfold imp_add_client_prog in Hf. unfold asm_add_client in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   destruct vs as [|] => //=.
@@ -210,7 +210,7 @@ Proof.
   tstep_s => *; simplify_eq.
   tstep_s.
   change (imp.Call "add" [Val 1; Val 1]) with (expr_fill [] (imp.Call "add" [Val 1; Val 1])).
-  apply: Hcall. { repeat econs. } { by simplify_map_eq. } { set_solver. } { set_solver. } { by simplify_map_eq. }
+  apply: Hcall. { repeat econs. } { by simplify_map_eq. } { set_solver. } { by simplify_map_eq. }
   { iSatMonoBupd.
     iRename select (i2a_heap_shared_agree _ _) into "Hag".
     iMod (i2a_mem_alloc (rs !!! "SP" - 1) with "[$]") as "[??]"; [apply Hsp; lia|].
@@ -231,7 +231,7 @@ Proof.
   { unfold imp_to_asm_args. split!; decompose_Forall; by simplify_map_eq'. }
   { by simplify_map_eq. } { by simplify_map_eq'. }
   iSatClear.
-  move => rs'' mem'' av v h'' amem'' ih'' rf'' Hpc'' Hsat'' [Hmem'' [Hheap'' Hsp'']] Hr.
+  move => rs'' mem'' av v h'' amem'' ih'' rf'' lr'' Hpc'' Hsat'' [Hmem'' [Hheap'' Hsp'']] Hr ?.
   move: Hr => [?[? Hm]]; simplify_map_eq'.
   tstep_i; simplify_map_eq'. split!; [by simplify_map_eq'..|].
   tstep_i; simplify_map_eq'. split!; [done..|].
@@ -298,7 +298,7 @@ Qed.
 
 Lemma full_add_stack :
   trefines (MS asm_module (initial_asm_state full_asm_add))
-           (MS (imp_to_asm {[ 100; 104; 200; 204; 208; 212; 216; 220 ]} {[ "add"; "add_client" ]}
+           (MS (imp_to_asm {[ 100; 101; 200; 201; 202; 203; 204; 205 ]} {[ "add"; "add_client" ]}
                            (<["add_client" := 200]> $ <["add" := 100]> ∅) imp_module)
                (initial_imp_to_asm_state imp_module (initial_imp_state full_imp_add_prog))).
 Proof.

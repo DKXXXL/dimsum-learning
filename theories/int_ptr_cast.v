@@ -20,7 +20,7 @@ Definition int_to_ptr_asm : gmap Z asm_instr :=
         WriteReg "PC" (λ rs, rs !!! "R30")
     ] ]> $
   (* cast_ptr_to_int *)
-  <[ 404 := [
+  <[ 401 := [
         (* ret *)
         WriteReg "PC" (λ rs, rs !!! "R30")
     ] ]> $ ∅.
@@ -29,7 +29,7 @@ Definition int_to_ptr_fns : gset string :=
   {["cast_int_to_ptr"; "cast_ptr_to_int" ]}.
 
 Definition int_to_ptr_f2i : gmap string Z :=
-  <["cast_int_to_ptr" := 400]> $ <["cast_ptr_to_int" := 404]> $ ∅.
+  <["cast_int_to_ptr" := 400]> $ <["cast_ptr_to_int" := 401]> $ ∅.
 
 Definition int_to_ptr_itree : itree (moduleE imp_event (gmap prov Z)) unit :=
   ITree.forever (
@@ -251,13 +251,13 @@ Definition exit_asm : gmap Z asm_instr :=
   (* exit *)
   <[ 100 := [
         WriteReg "R8" (λ rs, __NR_EXIT);
-        WriteReg "PC" (λ rs, rs !!! "PC" + 4)
+        WriteReg "PC" (λ rs, rs !!! "PC" + 1)
     ] ]> $
-  <[ 104 := [
+  <[ 101 := [
         Syscall false;
-        WriteReg "PC" (λ rs, rs !!! "PC" + 4)
+        WriteReg "PC" (λ rs, rs !!! "PC" + 1)
     ] ]> $
-  <[ 108 := [
+  <[ 102 := [
         (* loop *)
         WriteReg "PC" (λ rs, rs !!! "PC")
     ] ]> $ ∅.
@@ -306,7 +306,7 @@ Proof.
   go_i. split. { by simplify_map_eq. }
   sort_map_insert. simplify_map_eq'.
   unshelve eapply tsim_remember. { exact (λ _ '(AsmState i rs _ ins) _,
-      i = Some [] ∧ rs !! "PC" = Some 108 ∧ ins = exit_asm). }
+      i = Some [] ∧ rs !! "PC" = Some 102 ∧ ins = exit_asm). }
   { split!. by simplify_map_eq. } { done. }
   move => ?? Hloop [????] ? ?. destruct_all?; simplify_eq.
   go_i => ??. simplify_map_eq.
@@ -326,7 +326,7 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   TAssume (pc = 200);;;;
   TAssume (map_list_included tmp_registers rs);;;;
   TAssume (map_list_included saved_registers rs);;;;
-  TAssume (rs !!! "R30" ∉ ({[200; 400; 404]} : gset _));;;;
+  TAssume (rs !!! "R30" ∉ ({[200; 400; 401]} : gset _));;;;
   args ← TExist _;;;
   TAssert (length args = length syscall_arg_regs);;;;
   TAssert (args !! 0%nat = Some 1);;;;

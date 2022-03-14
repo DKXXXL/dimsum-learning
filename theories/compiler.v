@@ -63,6 +63,9 @@ Global Instance cret S A E : MRet (compiler_monad S A E) :=
 Definition cerror {S A E R} : E → compiler_monad S A E R :=
   λ err s, CResult s (cm_empty A) (CError err).
 
+Definition cassert_opt {S A E R} : E → option R → compiler_monad S A E R :=
+  λ err o, if o is Some r then mret r else cerror err.
+
 Definition cget {S A E} : compiler_monad S A E S :=
   λ s, CResult s (cm_empty A) (CSuccess s).
 
@@ -101,7 +104,62 @@ Section compiler_monad.
     by rewrite assoc_L.
   Qed.
 
+  Lemma cret_success R (r' : R) (s s' : S) (a : A) (r : R):
+    crun (E:=E) s (mret r') = CResult s' a (CSuccess r) ↔ s = s' ∧ a = cm_empty A ∧ r = r'.
+  Proof. rewrite /crun/mret/cret/=. naive_solver. Qed.
+
+  Lemma cbind_success {RA RB} x (f : RA → M RB) s1 s3 r3 a3:
+    crun s1 (x ≫= f) = CResult s3 a3 (CSuccess r3) ↔
+    ∃ s2 a2 r2 a3',
+      crun s1 x = CResult s2 a2 (CSuccess r2) ∧
+      crun s2 (f r2) = CResult s3 a3' (CSuccess r3) ∧
+      a3 = cm_comp A a2 a3'.
+  Proof.
+    rewrite /crun/mbind/cbind/=.
+    destruct (x s1) as [xs ? ?].
+    repeat case_match; simplify_eq/= => //. 2: naive_solver.
+    split => ?; destruct_all?; simplify_eq.
+    + destruct (f res xs) eqn: Heq. naive_solver.
+    + revert select (f _ _ = _) => -> /=. done.
+  Qed.
+
+  Lemma cerror_success R (e : E) (s s' : S) (a : A) (r : R):
+    crun s (cerror e) = CResult s' a (CSuccess r) ↔ False.
+  Proof. rewrite /crun/cerror/=. naive_solver. Qed.
+
+  Lemma cassert_opt_success R (x : option R) (e : E) (s : S) s' a r:
+    crun s (cassert_opt e x) = CResult s' a (CSuccess r) ↔
+     s = s' ∧ a = cm_empty A ∧ x = Some r.
+  Proof.
+    rewrite /crun/=. destruct x => /=.
+    - rewrite cret_success. naive_solver.
+    - rewrite cerror_success. naive_solver.
+  Qed.
+
+  Lemma cappend_success (s : S) s' (a : A) a' r:
+    crun (E:=E) s (cappend a) = CResult s' a' (CSuccess r) ↔
+     s = s' ∧ a = a' ∧ r = tt.
+  Proof. rewrite /crun/cappend/=. naive_solver. Qed.
 End compiler_monad.
+
+Tactic Notation "simplify_crun_eq" :=
+  repeat (match goal with
+          | H : crun _ (mret _) = CResult _ _ (CSuccess _) |- _ =>
+              apply cret_success in H;
+              destruct H as (?&?&?)
+          | H : crun _ (_ ≫= _) = CResult _ _ (CSuccess _) |- _ =>
+              apply cbind_success in H;
+              destruct H as (?&?&?&?&?&?&?)
+          | H : crun _ (cerror _) = CResult _ _ (CSuccess _) |- _ =>
+              apply cerror_success in H;
+              destruct H as []
+          | H : crun _ (cassert_opt _ _) = CResult _ _ (CSuccess _) |- _ =>
+              apply cassert_opt_success in H;
+              destruct H as (?&?&?)
+          | H : crun _ (cappend _) = CResult _ _ (CSuccess _) |- _ =>
+              apply cappend_success in H;
+              destruct H as (?&?&?)
+          end || simplify_eq/=).
 
 Module compiler_test.
 

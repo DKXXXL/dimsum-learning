@@ -540,6 +540,12 @@ Proof. unfold map_preserved. naive_solver. Qed.
 
 Global Opaque map_list_included map_scramble map_preserved.
 
+Fixpoint map_seqZ `{Insert Z A M, Empty M} (start : Z) (xs : list A) : M :=
+  match xs with
+  | [] => ∅
+  | x :: xs => <[start:=x]> (map_seqZ (Z.succ start) xs)
+  end.
+
 Section semi_set.
   Context `{SemiSet A C}.
   Implicit Types x y : A.
