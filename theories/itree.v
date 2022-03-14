@@ -35,6 +35,9 @@ From ExtLib Require Import
 Require Export stdpp.gmap.
 Set Printing Universes.
 Print gset.
+Print Universes Subgraph (gmap.u1 gmap_eq.u1 MRet.u0).
+Print Universes.
+Print gmap_eq.
 Constraint sum.u1 < gmap.u1.
 *)
 From Paco Require Import paco.

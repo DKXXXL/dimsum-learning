@@ -13,6 +13,7 @@ theories/base.v
 theories/axioms.v
 theories/trace_index.v
 theories/satisfiable.v
+theories/compiler.v
 theories/module.v
 theories/example_modules.v
 theories/srefines.v

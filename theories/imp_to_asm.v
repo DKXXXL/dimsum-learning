@@ -223,6 +223,25 @@ Definition i2a_heap_shared_agree (h : gmap loc val) (ih : gmap prov imp_to_asm_e
     else
       True.
 
+Lemma i2a_inv_init mem sp:
+  i2a_inv mem ∅ initial_heap_state ∅ sp.
+Proof.
+  split_and!.
+  - move => ???. simplify_map_eq.
+  - split; [set_solver|]. move => ???. simplify_map_eq.
+  - move => ??. by simplify_map_eq.
+Qed.
+
+Lemma i2a_res_init :
+  satisfiable (i2a_mem_auth ∅ ∗ i2a_heap_auth ∅ ∗ i2a_heap_shared_agree ∅ ∅).
+Proof.
+ apply: (satisfiable_init (i2a_mem_inj (gmap_view_auth (DfracOwn 1) ∅) ⋅
+                              i2a_heap_inj (gmap_view_auth (DfracOwn 1) ∅))).
+ { split => /=; rewrite ?left_id ?right_id; apply gmap_view_auth_valid. }
+ rewrite uPred.ownM_op. iIntros!. iModIntro. iFrame. iApply big_sepM_intro.
+ iIntros "!>" (???). simplify_eq.
+Qed.
+
 (* TODO: This really should be a big ∗ not at big ∧ *)
 (* Definition i2a_mem_heap_agree (h : heap_state) (ih : gmap prov imp_to_asm_elem) : uPred imp_to_asmUR := *)
 (*   ∀ p a, ih !! p = Some (I2AShared a) → *)

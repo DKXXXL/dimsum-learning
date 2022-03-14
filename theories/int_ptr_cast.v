@@ -25,6 +25,12 @@ Definition int_to_ptr_asm : gmap Z asm_instr :=
         WriteReg "PC" (λ rs, rs !!! "R30")
     ] ]> $ ∅.
 
+Definition int_to_ptr_fns : gset string :=
+  {["cast_int_to_ptr"; "cast_ptr_to_int" ]}.
+
+Definition int_to_ptr_f2i : gmap string Z :=
+  <["cast_int_to_ptr" := 400]> $ <["cast_ptr_to_int" := 404]> $ ∅.
+
 Definition int_to_ptr_itree : itree (moduleE imp_event (gmap prov Z)) unit :=
   ITree.forever (
       f ← TExist string;;;
@@ -58,8 +64,7 @@ Local Ltac go_i :=
 
 Lemma int_to_ptr_asm_refines_itree :
   trefines (MS asm_module (initial_asm_state int_to_ptr_asm))
-           (MS (imp_to_asm (dom _ int_to_ptr_asm) ({[ "cast_int_to_ptr"; "cast_ptr_to_int" ]})
-                           (<["cast_int_to_ptr" := 400]> $ <["cast_ptr_to_int" := 404]> $ ∅)
+           (MS (imp_to_asm (dom _ int_to_ptr_asm) int_to_ptr_fns int_to_ptr_f2i
                            (mod_itree imp_event (gmap prov Z)))
                (initial_imp_to_asm_state (mod_itree _ _) (int_to_ptr_itree, ∅))).
 Proof.
@@ -80,7 +85,7 @@ Proof.
   revert select (_ ⊢ _) => HP.
   revert select (imp_to_asm_args _ _ _) => -[?[?[??]]].
   revert select (_ ∉ dom _ _) => /not_elem_of_dom?.
-  unfold int_to_ptr_asm in Hi. (repeat case_bool_decide); simplify_map_eq.
+  unfold int_to_ptr_asm in Hi. unfold int_to_ptr_f2i in *. (repeat case_bool_decide); simplify_map_eq.
   - tstep_i. split; [by simplify_map_eq'|].
     go_s => ?. go.
     go_s => ?. go.
@@ -165,7 +170,7 @@ Definition main_itree : itree (moduleE imp_event unit) unit :=
   TUb.
 
 Lemma main_int_to_ptr_refines_itree :
-  trefines (MS (imp_prod (dom _ main_imp_prog) ({[ "cast_int_to_ptr"; "cast_ptr_to_int" ]})
+  trefines (MS (imp_prod (dom _ main_imp_prog) int_to_ptr_fns
                          imp_module (mod_itree _ _))
                (MLFNone, [], initial_imp_state main_imp_prog, (int_to_ptr_itree, ∅)))
            (MS (mod_itree _ _) (main_itree, tt)).
@@ -226,6 +231,20 @@ Proof.
   go_s. done.
 Qed.
 
+Definition main_asm_dom : gset Z := {[200]}.
+Definition main_f2i : gmap string Z := <["main" := 200]> $ <["exit" := 100]> int_to_ptr_f2i .
+
+Axiom main_asm : gmap Z asm_instr.
+Axiom main_asm_wf : asm_instrs_wf main_asm.
+Axiom main_asm_dom_eq : dom (gset Z) main_asm = main_asm_dom.
+
+Lemma main_asm_refines_imp :
+  trefines (MS asm_module (initial_asm_state main_asm))
+           (MS (imp_to_asm main_asm_dom (dom _ main_imp_prog) main_f2i imp_module)
+               (initial_imp_to_asm_state imp_module (initial_imp_state main_imp_prog))).
+Proof. Admitted.
+
+(* https://thog.github.io/syscalls-table-aarch64/latest.html *)
 Definition __NR_EXIT : Z := 93.
 
 Definition exit_asm : gmap Z asm_instr :=
@@ -318,12 +337,10 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   TNb.
 
 Lemma top_level_refines_itree :
-  trefines (MS (asm_prod {[200; 400; 404]} {[ 100; 104; 108 ]}
-                         (imp_to_asm {[200; 400; 404]} {[ "main" ; "cast_int_to_ptr"; "cast_ptr_to_int" ]}
-                                     (<[ "main" := 200 ]> $
-                                      <[ "cast_int_to_ptr" := 400 ]> $
-                                      <[ "cast_ptr_to_int" := 404 ]> $
-                                      <[ "exit" := 100 ]> $ ∅)
+  trefines (MS (asm_prod (main_asm_dom ∪ dom _ int_to_ptr_asm) (dom _ exit_asm)
+                         (imp_to_asm (main_asm_dom ∪ dom _ int_to_ptr_asm)
+                                     (dom _ main_imp_prog ∪ int_to_ptr_fns)
+                                     main_f2i
                                      (mod_itree _ _)) (mod_itree _ _))
                (MLFNone, None, initial_imp_to_asm_state (mod_itree _ _) (main_itree, tt), (exit_itree, tt)))
            (MS (mod_itree _ _) (top_level_itree, tt)).
@@ -340,12 +357,13 @@ Proof.
   go_s => ?. go. simplify_eq/=.
   rewrite bool_decide_true; [|compute_done].
   go_i => ??. simplify_eq.
-  go_i. eexists true => /=. split; [done|]. eexists ∅, ∅, ∅.
-  split. { admit. }
+  go_i. eexists true => /=. split; [done|]. eexists initial_heap_state, ∅, ∅.
+  split. { apply i2a_inv_init. }
   eexists (regs !!! "R30"), "main", [], [].
   split!. { unfold imp_to_asm_args. split!. apply lookup_lookup_total.
             apply: (map_list_included_is_Some tmp_registers); [done|]. compute_done. }
-  { admit. }
+  { apply: satisfiable_mono; [apply i2a_res_init|].
+    iIntros!. iFrame. iSplit; [done|]. iAccu. }
   go_i => ?. go.
   go_i => ?. go.
   go_i => ?. go.
@@ -354,14 +372,18 @@ Proof.
   go_i. split!. go.
   go_i => ?. go.
   go_i.
-  go_i. move => *. destruct_all?; simplify_map_eq.
+  go_i. move => *. unfold main_f2i in *. destruct_all?; simplify_map_eq.
   rewrite bool_decide_false; [|compute_done]. rewrite bool_decide_true; [|compute_done].
   go_i => ?. go.
   go_i => ?. go.
   go_i => ?. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
-  go_i. split!. { admit. } go.
+  go_i. split!. {
+    revert select (imp_to_asm_args _ _ _) => -[?[?[??]]].
+    apply: (map_list_included_mono tmp_registers); [done|].
+    compute_done.
+  } go.
   go_i => ?. go.
   go_i => ?. go.
   go_i => ?. go.
@@ -379,10 +401,64 @@ Proof.
   go_i => *. go.
   go_i => *. done.
   Unshelve.
-  - admit.
-  - admit.
   - done.
   - iSatStart. iIntros!. iDestruct (big_sepL2_cons_inv_l with "[$]") as (????) "?". iSatStop. simplify_eq.
     revert select (imp_to_asm_args _ _ _) => -[?[??]]. decompose_Forall_hyps. simplify_map_eq'. by f_equal.
   - done.
-Admitted.
+Qed.
+
+Lemma complete_refinement :
+  trefines (MS asm_module (initial_asm_state (main_asm ∪ int_to_ptr_asm ∪ exit_asm)))
+           (MS (mod_itree _ _) (top_level_itree, tt)).
+Proof.
+  etrans. {
+    apply asm_link_refines_prod.
+    - apply map_disjoint_dom_2. rewrite dom_union main_asm_dom_eq. compute_done.
+    - apply map_Forall_union_2; [apply main_asm_wf|compute_done].
+    - compute_done.
+  }
+  etrans. {
+    apply: asm_prod_trefines.
+    - etrans. {
+        apply asm_link_refines_prod.
+        - apply map_disjoint_dom_2. rewrite main_asm_dom_eq. compute_done.
+        - apply main_asm_wf.
+        - compute_done.
+      }
+      etrans. {
+        apply: asm_prod_trefines.
+        - apply main_asm_refines_imp.
+        - apply int_to_ptr_asm_refines_itree.
+      }
+      etrans. {
+        rewrite -main_asm_dom_eq.
+        apply: imp_to_asm_combine.
+        - rewrite main_asm_dom_eq. compute_done.
+        - compute_done.
+        - move => ?. rewrite !dom_insert_L dom_empty_L main_asm_dom_eq.
+          set_solver.
+        - move => ?. set_solver.
+        - move => ???. rewrite /main_f2i /int_to_ptr_f2i !lookup_insert_Some.
+          naive_solver.
+        - move => ??. rewrite /main_f2i !lookup_insert_Some. naive_solver.
+        - move => ??. rewrite main_asm_dom_eq /int_to_ptr_f2i !lookup_insert_Some. naive_solver.
+      }
+      etrans. {
+        apply: imp_to_asm_trefines.
+        apply main_int_to_ptr_refines_itree.
+      }
+      have -> : (main_f2i ∪ int_to_ptr_f2i) = main_f2i by compute_done.
+      done.
+    - apply exit_asm_refines_itree.
+  }
+  etrans. {
+    rewrite dom_union_L main_asm_dom_eq.
+    apply: top_level_refines_itree.
+  }
+  done.
+Qed.
+
+(* TODO: make asm_module a dem_module, have a dem_mod_itree (that
+makes non-trivial angelic choice UB) and show that the trefines implies
+dem_refines and then use this to prove trace properties about the
+assembly code? This would remove trefines from the TCB *)

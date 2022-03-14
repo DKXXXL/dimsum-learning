@@ -437,6 +437,12 @@ Lemma map_list_included_insert {K A} `{Countable K} ns (m : gmap K A) i x:
   map_list_included ns (<[i := x]>m).
 Proof. unfold map_list_included. set_solver. Qed.
 
+Lemma map_list_included_mono {K A} `{Countable K} (ns ns' : list K) (rs : gmap K A) :
+  map_list_included ns rs →
+  list_to_set ns' ⊆@{gset _} list_to_set ns →
+  map_list_included ns' rs.
+Proof. set_solver. Qed.
+
 Global Instance map_scramble_preorder {K A} `{Countable K} ns : PreOrder (map_scramble (K:=K) (A:=A) ns).
 Proof.
   constructor.
