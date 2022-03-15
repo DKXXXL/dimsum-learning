@@ -62,6 +62,12 @@ Local Ltac go_s :=
 Local Ltac go_i :=
   tstep_i; go.
 
+(*
+  asm_module(int_to_ptr_asm) {asm_event}
+    <= {asm_event}
+  imp_to_asm(itree_module(int_to_ptr_itree {imp_event}) {imp_event}) {asm_event}
+*)
+
 Lemma int_to_ptr_asm_refines_itree :
   trefines (MS asm_module (initial_asm_state int_to_ptr_asm))
            (MS (imp_to_asm (dom _ int_to_ptr_asm) int_to_ptr_fns int_to_ptr_f2i
@@ -142,6 +148,20 @@ Proof.
     by iApply big_sepM_insert_2.
 Qed.
 
+(*
+void main () {
+  size_t *l = alloc(1);
+  *l = 1;
+  size_t z = cast_ptr_to_int(l);
+  size_t z' = z - 1 + 1;
+  size_t *l' = cast_int_to_ptr(z');
+  size_t r = *l';
+  free(l);
+  exit(r);
+}
+
+*)
+
 Definition main_imp : fndef := {|
   fd_args := [];
   fd_body := LetE "l" (Alloc (Val 1)) $
@@ -168,6 +188,12 @@ Definition main_itree : itree (moduleE imp_event unit) unit :=
   h' ← TExist (heap_state);;;
   TVis (Outgoing, EICall "exit" [ValNum 1] h');;;;
   TUb.
+
+(*
+  imp_module(main_imp) {imp_event} +imp itree_module(int_to_ptr_itree {imp_event}) {imp_event}
+      <= {imp_event}
+  itree_module(main_itree {imp_event}) {imp_event}
+*)
 
 Lemma main_int_to_ptr_refines_itree :
   trefines (MS (imp_prod (dom _ main_imp_prog) int_to_ptr_fns
@@ -238,6 +264,12 @@ Axiom main_asm : gmap Z asm_instr.
 Axiom main_asm_wf : asm_instrs_wf main_asm.
 Axiom main_asm_dom_eq : dom (gset Z) main_asm = main_asm_dom.
 
+(*
+  asm_module(main_asm) {asm_event}
+    <= {asm_event}
+  imp_to_asm(imp_module(main_imp) {imp_event}) {asm_event}
+*)
+
 Lemma main_asm_refines_imp :
   trefines (MS asm_module (initial_asm_state main_asm))
            (MS (imp_to_asm main_asm_dom (dom _ main_imp_prog) main_f2i imp_module)
@@ -274,9 +306,16 @@ Definition exit_itree : itree (moduleE asm_event unit) unit :=
   TAssert (args !! 0%nat = Some (rs !!! "R0"));;;;
   TAssert (args !! 8%nat = Some __NR_EXIT);;;;
   TVis (Outgoing, EASyscallCall args);;;;
+  (* TUb. *)
   ret ← TExist _;;;
   TVis (Incoming, EASyscallRet ret);;;;
   TNb.
+
+(*
+  asm_module(exit_asm) {asm_event}
+    <= {asm_event}
+  itree_module(exit_itree {asm_event}) {asm_event}
+*)
 
 Lemma exit_asm_refines_itree :
   trefines (MS asm_module (initial_asm_state exit_asm))
@@ -335,6 +374,14 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   ret ← TExist _;;;
   TVis (Incoming, EASyscallRet ret);;;;
   TNb.
+
+(*
+   imp_to_asm(itree_module(main_itree {imp_event}) {imp_event}) {asm_event}
+    +asm
+   itree_module(exit_itree {asm_event}) {asm_event}
+      <= {asm_event}
+   itree_module(toplevel_itree {asm_event}) {asm_event}
+*)
 
 Lemma top_level_refines_itree :
   trefines (MS (asm_prod (main_asm_dom ∪ dom _ int_to_ptr_asm) (dom _ exit_asm)
@@ -406,6 +453,12 @@ Proof.
     revert select (imp_to_asm_args _ _ _) => -[?[??]]. decompose_Forall_hyps. simplify_map_eq'. by f_equal.
   - done.
 Qed.
+
+(*
+  asm_module(main_asm ∪ int_to_ptr_asm ∪ exit_asm) {asm_event}
+    <= {asm_event}
+  itree_module(toplevel_itree {asm_event}) {asm_event}
+*)
 
 Lemma complete_refinement :
   trefines (MS asm_module (initial_asm_state (main_asm ∪ int_to_ptr_asm ∪ exit_asm)))

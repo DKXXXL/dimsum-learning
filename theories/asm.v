@@ -18,7 +18,7 @@ Definition syscall_arg_regs : list string :=
 Definition extract_syscall_args (rs : gmap string Z) : list Z :=
   (λ r, rs !!! r) <$> syscall_arg_regs.
 
-Inductive asm_instr_event :=
+Inductive asm_instr_elem :=
 | WriteReg (r : string) (f : gmap string Z → Z)
 (* ldr r1, [f r2] *)
 | ReadMem (r1 r2 : string) (f : Z → Z)
@@ -27,7 +27,7 @@ Inductive asm_instr_event :=
 | Syscall (waiting : bool)
 .
 
-Definition asm_instr := list asm_instr_event.
+Definition asm_instr := list asm_instr_elem.
 
 Definition asm_instr_wf (i : asm_instr) : bool :=
   forallb (λ e, if e is Syscall true then false else true) i.
@@ -92,7 +92,8 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
 | SRecvJump regs regs' instrs pc es mem mem':
   regs' !! "PC" = Some pc →
   instrs !! pc = Some es →
-  asm_step (AsmState None regs mem instrs) (Some (Incoming, EAJump pc regs' mem'))
+  asm_step (AsmState None regs mem instrs)
+           (Some (Incoming, EAJump pc regs' mem'))
            (λ σ', σ' = AsmState (Some es) regs' mem' instrs)
 .
 

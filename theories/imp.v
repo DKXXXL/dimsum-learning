@@ -102,6 +102,7 @@ Definition to_val (e : expr) : option val :=
   | _ => None
   end.
 
+(** substitution *)
 Fixpoint subst (x : string) (v : val) (e : expr) : expr :=
   match e with
   | Var y => if bool_decide (x = y) then Val v else Var y
@@ -124,6 +125,55 @@ Fixpoint subst_l (xs : list string) (vs : list val) (e : expr) : expr :=
   | _,_ => e
   end.
 
+Fixpoint subst_map (x : gmap string val) (e : expr) : expr :=
+  match e with
+  | Var y => if x !! y is Some v then Val v else Var y
+  | Val v => Val v
+  | BinOp e1 o e2 => BinOp (subst_map x e1) o (subst_map x e2)
+  | Load e => Load (subst_map x e)
+  | Store e1 e2 => Store (subst_map x e1) (subst_map x e2)
+  | Alloc e => Alloc (subst_map x e)
+  | Free e => Free (subst_map x e)
+  | If e e1 e2 => If (subst_map x e) (subst_map x e1) (subst_map x e2)
+  | LetE y e1 e2 => LetE y (subst_map x e1) (subst_map (delete y x) e2)
+  | Call f args => Call f (subst_map x <$> args)
+  | UbE => UbE
+  | ReturnExt b e => ReturnExt b (subst_map x e)
+  | Waiting b => Waiting b
+  end.
+
+Lemma subst_map_empty e :
+  subst_map ∅ e = e.
+Proof.
+  elim: e => /=; try by move => *; simplify_map_eq; congruence.
+  - move => *. rewrite delete_empty. congruence.
+  - move => ?? /Forall_lookup IH. f_equal.
+    apply list_eq => ?. apply option_eq => ?.
+    rewrite !list_lookup_fmap !fmap_Some.
+    naive_solver congruence.
+Qed.
+
+Lemma subst_subst_map x v e xs :
+  subst_map (<[x:=v]> xs) e = subst_map xs (subst x v e).
+Proof.
+  elim: e xs => //=; try by move => *; congruence.
+  - move => ??. case_bool_decide; simplify_map_eq => //.
+  - move => ??? H1 H2 xs. rewrite H1. case_bool_decide; subst. 2: by rewrite delete_insert_delete.
+    by rewrite delete_insert_ne // H2.
+  - move => ?? /Forall_lookup IH ?. f_equal. apply list_eq => ?. apply option_eq => ?.
+    rewrite !list_lookup_fmap !fmap_Some. setoid_rewrite fmap_Some.
+    naive_solver congruence.
+Qed.
+
+Lemma subst_l_subst_map xs vs e :
+  length xs = length vs →
+  subst_l xs vs e = subst_map (list_to_map (zip xs vs)) e.
+Proof.
+  elim: xs vs e. { case => //=. move => ??. by rewrite subst_map_empty. }
+  move => ?? IH [|??] //= e [?]. by rewrite subst_subst_map IH.
+Qed.
+
+(** evaluation contexts *)
 Inductive expr_ectx :=
 | BinOpLCtx (op : binop) (e2 : expr)
 | BinOpRCtx (v1 : val) (op : binop)
