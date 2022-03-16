@@ -60,8 +60,20 @@ Global Instance cbind S A E: MBind (compiler_monad S A E) :=
 Global Instance cret S A E : MRet (compiler_monad S A E) :=
   λ RA x s, CResult s (cm_empty A) (CSuccess x).
 
+Fixpoint cmap {B C S} {A : compiler_monoid} {E} (l : list B) (n : nat) (f : nat → B → compiler_monad S A E C) : compiler_monad S A E (list C) :=
+  match l with
+  | [] => mret []
+  | x::l =>
+      c ← f n x;
+      cs ← cmap l (Datatypes.S n) f;
+      mret (c :: cs)
+  end.
+
 Definition cerror {S A E R} : E → compiler_monad S A E R :=
   λ err s, CResult s (cm_empty A) (CError err).
+
+Definition cassert {S A E} (err : E) (P : Prop) `{!Decision P} : compiler_monad S A E unit :=
+  if bool_decide P then mret tt else cerror err.
 
 Definition cassert_opt {S A E R} : E → option R → compiler_monad S A E R :=
   λ err o, if o is Some r then mret r else cerror err.
@@ -127,6 +139,15 @@ Section compiler_monad.
     crun s (cerror e) = CResult s' a (CSuccess r) ↔ False.
   Proof. rewrite /crun/cerror/=. naive_solver. Qed.
 
+  Lemma cassert_success P `{!Decision P} (e : E) (s : S) s' a r:
+    crun s (cassert e P) = CResult s' a (CSuccess r) ↔
+     s = s' ∧ a = cm_empty A ∧ r = tt ∧ P.
+  Proof.
+    rewrite /crun/cassert/=. case_bool_decide.
+    - rewrite cret_success. naive_solver.
+    - rewrite cerror_success. naive_solver.
+  Qed.
+
   Lemma cassert_opt_success R (x : option R) (e : E) (s : S) s' a r:
     crun s (cassert_opt e x) = CResult s' a (CSuccess r) ↔
      s = s' ∧ a = cm_empty A ∧ x = Some r.
@@ -153,6 +174,9 @@ Tactic Notation "simplify_crun_eq" :=
           | H : crun _ (cerror _) = CResult _ _ (CSuccess _) |- _ =>
               apply cerror_success in H;
               destruct H as []
+          | H : crun _ (cassert _ _) = CResult _ _ (CSuccess _) |- _ =>
+              apply cassert_success in H;
+              destruct H as (?&?&?&?)
           | H : crun _ (cassert_opt _ _) = CResult _ _ (CSuccess _) |- _ =>
               apply cassert_opt_success in H;
               destruct H as (?&?&?)

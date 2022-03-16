@@ -1,9 +1,11 @@
 From Coq Require Export ssreflect.
+From RecordUpdate Require Export RecordSet.
 Require Export stdpp.prelude.
 Require Export stdpp.gmap.
 Require Export stdpp.strings.
 Require Export iris.prelude.prelude.
 Require Import iris.proofmode.proofmode.
+Export RecordSetNotations.
 
 Global Unset Program Cases.
 

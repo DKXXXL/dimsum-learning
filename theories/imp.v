@@ -26,7 +26,7 @@ Lemma shift_loc_0 l :
 Proof. rewrite /shift_loc. destruct l => /=. f_equal. lia. Qed.
 
 Inductive binop : Set :=
-| AddOp | ShiftOp | EqOp.
+| AddOp | ShiftOp | EqOp | LeOp | LtOp.
 
 Inductive val := | ValNum (z : Z) | ValBool (b : bool) | ValLoc (l : loc).
 Global Instance val_inhabited : Inhabited val := populate (ValNum 0).
@@ -536,7 +536,14 @@ Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
   match op with
   | AddOp => z1 ← val_to_Z v1; z2 ← val_to_Z v2; Some (ValNum (z1 + z2))
   | ShiftOp => l ← val_to_loc v1; z ← val_to_Z v2; Some (ValLoc (l +ₗ z))
-  | EqOp => z1 ← val_to_Z v1; z2 ← val_to_Z v2; Some (ValBool (bool_decide (z1 = z2)))
+  | EqOp =>
+      match v1 with
+      | ValNum z1 => z2 ← val_to_Z v2; Some (ValBool (bool_decide (z1 = z2)))
+      | ValBool b1 => b2 ← val_to_bool v2; Some (ValBool (bool_decide (b1 = b2)))
+      | _ => None
+      end
+  | LeOp => z1 ← val_to_Z v1; z2 ← val_to_Z v2; Some (ValBool (bool_decide (z1 ≤ z2)))
+  | LtOp => z1 ← val_to_Z v1; z2 ← val_to_Z v2; Some (ValBool (bool_decide (z1 < z2)))
   end.
 
 (* TODO: alternative idea: Define semantics as state → itree moduleE state

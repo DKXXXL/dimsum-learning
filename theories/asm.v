@@ -497,6 +497,9 @@ Inductive deep_asm_instr :=
 | Amov (rd : string) (o : asm_operand)
 | Aadd (rd r1 : string) (o : asm_operand)
 | Amul (rd r1 : string) (o : asm_operand)
+| Aseq (rd r1 : string) (o : asm_operand) (* set rd to 1 if r1 == o else to 0 *)
+| Asle (rd r1 : string) (o : asm_operand) (* set rd to 1 if r1 <= o else to 0 *)
+| Aslt (rd r1 : string) (o : asm_operand) (* set rd to 1 if r1 <  o else to 0 *)
 | Aload (r r1 : string) (o2 : Z) (* ldr r, [r1 + o2] *)
 | Astore (r r1: string) (o2 : Z) (* str r, [r1 + o2] *)
 | Abranch (abs : bool) (o : asm_operand) (* abs: absolute or relative address? *)
@@ -518,6 +521,18 @@ Definition deep_to_asm_instr (di : deep_asm_instr) : asm_instr :=
     ]
   | Amul rd r1 o => [
       WriteReg rd (λ rs, rs !!! r1 * op_lookup rs o);
+      WriteReg "PC" (λ rs, rs !!! "PC" + 1)
+    ]
+  | Aseq rd r1 o => [
+      WriteReg rd (λ rs, bool_to_Z (bool_decide (rs !!! r1 = op_lookup rs o)));
+      WriteReg "PC" (λ rs, rs !!! "PC" + 1)
+    ]
+  | Asle rd r1 o => [
+      WriteReg rd (λ rs, bool_to_Z (bool_decide (rs !!! r1 ≤ op_lookup rs o)));
+      WriteReg "PC" (λ rs, rs !!! "PC" + 1)
+    ]
+  | Aslt rd r1 o => [
+      WriteReg rd (λ rs, bool_to_Z (bool_decide (rs !!! r1 < op_lookup rs o)));
       WriteReg "PC" (λ rs, rs !!! "PC" + 1)
     ]
   | Aload r r1 o2 => [
