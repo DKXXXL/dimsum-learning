@@ -94,7 +94,8 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
   instrs !! pc = Some es →
   asm_step (AsmState None regs mem instrs)
            (Some (Incoming, EAJump pc regs' mem'))
-           (λ σ', σ' = AsmState (Some es) regs' mem' instrs)
+           (* We use [] here such that each instruction starts from [] *)
+           (λ σ', σ' = AsmState (Some []) regs' mem' instrs)
 .
 
 Definition asm_module := Mod asm_step.
@@ -241,7 +242,7 @@ Lemma asm_step_None_i rs ins mem:
     ∀ pc i rs' mem',
       rs' !! "PC" = Some pc →
       ins !! pc = Some i →
-      G true (Some (Incoming, EAJump pc rs' mem')) (λ G', G' (AsmState (Some i) rs' mem' ins))
+      G true (Some (Incoming, EAJump pc rs' mem')) (λ G', G' (AsmState (Some []) rs' mem' ins))
    ).
 Proof.
   constructor => ? HG. apply steps_impl_step_end => ???.
@@ -253,7 +254,7 @@ Lemma asm_step_None_s rs mem ins:
   TStepS asm_module (AsmState None rs mem ins) (λ G,
     ∃ pc i rs' mem', rs' !! "PC" = Some pc ∧
       ins !! pc = Some i ∧
-      G (Some (Incoming, EAJump pc rs' mem')) (λ G', G' (AsmState (Some i) rs' mem' ins))).
+      G (Some (Incoming, EAJump pc rs' mem')) (λ G', G' (AsmState (Some []) rs' mem' ins))).
 Proof.
   constructor => ??. destruct_all!. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { by econs. } naive_solver.
@@ -377,7 +378,7 @@ Proof.
     + tstep_i => pc ?. case_match as Hunion. 1: move: Hunion => /lookup_union_Some_raw[Hl|[? Hl]].
       * tstep_s. split!. simplify_option_eq. apply: Hloop; [done|]. naive_solver.
       * tstep_s. split!. simpl_map_decide. simplify_option_eq. split! => /=.
-        tstep_s. split!. apply: Hloop; [done|]. naive_solver.
+        tstep_s. split!. tstep_s. split!. simplify_map_eq. apply: Hloop; [done|]. naive_solver.
       * move: Hunion => /lookup_union_None[??]. tstep_s.
         split!. simpl_map_decide. simplify_option_eq. split! => /=.
         apply: Hloop; [done|]. naive_solver.
@@ -392,7 +393,7 @@ Proof.
     + tstep_i => pc ?. case_match as Hunion. 1: move: Hunion => /lookup_union_Some_raw[Hl|[? Hl]].
       * have ?: ins2 !! pc = None by apply: map_disjoint_Some_l.
         tstep_s. split!. simpl_map_decide. simplify_option_eq. split! => /=.
-        tstep_s. split!. apply: Hloop; [done|]. naive_solver.
+        tstep_s. split!. tstep_s. split!. simplify_map_eq. apply: Hloop; [done|]. naive_solver.
       * tstep_s. split!. simplify_option_eq. apply: Hloop; [done|]. naive_solver.
       * move: Hunion => /lookup_union_None[??]. tstep_s.
         split!. simpl_map_decide. simplify_option_eq. split!.
@@ -430,7 +431,7 @@ Proof.
         apply: Hloop; [done|]. naive_solver.
       * tstep_s. split!. rewrite lookup_union_r //.
         destruct (ins2 !! pc) eqn:? => /=; simpl_map_decide.
-        -- tstep_i => *; simplify_eq. apply: Hloop; [done|]. naive_solver.
+        -- tstep_i => *; simplify_eq. tstep_i => *. simplify_map_eq. apply: Hloop; [done|]. naive_solver.
         -- split!. apply: Hloop; [done|]. naive_solver.
     + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
     + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
@@ -445,7 +446,7 @@ Proof.
         apply: Hloop; [done|]. naive_solver.
       * tstep_s. split!. rewrite lookup_union_l' //.
         destruct (ins1 !! pc) eqn:? => /=; simpl_map_decide.
-        -- tstep_i => *; simplify_eq. apply: Hloop; [done|]. naive_solver.
+        -- tstep_i => *; simplify_eq. tstep_i => *. simplify_map_eq. apply: Hloop; [done|]. naive_solver.
         -- split!. apply: Hloop; [done|]. naive_solver.
     + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
     + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
@@ -658,6 +659,7 @@ Proof.
     go_s. eexists _. go.
     go_s. split; [done|]. go.
     go_s. split. { apply Hins. naive_solver. } go.
+    tstep_i => ??. simplify_map_eq.
     go_s => -[]; go.
     { go_s. apply: tsim_mono_b. revert select (eqit eq _ _ _ _) => ->. apply HCONT. naive_solver. }
     revert select (eqit eq _ _ _ _) => ->. rewrite interp_bind bind_bind.
@@ -690,6 +692,7 @@ Proof.
     go_s. eexists _. go.
     go_s. split; [done|]. go.
     go_s. split. { apply Hins. naive_solver. } go.
+    tstep_i => ??. simplify_map_eq.
     go_s => -[]; go.
     { go_s. apply: tsim_mono_b. revert select (eqit eq _ _ _ _) => ->. apply HCONT. naive_solver. }
     revert select (eqit eq _ _ _ _) => ->. rewrite interp_bind bind_bind.

@@ -136,6 +136,16 @@ Section tactics.
   Definition iSat_end (Φ : Prop) : uPred M :=
     ∃ P', P' ∗ ⌜satisfiable P' → Φ⌝.
 
+  Lemma sat_start_bupd_intro_tac P (Φ : Prop) :
+    satisfiable P →
+    (P ==∗ iSat_end Φ) →
+    Φ.
+  Proof.
+    move => /satisfiable_mono/[apply].
+    move => /satisfiable_bupd_2/satisfiable_exist_2[?]/satisfiable_sep_2[?/satisfiable_pure_2].
+    by apply.
+  Qed.
+
   Lemma sat_start_intro_tac P (Φ : Prop) :
     satisfiable P →
     (P -∗ iSat_end Φ) →
@@ -200,6 +210,14 @@ Tactic Notation "iSatStart" :=
   lazymatch goal with
   | H1 : satisfiable _, H2 : satisfiable _ |- _ => fail "Multiple satisfiable! Pick one via iSatStart H."
   | H : satisfiable _ |- _ => iSatStart H
+  end.
+
+Tactic Notation "iSatStartBupd" ident(H) :=
+  apply (sat_start_bupd_intro_tac _ _ H); clear H; iSatStartProof.
+Tactic Notation "iSatStartBupd" :=
+  lazymatch goal with
+  | H1 : satisfiable _, H2 : satisfiable _ |- _ => fail "Multiple satisfiable! Pick one via iSatStartBupd H."
+  | H : satisfiable _ |- _ => iSatStartBupd H
   end.
 
 Ltac iSatStop :=

@@ -177,6 +177,14 @@ Proof.
   by apply gmap_view_alloc.
 Qed.
 
+Lemma i2a_mem_update v' a v amem :
+  i2a_mem_auth amem ∗ i2a_mem_constant a v ==∗ i2a_mem_auth (<[a := v']> amem) ∗ i2a_mem_constant a v'.
+Proof.
+  rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update.
+  rewrite -!pair_op_2. apply prod_update; [done|].
+  by apply gmap_view_update.
+Qed.
+
 Lemma i2a_mem_delete a v amem :
   i2a_mem_auth amem ∗ i2a_mem_constant a v ==∗ i2a_mem_auth (delete a amem).
 Proof.
@@ -557,46 +565,6 @@ Proof.
       1: { iSatMono. iIntros!. iFrame. }
 Qed.
 
-(* Lemma tsim_remember_stack {EV} {mi ms : module EV} (Pσ : _ → _ → Prop) σi σs b n : *)
-(*   Pσ σi σs → *)
-(*   (* (∀ n n' σi σs, tiS?b n' ⊆ n → Pσ n σi σs → Pσ n' σi σs) → *) *)
-(*   (∀ n' σi σs, *)
-(*       tiS?b n' ⊆ n → *)
-(*       Pσ σi σs → *)
-
-(*       σi ⪯{mi, ms, n'} σs. *)
-(*  ) → *)
-(*   σi ⪯{mi, ms, n, b} σs. *)
-(* Proof. *)
-(*   move => HP HPmono Hsim κs' n' Hn Ht /=. *)
-(*   move: HP => /HPmono HP. move: (HP _ ltac:(done)) => {}HP. *)
-(*   elim/ti_lt_ind: n' κs' σi σs Hn HP Ht. *)
-(*   move => n' IHn κs' σi σs Hn HP Ht. *)
-(*   apply: Hsim; [done| |done| |done]. 2: done. *)
-(*   move => ??????? /=. eapply IHn; [done| | |done]. *)
-(*   - etrans; [|done]. apply tiS_maybe_mono; [done|]. etrans; [|done]. apply ti_le_S. *)
-(*   - apply: HPmono; [|done]. etrans; [|done]. by apply tiS_maybe_mono. *)
-(* Qed. *)
-
-
-Inductive imp_to_asm_proof_stack (n : trace_index) (ins : gmap Z asm_instr) (fns : gmap string fndef) (f2i : gmap string Z) :
-  bool → list expr_ectx → imp_to_asm_state → uPred imp_to_asmUR → Prop :=
-| IAPSNil r0 :
-  imp_to_asm_proof_stack n ins fns f2i false [] (I2A [] ∅) r0
-| IAPSStep c cs lr lr' K' rs ret K b r0 r1:
-  imp_to_asm_proof_stack n ins fns f2i b K (I2A cs lr) r0 →
-  (∀ i rs' mem' h' av v amem' ih' rf,
-      rs' !! "PC" = Some ret →
-      ins !! ret = Some i →
-      satisfiable (i2a_mem_auth amem' ∗ i2a_heap_auth ih' ∗ i2a_heap_shared_agree (h_heap h') ih'
-                                ∗ imp_val_to_asm_val v av ∗ rf ∗ r1) →
-      i2a_inv mem' amem' h' ih' (rs' !!! "SP") →
-      (* i2a_mem_heap_agree rv' h' ih' → *)
-      imp_to_asm_ret rs' rs av →
-      AsmState (Some i) rs' mem' ins ⪯{asm_module, imp_to_asm (dom _ ins) (dom _ fns) f2i imp_module, n, true}
-               (SMProg, Imp (expr_fill (K' ++ K) (Val v)) h' fns, (PPInside, I2A (c :: cs) rs', rf))) →
-  imp_to_asm_proof_stack n ins fns f2i true (K' ++ K) (I2A ((I2AI true ret rs) :: c :: cs) lr') r1
-.
 
 Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
   ins_dom = dom _ ins →
@@ -612,7 +580,7 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
       length vs = length (fd_args fn) →
       map_scramble touched_registers lr rs →
       (* Call *)
-      (∀ K' rs' mem' f' es avs vs pc' i' ret' b h' lr' amem' ih' rf' r',
+      (∀ K' rs' mem' f' es avs vs pc' i' ret' h' lr' amem' ih' rf' r',
           Forall2 (λ e v, e = Val v) es vs →
           rs' !! "PC" = Some pc' →
           (ins !! pc' = None ↔ fns !! f' = None) →
@@ -630,21 +598,21 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
               i2a_inv mem'' amem'' h'' ih'' (rs'' !!! "SP") →
               imp_to_asm_ret rs'' rs' av →
               map_scramble touched_registers lr'' rs'' →
-              AsmState (Some i') rs'' mem'' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
+              AsmState (Some []) rs'' mem'' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K (expr_fill K' (Val v))) h'' fns, (PPInside, I2A cs lr'', rf''))) →
-          AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, b}
+          AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K (expr_fill K' (imp.Call f' es))) h' fns, (PPInside, I2A cs lr', rf'))) →
       (* Return *)
-      (∀ rs' mem' av v h' b lr' rf' amem' ih',
+      (∀ rs' mem' av v h' lr' rf' amem' ih',
           rs' !! "PC" = Some ret →
           satisfiable (i2a_mem_auth amem' ∗ i2a_heap_auth ih' ∗ i2a_heap_shared_agree (h_heap h') ih' ∗
                       imp_val_to_asm_val v av ∗ rf' ∗ rc) →
           i2a_inv mem' amem' h' ih' (rs' !!! "SP") →
           imp_to_asm_ret rs' rs av  →
           map_scramble touched_registers lr' rs' →
-          AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, b}
+          AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K (Val v)) h' fns, (PPInside, I2A cs lr', rf'))) →
-      AsmState (Some i) rs mem ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, false}
+      AsmState (Some []) rs mem ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, false}
                (SMProg, Imp (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) h fns, (PPInside, I2A cs lr, rf))
 ) →
   trefines (MS asm_module (initial_asm_state ins))
@@ -674,7 +642,7 @@ Proof.
                    imp_val_to_asm_val v av ∗ r1 ∗ r2) ∧
       i2a_inv mem2 amem h2 ih (rs2 !!! "SP") ∧
       imp_to_asm_ret rs2 lr' av ∧
-      i2 = Some i ∧
+      i2 = Some [] ∧
       ins'1 = ins'2 ∧
       σfs2 = SMProg ∧
       e1 = expr_fill K (Waiting true) ∧
@@ -708,27 +676,26 @@ Proof.
                                    ([∗ list] v;a∈vs;avs, imp_val_to_asm_val v a) ∗ r' ∗ r ∗ r1) ∧
          i2a_inv mem1 amem h1 ih (rs1 !!! "SP") ∧
          imp_to_asm_args ret rs1 avs ∧
-         i1 = Some i ∧
+         i1 = Some [] ∧
          e1 = expr_fill K' (subst_l fn.(fd_args) vs fn.(fd_body)) ∧
          map_scramble touched_registers lr1 rs1 ∧
          length vs = length (fd_args fn) ∧
          t1 = PPInside ∧
          σfs1 = SMProg ∧
-         (∀ rs' mem' av v h' b lr' rf' amem' ih',
+         (∀ rs' mem' av v h' lr' rf' amem' ih',
           rs' !! "PC" = Some ret →
           satisfiable (i2a_mem_auth amem' ∗ i2a_heap_auth ih' ∗ i2a_heap_shared_agree (h_heap h') ih' ∗
                       imp_val_to_asm_val v av ∗ r' ∗ r ∗ rf') →
           i2a_inv mem' amem' h' ih' (rs' !!! "SP") →
           imp_to_asm_ret rs' rs1 av  →
           map_scramble touched_registers lr' rs' →
-          AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm (dom _ ins) (dom _ fns) f2i imp_module, n, b}
+          AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm (dom _ ins) (dom _ fns) f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K' (Val v)) h' fns, (PPInside, I2A cs1 lr', rf'))) ). }
     { eexists (ReturnExtCtx _:: _). split! => //. { iSatMono. iIntros!. iFrame. iAccu. }
       iSatClear. move => *.
       tstep_s.
       tstep_i => ??. simplify_map_eq.
       tstep_s. split!. { iSatMono. iIntros!. iFrame. iAccu. }
-      rewrite orb_true_r.
       apply Hstay; [done|]. by split!.
     }
     { move => ?? [????] [[?[???]][[?[??]]?]] ??. destruct_all?. split!; [done..|].
@@ -738,21 +705,21 @@ Proof.
     apply: Hf; [try eassumption..| |].
     { iSatMono. iIntros!. iFrame. iAccu. }
     + iSatClear.
-      move => K'' rs'' mem'' f'' es avs'' vs'' pc'' i'' ret'' ? h'' lr amem'' ih'' rf'' r'' Hall ???????? Hret'.
+      move => K'' rs'' mem'' f'' es avs'' vs'' pc'' i'' ret'' h'' lr amem'' ih'' rf'' r'' Hall ???????? Hret'.
       have ?: es = Val <$> vs''. { clear -Hall. elim: Hall; naive_solver. } subst.
-      tstep_i => ??. simplify_map_eq.
-      case_match as Hi; rewrite orb_true_r.
+      destruct (ins !! pc'') eqn:Hi.
       * have [??] : is_Some (fns !! f''). { apply not_eq_None_Some. naive_solver. }
         tstep_s. left. split! => ?/=.
         apply IH; [done|]. split! => //.
         { iSatMono. iIntros!. iFrame. iAccu. }
         iSatClear. move => *.
-        tstep_i => ??. simplify_map_eq.
-        rewrite orb_true_r expr_fill_app.
+        rewrite expr_fill_app.
         apply: Hret' => //.
         iSatMono. iIntros!. iFrame.
       * have ?: fns !! f'' = None by naive_solver.
-        tstep_s. right. split!. tstep_s. split!. { by apply not_elem_of_dom. } { by apply elem_of_dom. }
+        tstep_i => ??. simplify_map_eq.
+        tstep_s. right. split!.
+        tstep_s. split!. { by apply not_elem_of_dom. } { by apply elem_of_dom. }
         { iSatMono. iIntros!. iFrame. iAccu. }
         apply Hcall. { etrans; [|done]. apply ti_le_S. } { by split!. }
         iSatClear.

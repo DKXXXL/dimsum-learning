@@ -131,6 +131,8 @@ Tactic Notation "simpl_map_total" "by" tactic3(tac) := repeat
    match goal with
    | H : ?m !! ?i = Some ?x |- context [?m !!! ?i] =>
        rewrite (lookup_total_correct m i x H)
+   | H1 : context [?m !!! ?i], H2 : ?m !! ?i = Some ?x |- _ =>
+      rewrite (lookup_total_correct m i x H2) in H1
    | |- context [<[ ?i := ?x ]> (<[ ?i := ?y ]> ?m)] =>
        rewrite (insert_insert m i x y)
    | |- context[ (<[_:=_]>_) !!! _ ] =>
@@ -428,6 +430,16 @@ Definition map_scramble {K A} `{Countable K} (ns : list K) (rs rs' : gmap K A) :
 Definition map_preserved {K A} `{Countable K} (ns : list K) (rs rs' : gmap K A) :=
   ∀ i, i ∈ ns → rs !! i = rs' !! i.
 
+Lemma map_list_included_nil {K A} `{Countable K} (m : gmap K A):
+  map_list_included [] m.
+Proof. unfold map_list_included. set_solver. Qed.
+
+Lemma map_list_included_cons {K A} `{Countable K} (m : gmap K A) n ns:
+  n ∈ dom (gset _) m →
+  map_list_included ns m →
+  map_list_included (n::ns) m.
+Proof. unfold map_list_included. set_solver. Qed.
+
 Lemma map_list_included_is_Some {K A} `{Countable K} ns (m : gmap K A) i :
   map_list_included ns m →
   i ∈ ns →
@@ -547,6 +559,33 @@ Fixpoint map_seqZ `{Insert Z A M, Empty M} (start : Z) (xs : list A) : M :=
   | [] => ∅
   | x :: xs => <[start:=x]> (map_seqZ (Z.succ start) xs)
   end.
+
+Definition map_Exists `{Lookup K A M} (P : K → A → Prop) : M → Prop :=
+  λ m, ∃ i x, m !! i = Some x ∧ P i x.
+
+Section theorems.
+Context `{FinMap K M}.
+Section map_Exists.
+  Context {A} (P : K → A → Prop).
+  Implicit Types m : M A.
+  Lemma map_Exists_to_list m : map_Exists P m ↔ Exists (uncurry P) (map_to_list m).
+  Proof.
+    rewrite Exists_exists. split.
+    - intros [? [? [? ?]]]. eexists (_, _). by rewrite elem_of_map_to_list.
+    - intros [[??] [??]]. eexists _, _. by rewrite <-elem_of_map_to_list.
+  Qed.
+
+  Context `{∀ i x, Decision (P i x)}.
+  Global Instance map_Exists_dec m : Decision (map_Exists P m).
+  Proof.
+    refine (cast_if (decide (Exists (uncurry P) (map_to_list m))));
+      by rewrite map_Exists_to_list.
+  Defined.
+End map_Exists.
+End theorems.
+
+Definition codom {K A} `{Countable K} `{Countable A} (m : gmap K A) : gset A :=
+  list_to_set (snd <$> (map_to_list m)).
 
 Section semi_set.
   Context `{SemiSet A C}.

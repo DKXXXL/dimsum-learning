@@ -157,6 +157,16 @@ Section compiler_monad.
     - rewrite cerror_success. naive_solver.
   Qed.
 
+  Lemma cget_success (s : S) s' a' r:
+    crun (E:=E) s cget = CResult s' a' (CSuccess r) ↔
+     s = s' ∧ a' = cm_empty A ∧ r = s.
+  Proof. rewrite /crun/cget/=. naive_solver. Qed.
+
+  Lemma cput_success (s : S) s' s'' a' r:
+    crun (E:=E) s (cput s'') = CResult s' a' (CSuccess r) ↔
+     s' = s'' ∧ a' = cm_empty A ∧ r = s.
+  Proof. rewrite /crun/cput/=. naive_solver. Qed.
+
   Lemma cappend_success (s : S) s' (a : A) a' r:
     crun (E:=E) s (cappend a) = CResult s' a' (CSuccess r) ↔
      s = s' ∧ a = a' ∧ r = tt.
@@ -179,6 +189,12 @@ Tactic Notation "simplify_crun_eq" :=
               destruct H as (?&?&?&?)
           | H : crun _ (cassert_opt _ _) = CResult _ _ (CSuccess _) |- _ =>
               apply cassert_opt_success in H;
+              destruct H as (?&?&?)
+          | H : crun _ cget = CResult _ _ (CSuccess _) |- _ =>
+              apply cget_success in H;
+              destruct H as (?&?&?)
+          | H : crun _ (cput _) = CResult _ _ (CSuccess _) |- _ =>
+              apply cput_success in H;
               destruct H as (?&?&?)
           | H : crun _ (cappend _) = CResult _ _ (CSuccess _) |- _ =>
               apply cappend_success in H;

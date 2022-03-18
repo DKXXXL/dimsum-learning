@@ -160,6 +160,7 @@ Proof.
   iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]".
   iDestruct (big_sepL2_nil_inv_l with "[$]") as %?. simplify_eq/=. decompose_Forall_hyps.
   iSatStop.
+  tstep_i => ??. simplify_map_eq.
   tstep_i. split; [simplify_map_eq'|].
   tstep_i; simplify_map_eq'. split; [done|].
   tstep_i => ??. simplify_map_eq'.
@@ -188,6 +189,7 @@ Proof.
   iSatStart. iIntros!.
   iDestruct (big_sepL2_nil_inv_l with "[$]") as %?. simplify_eq/=. decompose_Forall_hyps.
   iSatStop.
+  tstep_i => ??. simplify_map_eq.
   tstep_i. split; [simplify_map_eq'|].
   tstep_i; simplify_map_eq'. split; [done|].
   tstep_i => ??. simplify_map_eq'.
@@ -233,6 +235,7 @@ Proof.
   iSatClear.
   move => rs'' mem'' av v h'' amem'' ih'' rf'' lr'' Hpc'' Hsat'' [Hmem'' [Hheap'' Hsp'']] Hr ?.
   move: Hr => [?[? Hm]]; simplify_map_eq'.
+  tstep_i => ??. simplify_map_eq.
   tstep_i; simplify_map_eq'. split!; [by simplify_map_eq'..|].
   tstep_i; simplify_map_eq'. split!; [done..|].
   tstep_i; simplify_map_eq'. split!; [done..|].

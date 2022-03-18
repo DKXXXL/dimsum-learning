@@ -85,7 +85,9 @@ Proof.
     (P ⊢ [∗ map] p↦z∈ps, i2a_heap_shared p z)). }
   { split!. by rewrite big_sepM_empty. } { done. }
   move => n _ Hloop [????] [[?[? ps]][[??]?]] ?. destruct_all?; simplify_eq/=.
-  tstep_i => ????? Hi. tstep_s. split!. tstep_s => *. case_match => /= *. 2: congruence.
+  tstep_i => ????? Hi. tstep_s. split!.
+  tstep_i => ??. simplify_map_eq.
+  tstep_s => *. case_match => /= *. 2: congruence.
   tstep_s. rewrite -/int_to_ptr_itree. go. go_s. eexists _. go. go_s. eexists _. go. go_s. eexists _. go.
   go_s. split!. go.
   revert select (_ ⊢ _) => HP.
@@ -327,6 +329,7 @@ Proof.
   go_s. eexists _. go.
   go_s. eexists _. go.
   go_s. split!. go.
+  go_i => ??. simplify_map_eq.
   go_s => ?. go.
   go_s => ?. go.
   unfold exit_asm in Hi. simplify_map_eq.
