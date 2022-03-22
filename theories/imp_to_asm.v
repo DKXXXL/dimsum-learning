@@ -148,7 +148,17 @@ Definition i2a_mem_auth (amem : gmap Z Z) : uPred imp_to_asmUR :=
 Definition i2a_mem_constant (a : Z) (v : Z) : uPred imp_to_asmUR :=
   uPred_ownM (i2a_mem_inj (gmap_view_frag a (DfracOwn 1) v)).
 
-Lemma i2a_heap_shared_lookup h p a :
+Lemma i2a_mem_constant_excl a v1 v2 :
+  i2a_mem_constant a v1 -∗
+  i2a_mem_constant a v2 -∗
+  False.
+Proof.
+  apply bi.wand_intro_r. rewrite -uPred.ownM_op.
+  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [?/=/gmap_view_frag_op_valid[??]].
+  naive_solver.
+Qed.
+
+Lemma i2a_heap_shared_lookup' h p a :
   i2a_heap_auth h -∗
   i2a_heap_shared p a -∗
   ⌜h !! p = Some (I2AShared a)⌝.
@@ -167,7 +177,7 @@ Proof.
   naive_solver.
 Qed.
 
-Lemma i2a_mem_alloc a v amem :
+Lemma i2a_mem_alloc' a v amem :
   amem !! a = None →
   i2a_mem_auth amem ==∗ i2a_mem_auth (<[a := v]> amem) ∗ i2a_mem_constant a v.
 Proof.
@@ -177,7 +187,7 @@ Proof.
   by apply gmap_view_alloc.
 Qed.
 
-Lemma i2a_mem_update v' a v amem :
+Lemma i2a_mem_update' v' a v amem :
   i2a_mem_auth amem ∗ i2a_mem_constant a v ==∗ i2a_mem_auth (<[a := v']> amem) ∗ i2a_mem_constant a v'.
 Proof.
   rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update.
@@ -185,7 +195,7 @@ Proof.
   by apply gmap_view_update.
 Qed.
 
-Lemma i2a_mem_delete a v amem :
+Lemma i2a_mem_delete' a v amem :
   i2a_mem_auth amem ∗ i2a_mem_constant a v ==∗ i2a_mem_auth (delete a amem).
 Proof.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
@@ -193,7 +203,7 @@ Proof.
   by apply gmap_view_delete.
 Qed.
 
-Lemma i2a_mem_lookup a v amem :
+Lemma i2a_mem_lookup' a v amem :
   i2a_mem_auth amem -∗
   i2a_mem_constant a v -∗
   ⌜amem !! a = Some v⌝.
@@ -210,19 +220,21 @@ Definition imp_val_to_asm_val (iv : val) (av : Z) : uPred imp_to_asmUR :=
   | ValLoc l => ∃ z, ⌜av = (z + l.2)%Z⌝ ∗ i2a_heap_shared l.1 z
   end.
 
+Global Instance imp_val_to_asm_val_pers iv av : Persistent (imp_val_to_asm_val iv av).
+Proof. destruct iv; apply _. Qed.
+
 Definition i2a_mem_agree (mem : gmap Z Z) (amem : gmap Z Z) : Prop :=
   ∀ a v, amem !! a = Some v → mem !!! a = v.
-
-Definition i2a_heap_agree (h : heap_state) (ih : gmap prov imp_to_asm_elem) : Prop :=
-  dom _ ih ⊆ h_provs h ∧
-  ∀ l b, ih !! l.1 = Some (I2AConstant b) → h_heap h !! l = b !! l.
 
 Definition i2a_mem_sp (sp : Z) (amem : gmap Z Z) : Prop :=
   ∀ a, a < sp → amem !! a = None.
 
-Definition i2a_inv (mem : gmap Z Z) (amem : gmap Z Z)
-           (h : heap_state) (ih : gmap prov imp_to_asm_elem) (sp : Z) :=
-  i2a_mem_agree mem amem ∧ i2a_heap_agree h ih ∧ i2a_mem_sp sp amem.
+Definition i2a_mem_inv (sp : Z) (mem : gmap Z Z) : uPred imp_to_asmUR :=
+  ∃ amem, ⌜i2a_mem_agree mem amem⌝ ∗ ⌜i2a_mem_sp sp amem⌝ ∗ i2a_mem_auth amem.
+
+Definition i2a_heap_agree (h : heap_state) (ih : gmap prov imp_to_asm_elem) : Prop :=
+  dom _ ih ⊆ h_provs h ∧
+  ∀ l b, ih !! l.1 = Some (I2AConstant b) → h_heap h !! l = b !! l.
 
 Definition i2a_heap_shared_agree (h : gmap loc val) (ih : gmap prov imp_to_asm_elem) : uPred imp_to_asmUR :=
   [∗ map] l↦v∈h,
@@ -231,23 +243,125 @@ Definition i2a_heap_shared_agree (h : gmap loc val) (ih : gmap prov imp_to_asm_e
     else
       True.
 
-Lemma i2a_inv_init mem sp:
-  i2a_inv mem ∅ initial_heap_state ∅ sp.
+Definition i2a_heap_inv (h : heap_state) : uPred imp_to_asmUR :=
+  ∃ ih, ⌜i2a_heap_agree h ih⌝ ∗ i2a_heap_shared_agree (h_heap h) ih ∗ i2a_heap_auth ih.
+
+Lemma i2a_mem_lookup a v mem sp:
+  i2a_mem_inv sp mem -∗
+  i2a_mem_constant a v -∗
+  ⌜mem !!! a = v⌝.
 Proof.
-  split_and!.
-  - move => ???. simplify_map_eq.
-  - split; [set_solver|]. move => ???. simplify_map_eq.
-  - move => ??. by simplify_map_eq.
+  iDestruct 1 as (? Hag Hsp) "Hauth".
+  iIntros "Hconst".
+  iDestruct (i2a_mem_lookup' with "[$] [$]") as %?.
+  iPureIntro. by apply: Hag.
 Qed.
 
-Lemma i2a_res_init :
-  satisfiable (i2a_mem_auth ∅ ∗ i2a_heap_auth ∅ ∗ i2a_heap_shared_agree ∅ ∅).
+Lemma i2a_mem_range a v mem sp:
+  i2a_mem_inv sp mem -∗
+  i2a_mem_constant a v -∗
+  ⌜sp ≤ a⌝.
+Proof.
+  iDestruct 1 as (? Hag Hsp) "Hauth".
+  iIntros "Hconst".
+  iDestruct (i2a_mem_lookup' with "[$] [$]") as %Hl.
+  destruct (decide (sp ≤ a)) => //.
+  rewrite Hsp in Hl => //. lia.
+Qed.
+
+Lemma i2a_mem_alloc sp mem :
+  i2a_mem_inv sp mem ==∗ i2a_mem_inv (sp - 1) mem ∗ i2a_mem_constant (sp - 1) (mem !!! (sp - 1)).
+Proof.
+  iDestruct 1 as (? Hag Hsp) "Hauth".
+  iMod (i2a_mem_alloc' (sp - 1) with "[$]") as "[? $]". { apply Hsp. lia. } iModIntro.
+  iExists _. iFrame. iPureIntro. split!.
+  - move => ?? /lookup_insert_Some[[??]|[??]]; simplify_map_eq => //. by apply Hag.
+  - move => ??. apply lookup_insert_None. split; [|lia]. apply Hsp. lia.
+Qed.
+
+Lemma i2a_mem_update v' a v mem sp:
+  i2a_mem_inv sp mem -∗
+  i2a_mem_constant a v ==∗
+  i2a_mem_inv sp (<[a := v']> mem) ∗ i2a_mem_constant a v'.
+Proof.
+  iDestruct 1 as (? Hag Hsp) "Hauth".
+  iIntros "Hconst".
+  iDestruct (i2a_mem_lookup' with "[$] [$]") as %?.
+  iMod (i2a_mem_update' with "[$]") as "[? $]". iModIntro.
+  iExists _. iFrame. iPureIntro. split!.
+  - move => ?? /lookup_insert_Some[[??]|[??]]; simplify_map_eq'; [done|]. by apply Hag.
+  - move => ??. apply lookup_insert_None. unfold i2a_mem_sp in *. naive_solver lia.
+Qed.
+
+Lemma i2a_mem_delete v mem sp:
+  i2a_mem_inv sp mem -∗
+  i2a_mem_constant sp v ==∗
+  i2a_mem_inv (sp + 1) mem.
+Proof.
+  iDestruct 1 as (? Hag Hsp) "Hauth".
+  iIntros "Hconst".
+  iDestruct (i2a_mem_lookup' with "[$] [$]") as %?.
+  iMod (i2a_mem_delete' with "[$]") as "?". iModIntro.
+  iExists _. iFrame. iPureIntro. split!.
+  - move => ?? /lookup_delete_Some[??]; simplify_map_eq'. by apply Hag.
+  - move => a ?. apply lookup_delete_None.
+    destruct (decide (a = sp)); [naive_solver|].
+    unfold i2a_mem_sp in *. naive_solver lia.
+Qed.
+
+Lemma i2a_mem_delete_big adrs mem sp sp':
+  sp ≤ sp' →
+  Forall (λ a, a < sp') adrs →
+  length adrs = Z.to_nat (sp' - sp) →
+  i2a_mem_inv sp mem -∗
+  ([∗ list] a∈adrs, ∃ v, i2a_mem_constant a v) ==∗
+  i2a_mem_inv sp' mem.
+Proof.
+  iIntros (? Hall ?) "Hinv Ha".
+  iAssert ⌜NoDup adrs⌝%I as %?. {
+    rewrite NoDup_alt. iIntros (a1 a2 ???).
+    destruct (decide (a1 = a2)) => //.
+    rewrite (big_sepL_delete _ _ a1); [|done].
+    rewrite (big_sepL_delete _ _ a2); [|done].
+    iDestruct!. case_decide => //. iDestruct!.
+    iDestruct (i2a_mem_constant_excl with "[$] [$]") as %[].
+  }
+  iAssert ⌜∀ a, a ∈ adrs → a ∈ seqZ sp (sp' - sp)⌝%I as %Hsub%NoDup_submseteq => //. {
+    iIntros (??).
+    iDestruct (big_sepL_elem_of with "[$]") as (?) "?"; [done|].
+    iDestruct (i2a_mem_range with "[$] [$]") as %?. iPureIntro.
+    apply elem_of_seqZ. move: Hall => /Forall_forall. naive_solver lia.
+  }
+  move: Hsub => /submseteq_Permutation_length_eq ->. 2: { rewrite seqZ_length. lia. }
+  have [n [-> ->]]: ∃ n : nat, sp' - sp = Z.of_nat n ∧ sp' = sp + Z.of_nat n.
+  { eexists (Z.to_nat (sp' - sp)). lia. }
+  clear. iInduction n as [|n'] "IH". { by rewrite Z.add_0_r. }
+  rewrite seqZ_S big_sepL_app.
+  iDestruct "Ha" as "[Hsp [[% ?] _]]".
+  iMod ("IH" with "[$] [$]") as "Hinv".
+  have ->: (sp + S n') = ((sp + n') + 1) by lia.
+  iApply (i2a_mem_delete with "[$] [$]").
+Qed.
+
+Lemma i2a_heap_inv_add_provs h ps :
+  i2a_heap_inv h -∗
+  i2a_heap_inv (heap_add_provs h ps).
+Proof.
+  iDestruct 1 as (?[??]) "[??]". iExists _. iFrame.
+  iPureIntro. split; [|done]. rewrite heap_add_provs_provs.
+  set_solver.
+Qed.
+
+Lemma i2a_res_init sp mem:
+  satisfiable (i2a_mem_inv sp mem ∗ i2a_heap_inv initial_heap_state).
 Proof.
  apply: (satisfiable_init (i2a_mem_inj (gmap_view_auth (DfracOwn 1) ∅) ⋅
                               i2a_heap_inj (gmap_view_auth (DfracOwn 1) ∅))).
  { split => /=; rewrite ?left_id ?right_id; apply gmap_view_auth_valid. }
- rewrite uPred.ownM_op. iIntros!. iModIntro. iFrame. iApply big_sepM_intro.
- iIntros "!>" (???). simplify_eq.
+ rewrite uPred.ownM_op. iIntros "[Hmem Hh]". iModIntro.
+ iSplitL "Hmem".
+ - iExists _. by iFrame.
+ - iExists _. by iFrame.
 Qed.
 
 (* TODO: This really should be a big ∗ not at big ∧ *)
@@ -294,10 +408,7 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
     pp_quant $ λ b : bool,
     pp_prop (i = Incoming) $
     pp_quant $ λ h,
-    pp_quant $ λ amem,
-    pp_quant $ λ ih,
-    pp_star (i2a_mem_auth amem ∗ i2a_heap_auth ih ∗ i2a_heap_shared_agree (h_heap h) ih) $
-    pp_prop (i2a_inv mem amem h ih (rs !!! "SP")) $
+    pp_star (i2a_mem_inv (rs !!! "SP") mem ∗ i2a_heap_inv h) $
     if b then
       (* env chooses return address *)
       pp_quant $ λ ret,
@@ -339,10 +450,7 @@ Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string
   pp_quant $ λ pc,
   pp_quant $ λ rs,
   pp_quant $ λ mem,
-  pp_quant $ λ amem,
-  pp_quant $ λ ih,
-  pp_star (i2a_mem_auth amem ∗ i2a_heap_auth ih ∗ i2a_heap_shared_agree (h_heap (heap_of_event e.2)) ih) $
-  pp_prop (i2a_inv mem amem (heap_of_event e.2) ih (rs !!! "SP")) $
+  pp_star (i2a_mem_inv (rs !!! "SP") mem ∗ i2a_heap_inv (heap_of_event e.2)) $
   match e with
   | (i, EICall f vs h) =>
       pp_quant $ λ avs,
@@ -435,7 +543,6 @@ Local Ltac split_solve :=
   match goal with
   | |- imp_to_asm_args _ _ _ => eassumption
   | |- imp_to_asm_ret _ _ _ => eassumption
-  | |- i2a_inv _ _ _ _ _ => eassumption
   | |- ?P ⊣⊢ _ => is_evar P; reflexivity
   | |- map_scramble ?r ?a ?b =>
       assert_fails (has_evar r); assert_fails (has_evar a); assert_fails (has_evar b); by etrans
@@ -473,7 +580,7 @@ Proof.
   - move => e ? e' /= ? ?.
     destruct_all?; simplify_eq.
     destruct e as [pc rs mem| |]; destruct_all?; simplify_eq/=.
-    move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b. split!.
+    move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
     + move => ret f vs avs Hin Hf2i /not_elem_of_union[??] ? ??.
       repeat case_bool_decide => //.
@@ -493,7 +600,7 @@ Proof.
   - move => e ? e' /= ? ?.
     destruct_all?; simplify_eq.
     destruct e as [pc rs mem| |]; destruct_all?; simplify_eq/=.
-    move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b. split!.
+    move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
     + move => ret f vs avs Hin Hf2i /not_elem_of_union[??] ???.
       repeat case_bool_decide => //.
@@ -569,33 +676,30 @@ Qed.
 Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
   ins_dom = dom _ ins →
   fns_dom = dom _ fns →
-  (∀ n i rs mem K f fn avs vs h cs pc ret rf rc amem ih lr,
+  (∀ n i rs mem K f fn avs vs h cs pc ret rf rc lr,
       rs !! "PC" = Some pc →
       ins !! pc = Some i →
       fns !! f = Some fn →
       f2i !! f = Some pc →
-      satisfiable (i2a_mem_auth amem ∗ i2a_heap_auth ih ∗ i2a_heap_shared_agree (h_heap h) ih ∗ ([∗ list] v;a∈vs;avs, imp_val_to_asm_val v a) ∗ rf ∗ rc) →
-      i2a_inv mem amem h ih (rs !!! "SP") →
+      satisfiable (i2a_mem_inv (rs !!! "SP") mem ∗ i2a_heap_inv h ∗ ([∗ list] v;a∈vs;avs, imp_val_to_asm_val v a) ∗ rf ∗ rc) →
       imp_to_asm_args ret rs avs →
       length vs = length (fd_args fn) →
       map_scramble touched_registers lr rs →
       (* Call *)
-      (∀ K' rs' mem' f' es avs vs pc' i' ret' h' lr' amem' ih' rf' r',
+      (∀ K' rs' mem' f' es avs vs pc' i' ret' h' lr' rf' r',
           Forall2 (λ e v, e = Val v) es vs →
           rs' !! "PC" = Some pc' →
           (ins !! pc' = None ↔ fns !! f' = None) →
           f2i !! f' = Some pc' →
-          satisfiable (i2a_mem_auth amem' ∗ i2a_heap_auth ih' ∗ i2a_heap_shared_agree (h_heap h') ih' ∗
+          satisfiable (i2a_mem_inv (rs' !!! "SP") mem' ∗ i2a_heap_inv h' ∗
                       ([∗ list] v;a∈vs;avs, imp_val_to_asm_val v a) ∗ rf' ∗ rc ∗ r') →
-          i2a_inv mem' amem' h' ih' (rs' !!! "SP") →
           imp_to_asm_args ret' rs' avs →
           ins !! ret' = Some i' →
           map_scramble touched_registers lr' rs' →
-          (∀ rs'' mem'' av v h'' amem'' ih'' rf'' lr'',
+          (∀ rs'' mem'' av v h'' rf'' lr'',
               rs'' !! "PC" = Some ret' →
-              satisfiable (i2a_mem_auth amem'' ∗ i2a_heap_auth ih'' ∗ i2a_heap_shared_agree (h_heap h'') ih'' ∗
+              satisfiable (i2a_mem_inv (rs'' !!! "SP") mem'' ∗ i2a_heap_inv h'' ∗
                            imp_val_to_asm_val v av ∗ rf'' ∗ rc ∗ r') →
-              i2a_inv mem'' amem'' h'' ih'' (rs'' !!! "SP") →
               imp_to_asm_ret rs'' rs' av →
               map_scramble touched_registers lr'' rs'' →
               AsmState (Some []) rs'' mem'' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
@@ -603,11 +707,10 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
           AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K (expr_fill K' (imp.Call f' es))) h' fns, (PPInside, I2A cs lr', rf'))) →
       (* Return *)
-      (∀ rs' mem' av v h' lr' rf' amem' ih',
+      (∀ rs' mem' av v h' lr' rf',
           rs' !! "PC" = Some ret →
-          satisfiable (i2a_mem_auth amem' ∗ i2a_heap_auth ih' ∗ i2a_heap_shared_agree (h_heap h') ih' ∗
+          satisfiable (i2a_mem_inv (rs' !!! "SP") mem' ∗ i2a_heap_inv h' ∗
                       imp_val_to_asm_val v av ∗ rf' ∗ rc) →
-          i2a_inv mem' amem' h' ih' (rs' !!! "SP") →
           imp_to_asm_ret rs' rs av  →
           map_scramble touched_registers lr' rs' →
           AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
@@ -635,12 +738,10 @@ Proof.
                  ). }
   { simpl. exact (λ  '(AsmState i1 rs1 mem1 ins'1) '(σfs1, Imp e1 h1 fns'1, (t1, I2A cs1 lr1, r1))
                      '(AsmState i2 rs2 mem2 ins'2) '(σfs2, Imp e2 h2 fns'2, (t2, I2A cs2 lr2, r2)),
-    ∃ i K av v pc lr' amem ih,
+    ∃ i K av v pc lr',
       rs2 !! "PC" = Some pc ∧
       ins !! pc = Some i ∧
-      satisfiable (i2a_mem_auth amem ∗ i2a_heap_auth ih ∗ i2a_heap_shared_agree (h_heap h2) ih ∗
-                   imp_val_to_asm_val v av ∗ r1 ∗ r2) ∧
-      i2a_inv mem2 amem h2 ih (rs2 !!! "SP") ∧
+      satisfiable (i2a_mem_inv (rs2 !!! "SP") mem2 ∗ i2a_heap_inv h2 ∗ imp_val_to_asm_val v av ∗ r1 ∗ r2) ∧
       imp_to_asm_ret rs2 lr' av ∧
       i2 = Some [] ∧
       ins'1 = ins'2 ∧
@@ -659,22 +760,21 @@ Proof.
   tstep_i => ??????.
   go_s. split!.
   go_s => -[] ? /=.
-  - move => ???????? /elem_of_dom[??] ? /not_elem_of_dom ? ???.
+  - move => ????? /elem_of_dom[??] ? /not_elem_of_dom ? ???.
     go_s. split!.
     repeat case_bool_decide (_ = _); try by tstep_s.
     (* This inner loop deals with calls inside of the module. We use
     Hf both for calls triggered from inside and outside the module. *)
     unshelve eapply tsim_remember. { exact (λ n '(AsmState i1 rs1 mem1 ins'1) '(σfs1, Imp e1 h1 fns'1, (t1, I2A cs1 lr1, r1)),
-       ∃ K' pc i amem ih ret f fn avs vs r',
+       ∃ K' pc i ret f fn avs vs r',
          rs1 !! "PC" = Some pc ∧
          ins !! pc = Some i ∧
          fns !! f = Some fn ∧
          f2i !! f = Some pc ∧
          ins'1 = ins ∧
          fns'1 = fns ∧
-         satisfiable (i2a_mem_auth amem ∗ i2a_heap_auth ih ∗ i2a_heap_shared_agree (h_heap h1) ih ∗
+         satisfiable (i2a_mem_inv (rs1 !!! "SP") mem1 ∗ i2a_heap_inv h1 ∗
                                    ([∗ list] v;a∈vs;avs, imp_val_to_asm_val v a) ∗ r' ∗ r ∗ r1) ∧
-         i2a_inv mem1 amem h1 ih (rs1 !!! "SP") ∧
          imp_to_asm_args ret rs1 avs ∧
          i1 = Some [] ∧
          e1 = expr_fill K' (subst_l fn.(fd_args) vs fn.(fd_body)) ∧
@@ -682,11 +782,10 @@ Proof.
          length vs = length (fd_args fn) ∧
          t1 = PPInside ∧
          σfs1 = SMProg ∧
-         (∀ rs' mem' av v h' lr' rf' amem' ih',
+         (∀ rs' mem' av v h' lr' rf',
           rs' !! "PC" = Some ret →
-          satisfiable (i2a_mem_auth amem' ∗ i2a_heap_auth ih' ∗ i2a_heap_shared_agree (h_heap h') ih' ∗
+          satisfiable (i2a_mem_inv (rs' !!! "SP") mem' ∗ i2a_heap_inv h' ∗
                       imp_val_to_asm_val v av ∗ r' ∗ r ∗ rf') →
-          i2a_inv mem' amem' h' ih' (rs' !!! "SP") →
           imp_to_asm_ret rs' rs1 av  →
           map_scramble touched_registers lr' rs' →
           AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm (dom _ ins) (dom _ fns) f2i imp_module, n, true}
@@ -705,7 +804,7 @@ Proof.
     apply: Hf; [try eassumption..| |].
     { iSatMono. iIntros!. iFrame. iAccu. }
     + iSatClear.
-      move => K'' rs'' mem'' f'' es avs'' vs'' pc'' i'' ret'' h'' lr amem'' ih'' rf'' r'' Hall ???????? Hret'.
+      move => K'' rs'' mem'' f'' es avs'' vs'' pc'' i'' ret'' h'' lr rf'' r'' Hall ??????? Hret'.
       have ?: es = Val <$> vs''. { clear -Hall. elim: Hall; naive_solver. } subst.
       destruct (ins !! pc'') eqn:Hi.
       * have [??] : is_Some (fns !! f''). { apply not_eq_None_Some. naive_solver. }
@@ -731,7 +830,7 @@ Proof.
         eapply Hret' => //.
         iSatMono. iIntros!. iFrame.
     + iSatClear. move => *.
-      apply: H17 => //.
+      apply: H16 => //.
       iSatMono. iIntros!. iFrame.
   - move => *.
     tstep_s. simplify_eq. destruct d; [exfalso; naive_solver|]. split!.

@@ -694,6 +694,11 @@ Definition TGet {EV S} : itree (moduleE EV S) S :=
 Definition TPut {EV S} (s : S) : itree (moduleE EV S) unit :=
   trigger (EPut s).
 
+Definition TReceive {EV S A} (e : A → EV) : itree (moduleE EV S) A :=
+  x ← TExist A;;;
+  TVis (e x);;;;
+  Ret x.
+
 (** * tsim *)
 Global Instance tsim_itree_l_proper EV S m1 n b:
   Proper ((prod_relation (eqit eq false false) (=)) ==> (=) ==> (=) ==> iff) (tsim n b (mod_itree EV S) m1).

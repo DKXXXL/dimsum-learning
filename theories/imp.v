@@ -574,6 +574,8 @@ Inductive head_step : imp_state → option imp_event → (imp_state → Prop) �
   head_step (Imp (LetE x (Val v) e) h fns) None (λ σ, σ = Imp (subst x v e) h fns)
 | UbES fns h:
   head_step (Imp UbE h fns) None (λ σ, False)
+| VarES fns h v: (* unbound variable *)
+  head_step (Imp (Var v) h fns) None (λ σ, False)
 | CallInternalS f fn fns vs h:
   fns !! f = Some fn →
   head_step (Imp (Call f (Val <$> vs)) h fns) None (λ σ,
@@ -765,6 +767,15 @@ Proof.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?. naive_solver.
 Qed.
 Global Hint Resolve imp_step_UbE_s : tstep.
+
+Lemma imp_step_Var_s fns h e K v `{!ImpExprFill e K (Var v)}:
+  TStepS imp_module (Imp e h fns) (λ G, G None (λ G', True)).
+Proof.
+  destruct ImpExprFill0; subst.
+  constructor => ? HG. eexists _, _. split; [done|] => /= ??.
+  apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?. naive_solver.
+Qed.
+Global Hint Resolve imp_step_Var_s : tstep.
 
 Lemma imp_step_Waiting_i fns h K e b `{!ImpExprFill e K (Waiting b)}:
   TStepI imp_module (Imp e h fns) (λ G,
@@ -1380,6 +1391,7 @@ Proof.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       apply static_expr_expr_fill. split!. by apply static_expr_subst.
     + tstep_s. done.
+    + tstep_s. done.
     + revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|[??]].
       * tstep_s. left. split!. tend. split!.
         apply: Hloop. rewrite !expr_fill_app. split!; [done..|].
@@ -1413,6 +1425,7 @@ Proof.
       apply static_expr_expr_fill. split!. destruct b; naive_solver.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       apply static_expr_expr_fill. split!. by apply static_expr_subst.
+    + tstep_s. done.
     + tstep_s. done.
     + revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|[??]].
       * have ? : fns2 !! f = None by apply: map_disjoint_Some_l.
@@ -1499,6 +1512,7 @@ Proof.
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         apply static_expr_expr_fill. split!. by apply static_expr_subst.
       * by tstep_s.
+      * by tstep_s.
       * tstep_s. left. split!; [apply lookup_union_Some; naive_solver|] => ?. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..|].
         apply static_expr_expr_fill. split!. apply static_expr_subst_l; [|done].
@@ -1545,6 +1559,7 @@ Proof.
       * tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         apply static_expr_expr_fill. split!. by apply static_expr_subst.
+      * by tstep_s.
       * by tstep_s.
       * tstep_s. left. split!; [apply lookup_union_Some; naive_solver|] => ?. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..|].

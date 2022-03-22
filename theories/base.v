@@ -440,6 +440,11 @@ Lemma map_list_included_cons {K A} `{Countable K} (m : gmap K A) n ns:
   map_list_included (n::ns) m.
 Proof. unfold map_list_included. set_solver. Qed.
 
+Lemma map_list_included_app {K A} `{Countable K} (m : gmap K A) ns1 ns2:
+  map_list_included (ns1 ++ ns2) m ↔
+  map_list_included ns1 m ∧ map_list_included ns2 m.
+Proof. unfold map_list_included. set_solver. Qed.
+
 Lemma map_list_included_is_Some {K A} `{Countable K} ns (m : gmap K A) i :
   map_list_included ns m →
   i ∈ ns →
@@ -511,6 +516,12 @@ Lemma map_scramble_eq' {K A} `{Countable K} ns (m : gmap K A):
   map_scramble ns m m ↔ True.
 Proof. unfold map_scramble. naive_solver. Qed.
 
+Lemma map_scramble_mono {K A} `{Countable K} ns ns' (m m' : gmap K A):
+  map_scramble ns m m' →
+  ns ⊆ ns' →
+  map_scramble ns' m m'.
+Proof. unfold map_scramble. set_solver. Qed.
+
 
 Lemma map_preserved_sym {K A} `{Countable K} ns (m m' : gmap K A) :
   map_preserved ns m m' ↔ map_preserved ns m' m.
@@ -559,6 +570,46 @@ Fixpoint map_seqZ `{Insert Z A M, Empty M} (start : Z) (xs : list A) : M :=
   | [] => ∅
   | x :: xs => <[start:=x]> (map_seqZ (Z.succ start) xs)
   end.
+
+Section map_seqZ.
+  Context `{FinMap Z M} {A : Type}.
+  Implicit Types x : A.
+  Implicit Types xs : list A.
+
+  Lemma lookup_map_seqZ start xs i :
+    map_seqZ (M:=M A) start xs !! i = guard (start ≤ i)%Z; xs !! Z.to_nat (i - start)%Z.
+  Proof.
+    revert start. induction xs as [|x' xs IH]; intros start; simpl.
+    { rewrite lookup_empty; simplify_option_eq; by rewrite ?lookup_nil. }
+    destruct (decide (start = i)) as [->|?].
+    - by rewrite lookup_insert option_guard_True ?Z.sub_diag; try lia.
+    - rewrite lookup_insert_ne // IH.
+      simplify_option_eq; try done || lia.
+      replace (i - start)%Z with (Z.succ (i - Z.succ start))%Z by lia.
+      by rewrite Z2Nat.inj_succ; [|lia].
+  Qed.
+  Lemma lookup_map_seqZ_0 xs i :
+    (0 ≤ i)%Z →
+    map_seqZ (M:=M A) 0 xs !! i = xs !! Z.to_nat i.
+  Proof. move => ?. by rewrite lookup_map_seqZ option_guard_True // ?Z.sub_0_r. Qed.
+(*
+  Lemma lookup_map_seq_Some_inv start xs i x :
+    xs !! i = Some x ↔ map_seq (M:=M A) start xs !! (start + i) = Some x.
+  Proof.
+    rewrite lookup_map_seq, option_guard_True by lia.
+    by rewrite Nat.add_sub_swap, Nat.sub_diag.
+  Qed.
+  Lemma lookup_map_seq_Some start xs i x :
+    map_seq (M:=M A) start xs !! i = Some x ↔ start ≤ i ∧ xs !! (i - start) = Some x.
+  Proof. rewrite lookup_map_seq. case_option_guard; naive_solver. Qed.
+*)
+  Lemma lookup_map_seqZ_None start xs i :
+    map_seqZ (M:=M A) start xs !! i = None ↔ (i < start ∨ start + length xs ≤ i)%Z.
+  Proof.
+    rewrite lookup_map_seqZ.
+    case_option_guard; rewrite ?lookup_ge_None; naive_solver lia.
+  Qed.
+End map_seqZ.
 
 Definition map_Exists `{Lookup K A M} (P : K → A → Prop) : M → Prop :=
   λ m, ∃ i x, m !! i = Some x ∧ P i x.

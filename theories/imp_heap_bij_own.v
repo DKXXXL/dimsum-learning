@@ -928,6 +928,7 @@ Proof.
         { iSatMono. iFrame. iApply (expr_in_bij_fill_2 with "[$]"). by iApply (expr_in_bij_subst with "[$]"). }
         1: by apply static_expr_subst.
       * by tstep_s.
+      * by tstep_s.
       * iSatStart.
         rewrite big_sepL_zip_with_same_length //.
         iDestruct (big_sepL2_Val_inv_l with "[$]") as (??) "?"; subst.

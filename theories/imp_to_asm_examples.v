@@ -150,7 +150,7 @@ Lemma asm_add_refines_imp_add :
            (MS (imp_to_asm (dom _ asm_add) (dom _ imp_add_prog) (<["add" := 100]> ∅) imp_module) (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_prog))).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
-  move => n i rs mem K f fn avs vs h cs pc ret rf rc amem ih lr Hpc Hi Hf Hf2i Hsat Hinv Hargs ? ? Hcall Hret.
+  move => n i rs mem K f fn avs vs h cs pc ret rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
   unfold imp_add_prog in Hf. unfold asm_add in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   destruct vs as [|v1 [|v2 []]] => //=.
@@ -168,8 +168,7 @@ Proof.
   go_s => n1 n2 ??; subst.
   iSatStart. simpl. iDestruct!. iSatStop.
   apply: Hret. 1: by simplify_map_eq.
-  1: { iSatMono. iFrame. done. }
-  1: by simplify_map_eq'.
+  1: { simplify_map_eq'. iSatMono. iFrame. done. }
   1: { unfold imp_to_asm_ret; split!; simplify_map_eq' => //. }
   1: by simplify_map_eq'.
 Qed.
@@ -181,7 +180,7 @@ Lemma asm_add_client_refines_imp_add_client :
                (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_client_prog) )).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
-  move => n i rs mem K f fn avs vs h cs pc ret rf rc amem ih lr Hpc Hi Hf Hf2i Hsat [Hmem [Hheap Hsp]] Hargs ? ? Hcall Hret.
+  move => n i rs mem K f fn avs vs h cs pc ret rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
   unfold imp_add_client_prog in Hf. unfold asm_add_client in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   destruct vs as [|] => //=.
@@ -214,26 +213,18 @@ Proof.
   change (imp.Call "add" [Val 1; Val 1]) with (expr_fill [] (imp.Call "add" [Val 1; Val 1])).
   apply: Hcall. { repeat econs. } { by simplify_map_eq. } { set_solver. } { by simplify_map_eq. }
   { iSatMonoBupd.
-    iRename select (i2a_heap_shared_agree _ _) into "Hag".
-    iMod (i2a_mem_alloc (rs !!! "SP" - 1) with "[$]") as "[??]"; [apply Hsp; lia|].
-    iModIntro.
-    iFrame. iSplitL "Hag".
-    { rewrite heap_free_update // heap_free_alloc //=. rewrite left_id_L. apply is_fresh. }
+    iMod (i2a_mem_alloc with "[$]") as "[??]".
+    iMod (i2a_mem_update with "[$] [$]") as "[??]". simplify_map_eq'.
+    iModIntro. iFrame.
+    rewrite heap_free_update // heap_free_alloc //=. 2: { rewrite left_id_L. apply is_fresh. }
+    iDestruct (i2a_heap_inv_add_provs with "[$]") as "$".
     iSplitR; [|iDestruct!; iAccu].
     instantiate (1 := [_;_]) => /=. done.
-  }
-  { split_and!.
-    - move => ?? /lookup_insert_Some?. destruct_all?; simplify_map_eq' => //. by apply Hmem.
-    - split. { rewrite heap_free_provs heap_update_provs heap_alloc_provs. apply union_subseteq_r'. apply Hheap. }
-      move => l ??. etrans; [|by eapply Hheap].
-      rewrite heap_free_update // heap_free_alloc //=.
-      rewrite left_id_L. apply is_fresh.
-    - simplify_map_eq'. move => ??. apply lookup_insert_None. split; [|lia]. apply Hsp. lia.
   }
   { unfold imp_to_asm_args. split!; decompose_Forall; by simplify_map_eq'. }
   { by simplify_map_eq. } { by simplify_map_eq'. }
   iSatClear.
-  move => rs'' mem'' av v h'' amem'' ih'' rf'' lr'' Hpc'' Hsat'' [Hmem'' [Hheap'' Hsp'']] Hr ?.
+  move => rs'' mem'' av v h'' rf'' lr'' Hpc'' Hsat'' Hr ?.
   move: Hr => [?[? Hm]]; simplify_map_eq'.
   tstep_i => ??. simplify_map_eq.
   tstep_i; simplify_map_eq'. split!; [by simplify_map_eq'..|].
@@ -246,18 +237,12 @@ Proof.
   iDestruct (i2a_mem_lookup with "[$] [$]") as %?.
   iSatStop.
   apply: Hret.
-  1: { simplify_map_eq'. f_equal. by apply: Hmem''. }
+  1: { by simplify_map_eq'. }
   1: { iSatMonoBupd.
-       iMod (i2a_mem_delete with "[$]") as "?".
+       iMod (i2a_mem_delete with "[$] [$]") as "?".
        iModIntro.
-       iFrame.
-  }
-  { split_and!.
-    - move => ?? /lookup_delete_Some?. destruct_all?; simplify_map_eq' => //. by apply Hmem''.
-    - done.
-    - simplify_map_eq'. move => a ?. apply lookup_delete_None.
-      destruct (decide (rs !!! "SP" - 1 = a)); [lia|].
-      right. apply Hsp''. simplify_map_eq'. lia.
+       iFrame. simplify_map_eq'.
+       by rewrite Z.sub_add.
   }
   1: { unfold imp_to_asm_ret; split!; simplify_map_eq'; split!. apply lookup_lookup_total; simplify_map_eq'. }
   1: { by simplify_map_eq'. }

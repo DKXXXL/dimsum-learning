@@ -33,10 +33,7 @@ Definition int_to_ptr_f2i : gmap string Z :=
 
 Definition int_to_ptr_itree : itree (moduleE imp_event (gmap prov Z)) unit :=
   ITree.forever (
-      f ← TExist string;;;
-      vs ← TExist (list val);;;
-      h ← TExist (heap_state);;;
-      TVis (Incoming, EICall f vs h);;;;
+      '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, EICall f vs h));;;
       if bool_decide (f = "cast_int_to_ptr") then
         z ← TAll Z;;;
         TAssume (vs = [ValNum z]);;;;
@@ -54,6 +51,27 @@ Definition int_to_ptr_itree : itree (moduleE imp_event (gmap prov Z)) unit :=
         TVis (Outgoing, EIReturn (ValNum (ps' !!! l.1 + l.2)) h)
       else
         TNb).
+
+(*
+
+ 100 <- cast_ptr_to_int(l);
+ 200 <- cast_ptr_to_int(p);
+
+  (* b = nondet(); // works *)
+  x = cast_int_to_ptr(300); // l + 200 | p + 100
+
+  (* b = nondet(); // does not work *)
+
+  assert(x == l);
+  assert(x == p); // UB here (and in in PNVI)
+
+  if(b) {
+    assert(x == l);
+  } else {
+    assert(x == p);
+  }
+
+ *)
 
 Local Ltac go :=
   clear_itree.
@@ -88,8 +106,8 @@ Proof.
   tstep_i => ????? Hi. tstep_s. split!.
   tstep_i => ??. simplify_map_eq.
   tstep_s => *. case_match => /= *. 2: congruence.
-  tstep_s. rewrite -/int_to_ptr_itree. go. go_s. eexists _. go. go_s. eexists _. go. go_s. eexists _. go.
-  go_s. split!. go.
+  tstep_s. rewrite -/int_to_ptr_itree. go. go_s. eexists (_, _, _). go.
+  go_s. split!. go. go_s.
   revert select (_ ⊢ _) => HP.
   revert select (imp_to_asm_args _ _ _) => -[?[?[??]]].
   revert select (_ ∉ dom _ _) => /not_elem_of_dom?.
@@ -107,7 +125,7 @@ Proof.
     iDestruct (big_sepM_lookup with "HP") as "#?"; [done|].
     iSatStop.
     tstep_i => ??. simplify_map_eq'.
-    go_s. go_s. split!. { by simplify_map_eq'. }
+    go_s. go_s. split!.
     1: { unfold imp_to_asm_ret; split!; simplify_map_eq'; split!.
          - by apply map_list_included_insert.
          - apply map_preserved_insert_r_not_in; [|done]. compute_done.
@@ -124,7 +142,6 @@ Proof.
     iDestruct (big_sepL2_nil_inv_l with "[$]") as %?. simplify_eq/=.
     iDestruct!.
     iDestruct (HP with "[$]") as "HP".
-    iDestruct (i2a_heap_shared_lookup with "[$] [$]") as %?. setoid_subst.
     decompose_Forall_hyps.
     iAssert ⌜z = default z (ps !! l.1)⌝%I as %Hz.
     { destruct (ps !! l.1) as [z'|] eqn:Hp => //=.
@@ -135,7 +152,7 @@ Proof.
     go_s. eexists z. go.
     go_s. go_s. go_s.
     tstep_i => ??. simplify_map_eq'.
-    go_s. split!. { by simplify_map_eq'. }
+    go_s. split!.
     1: { unfold imp_to_asm_ret; split!; simplify_map_eq'; split!.
          - by apply map_list_included_insert.
          - apply map_preserved_insert_r_not_in; [|done]. compute_done.
@@ -181,10 +198,7 @@ Definition main_imp_prog : gmap string fndef :=
   <[ "main" := main_imp ]> ∅.
 
 Definition main_itree : itree (moduleE imp_event unit) unit :=
-  f ← TExist string;;;
-  vs ← TExist (list val);;;
-  h ← TExist (heap_state);;;
-  TVis (Incoming, EICall f vs h);;;;
+  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, EICall f vs h));;;
   TAssume (f = "main");;;;
   TAssume (vs = []);;;;
   h' ← TExist (heap_state);;;
@@ -205,8 +219,7 @@ Lemma main_int_to_ptr_refines_itree :
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   tstep_i => *. case_match; destruct_all?; simplify_eq.
-  go_s. eexists _. go. go_s. eexists _. go. go_s. eexists _. go.
-  go_s. split!. go.
+  go_s. eexists (_, _, _). go. go_s. split!. go.
   go_s => ?. go. go_s => ?. go. simplify_eq. rewrite bool_decide_true; [|compute_done].
   tstep_i. split! => ???? Hf ?. unfold main_imp_prog in Hf. simplify_map_eq.
   tstep_i => l ?. split!.
@@ -217,9 +230,7 @@ Proof.
   move => ????. rewrite bool_decide_false; [|compute_done]. rewrite bool_decide_true; [|compute_done].
   move => *. destruct_all?. simplify_eq/=.
   tstep_i. rewrite -/int_to_ptr_itree. go.
-  go_i => ?. go.
-  go_i => ?. go.
-  go_i => ?. go.
+  go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq/=.
   go_i. eexists _. go.
   go_i. split!. go.
@@ -235,9 +246,7 @@ Proof.
   move => ????. rewrite bool_decide_false; [|compute_done]. rewrite bool_decide_true; [|compute_done].
   move => *. destruct_all?. simplify_eq/=.
   tstep_i. rewrite -/int_to_ptr_itree. go.
-  go_i => ?. go.
-  go_i => ?. go.
-  go_i => ?. go.
+  go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq/=.
   go_i. eexists _. go.
   go_i. split!. go.
@@ -297,10 +306,7 @@ Definition exit_asm : gmap Z asm_instr :=
     ] ]> $ ∅.
 
 Definition exit_itree : itree (moduleE asm_event unit) unit :=
-  pc ← TExist _;;;
-  rs ← TExist _;;;
-  mem ← TExist _;;;
-  TVis (Incoming, EAJump pc rs mem);;;;
+  '(pc, rs, mem) ← TReceive (λ '(pc, rs, mem), (Incoming, EAJump pc rs mem));;;
   TAssume (pc = 100);;;;
   TAssume (map_list_included syscall_arg_regs rs);;;;
   args ← TExist _;;;
@@ -309,8 +315,7 @@ Definition exit_itree : itree (moduleE asm_event unit) unit :=
   TAssert (args !! 8%nat = Some __NR_EXIT);;;;
   TVis (Outgoing, EASyscallCall args);;;;
   (* TUb. *)
-  ret ← TExist _;;;
-  TVis (Incoming, EASyscallRet ret);;;;
+  TReceive (λ ret, (Incoming, EASyscallRet ret));;;;
   TNb.
 
 (*
@@ -325,9 +330,7 @@ Lemma exit_asm_refines_itree :
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   go_i => ????? Hi.
-  go_s. eexists _. go.
-  go_s. eexists _. go.
-  go_s. eexists _. go.
+  go_s. eexists (_, _, _). go.
   go_s. split!. go.
   go_i => ??. simplify_map_eq.
   go_s => ?. go.
@@ -361,10 +364,7 @@ Proof.
 Qed.
 
 Definition top_level_itree : itree (moduleE asm_event unit) unit :=
-  pc ← TExist _;;;
-  rs ← TExist _;;;
-  mem ← TExist _;;;
-  TVis (Incoming, EAJump pc rs mem);;;;
+  '(pc, rs, mem) ← TReceive (λ '(pc, rs, mem), (Incoming, EAJump pc rs mem));;;
   TAssume (pc = 200);;;;
   TAssume (map_list_included tmp_registers rs);;;;
   TAssume (map_list_included saved_registers rs);;;;
@@ -397,9 +397,7 @@ Lemma top_level_refines_itree :
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   go_i => ?????. case_match; destruct_all?; simplify_eq.
-  go_s. eexists _. go.
-  go_s. eexists _. go.
-  go_s. eexists _. go.
+  go_s. eexists (_, _, _). go.
   go_s. split!. go.
   go_s => ?. go.
   go_s => ?. go.
@@ -407,16 +405,12 @@ Proof.
   go_s => ?. go. simplify_eq/=.
   rewrite bool_decide_true; [|compute_done].
   go_i => ??. simplify_eq.
-  go_i. eexists true => /=. split; [done|]. eexists initial_heap_state, ∅, ∅.
-  split. { apply i2a_inv_init. }
-  eexists (regs !!! "R30"), "main", [], [].
+  go_i. eexists true => /=. split; [done|]. eexists initial_heap_state, (regs !!! "R30"), "main", [], [].
   split!. { unfold imp_to_asm_args. split!. apply lookup_lookup_total.
             apply: (map_list_included_is_Some tmp_registers); [done|]. compute_done. }
-  { apply: satisfiable_mono; [apply i2a_res_init|].
+  { apply: satisfiable_mono; [eapply i2a_res_init|].
     iIntros!. iFrame. iSplit; [done|]. iAccu. }
-  go_i => ?. go.
-  go_i => ?. go.
-  go_i => ?. go.
+  go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
   go_i. split!. go.
@@ -424,9 +418,7 @@ Proof.
   go_i.
   go_i. move => *. unfold main_f2i in *. destruct_all?; simplify_map_eq.
   rewrite bool_decide_false; [|compute_done]. rewrite bool_decide_true; [|compute_done].
-  go_i => ?. go.
-  go_i => ?. go.
-  go_i => ?. go.
+  go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
   go_i. split!. {

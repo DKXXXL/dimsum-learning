@@ -117,7 +117,7 @@ Section compiler_monad.
   Qed.
 
   Lemma cret_success R (r' : R) (s s' : S) (a : A) (r : R):
-    crun (E:=E) s (mret r') = CResult s' a (CSuccess r) ↔ s = s' ∧ a = cm_empty A ∧ r = r'.
+    crun (E:=E) s (mret r') = CResult s' a (CSuccess r) ↔ s' = s ∧ a = cm_empty A ∧ r = r'.
   Proof. rewrite /crun/mret/cret/=. naive_solver. Qed.
 
   Lemma cbind_success {RA RB} x (f : RA → M RB) s1 s3 r3 a3:
@@ -141,7 +141,7 @@ Section compiler_monad.
 
   Lemma cassert_success P `{!Decision P} (e : E) (s : S) s' a r:
     crun s (cassert e P) = CResult s' a (CSuccess r) ↔
-     s = s' ∧ a = cm_empty A ∧ r = tt ∧ P.
+     s' = s ∧ a = cm_empty A ∧ r = tt ∧ P.
   Proof.
     rewrite /crun/cassert/=. case_bool_decide.
     - rewrite cret_success. naive_solver.
@@ -150,7 +150,7 @@ Section compiler_monad.
 
   Lemma cassert_opt_success R (x : option R) (e : E) (s : S) s' a r:
     crun s (cassert_opt e x) = CResult s' a (CSuccess r) ↔
-     s = s' ∧ a = cm_empty A ∧ x = Some r.
+     s' = s ∧ a = cm_empty A ∧ x = Some r.
   Proof.
     rewrite /crun/=. destruct x => /=.
     - rewrite cret_success. naive_solver.
@@ -159,7 +159,7 @@ Section compiler_monad.
 
   Lemma cget_success (s : S) s' a' r:
     crun (E:=E) s cget = CResult s' a' (CSuccess r) ↔
-     s = s' ∧ a' = cm_empty A ∧ r = s.
+     s' = s ∧ a' = cm_empty A ∧ r = s.
   Proof. rewrite /crun/cget/=. naive_solver. Qed.
 
   Lemma cput_success (s : S) s' s'' a' r:
@@ -169,7 +169,7 @@ Section compiler_monad.
 
   Lemma cappend_success (s : S) s' (a : A) a' r:
     crun (E:=E) s (cappend a) = CResult s' a' (CSuccess r) ↔
-     s = s' ∧ a = a' ∧ r = tt.
+     s' = s ∧ a = a' ∧ r = tt.
   Proof. rewrite /crun/cappend/=. naive_solver. Qed.
 End compiler_monad.
 
