@@ -261,6 +261,11 @@ Proof.
   - rewrite lookup_partial_alter. naive_solver.
   - rewrite lookup_partial_alter_ne; naive_solver.
 Qed.
+
+Lemma alter_insert_alter {A} (m : M A) i f :
+  delete i (alter f i m) = delete i m.
+Proof. by setoid_rewrite <-partial_alter_compose. Qed.
+
 End theorems.
 
 Section dom.
@@ -309,6 +314,18 @@ Proof. elim: l1 => //; csimpl => ?? ->. by case_match. Qed.
 Lemma omap_option_list {A B} (f : A → option B) o :
   omap f (option_list o) = option_list (o ≫= f).
 Proof. by destruct o. Qed.
+
+Lemma list_elem_of_weaken {A} (xs ys : list A) x:
+  x ∈ xs → xs ⊆ ys → x ∈ ys.
+Proof. set_solver. Qed.
+
+Lemma list_subseteq_cons_l {A} x (xs ys : list A):
+  x ∈ ys → xs ⊆ ys → x :: xs ⊆ ys.
+Proof. set_solver. Qed.
+
+Lemma elem_of_drop {A} x n (xs : list A):
+  x ∈ drop n xs → x ∈ xs.
+Proof.  move => /elem_of_list_lookup. setoid_rewrite lookup_drop => -[??]. apply elem_of_list_lookup. naive_solver. Qed.
 
 (** fixpoints based on iris/bi/lib/fixpoint.v *)
 Class MonoPred {A : Type} (F : (A → Prop) → (A → Prop)) := {
@@ -522,7 +539,6 @@ Lemma map_scramble_mono {K A} `{Countable K} ns ns' (m m' : gmap K A):
   map_scramble ns' m m'.
 Proof. unfold map_scramble. set_solver. Qed.
 
-
 Lemma map_preserved_sym {K A} `{Countable K} ns (m m' : gmap K A) :
   map_preserved ns m m' ↔ map_preserved ns m' m.
 Proof. unfold map_preserved. naive_solver. Qed.
@@ -562,6 +578,20 @@ Proof. unfold map_preserved. naive_solver. Qed.
 Lemma map_preserved_eq' {K A} `{Countable K} ns (m : gmap K A):
   map_preserved ns m m ↔ True.
 Proof. unfold map_preserved. naive_solver. Qed.
+
+Lemma map_preserved_app {K A} `{Countable K} ns1 ns2 (m m' : gmap K A) :
+  map_preserved (ns1 ++ ns2) m m' ↔ map_preserved ns1 m m' ∧ map_preserved ns2 m m'.
+Proof. unfold map_preserved. set_solver. Qed.
+
+Lemma map_preserved_mono {K A} `{Countable K} ns1 ns2 (m m' : gmap K A) :
+  map_preserved ns1 m m' →
+  ns2 ⊆ ns1 →
+  map_preserved ns2 m m'.
+Proof. unfold map_preserved. set_solver. Qed.
+
+Lemma map_scramble_preserved {K A} `{Countable K} ns1 ns2 (m m' : gmap K A) :
+  map_scramble ns1 m m' → ns1 ## ns2 → map_preserved ns2 m m'.
+Proof. unfold map_preserved, map_scramble. set_solver. Qed.
 
 Global Opaque map_list_included map_scramble map_preserved.
 
@@ -608,6 +638,20 @@ Section map_seqZ.
   Proof.
     rewrite lookup_map_seqZ.
     case_option_guard; rewrite ?lookup_ge_None; naive_solver lia.
+  Qed.
+
+  Lemma lookup_map_seqZ_is_Some start xs i :
+    is_Some (map_seqZ (M:=M A) start xs !! i) ↔ (start ≤ i < start + length xs)%Z.
+  Proof. rewrite -not_eq_None_Some lookup_map_seqZ_None. lia. Qed.
+
+  Lemma lookup_map_seqZ_disjoint start1 start2 xs1 xs2 :
+    map_seqZ (M:=M A) start1 xs1 ##ₘ map_seqZ (M:=M A) start2 xs2 ↔
+     (start1 + length xs1 ≤ start2 ∨ start2 + length xs2 ≤ start1 ∨ length xs1 = 0%nat ∨ length xs2 = 0%nat)%Z.
+  Proof.
+    rewrite map_disjoint_alt.
+    setoid_rewrite lookup_map_seqZ_None.
+    split => Hi; [|lia].
+    have ?:= (Hi (start1)%Z). have ?:= (Hi (start2)%Z). lia.
   Qed.
 End map_seqZ.
 

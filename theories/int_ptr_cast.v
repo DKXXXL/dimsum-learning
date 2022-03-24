@@ -109,7 +109,7 @@ Proof.
   tstep_s. rewrite -/int_to_ptr_itree. go. go_s. eexists (_, _, _). go.
   go_s. split!. go. go_s.
   revert select (_ ⊢ _) => HP.
-  revert select (imp_to_asm_args _ _ _) => -[?[?[??]]].
+  revert select (i2a_regs_call _ _) => -[??].
   revert select (_ ∉ dom _ _) => /not_elem_of_dom?.
   unfold int_to_ptr_asm in Hi. unfold int_to_ptr_f2i in *. (repeat case_bool_decide); simplify_map_eq.
   - tstep_i. split; [by simplify_map_eq'|].
@@ -118,15 +118,13 @@ Proof.
     go_s => ?. go.
     go_s. go_s => ?. go.
     iSatStart. iIntros!.
-    iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[% ?]".
-    iDestruct (big_sepL2_nil_inv_l with "[$]") as %?. simplify_eq/=.
-    decompose_Forall_hyps.
+    rewrite i2a_args_cons ?i2a_args_nil; [|done]. iDestruct!.
     iDestruct (HP with "[$]") as "HP".
     iDestruct (big_sepM_lookup with "HP") as "#?"; [done|].
     iSatStop.
     tstep_i => ??. simplify_map_eq'.
     go_s. go_s. split!.
-    1: { unfold imp_to_asm_ret; split!; simplify_map_eq'; split!.
+    1: { unfold i2a_regs_ret; split!; simplify_map_eq'; split!.
          - by apply map_list_included_insert.
          - apply map_preserved_insert_r_not_in; [|done]. compute_done.
     }
@@ -138,22 +136,19 @@ Proof.
     go_s => l. go.
     go_s => ?. go.
     iSatStart. iIntros!.
-    iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[#[%z ?] ?]".
-    iDestruct (big_sepL2_nil_inv_l with "[$]") as %?. simplify_eq/=.
-    iDestruct!.
+    rewrite i2a_args_cons ?i2a_args_nil; [|done]. iDestruct!.
     iDestruct (HP with "[$]") as "HP".
-    decompose_Forall_hyps.
     iAssert ⌜z = default z (ps !! l.1)⌝%I as %Hz.
     { destruct (ps !! l.1) as [z'|] eqn:Hp => //=.
       iDestruct (big_sepM_lookup with "HP") as "?"; [done|].
-      iAssert ⌜z = z'⌝%I as %?; [|done].
-      by iApply i2a_heap_shared_ag. }
+      iAssert ⌜z' = z⌝%I as %?; [|done].
+      by iApply (i2a_heap_shared_ag with "[$]"). }
     iSatStop.
     go_s. eexists z. go.
     go_s. go_s. go_s.
     tstep_i => ??. simplify_map_eq'.
     go_s. split!.
-    1: { unfold imp_to_asm_ret; split!; simplify_map_eq'; split!.
+    1: { unfold i2a_regs_ret; split!; simplify_map_eq'; split!.
          - by apply map_list_included_insert.
          - apply map_preserved_insert_r_not_in; [|done]. compute_done.
     }
@@ -366,16 +361,14 @@ Qed.
 Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   '(pc, rs, mem) ← TReceive (λ '(pc, rs, mem), (Incoming, EAJump pc rs mem));;;
   TAssume (pc = 200);;;;
-  TAssume (map_list_included tmp_registers rs);;;;
-  TAssume (map_list_included saved_registers rs);;;;
+  TAssume (map_list_included touched_registers rs);;;;
   TAssume (rs !!! "R30" ∉ ({[200; 400; 401]} : gset _));;;;
   args ← TExist _;;;
   TAssert (length args = length syscall_arg_regs);;;;
   TAssert (args !! 0%nat = Some 1);;;;
   TAssert (args !! 8%nat = Some __NR_EXIT);;;;
   TVis (Outgoing, EASyscallCall args);;;;
-  ret ← TExist _;;;
-  TVis (Incoming, EASyscallRet ret);;;;
+  TReceive (λ ret, (Incoming, EASyscallRet ret));;;;
   TNb.
 
 (*
@@ -401,15 +394,14 @@ Proof.
   go_s. split!. go.
   go_s => ?. go.
   go_s => ?. go.
-  go_s => ?. go.
   go_s => ?. go. simplify_eq/=.
   rewrite bool_decide_true; [|compute_done].
   go_i => ??. simplify_eq.
-  go_i. eexists true => /=. split; [done|]. eexists initial_heap_state, (regs !!! "R30"), "main", [], [].
-  split!. { unfold imp_to_asm_args. split!. apply lookup_lookup_total.
-            apply: (map_list_included_is_Some tmp_registers); [done|]. compute_done. }
+  go_i. eexists true => /=. split; [done|]. eexists initial_heap_state, (regs !!! "R30"), "main", [].
+  split!. { unfold i2a_regs_call. split!. apply lookup_lookup_total.
+            apply: map_list_included_is_Some; [done|]. compute_done. }
   { apply: satisfiable_mono; [eapply i2a_res_init|].
-    iIntros!. iFrame. iSplit; [done|]. iAccu. }
+    iIntros!. iFrame. rewrite i2a_args_nil. iSplit; [done|]. iAccu. }
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
@@ -422,8 +414,8 @@ Proof.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
   go_i. split!. {
-    revert select (imp_to_asm_args _ _ _) => -[?[?[??]]].
-    apply: (map_list_included_mono tmp_registers); [done|].
+    revert select (i2a_regs_call _ _) => -[??].
+    apply: (map_list_included_mono touched_registers); [done|].
     compute_done.
   } go.
   go_i => ?. go.
@@ -444,8 +436,7 @@ Proof.
   go_i => *. done.
   Unshelve.
   - done.
-  - iSatStart. iIntros!. iDestruct (big_sepL2_cons_inv_l with "[$]") as (????) "?". iSatStop. simplify_eq.
-    revert select (imp_to_asm_args _ _ _) => -[?[??]]. decompose_Forall_hyps. simplify_map_eq'. by f_equal.
+  - iSatStart. iIntros!. rewrite i2a_args_cons; [|done]. iDestruct!. iSatStop. by simplify_map_eq'.
   - done.
 Qed.
 

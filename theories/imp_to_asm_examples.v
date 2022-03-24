@@ -150,16 +150,13 @@ Lemma asm_add_refines_imp_add :
            (MS (imp_to_asm (dom _ asm_add) (dom _ imp_add_prog) (<["add" := 100]> ∅) imp_module) (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_prog))).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
-  move => n i rs mem K f fn avs vs h cs pc ret rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
+  move => n i rs mem K f fn vs h cs pc ret rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
   unfold imp_add_prog in Hf. unfold asm_add in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   destruct vs as [|v1 [|v2 []]] => //=.
-  move: Hargs => -[?[? /= [??]]].
-  iSatStart. iIntros!.
-  iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]".
-  iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]".
-  iDestruct (big_sepL2_nil_inv_l with "[$]") as %?. simplify_eq/=. decompose_Forall_hyps.
-  iSatStop.
+  move: Hargs => -[??].
+  iSatStart. iIntros!. rewrite i2a_args_cons ?i2a_args_cons; [|done..].
+  iDestruct!. iSatStop.
   tstep_i => ??. simplify_map_eq.
   tstep_i. split; [simplify_map_eq'|].
   tstep_i; simplify_map_eq'. split; [done|].
@@ -169,7 +166,7 @@ Proof.
   iSatStart. simpl. iDestruct!. iSatStop.
   apply: Hret. 1: by simplify_map_eq.
   1: { simplify_map_eq'. iSatMono. iFrame. done. }
-  1: { unfold imp_to_asm_ret; split!; simplify_map_eq' => //. }
+  1: { unfold i2a_regs_ret; split!; simplify_map_eq' => //. }
   1: by simplify_map_eq'.
 Qed.
 
@@ -180,14 +177,12 @@ Lemma asm_add_client_refines_imp_add_client :
                (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_client_prog) )).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
-  move => n i rs mem K f fn avs vs h cs pc ret rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
+  move => n i rs mem K f fn vs h cs pc ret rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
   unfold imp_add_client_prog in Hf. unfold asm_add_client in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   destruct vs as [|] => //=.
-  move: Hargs => -[?[? /= [? ?]]].
-  iSatStart. iIntros!.
-  iDestruct (big_sepL2_nil_inv_l with "[$]") as %?. simplify_eq/=. decompose_Forall_hyps.
-  iSatStop.
+  move: Hargs => -[??].
+  iSatStart. iIntros!. iSatStop.
   tstep_i => ??. simplify_map_eq.
   tstep_i. split; [simplify_map_eq'|].
   tstep_i; simplify_map_eq'. split; [done|].
@@ -219,9 +214,10 @@ Proof.
     rewrite heap_free_update // heap_free_alloc //=. 2: { rewrite left_id_L. apply is_fresh. }
     iDestruct (i2a_heap_inv_add_provs with "[$]") as "$".
     iSplitR; [|iDestruct!; iAccu].
-    instantiate (1 := [_;_]) => /=. done.
+    rewrite !i2a_args_cons ?i2a_args_nil; [|done..].
+    iSplit!; by simplify_map_eq.
   }
-  { unfold imp_to_asm_args. split!; decompose_Forall; by simplify_map_eq'. }
+  { unfold i2a_regs_call. split!; by simplify_map_eq'. }
   { by simplify_map_eq. } { by simplify_map_eq'. }
   iSatClear.
   move => rs'' mem'' av v h'' rf'' lr'' Hpc'' Hsat'' Hr ?.
@@ -244,7 +240,7 @@ Proof.
        iFrame. simplify_map_eq'.
        by rewrite Z.sub_add.
   }
-  1: { unfold imp_to_asm_ret; split!; simplify_map_eq'; split!. apply lookup_lookup_total; simplify_map_eq'. }
+  1: { unfold i2a_regs_ret; split!; simplify_map_eq'; split!. apply lookup_lookup_total; simplify_map_eq'. }
   1: { by simplify_map_eq'. }
 Qed.
 

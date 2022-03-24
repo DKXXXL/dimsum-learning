@@ -102,6 +102,23 @@ Definition to_val (e : expr) : option val :=
   | _ => None
   end.
 
+Fixpoint assigned_vars (e : expr) : list string :=
+  match e with
+  | Var v => []
+  | Val v => []
+  | BinOp e1 o e2 => assigned_vars e1 ++ assigned_vars e2
+  | Load e => assigned_vars e
+  | Store e1 e2 => assigned_vars e1 ++ assigned_vars e2
+  | Alloc e => assigned_vars e
+  | Free e => assigned_vars e
+  | If e e1 e2 => assigned_vars e ++ assigned_vars e1 ++ assigned_vars e2
+  | LetE v e1 e2 => [v] ++ assigned_vars e1 ++ assigned_vars e2
+  | Call f args => mjoin (assigned_vars <$> args)
+  | UbE => []
+  | ReturnExt can_return_further e => assigned_vars e
+  | Waiting can_return => []
+  end.
+
 (** substitution *)
 Fixpoint subst (x : string) (v : val) (e : expr) : expr :=
   match e with
@@ -153,7 +170,7 @@ Proof.
     naive_solver congruence.
 Qed.
 
-Lemma subst_subst_map x v e xs :
+Lemma subst_map_subst x v e xs :
   subst_map (<[x:=v]> xs) e = subst_map xs (subst x v e).
 Proof.
   elim: e xs => //=; try by move => *; congruence.
@@ -165,12 +182,24 @@ Proof.
     naive_solver congruence.
 Qed.
 
+Lemma subst_map_subst_map e xs ys:
+  subst_map (xs ∪ ys) e = subst_map ys (subst_map xs e).
+Proof.
+  revert e. induction xs using map_ind => e.
+  { by rewrite left_id_L subst_map_empty. }
+  rewrite -insert_union_l !subst_map_subst. naive_solver.
+Qed.
+
+Lemma subst_subst_map x v e xs :
+  subst_map (xs ∪ <[x:=v]> ∅) e = subst x v (subst_map xs e).
+Proof. by rewrite subst_map_subst_map subst_map_subst subst_map_empty. Qed.
+
 Lemma subst_l_subst_map xs vs e :
   length xs = length vs →
   subst_l xs vs e = subst_map (list_to_map (zip xs vs)) e.
 Proof.
   elim: xs vs e. { case => //=. move => ??. by rewrite subst_map_empty. }
-  move => ?? IH [|??] //= e [?]. by rewrite subst_subst_map IH.
+  move => ?? IH [|??] //= e [?]. by rewrite subst_map_subst IH.
 Qed.
 
 (** evaluation contexts *)

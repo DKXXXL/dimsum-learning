@@ -171,6 +171,12 @@ Section compiler_monad.
     crun (E:=E) s (cappend a) = CResult s' a' (CSuccess r) ↔
      s' = s ∧ a = a' ∧ r = tt.
   Proof. rewrite /crun/cappend/=. naive_solver. Qed.
+
+  Lemma cscope_success R (s : S) s' c a' (r : R * A):
+    crun (E:=E) s (cscope c) = CResult s' a' (CSuccess r) ↔
+     crun (E:=E) s c = CResult s' r.2 (CSuccess r.1) ∧ a' = cm_empty A.
+  Proof. rewrite /crun/cscope/=. case_match => //=; destruct (c s), r; naive_solver. Qed.
+
 End compiler_monad.
 
 Tactic Notation "simplify_crun_eq" :=
@@ -199,6 +205,9 @@ Tactic Notation "simplify_crun_eq" :=
           | H : crun _ (cappend _) = CResult _ _ (CSuccess _) |- _ =>
               apply cappend_success in H;
               destruct H as (?&?&?)
+          | H : crun _ (cscope _) = CResult _ _ (CSuccess _) |- _ =>
+              apply cscope_success in H;
+              destruct H as (?&?)
           end || simplify_eq/=).
 
 Module compiler_test.

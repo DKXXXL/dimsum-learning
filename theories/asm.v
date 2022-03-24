@@ -570,6 +570,46 @@ Definition deep_to_asm_instr (di : deep_asm_instr) : asm_instr :=
 Definition deep_to_asm_instrs (s : Z) (di : list deep_asm_instr) : gmap Z asm_instr :=
   map_seqZ s (deep_to_asm_instr <$> di).
 
+Lemma deep_to_asm_instrs_nil pc :
+  deep_to_asm_instrs pc [] = ∅.
+Proof. done. Qed.
+
+Lemma deep_to_asm_instrs_cons pc di dins :
+  deep_to_asm_instrs pc (di :: dins) = <[pc := deep_to_asm_instr di]> $ deep_to_asm_instrs (pc + 1) dins.
+Proof. done. Qed.
+
+Lemma deep_to_asm_instrs_app pc dins1 dins2 :
+  deep_to_asm_instrs pc (dins1 ++ dins2) = deep_to_asm_instrs pc dins1 ∪ deep_to_asm_instrs (pc + length dins1) dins2.
+Proof.
+  elim: dins1 pc => /=. { move => ?. rewrite left_id_L. f_equal. lia. }
+  move => ?? IH ?. rewrite !deep_to_asm_instrs_cons IH insert_union_l. f_equal. f_equal. lia.
+Qed.
+
+Lemma deep_to_asm_instrs_is_Some a dins pc:
+  is_Some (deep_to_asm_instrs a dins !! pc) ↔ a ≤ pc < a + length dins.
+Proof. by rewrite lookup_map_seqZ_is_Some fmap_length. Qed.
+
+Lemma deep_to_asm_instrs_subseteq_range a1 di1 a2 di2:
+  deep_to_asm_instrs a1 di1 ⊆ deep_to_asm_instrs a2 di2 →
+  (a2 ≤ a1 ∧ a1 + length di1 ≤ a2 + length di2) ∨ length di1 = 0%nat.
+Proof.
+  destruct (decide (length di1 = 0%nat)); [naive_solver|].
+  move => Hsub. left.
+  have : is_Some (deep_to_asm_instrs a1 di1 !! a1). { apply deep_to_asm_instrs_is_Some. lia. }
+  move => /(lookup_weaken_is_Some _ _ _)/(_ Hsub)/deep_to_asm_instrs_is_Some?.
+  have : is_Some (deep_to_asm_instrs a1 di1 !! (a1 + length di1 - 1)). { apply deep_to_asm_instrs_is_Some. lia. }
+  move => /(lookup_weaken_is_Some _ _ _)/(_ Hsub)/deep_to_asm_instrs_is_Some?. lia.
+Qed.
+
+Lemma deep_to_asm_instrs_cons_inv pc di dins ins :
+  deep_to_asm_instrs pc (di :: dins) ⊆ ins →
+  ins !! pc = Some (deep_to_asm_instr di) ∧ deep_to_asm_instrs (pc + 1) dins ⊆ ins.
+Proof.
+  rewrite deep_to_asm_instrs_cons => Hsub.
+  split.
+  - eapply lookup_weaken; [|done]. apply lookup_insert.
+  - etrans; [|done]. apply insert_subseteq. apply lookup_map_seqZ_None. lia.
+Qed.
 
 (** * itree examples *)
 Require Import refframe.itree.
