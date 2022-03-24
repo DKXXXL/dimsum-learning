@@ -1,6 +1,5 @@
 Require Export iris.algebra.lib.gmap_view.
 Require Export refframe.module.
-Require Export refframe.compiler.
 Require Import refframe.trefines.
 Require Import refframe.filter.
 Require Import refframe.product.
@@ -11,7 +10,8 @@ Require Import refframe.proof_techniques.
 Require Import refframe.imp.
 Require Import refframe.asm.
 Require Import refframe.imp_to_asm.
-
+Require Export refframe.compiler.monad.
+Require Export refframe.compiler.linear_imp.
 
 Local Open Scope Z_scope.
 
@@ -52,48 +52,10 @@ compilation chain:
 
 *)
 
-Inductive var_val :=
-| VVar (v : string)
-| VVal (v : val).
-
-Definition var_val_to_expr (v : var_val) : expr :=
-  match v with
-  | VVar v => Var v
-  | VVal v => Val v
-  end.
-
-Inductive lexpr_op :=
-| LVarVal (v : var_val)
-| LBinOp (v1 : var_val) (o : binop) (v2 : var_val)
-| LLoad (v : var_val)
-| LStore (v1 v2 : var_val)
-| LCall (f : string) (args : list var_val)
-| LUbE.
-
-Definition lexpr_op_to_expr (e : lexpr_op) : expr :=
-  match e with
-  | LVarVal v => var_val_to_expr v
-  | LBinOp v1 o v2 => BinOp (var_val_to_expr v1) o (var_val_to_expr v2)
-  | LLoad v => Load (var_val_to_expr v)
-  | LStore v1 v2 => Store (var_val_to_expr v1) (var_val_to_expr v2)
-  | LCall f args => Call f (var_val_to_expr <$> args)
-  | LUbE => UbE
-  end.
-
-Inductive lexpr :=
-| LLetE (v : string) (e1 : lexpr_op) (e2 : lexpr)
-| LIf (e1 : lexpr_op) (e2 e3 : lexpr)
-| LEnd (e : lexpr_op).
-
-Fixpoint lexpr_to_expr (e : lexpr) : expr :=
-  match e with
-  | LLetE v e1 e2 => LetE v (lexpr_op_to_expr e1) (lexpr_to_expr e2)
-  | LIf e1 e2 e3 => If (lexpr_op_to_expr e1) (lexpr_to_expr e2) (lexpr_to_expr e3)
-  | LEnd e => (lexpr_op_to_expr e)
-  end.
-
 Module ci2a_codegen.
-Inductive i2a_error :=
+
+(** * initial definitions *)
+Inductive error :=
 | UnsupportedExpr (e : expr)
 | UnknownOperand (e : expr)
 | UnknownFunction (f : string)
@@ -110,6 +72,7 @@ Definition variable_registers : list string :=
 Inductive place :=
 | PReg (r : string) | PStack (slot : N).
 
+(** * state of the pass *)
 Record state := State {
   s_f2i : gmap string Z;
   s_stacksize : N;
@@ -130,8 +93,9 @@ Proof. move => ?. rewrite /s_stack_places map_to_list_insert //; csimpl. by dest
 
 Definition initial_state (f2i : gmap string Z) : state := State f2i 0 ∅ [] true.
 
-Definition M := compiler_monad state (list_compiler_monoid deep_asm_instr) i2a_error.
+Definition M := compiler_monad state (list_compiler_monoid deep_asm_instr) error.
 
+(** * pass *)
 Definition alloc_stack : M N :=
   s ← cget;
   cassert (AssertionFailed "alloc_stack: s_sp_above is not true") (s.(s_sp_above) = true);;
@@ -306,6 +270,7 @@ Definition pass (args : list string) (e : lexpr) : M unit :=
   restore_callee_save_registers;;
   cappend [Aret].
 
+(** * examples *)
 Definition test_fn_expr : lexpr :=
   LLetE "r" (LBinOp (VVar "a") AddOp (VVar "b")) $
   LEnd $ LBinOp (VVar "a") AddOp (VVar "r").
@@ -343,6 +308,7 @@ Definition test3_fn : fndef := {|
 
 Compute let x := crun (initial_state (<["test3" := 100]> $ ∅)) (pass test3_fn.(fd_args) test3_fn_expr) in (x.(c_prog), x.(c_result)).
 
+(** * proof *)
 Class ProofFixedValues := {
   pf_sp : Z;
   pf_ins : gmap Z asm_instr;
@@ -355,7 +321,7 @@ Class ProofFixedValues := {
 Section proof.
 Context `{!ProofFixedValues}.
 
-(** general invariants *)
+(** ** general invariants *)
 Definition stack_slot (slot : N) (v : Z) : uPred _ :=
   i2a_mem_constant (pf_sp - Z.of_N slot - 1) v.
 
@@ -371,7 +337,7 @@ Definition ci2a_inv (s : state) (lr rs : gmap string Z) (mem : gmap Z Z) (h : he
     i2a_heap_inv h ∗
     ci2a_regs_inv s lr rs.
 
-(** lemmas for general invariants *)
+(** *** lemmas for general invariants *)
 Lemma stack_slot_lookup slot v mem sp:
   stack_slot slot v -∗
   i2a_mem_inv sp mem -∗
@@ -416,7 +382,7 @@ Proof.
   etrans; [done|]. by apply map_scramble_insert_l_in.
 Qed.
 
-(** ci2a_places_inv *)
+(** ** ci2a_places_inv *)
 Definition ci2a_places_inv (ps : gmap string place) (sr : list (string*N)) (vs : gmap string val) (rs : gmap string Z)
   : uPred imp_to_asmUR :=
   ([∗ map] n↦p∈ps, ∃ av,
@@ -443,7 +409,7 @@ Proof.
   - iPureIntro. apply Forall_forall => ??. rewrite <-Hp; [|done]. move: Hv => /Forall_forall. naive_solver.
 Qed.
 
-(** sim *)
+(** ** sim *)
 Definition sim (n : trace_index) (b : bool) (dins : list deep_asm_instr) (e : expr)
            (s : state) (rs : gmap string Z) : uPred imp_to_asmUR :=
   ∀ mem lr h rf,
@@ -525,8 +491,9 @@ Qed.
 (** rules for operations *)
 Lemma move_sp_correct s s' p p' r n b e rs ab:
   crun s (move_sp ab) = CResult s' p (CSuccess r) →
-  (∀ pc' sp', ⌜s' = s <|s_sp_above := ab |>⌝ -∗
-        sim n true p' e s' (<["PC":=pc']> $ <["SP":=sp']>rs)) -∗
+  (∀ pc' sp',
+      ⌜s' = s <|s_sp_above := ab |>⌝ -∗
+      sim n true p' e s' (<["PC":=pc']> $ <["SP":=sp']>rs)) -∗
   sim n b (p ++ p') e s rs.
 Proof.
   unfold move_sp. move => ?. simplify_crun_eq. iIntros "Hcont".
@@ -637,8 +604,7 @@ Proof.
   iIntros (?[Hin ?]?) "Hp Hcont". simplify_crun_eq.
   have ? : r ∈ touched_registers ∧ r ≠ "SP" ∧ r ≠ "PC". {
     split. 2: split => ?; subst; set_solver.
-    apply: (list_elem_of_weaken tmp_registers); [done| ].
-    clear. set_unfold. naive_solver.
+    apply: (list_elem_of_weaken tmp_registers); [done|compute_done].
   }
   iDestruct "Hp" as "[Hp ?]".
   iDestruct (big_sepM_lookup_acc with "Hp") as "[[% [Hv Hpl]] Hp]"; [done|]. simplify_map_eq.
@@ -684,13 +650,13 @@ Proof.
   - iDestruct "Hpl" as %(?&?&?).
     iApply sim_Amov. {
       split. 2: split => ?; subst; set_solver.
-      apply: (list_elem_of_weaken variable_registers); [done| ].
-      clear. set_unfold. naive_solver.
+      apply: (list_elem_of_weaken variable_registers); [done|compute_done].
     }
     simplify_map_eq'.
     iApply ("Hcont" with "[//] [%]"). {
       apply map_scramble_insert_r_in; [compute_done|].
-      apply map_scramble_insert_r_in; [set_unfold; naive_solver|done].
+      apply map_scramble_insert_r_in; [|done].
+      apply: (list_elem_of_weaken variable_registers); [done|compute_done].
     }
     iApply (ci2a_places_inv_mono_rs). { apply map_preserved_insert_r_not_in; [compute_done|]. done. }
     iFrame. rewrite (big_sepM_delete _ (s_places _)); [|done].
@@ -725,12 +691,13 @@ Lemma read_var_val_correct e e' s s' p p' n r rs vs res K `{!ImpExprFill e' K (s
   sim n true (p ++ p') e' s rs.
 Proof.
   destruct ImpExprFill0; subst.
-  iIntros (??) "Hp Hcont".
+  iIntros (?[??]) "Hp Hcont".
   destruct e; simplify_crun_eq.
   - case_match; [|iApply sim_Var; typeclasses eauto with tstep].
     iApply (read_var_correct with "Hp"); [done..|].
     iIntros (???) "?". by iApply "Hcont".
-  - iApply sim_Amov. { set_unfold. naive_solver. }
+  - iApply sim_Amov.
+    { split!; [|set_unfold;naive_solver]. apply: list_elem_of_weaken; [done|]. compute_done. }
     iApply "Hcont"; [by simplify_map_eq|by destruct v; simplify_eq/=|].
     iApply ci2a_places_inv_mono_rs; [|done].
     apply map_preserved_insert_r_not_in; [compute_done|].
@@ -831,7 +798,8 @@ Proof.
       * iApply big_sepM_insert; [set_solver|]. iFrame. iSplitR.
         { iExists _. simplify_map_eq. iPureIntro. split!. { rewrite Hperm. set_solver. } set_solver. }
         iApply (big_sepM_impl with "[$]"). iIntros "!>" (???) "[% [? Hp]]". iExists _. iFrame.
-        case_match => //. iDestruct "Hp" as %(?&?&?). iPureIntro. csimpl. split!. set_unfold. naive_solver.
+        case_match => //. iDestruct "Hp" as %(?&?&Hin). iPureIntro. csimpl. split!.
+        clear -Hin. set_unfold. naive_solver.
       * simpl. iFrame. iExists _. iFrame. iPureIntro.
         move: Hv => /Forall_forall/(_ v)[| |->//]. { rewrite Hperm. set_solver. }  set_unfold. naive_solver.
       * iPureIntro. apply list_subseteq_cons_l; [|done]. rewrite Hperm. set_solver.

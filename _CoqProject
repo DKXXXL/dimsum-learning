@@ -13,7 +13,6 @@ theories/base.v
 theories/axioms.v
 theories/trace_index.v
 theories/satisfiable.v
-theories/compiler.v
 theories/module.v
 theories/example_modules.v
 theories/srefines.v
@@ -33,8 +32,10 @@ theories/imp_heap_bij.v
 theories/imp_heap_bij_own.v
 theories/imp_to_asm.v
 theories/imp_to_asm_examples.v
-theories/imp_to_asm_compiler.v
 theories/int_ptr_cast.v
+theories/compiler/monad.v
+theories/compiler/linear_imp.v
+theories/compiler/codegen.v
 theories/iris/wp.v
 theories/iris/mono_ord.v
 theories/iris/ord_later.v

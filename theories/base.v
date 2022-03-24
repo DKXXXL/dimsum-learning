@@ -323,6 +323,12 @@ Lemma list_subseteq_cons_l {A} x (xs ys : list A):
   x ∈ ys → xs ⊆ ys → x :: xs ⊆ ys.
 Proof. set_solver. Qed.
 
+Global Program Instance list_subseteq_dec {A} `{!EqDecision A} : RelDecision (⊆@{list A}) :=
+  λ xs ys, cast_if (decide (Forall (λ x, x ∈ ys) xs)).
+Next Obligation. move => ???? /Forall_forall; set_solver. Qed.
+Next Obligation. move => ???? /Forall_forall; set_solver. Qed.
+
+
 Lemma elem_of_drop {A} x n (xs : list A):
   x ∈ drop n xs → x ∈ xs.
 Proof.  move => /elem_of_list_lookup. setoid_rewrite lookup_drop => -[??]. apply elem_of_list_lookup. naive_solver. Qed.
