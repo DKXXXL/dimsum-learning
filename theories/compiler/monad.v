@@ -29,14 +29,26 @@ Next Obligation. done. Qed.
 Next Obligation. done. Qed.
 Next Obligation. done. Qed.
 
-Inductive compiler_success {R E : Type} :=
+Inductive compiler_success {E R : Type} :=
 | CSuccess (res : R) | CError (err : E).
 Arguments compiler_success : clear implicits.
+
+Global Instance compiler_success_fmap E : FMap (compiler_success E) :=
+  λ RA RB f x,
+    match x with
+    | CSuccess y => CSuccess (f y)
+    | CError e => CError e
+    end.
+
+Lemma compiler_success_fmap_success E RA RB (f : RA → RB) x y :
+  f <$> x = @CSuccess E RB y →
+  ∃ x', x = CSuccess x' ∧ y = f x'.
+Proof. destruct x => //=. naive_solver. Qed.
 
 Record compiler_result {S : Type} {A : compiler_monoid} {E R : Type} := CResult {
   c_state : S;
   c_prog : A;
-  c_result : compiler_success R E;
+  c_result : compiler_success E R;
 }.
 Arguments CResult {_ _ _ _}.
 Arguments compiler_result : clear implicits.

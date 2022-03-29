@@ -320,15 +320,12 @@ Proof.
   - move => *. prepare_goal. by tstep_s.
 Qed.
 
-Definition translate_fn (f : static_fndef) : compiler_success lfndef error :=
+Definition translate_fn (f : static_fndef) : compiler_success error lfndef :=
   let x := crun 0%N (pass f.(sfd_body)) in
-  match x.(c_result) with
-  | CSuccess v => CSuccess {|
+  (λ v, {|
      lfd_args := f.(sfd_args);
      lfd_body := x.(c_prog) (LEnd $ LVarVal v);
-  |}
-  | CError e => CError e
-  end.
+  |} ) <$> x.(c_result).
 
 Compute translate_fn (fndef_to_static_fndef test_fn_1).
 
@@ -340,12 +337,13 @@ Lemma translate_fn_correct f fn fn' :
            (MS imp_module (initial_imp_sstate (<[f := fn]> ∅))).
 Proof.
   destruct (crun 0%N (pass (sfd_body fn))) as [?? res] eqn: Hsucc.
-  unfold translate_fn. case_match as H => // ? /NoDup_app[?[??]]?. rewrite Hsucc in H. simplify_eq/=.
+  unfold translate_fn. rewrite Hsucc => /= /(compiler_success_fmap_success _ _ _ _ _ _)[?[??]]. subst.
+  move => // /NoDup_app[?[??]]?.
   apply imp_proof. { move => ?. rewrite !lookup_fmap !fmap_None !lookup_insert_None. naive_solver. }
   move => ???????. rewrite !fmap_insert !fmap_empty /=.
   move => /lookup_insert_Some[[??]|[??]]; simplify_map_eq. split!.
   move => ?? Hret.
-  rewrite !subst_l_subst_map; [|lia..]. rewrite {1}Hsucc /=.
+  rewrite !subst_l_subst_map; [|lia..].
   apply: pass_correct; [typeclasses eauto with tstep|done|done|done|done|set_solver|..].
   { move => ?. rewrite list_to_map_lookup_is_Some. move => [? /(elem_of_zip_l _ _ _)]. set_solver. }
   { move => ?. rewrite list_to_map_lookup_is_Some. move => [? /(elem_of_zip_l _ _ _)]. set_solver. }
