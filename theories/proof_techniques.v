@@ -243,6 +243,11 @@ Lemma tsim_mono_b {EV} {mi ms : module EV} σi σs n κs b:
   σi ⪯{mi, ms, n, true, κs} σs.
 Proof. move => Hsim Hn ??. apply: Hsim. destruct b => //. by apply ti_lt_impl_le. Qed.
 
+Lemma tsim_mono_b_false {EV} {mi ms : module EV} σi σs n κs b:
+  σi ⪯{mi, ms, n, false, κs} σs →
+  σi ⪯{mi, ms, n, b, κs} σs.
+Proof. move => Hsim Hn ??. apply: Hsim. destruct b => //. by apply ti_lt_impl_le. Qed.
+
 Definition Plater (P : bool → Prop) : Prop :=
   P true → P false.
 Arguments Plater _ /.

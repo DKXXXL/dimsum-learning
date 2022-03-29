@@ -1,7 +1,4 @@
 Require Import refframe.base.
-(* We require functional extensionality such that we can use leibniz
-equiality for compiler_monad. *)
-(* Require Import refframe.axioms. *)
 
 Set Default Proof Using "Type".
 

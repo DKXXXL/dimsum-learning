@@ -1,8 +1,5 @@
 # TODOs
 
-- [ ] Verify imp code that links with spec of integer pointer casting.
-  - Maybe let x := Alloc 1 in x ← 1; let y = int_to_ptr(ptr_to_int(x)) in let r := !y in Free(y); Return r
-    - refines Return 1
 - [ ] Define pure_i2a.imp_to_asm
 - [ ] prove vertical compositionality
   - Plan A: prove vertical compositionality directly on ownership based prepost
@@ -27,7 +24,9 @@
 - [ ] Add global variables
 - [ ] Make allocation in Imp like RefinedC allocation
 - [ ] Compiler
-- [ ] vertical compositionality? If necessary
+- [ ] Allow the proof to use a bigger resource than the prepost, e.g.
+      by defining an injection from the prepost resource to the bigger resource
+  - [ ] Use this to define ownership of registers for compiler codegen pass
 
 Done:
 - [X] Add system calls to asm
@@ -36,8 +35,12 @@ Done:
   - at the imp level, the integer pointer casting can be represented
     by an itree with state gmap prov Z which universally chooses which
     provenance to return
+- [X] Verify imp code that links with spec of integer pointer casting.
+  - Maybe let x := Alloc 1 in x ← 1; let y = int_to_ptr(ptr_to_int(x)) in let r := !y in Free(y); Return r
+    - refines Return 1
 
 Postponed:
+- [ ] Add framework for combining compiler passes
 - [ ] Make mod_seq_map only emit events when the inner module accepted them
   - Tricky because the two events are not linked. Maybe it is not
     necessary? With the current asm_closed it seems so since the env

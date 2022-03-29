@@ -183,18 +183,16 @@ Definition restore_callee_save_registers : M unit :=
   cmap s.(s_saved_registers) 0 (λ _ '(r, slot), read_stack r slot);;
   mret tt.
 
-Definition translate_val (v : val) : option Z :=
+Definition translate_val (v : static_val) : Z :=
   match v with
-  | ValNum z => Some z
-  | ValBool b => Some (bool_to_Z b)
-  | ValLoc l => None (* should never occur since code does not contain source locations *)
+  | StaticValNum z => z
+  | StaticValBool b => bool_to_Z b
   end.
 
 Definition read_var_val (r : string) (e : var_val) : M unit :=
   match e with
   | VVal v =>
-      z ← cassert_opt LocInCode (translate_val v);
-      cappend [Amov r (ImmediateOp z)]
+      cappend [Amov r (ImmediateOp (translate_val v))]
   | VVar v => read_var r v
   end.
 
@@ -285,8 +283,8 @@ Compute let x := crun (initial_state ∅) (pass test_fn.(fd_args) test_fn_expr) 
 
 Definition test2_fn_expr : lexpr :=
   LIf (LVarVal (VVar "a"))
-      (LIf (LVarVal (VVar "b")) (LEnd $ LVarVal (VVal 1)) (LEnd $ LVarVal (VVal 2)))
-      (LIf (LVarVal (VVar "b")) (LEnd $ LVarVal (VVal 3)) (LEnd $ LVarVal (VVal 4))).
+      (LIf (LVarVal (VVar "b")) (LEnd $ LVarVal (VVal $ StaticValNum 1)) (LEnd $ LVarVal (VVal $ StaticValNum 2)))
+      (LIf (LVarVal (VVar "b")) (LEnd $ LVarVal (VVal $ StaticValNum 3)) (LEnd $ LVarVal (VVal $ StaticValNum 4))).
 
 Definition test2_fn : fndef := {|
   fd_args := ["a"; "b"];
@@ -297,7 +295,7 @@ Definition test2_fn : fndef := {|
 Compute let x := crun (initial_state ∅) (pass test2_fn.(fd_args) test2_fn_expr) in (x.(c_prog), x.(c_result)).
 
 Definition test3_fn_expr : lexpr :=
-  LLetE "r" (LCall "test3" [VVar "a"; VVal 1]) $
+  LLetE "r" (LCall "test3" [VVar "a"; VVal $ StaticValNum 1]) $
   LEnd (LVarVal (VVar "r")).
 
 Definition test3_fn : fndef := {|
@@ -1023,8 +1021,7 @@ Proof.
     iIntros (?????) "Hrf Hs". iSatStop. tstep_s. iSatStart. iRevert "Hrf Hs". iApply (to_sim with "[-]"); [|done].
     iApply (write_var_correct with "Hp Hv"); [done..|].
     iIntros (???) "Hp". subst.
-    rewrite -subst_subst_map -insert_union_r; [|by simplify_map_eq].
-    rewrite right_id_L insert_delete_insert.
+    rewrite -subst_subst_map_delete.
     by iApply ("IH" with "[//] Hp").
   - iApply (translate_lexpr_op_correct with "Hp"); [typeclasses eauto with tstep|done..|eauto using suffix_app_r|].
     iIntros (?????) "Hv Hp" => /=. repeat (destruct_all?; simplify_crun_eq).
@@ -1136,23 +1133,21 @@ Proof.
   iApply (Hcont with "[$] [//] Hrf Hinv").
 Qed.
 
-Lemma pass_correct a f2i f s' dins ins args e fn:
-  crun (initial_state f2i) (pass args e) = CResult s' dins (CSuccess tt) →
+Lemma pass_correct a f2i f s' dins ins fn:
+  crun (initial_state f2i) (pass fn.(lfd_args) fn.(lfd_body)) = CResult s' dins (CSuccess tt) →
   ins = deep_to_asm_instrs a dins →
   f2i !! f = Some a →
-  NoDup args →
-  fn.(fd_args) = args →
-  fn.(fd_body) = lexpr_to_expr e →
+  NoDup fn.(lfd_args) →
   (∀ f' i', f2i !! f' = Some i' → ins !! i' = None ↔ f' ≠ f) →
   trefines (MS asm_module (initial_asm_state ins))
            (MS (imp_to_asm (dom _ ins) {[f]} f2i imp_module) (initial_imp_to_asm_state imp_module
-             (initial_imp_state (<[f := fn]> ∅)))).
+             (initial_imp_lstate (<[f := fn]> ∅)))).
 Proof.
-  move => Hrun ? Ha ? Has Hbody Hf2i.
+  move => Hrun ? Ha ? Hf2i.
   apply imp_to_asm_proof; [done|set_solver|].
   move => n i rs mem K f' fn' vs h cs pc ret rf rc lr Hpc Hins Hf ? Hsat Hargs Hlen Hlr Hcall Hret.
-  move: Hf. rewrite lookup_insert_Some lookup_empty => ?. destruct_all?; simplify_map_eq.
-  move: Hargs => [??].
+  move: Hf. rewrite {1}fmap_insert {1}fmap_empty lookup_insert_Some lookup_empty => ?.
+  destruct_all?; simplify_map_eq. move: Hargs => [??].
 
   apply: (sim_intro (initial_state f2i)).
   1: by simplify_map_eq'. 1: done. 1: set_solver. 1: done. {
@@ -1179,7 +1174,7 @@ Proof.
   iIntros (???) "Hpl". simplify_eq.
   iApply (move_sp_correct); [done|].
   iIntros (???). simplify_eq.
-  rewrite subst_l_subst_map // right_id_L Hbody.
+  rewrite subst_l_subst_map // right_id_L.
   iApply (translate_lexpr_correct with "[Hpl]"); [done| | |]. {
     clear Hins.
     iIntros (????????) "Hvs Hp Hcont".
@@ -1190,11 +1185,11 @@ Proof.
     move: Hins => /deep_to_asm_instrs_cons_inv[Hi ?]. simplify_map_eq'.
     tstep_i. split!. { apply: map_list_included_is_Some; [done|compute_done]. }
     tstep_i; simplify_map_eq'. split!.
-    rewrite dom_insert_L dom_empty_L right_id_L expr_fill_app.
+    rewrite dom_fmap_L dom_insert_L dom_empty_L right_id_L expr_fill_app.
     eapply Hcall.
     - apply Forall2_fmap_l. apply: Forall_Forall2_diag. by apply Forall_true.
     - by simplify_map_eq.
-    - rewrite Hf2i; [|done]. rewrite lookup_insert_None. naive_solver.
+    - rewrite Hf2i; [|done]. rewrite lookup_fmap fmap_None lookup_insert_None. naive_solver.
     - done.
     - iSatMono. simplify_map_eq'. iFrame. iSplitL "Hvs"; [|iAccu].
       iApply (i2a_args_mono with "Hvs").
@@ -1210,8 +1205,8 @@ Proof.
     - apply map_scramble_insert_r_in; [compute_done|].
       apply map_scramble_insert_r_in; [compute_done|done].
     - iSatClear. move => ????????? [?[? Hpre]] ?. rewrite -expr_fill_app. subst.
-      assert ({[f']} = dom (gset string) (<[f':=fn']> ∅ : gmap _ _)) as ->.
-      { by rewrite dom_insert_L dom_empty_L right_id_L. }
+      assert ({[f']} = dom (gset string) (lfndef_to_fndef <$> (<[f':=fn]> ∅ : gmap _ _))) as ->.
+      { by rewrite dom_fmap_L dom_insert_L dom_empty_L right_id_L. }
       rewrite map_preserved_insert_l_not_in in Hpre; [|compute_done].
       rewrite map_preserved_insert_l_not_in in Hpre; [|compute_done].
       iSatStart.
@@ -1244,7 +1239,7 @@ Proof.
   tstep_i => ??. simplify_map_eq.
   move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq'.
   tstep_i. split!.
-  rewrite dom_insert_L dom_empty_L right_id_L.
+  rewrite dom_fmap_L dom_insert_L dom_empty_L right_id_L.
   eapply Hret.
   - simplify_map_eq'. f_equal. eapply lookup_total_correct.
     move: Hallsr => /Forall_forall/(_ ("R30", slot)) ->. 2: set_unfold; naive_solver.

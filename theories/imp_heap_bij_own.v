@@ -376,7 +376,7 @@ Proof.
 Qed.
 
 Lemma expr_in_bij_static e:
-  static_expr false e →
+  is_static_expr false e →
   ⊢ expr_in_bij e e.
 Proof.
   elim: e => //=; try naive_solver. { case => //= *; by iPureIntro. }
@@ -771,7 +771,7 @@ Local Ltac split_solve ::=
       assert_fails (has_evar K'); assert_fails (has_evar K); apply expr_fill_app
   | |- expr_fill ?K _ = expr_fill ?K _ =>
       assert_fails (has_evar K); reflexivity
-  | |- Is_true (static_expr _ (expr_fill _ _)) => apply static_expr_expr_fill
+  | |- Is_true (is_static_expr _ (expr_fill _ _)) => apply is_static_expr_expr_fill
   | |- _ ≡ _ => reflexivity
   | |- heap_preserved ?p _ => eassumption
   (* | |- expr_in_bij ?b (expr_fill _ _) (expr_fill _ _) => *)
@@ -808,13 +808,13 @@ Proof.
     hb_provs_i bij' ⊆ h_provs hi ∧
     dom _ (hb_bij bij') ⊆ h_provs hs ∧
     pp = PPInside ∧
-    static_expr true ei' ∧
+    is_static_expr true ei' ∧
     ips = SMProg
  ). }
   { split!.
     { iSatMono. iFrame. iApply expr_in_bij_subst_l; [lia| |done]. iApply expr_in_bij_static. apply fd_static. }
     all: split!.
-    { apply static_expr_subst_l; [|solve_length]. apply static_expr_mono. apply fd_static. }  }
+    { apply is_static_expr_subst_l; [|solve_length]. apply is_static_expr_mono. apply fd_static. }  }
   { naive_solver. }
   iSatClear.
   move => /= n' ? Hloop [ei hi fnsi] [[ips [es hs fnss]] [[pp []] P]] ?. destruct_all?; simplify_eq.
@@ -831,7 +831,7 @@ Proof.
       rewrite big_sepL_zip_with_same_length //.
       iDestruct (big_sepL2_Val_inv_l with "[$]") as (??) "?"; subst.
       iSatStop.
-      revert select (Is_true (static_expr _ _)) => /static_expr_expr_fill/=[??]//.
+      revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
       apply: Hcall; [done..| | |].
       1,2: by apply Forall2_fmap_l, Forall_Forall2_diag, Forall_true.
       clear Hret. split!.
@@ -848,7 +848,7 @@ Proof.
       iSatStart.
       iIntros!. iDestruct (expr_in_bij_fill_l with "[$]") as (???) "[??]".
       destruct_all?; simplify_eq/=.
-      revert select (Is_true (static_expr _ _)) => /static_expr_expr_fill/=[??]//.
+      revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
       invert_all' @head_step; destruct_all?; simplify_eq/=.
       all: repeat (case_match; iDestruct! => //); simplify_eq; iSatStop.
       * tstep_s => ? /eval_binop_bij Hbin.
@@ -926,7 +926,7 @@ Proof.
         case_match; naive_solver.
       * tstep_s. tend. split!. apply: Hloop; [done|]. split!.
         { iSatMono. iFrame. iApply (expr_in_bij_fill_2 with "[$]"). by iApply (expr_in_bij_subst with "[$]"). }
-        1: by apply static_expr_subst.
+        1: by apply is_static_expr_subst.
       * by tstep_s.
       * by tstep_s.
       * iSatStart.
@@ -938,7 +938,7 @@ Proof.
         { iSatMono. iFrame. iApply (expr_in_bij_fill_2 with "[$]").
           iApply expr_in_bij_subst_l; [solve_length| |done].
           iApply expr_in_bij_static. apply fd_static. }
-        apply static_expr_subst_l; [|solve_length]. apply static_expr_mono. apply fd_static.
+        apply is_static_expr_subst_l; [|solve_length]. apply is_static_expr_mono. apply fd_static.
       * naive_solver.
 Qed.
 

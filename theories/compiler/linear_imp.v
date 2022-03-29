@@ -2,12 +2,12 @@ Require Import refframe.imp.
 
 Inductive var_val :=
 | VVar (v : string)
-| VVal (v : val).
+| VVal (v : static_val).
 
 Definition var_val_to_expr (v : var_val) : expr :=
   match v with
   | VVar v => Var v
-  | VVal v => Val v
+  | VVal v => Val (static_val_to_val v)
   end.
 
 Inductive lexpr_op :=
@@ -39,3 +39,32 @@ Fixpoint lexpr_to_expr (e : lexpr) : expr :=
   | LIf e1 e2 e3 => If (lexpr_op_to_expr e1) (lexpr_to_expr e2) (lexpr_to_expr e3)
   | LEnd e => (lexpr_op_to_expr e)
   end.
+
+Lemma var_val_is_static v :
+  is_static_expr false (var_val_to_expr v).
+Proof. destruct v => //=. by destruct v. Qed.
+
+Lemma lexpr_op_is_static e :
+  is_static_expr false (lexpr_op_to_expr e).
+Proof.
+  destruct e => //=; rewrite ?andb_True; split!; try apply var_val_is_static.
+  apply forallb_True. rewrite Forall_fmap. apply Forall_true => ?. apply var_val_is_static.
+Qed.
+
+Lemma lexpr_is_static e :
+  is_static_expr false (lexpr_to_expr e).
+Proof. elim: e => //= *; rewrite ?andb_True; split!; apply lexpr_op_is_static. Qed.
+
+Record lfndef : Type := {
+  lfd_args : list string;
+  lfd_body : lexpr;
+}.
+
+Program Definition lfndef_to_fndef (fn : lfndef) : fndef := {|
+   fd_args := fn.(lfd_args);
+   fd_body := lexpr_to_expr fn.(lfd_body);
+|}.
+Next Obligation. move => ?. apply lexpr_is_static. Qed.
+
+Definition initial_imp_lstate (fns : gmap string lfndef) : imp_state :=
+  initial_imp_state (lfndef_to_fndef <$> fns).

@@ -496,7 +496,7 @@ Proof.
 Qed.
 
 Lemma expr_in_bij_static bij e:
-  static_expr false e →
+  is_static_expr false e →
   expr_in_bij bij e e.
 Proof.
   elim: e => //=; try naive_solver. { by case. }
@@ -1540,7 +1540,7 @@ Local Ltac split_solve ::=
       assert_fails (has_evar K'); assert_fails (has_evar K); apply expr_fill_app
   | |- expr_fill ?K _ = expr_fill ?K _ =>
       assert_fails (has_evar K); reflexivity
-  | |- Is_true (static_expr _ (expr_fill _ _)) => apply static_expr_expr_fill
+  | |- Is_true (is_static_expr _ (expr_fill _ _)) => apply is_static_expr_expr_fill
   | |- expr_in_bij ?b (expr_fill _ _) (expr_fill _ _) =>
       assert_fails (has_evar b); apply expr_in_bij_fill_2
   | |- ectx_in_bij ?b (_ ++ _) (_ ++ _) => assert_fails (has_evar b); by apply ectx_in_bij_app
@@ -1580,14 +1580,14 @@ Proof.
     heap_in_bij (hb_bij bij') hi hs ∧
     set_map fst (hb_bij bij') ⊆ h_provs hi ∧
     pp = PPInside ∧
-    static_expr true ei' ∧
+    is_static_expr true ei' ∧
     ips = SMProg
  ). }
   { eexists _. split!. done. all: split!.
     { unfold heap_bij_extend in *. clear Hcall Hret. bij_solver. }
     { unfold heap_bij_extend in *. clear Hcall Hret. bij_solver. }
     { apply expr_in_bij_subst_l; [|done|solve_length]. apply expr_in_bij_static. apply fd_static. }
-    { apply static_expr_subst_l; [|solve_length]. apply static_expr_mono. apply fd_static. }   }
+    { apply is_static_expr_subst_l; [|solve_length]. apply is_static_expr_mono. apply fd_static. }   }
   { naive_solver. }
   move => /= n' ? Hloop [ei hi fnsi] [[ips [es hs fnss]] [[pp [bij he]] ?]] ?.
   destruct_all?; simplify_eq.
@@ -1603,7 +1603,7 @@ Proof.
     + destruct_all?; simplify_eq/=.
       revert select (expr_in_bij _ (expr_fill _ _) _) => /expr_in_bij_fill_l[?[?[?[??]]]].
       destruct_all?; simplify_eq/=.
-      revert select (Is_true (static_expr _ _)) => /static_expr_expr_fill/=[??]//.
+      revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
       case_match => //; destruct_all?; simplify_eq/=.
       revert select (Forall id _) => /Forall_zip_with_1 Hall.
       move: (Hall ltac:(done)) => /Forall2_bij_val_inv_l[?[??]]; simplify_eq.
@@ -1626,7 +1626,7 @@ Proof.
       destruct_all?; simplify_eq.
       revert select (expr_in_bij _ (expr_fill _ _) _) => /expr_in_bij_fill_l[?[?[?[??]]]].
       destruct_all?; simplify_eq.
-      revert select (Is_true (static_expr _ _)) => /static_expr_expr_fill/=[??]//.
+      revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
       invert_all' @head_step; destruct_all?; simplify_eq/=.
       all: repeat (case_match; destruct_all? => //); simplify_eq.
       * tstep_s => ? /eval_binop_bij Hbin. have [?[??]]:= Hbin _ _ _ ltac:(done) ltac:(done).
@@ -1670,14 +1670,14 @@ Proof.
         split!. apply: Hloop; [done|]. split!. 1: done. 1: done. all: split!. all: by case_match.
       * tstep_s. tend. split!. apply: Hloop; [done|]. split!. 1: done. all: split!.
         1: by apply expr_in_bij_subst.
-        1: by apply static_expr_subst.
+        1: by apply is_static_expr_subst.
       * by tstep_s.
       * revert select (Forall id _) => /Forall_zip_with_1 Hall.
         move: (Hall ltac:(done)) => /Forall2_bij_val_inv_l[?[??]]; simplify_eq.
         tstep_s. left. split! => ?. tend. split!; [solve_length|].
         apply Hloop; [done|]. split!. 1: done. all: split!.
         1: { apply expr_in_bij_subst_l; [|done|solve_length]. apply expr_in_bij_static. apply fd_static. }
-        apply static_expr_subst_l; [|solve_length]. apply static_expr_mono. apply fd_static.
+        apply is_static_expr_subst_l; [|solve_length]. apply is_static_expr_mono. apply fd_static.
       * naive_solver.
 Qed.
 
