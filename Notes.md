@@ -23,6 +23,7 @@
 - [ ] Add fnptrs to imp (should be easy when one has ghost state for f2i)
 - [ ] Add global variables
 - [ ] Make allocation in Imp like RefinedC allocation
+  - Define alloc_list fixpoint
 - [ ] Compiler
 - [ ] Allow the proof to use a bigger resource than the prepost, e.g.
       by defining an injection from the prepost resource to the bigger resource

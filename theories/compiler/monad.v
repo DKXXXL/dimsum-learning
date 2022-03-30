@@ -41,9 +41,31 @@ Global Instance compiler_success_fmap E : FMap (compiler_success E) :=
     end.
 
 Lemma compiler_success_fmap_success E RA RB (f : RA → RB) x y :
-  f <$> x = @CSuccess E RB y →
+  f <$> x = @CSuccess E RB y ↔
   ∃ x', x = CSuccess x' ∧ y = f x'.
+Proof. destruct x => //=; naive_solver. Qed.
+
+Definition compiler_success_fmap_error {E1 E2 R} (f : E1 → E2) (x : compiler_success E1 R) : compiler_success E2 R :=
+  match x with
+  | CSuccess y => CSuccess y
+  | CError e => CError (f e)
+  end.
+
+Lemma compiler_success_fmap_error_success E1 E2 R (f : E1 → E2) x (y : R) :
+  compiler_success_fmap_error f x = CSuccess y ↔ x = CSuccess y.
 Proof. destruct x => //=. naive_solver. Qed.
+
+Global Instance compiler_success_bind E : MBind (compiler_success E) :=
+  λ RA RB f c,
+    match c with
+    | CSuccess x => f x
+    | CError e => CError e
+    end.
+
+Lemma compiler_success_bind_success E RA RB (f : RA → compiler_success E RB) x y :
+  x ≫= f = @CSuccess E RB y ↔
+  ∃ x', x = CSuccess x' ∧ f x' = CSuccess y.
+Proof. destruct x => //=; naive_solver. Qed.
 
 Record compiler_result {S : Type} {A : compiler_monoid} {E R : Type} := CResult {
   c_state : S;

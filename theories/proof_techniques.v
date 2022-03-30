@@ -503,19 +503,22 @@ Proof.
   naive_solver.
 Qed.
 
+Ltac eauto_tstep :=
+  solve [typeclasses eauto with tstep].
+
 Ltac tstep_s :=
   first [
-      once (notypeclasses refine (tsim_tstep_s _ _ _ _ _ _ _ _ _); [solve [typeclasses eauto with tstep]|]); simpl
-    | once (notypeclasses refine (thas_trace_tstep_s _ _ _ _ _); [solve [typeclasses eauto with tstep]|]); simpl
-    | once (notypeclasses refine (steps_spec_tstep_s _ _ _ _ _)); [solve [typeclasses eauto with tstep]|]; simpl
+      once (notypeclasses refine (tsim_tstep_s _ _ _ _ _ _ _ _ _); [eauto_tstep|]); simpl
+    | once (notypeclasses refine (thas_trace_tstep_s _ _ _ _ _); [eauto_tstep|]); simpl
+    | once (notypeclasses refine (steps_spec_tstep_s _ _ _ _ _)); [eauto_tstep|]; simpl
     ].
 Ltac tstep_i :=
   first [
-      once (notypeclasses refine (tsim_tstep_i _ _ _ _ _ _ _ _); [solve [typeclasses eauto with tstep]|]); simpl
-    | once (notypeclasses refine (steps_impl_tstep_i _ _ _ _); [solve [typeclasses eauto with tstep]|]); simpl
+      once (notypeclasses refine (tsim_tstep_i _ _ _ _ _ _ _ _); [eauto_tstep|]); simpl
+    | once (notypeclasses refine (steps_impl_tstep_i _ _ _ _); [eauto_tstep|]); simpl
     ].
 Ltac tstep_both :=
-  once (notypeclasses refine (tsim_tstep_both _ _ _ _ _ _ _ _); [solve [typeclasses eauto with tstep]|]); simpl.
+  once (notypeclasses refine (tsim_tstep_both _ _ _ _ _ _ _ _); [eauto_tstep|]); simpl.
 
 Lemma tstep_i_generic EV (m : module EV) σ:
   TStepI m σ (λ G, σ -{ m }-> (λ b κ Pσ, G b κ (λ G', ∃ σ', Pσ σ' ∧ G' σ'))).

@@ -35,8 +35,10 @@ theories/imp_to_asm_examples.v
 theories/int_ptr_cast.v
 theories/compiler/monad.v
 theories/compiler/linear_imp.v
+theories/compiler/ssa.v
 theories/compiler/linearize.v
 theories/compiler/codegen.v
+theories/compiler/compiler.v
 theories/iris/wp.v
 theories/iris/mono_ord.v
 theories/iris/ord_later.v

@@ -1274,4 +1274,24 @@ Proof.
   - by apply map_scramble_insert_r_in; [compute_done|].
 Qed.
 
+Definition pass_fn (f2i : gmap string Z) (fn : lfndef) : compiler_success error (list deep_asm_instr) :=
+  let res := crun (initial_state f2i) (pass fn.(lfd_args) fn.(lfd_body)) in
+  (λ _, res.(c_prog)) <$> res.(c_result).
+
+Lemma pass_fn_correct a f2i f dins ins fn:
+  pass_fn f2i fn = CSuccess dins →
+  ins = deep_to_asm_instrs a dins →
+  f2i !! f = Some a →
+  NoDup fn.(lfd_args) →
+  (∀ f' i', f2i !! f' = Some i' → ins !! i' = None ↔ f' ≠ f) →
+  trefines (MS asm_module (initial_asm_state ins))
+           (MS (imp_to_asm (dom _ ins) {[f]} f2i imp_module) (initial_imp_to_asm_state imp_module
+             (initial_imp_lstate (<[f := fn]> ∅)))).
+Proof.
+  unfold pass_fn.
+  destruct (crun (initial_state f2i) (pass (lfd_args fn) (lfd_body fn))) eqn: Hres => /=.
+  move => /(compiler_success_fmap_success _ _ _ _ _ _)[[][??]]. simplify_eq.
+  by apply: pass_correct.
+Qed.
+
 End ci2a_codegen.

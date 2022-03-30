@@ -1,4 +1,3 @@
-Require Export iris.algebra.lib.gmap_view.
 Require Export refframe.module.
 Require Import refframe.trefines.
 Require Import refframe.filter.
@@ -187,9 +186,9 @@ Proof.
     apply Hcont; [done|by eapply lookup_weaken|done|naive_solver].
   - move => ?????????????????? Hcont. prepare_goal. apply Hcont; [done|done|done|naive_solver].
   - move => /= ??? IH1 IH2 ????????????????? Hcont. prepare_goal.
-    eapply IH1; [typeclasses eauto with tstep|done|done|done|set_solver|set_solver|done|].
+    eapply IH1; [eauto_tstep|done|done|done|set_solver|set_solver|done|].
     move => ?????? Hvsi'/=.
-    eapply IH2; [typeclasses eauto with tstep|done|by etrans|done|set_solver|set_unfold; naive_solver lia|set_unfold; naive_solver lia|].
+    eapply IH2; [eauto_tstep|done|by etrans|done|set_solver|set_unfold; naive_solver lia|set_unfold; naive_solver lia|].
     move => ?????? Hvsi'' /=.
     erewrite lookup_var_val_to_expr; [|by apply: lookup_var_val_mono].
     erewrite lookup_var_val_to_expr; [|done].
@@ -205,7 +204,7 @@ Proof.
       move => /Hvsi'' [|[?|?]]; [ |set_unfold; naive_solver lia..].
       move => /Hvsi'; set_unfold; naive_solver lia.
   - move => /= ? IH ????????????????? Hcont. prepare_goal.
-    eapply IH; [typeclasses eauto with tstep|done|done|done|set_solver|set_solver|done|].
+    eapply IH; [eauto_tstep|done|done|done|set_solver|set_solver|done|].
     move => ?????? Hvsi'/=.
     erewrite lookup_var_val_to_expr; [|done].
     tstep_s => ????. subst.
@@ -219,9 +218,9 @@ Proof.
     + move => ? /lookup_insert_is_Some'[|]; [naive_solver lia|].
       move => /Hvsi'; set_unfold; naive_solver lia.
   - move => /= ?? IH1 IH2 ????????????????? Hcont. prepare_goal.
-    eapply IH1; [typeclasses eauto with tstep|done|done|done|set_solver|set_solver|done|].
+    eapply IH1; [eauto_tstep|done|done|done|set_solver|set_solver|done|].
     move => ?????? Hvsi'/=.
-    eapply IH2; [typeclasses eauto with tstep|done|by etrans|done|set_solver|set_unfold; naive_solver lia|set_unfold; naive_solver lia|].
+    eapply IH2; [eauto_tstep|done|by etrans|done|set_solver|set_unfold; naive_solver lia|set_unfold; naive_solver lia|].
     move => ?????? Hvsi'' /=.
     erewrite lookup_var_val_to_expr; [|by apply: lookup_var_val_mono].
     erewrite lookup_var_val_to_expr; [|done].
@@ -237,12 +236,12 @@ Proof.
       move => /Hvsi'' [|[?|?]]; [ |set_unfold; naive_solver lia..].
       move => /Hvsi'; set_unfold; naive_solver lia.
   - move => ??? IH1 IH2 IH3 > ?????? Hcont. prepare_goal.
-    eapply IH1; [typeclasses eauto with tstep|done|done|done|set_solver|set_solver|done|].
+    eapply IH1; [eauto_tstep|done|done|done|set_solver|set_solver|done|].
     move => ?????? Hvsi'/=.
     erewrite lookup_var_val_to_expr; [|done].
     tstep_s => ??. subst.
     tstep_i. apply tsim_mono_b_false. case_match.
-    + eapply IH2; [typeclasses eauto with tstep|done|by etrans|done|set_solver|set_unfold; naive_solver lia|set_unfold; naive_solver lia|].
+    + eapply IH2; [eauto_tstep|done|by etrans|done|set_solver|set_unfold; naive_solver lia|set_unfold; naive_solver lia|].
     move => ?????? Hvsi''/=.
     erewrite lookup_var_val_to_expr; [|by apply: lookup_var_val_mono].
     tstep_i. rewrite -subst_subst_map_delete.
@@ -254,7 +253,7 @@ Proof.
     * move => ? /lookup_insert_is_Some'[|]; [naive_solver lia|].
       move => /Hvsi'' [|[?|?]]; [ |set_unfold; naive_solver lia..].
       move => /Hvsi'; set_unfold; naive_solver lia.
-    + eapply IH3; [typeclasses eauto with tstep|done|by etrans|done|set_solver|set_unfold; naive_solver lia|set_unfold; naive_solver lia|].
+    + eapply IH3; [eauto_tstep|done|by etrans|done|set_solver|set_unfold; naive_solver lia|set_unfold; naive_solver lia|].
       move => ?????? Hvsi''/=.
       erewrite lookup_var_val_to_expr; [|by apply: lookup_var_val_mono].
       tstep_i. rewrite -subst_subst_map_delete.
@@ -267,10 +266,10 @@ Proof.
         move => /Hvsi'' [|[?|?]]; [ |set_unfold; naive_solver lia..].
         move => /Hvsi'; set_unfold; naive_solver lia.
   - move => ??? IH1 IH2 ????????????????? Hcont. prepare_goal.
-    eapply IH1; [typeclasses eauto with tstep|done|done|done|set_solver|set_solver|done|].
+    eapply IH1; [eauto_tstep|done|done|done|set_solver|set_solver|done|].
     move => ?????? Hvsi'/=. erewrite lookup_var_val_to_expr; [|done].
     tstep_s. tstep_i. rewrite -!subst_subst_map_delete. apply tsim_mono_b_false.
-    eapply IH2; [typeclasses eauto with tstep|done| |done|set_solver| | |].
+    eapply IH2; [eauto_tstep|done| |done|set_solver| | |].
     { by apply insert_mono; etrans. }
     { move => ?/lookup_insert_is_Some'. set_solver. }
     { move => ?/lookup_insert_is_Some'. set_unfold; naive_solver lia. }
@@ -291,7 +290,7 @@ Proof.
     elim: IH m p'' v'' s s'' vsi vr'' va'' h Hrun Hsub Hvsi1 Hvsi2 Hnodup Htmp Hall Hcont.
     + move => /= ??????????????? /lookup_var_val_to_expr_fmap Hall Hcont. simplify_crun_eq. rewrite !app_nil_r.
       rewrite Hall.
-      apply: Hcall; [typeclasses eauto with tstep|typeclasses eauto with tstep|done| | |done|done|..].
+      apply: Hcall; [eauto_tstep|eauto_tstep|done| | |done|done|..].
       { apply Forall2_fmap_l. apply Forall_Forall2_diag. by apply Forall_true. }
       { apply Forall2_fmap_l. apply Forall_Forall2_diag. by apply Forall_true. }
       move => ?? /=.
@@ -320,31 +319,31 @@ Proof.
   - move => *. prepare_goal. by tstep_s.
 Qed.
 
-Definition translate_fn (f : static_fndef) : compiler_success error lfndef :=
+Definition pass_fn (f : static_fndef) : compiler_success error lfndef :=
   let x := crun 0%N (pass f.(sfd_body)) in
   (λ v, {|
      lfd_args := f.(sfd_args);
      lfd_body := x.(c_prog) (LEnd $ LVarVal v);
   |} ) <$> x.(c_result).
 
-Compute translate_fn (fndef_to_static_fndef test_fn_1).
+Compute pass_fn (fndef_to_static_fndef test_fn_1).
 
-Lemma translate_fn_correct f fn fn' :
-  translate_fn fn = CSuccess fn' →
+Lemma pass_fn_correct f fn fn' :
+  pass_fn fn = CSuccess fn' →
   NoDup (sfd_args fn ++ assigned_vars (static_expr_to_expr (sfd_body fn))) →
   (∀ n, tmp_var n ∉ sfd_args fn ++ assigned_vars (static_expr_to_expr (sfd_body fn))) →
   trefines (MS imp_module (initial_imp_lstate (<[f := fn']> ∅)))
            (MS imp_module (initial_imp_sstate (<[f := fn]> ∅))).
 Proof.
   destruct (crun 0%N (pass (sfd_body fn))) as [?? res] eqn: Hsucc.
-  unfold translate_fn. rewrite Hsucc => /= /(compiler_success_fmap_success _ _ _ _ _ _)[?[??]]. subst.
+  unfold pass_fn. rewrite Hsucc => /= /(compiler_success_fmap_success _ _ _ _ _ _)[?[??]]. subst.
   move => // /NoDup_app[?[??]]?.
   apply imp_proof. { move => ?. rewrite !lookup_fmap !fmap_None !lookup_insert_None. naive_solver. }
   move => ???????. rewrite !fmap_insert !fmap_empty /=.
   move => /lookup_insert_Some[[??]|[??]]; simplify_map_eq. split!.
   move => ?? Hret.
   rewrite !subst_l_subst_map; [|lia..].
-  apply: pass_correct; [typeclasses eauto with tstep|done|done|done|done|set_solver|..].
+  apply: pass_correct; [eauto_tstep|done|done|done|done|set_solver|..].
   { move => ?. rewrite list_to_map_lookup_is_Some. move => [? /(elem_of_zip_l _ _ _)]. set_solver. }
   { move => ?. rewrite list_to_map_lookup_is_Some. move => [? /(elem_of_zip_l _ _ _)]. set_solver. }
   move => /= ???????.
