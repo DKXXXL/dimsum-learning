@@ -4,7 +4,7 @@ From RecordUpdate Require Export RecordSet.
 Require Export stdpp.prelude.
 Require Export stdpp.gmap.
 Require Export stdpp.strings.
-Require Import stdpp.pretty.
+Require Export stdpp.pretty.
 Require Export iris.prelude.prelude.
 Require Import iris.proofmode.proofmode.
 Export RecordSetNotations.
