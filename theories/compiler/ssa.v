@@ -9,6 +9,7 @@ Require Import refframe.prepost.
 Require Import refframe.proof_techniques.
 Require Import refframe.imp.
 
+
 Local Open Scope Z_scope.
 Set Default Proof Using "Type".
 
@@ -17,8 +18,11 @@ Definition ssa_var (s : string) (n : N) : string :=
 
 Global Instance ssa_var_inj : Inj2 (=) (=) (=) ssa_var.
 Proof.
-  move => ????. unfold ssa_var => ?. simplify_eq.
-Admitted.
+  move => ????. unfold ssa_var.
+  move => /string_list_eq.
+  rewrite !string_to_list_app => /= /(app_inj_middle _ _ _ _  _)[| |??]. 3: naive_solver.
+  all: move => /pretty_N_digits; compute_done.
+Qed.
 
 Module ci2a_ssa.
 
@@ -99,7 +103,11 @@ Proof.
               | |- imap _ _ = imap _ _ => apply imap_ext => * /=
               | |- ssa_var _ _ = ssa_var _ _ => f_equal
               end; try lia.
-Admitted.
+  revert s. revert select (Forall _ _).
+  elim => //; csimpl => ?? IH1 _ IH2 s.
+  rewrite imap_app IH2 pass_state. f_equal; [done|].
+  apply imap_ext => * /=. f_equal. lia.
+Qed.
 
 Lemma pass_correct Ki Ks ei es es' n h fns1 fns2 s vsi vss ren
       `{!ImpExprFill es Ks (subst_map vss (static_expr_to_expr es'))}
@@ -171,6 +179,10 @@ Definition pass_fn (f : static_fndef) : static_fndef :=
 
 Compute pass_fn (fndef_to_static_fndef test_fn_1).
 
+Lemma pass_fn_args_NoDup fn:
+  NoDup (sfd_args (pass_fn fn)).
+Proof. apply NoDup_alt => /= ??? /list_lookup_imap_Some? /list_lookup_imap_Some?. naive_solver. Qed.
+
 Lemma pass_fn_vars f :
   sfd_args (pass_fn f) ++ assigned_vars (static_expr_to_expr (sfd_body (pass_fn f))) =
   imap (λ n v, ssa_var v (N.of_nat n)) (sfd_args f ++ assigned_vars (static_expr_to_expr (sfd_body f))).
@@ -189,12 +201,20 @@ Proof.
   rewrite imap_length. move => ?? Hret.
   rewrite !subst_l_subst_map; [|rewrite ?imap_length; lia..].
   apply: pass_correct; [eauto_tstep|eauto_tstep|done|..].
-  - move => i v Hl.
-    admit.
+  - move => i v /list_to_map_lookup_Some [? [/lookup_zip_with_Some [? [? [?[??]]]] Hl]]. simplify_eq.
+    eexists _. split.
+    + apply list_to_map_lookup_Some. eexists _. split.
+      * apply lookup_zip_with_Some. split!; [done|]. apply list_lookup_imap_Some. split!.
+      * move => ??. rewrite fst_zip ?imap_length // => ?. apply Hl.
+        rewrite fst_zip //. lia.
+    + apply list_to_map_lookup_Some. eexists _. split.
+      * apply lookup_zip_with_Some. split!; [|done]. apply list_lookup_imap_Some. split!.
+      * move => ??. rewrite fst_zip ?imap_length //; [|lia] => /list_lookup_imap_Some[?[??]] ??.
+        simplify_eq. lia.
   - move => ???. apply not_elem_of_list_to_map_1.
     move => /elem_of_list_fmap[[??][?]] /(elem_of_zip_with _ _ _ _)[?[?[?[/elem_of_lookup_imap]]]].
     move => [?[?[? /(lookup_lt_Some _ _ _) ?]]]. naive_solver lia.
   - move => ?? /=. by apply Hret.
-Admitted.
+Qed.
 
 End ci2a_ssa.

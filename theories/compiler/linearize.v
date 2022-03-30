@@ -4,6 +4,7 @@ Require Import refframe.filter.
 Require Import refframe.product.
 Require Import refframe.seq_product.
 Require Import refframe.link.
+Require Import stdpp.strings.
 Require Import stdpp.pretty.
 Require Import refframe.prepost.
 Require Import refframe.proof_techniques.
@@ -15,10 +16,13 @@ Local Open Scope Z_scope.
 Set Default Proof Using "Type".
 
 Definition tmp_var (n : N) : string :=
-  "$$" ++ pretty n.
+  "$" ++ pretty n ++ "$".
 
 Global Instance tmp_var_inj : Inj (=) (=) tmp_var.
-Proof. move => ??. unfold tmp_var => ?. by simplify_eq. Qed.
+Proof.
+  move => x y. unfold tmp_var => Heq. simplify_eq.
+  move: Heq => /string_app_inj_r?. by simplify_eq.
+Qed.
 
 Module ci2a_linearize.
 
@@ -327,6 +331,11 @@ Definition pass_fn (f : static_fndef) : compiler_success error lfndef :=
   |} ) <$> x.(c_result).
 
 Compute pass_fn (fndef_to_static_fndef test_fn_1).
+
+Lemma pass_fn_args fn fn' :
+  pass_fn fn = CSuccess fn' →
+  lfd_args fn' = sfd_args fn.
+Proof. rewrite /pass_fn => /(compiler_success_fmap_success _ _ _ _ _ _). naive_solver. Qed.
 
 Lemma pass_fn_correct f fn fn' :
   pass_fn fn = CSuccess fn' →

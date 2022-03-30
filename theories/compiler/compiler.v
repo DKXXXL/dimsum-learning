@@ -18,6 +18,15 @@ Require Import refframe.compiler.codegen.
 Local Open Scope Z_scope.
 Set Default Proof Using "Type".
 
+Lemma tmp_var_ne_ssa_var n1 s n2 :
+  tmp_var n1 ≠ ssa_var s n2.
+Proof.
+  suff : last (string_to_list (tmp_var n1)) ≠ last (string_to_list (ssa_var s n2)).
+  { move => ? /string_list_eq?. congruence. }
+  rewrite /tmp_var /ssa_var !string_to_list_app !last_app /=.
+  rewrite pretty_N_last /pretty_N_char. by repeat case_match.
+Qed.
+
 Inductive compile_error :=
 | LinearizeError (e : ci2a_linearize.error)
 | CodegenError (e : ci2a_codegen.error)
@@ -49,18 +58,18 @@ Proof.
   move => ??.
   etrans. {
     apply: ci2a_codegen.pass_fn_correct; [done..| |done].
-    admit.
+    erewrite ci2a_linearize.pass_fn_args; [|done]. apply ci2a_ssa.pass_fn_args_NoDup.
   }
   apply imp_to_asm_trefines; [apply _|].
   etrans. {
     apply: ci2a_linearize.pass_fn_correct; [done|..]; rewrite ci2a_ssa.pass_fn_vars.
-    - admit.
-    - admit.
+    - apply NoDup_alt => ??? /list_lookup_imap_Some[?[??]] /list_lookup_imap_Some. naive_solver.
+    - move => ? /elem_of_lookup_imap[?[?[??]]]. by apply: tmp_var_ne_ssa_var.
   }
   etrans. { apply: ci2a_ssa.pass_fn_correct. }
   rewrite /initial_imp_sstate fmap_insert fmap_empty static_fndef_to_fndef_to_static_fndef.
   done.
-Admitted.
+Qed.
 
 Module ci2a_test.
 

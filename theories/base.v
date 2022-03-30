@@ -1,8 +1,10 @@
+From Coq Require Import Ascii.
 From Coq Require Export ssreflect.
 From RecordUpdate Require Export RecordSet.
 Require Export stdpp.prelude.
 Require Export stdpp.gmap.
 Require Export stdpp.strings.
+Require Import stdpp.pretty.
 Require Export iris.prelude.prelude.
 Require Import iris.proofmode.proofmode.
 Export RecordSetNotations.
@@ -210,6 +212,24 @@ End map.
 
 Section theorems.
 Context `{FinMap K M}.
+Lemma list_to_map_list_find {A} (l : list (K * A)) i y:
+  (list_to_map l : M A) !! i = Some y ↔ ∃ j, list_find (λ e, e.1 = i) l = Some (j, (i, y)).
+Proof.
+  elim: l i => /=. { move => ?. split => ?; simplify_map_eq; naive_solver. }
+  move => [??] ? IH i /=. rewrite lookup_insert_Some. case_decide; [naive_solver|].
+  rewrite IH. setoid_rewrite fmap_Some. split => ?; destruct_all?; simplify_eq.
+  - eexists _, (_, (_, _)). done.
+  - destruct x as [?[??]]. naive_solver.
+Qed.
+
+Lemma list_to_map_lookup_Some {A} (l : list (K * A)) i y:
+  (list_to_map l : M A) !! i = Some y ↔
+           ∃ j, l !! j = Some (i, y) ∧ (∀ j' y', l.*1 !! j' = Some y' → j' < j → y' ≠ i).
+Proof.
+  rewrite list_to_map_list_find. f_equiv => ?. rewrite list_find_Some.
+  setoid_rewrite list_lookup_fmap. setoid_rewrite fmap_Some. naive_solver.
+Qed.
+
 Lemma list_to_map_lookup_is_Some {A} (l : list (K * A)) i :
   is_Some ((list_to_map l : M A) !! i) ↔ ∃ x, (i,x) ∈ l.
 Proof.
@@ -854,3 +874,89 @@ Ltac iSplit_tac :=
   original_iSplit_tac.
 
 Tactic Notation "iSplit!" := iSplit_tac.
+
+Section imap.
+  Context {A B : Type} (f : nat → A → B).
+  Lemma list_lookup_imap_Some l i x : imap f l !! i = Some x ↔ ∃ y, l !! i = Some y ∧ x = f i y.
+  Proof. rewrite list_lookup_imap fmap_Some. done. Qed.
+End imap.
+
+Lemma app_inj_middle {A} (l1 l2 l1' l2' : list A) x:
+  x ∉ l2 →
+  x ∉ l2' →
+  l1 ++ x :: l2 = l1' ++ x :: l2' → l1 = l1' ∧ l2 = l2'.
+Proof.
+  move => Hnotin1 Hnotin2 Heq.
+  destruct (decide (length l1 = length l1')). { move: Heq => /app_inj_1. naive_solver. }
+  exfalso.
+  have Hi : ∀ i, (l1 ++ x :: l2) !! i = (l1' ++ x :: l2') !! i by rewrite Heq.
+  destruct (decide (length l1 < length l1')).
+  - have := Hi (length l1').
+    rewrite lookup_app_r ?list_lookup_middle ?lookup_cons_ne_0; [|lia..].
+    move => /(elem_of_list_lookup_2 _ _ _). done.
+  - have := Hi (length l1).
+    rewrite list_lookup_middle ?lookup_app_r ?lookup_cons_ne_0; [|lia..].
+    move => ?. apply Hnotin2. by apply: elem_of_list_lookup_2.
+Qed.
+
+(** * strings *)
+Notation string_to_list := list_ascii_of_string.
+
+Lemma string_list_eq s1 s2 :
+  s1 = s2 ↔ string_to_list s1 = string_to_list s2.
+Proof.
+  elim: s1 s2 => //=. { case; naive_solver. }
+  move => ???. case; naive_solver.
+Qed.
+
+Global Instance string_to_list_inj : Inj (=) (=) (string_to_list).
+Proof. move => ?? /string_list_eq. done. Qed.
+
+Lemma string_to_list_app s1 s2 :
+  string_to_list (s1 +:+ s2) = string_to_list s1 ++ string_to_list s2.
+Proof. elim: s1 => //. cbn. move => ?? <-. done. Qed.
+
+Lemma string_app_inj_r x y z:
+  x +:+ z = y +:+ z → x = y.
+Proof. move => /string_list_eq. rewrite !string_to_list_app => /app_inj_2[//|??]. by simplify_eq. Qed.
+
+Definition digits : list ascii :=
+  ["0"; "1"; "2"; "3"; "4"; "5"; "6"; "7"; "8"; "9"]%char.
+
+Lemma pretty_N_char_digits n:
+  pretty_N_char n ∈ digits.
+Proof. compute. repeat case_match; set_solver. Qed.
+
+Lemma pretty_N_go_digits (n : N) s:
+  string_to_list s ⊆ digits →
+  string_to_list (pretty_N_go n s) ⊆ digits.
+Proof.
+  revert s. induction (N.lt_wf_0 n) as [n _ IH] => s Hs.
+  destruct (decide (n = 0%N)); subst => //=.
+  rewrite pretty_N_go_step; [|lia].
+  apply IH => /=. { apply N.div_lt; lia. }
+  apply list_subseteq_cons_l; [|done].
+  apply pretty_N_char_digits.
+Qed.
+
+Lemma pretty_N_digits (n : N):
+  string_to_list (pretty n) ⊆ digits.
+Proof. rewrite /pretty/pretty_N. case_decide; [set_solver|]. apply pretty_N_go_digits. set_solver. Qed.
+
+Lemma pretty_N_go_last n s c:
+  last (string_to_list s) = Some c →
+  last (string_to_list (pretty_N_go n s)) = Some c.
+Proof.
+  revert s. induction (N.lt_wf_0 n) as [n _ IH] => s Hs.
+  destruct (decide (n = 0%N)); subst => //=.
+  rewrite pretty_N_go_step; [|lia].
+  apply IH => /=. { apply N.div_lt; lia. }
+  by rewrite last_cons Hs.
+Qed.
+
+Lemma pretty_N_last (n : N):
+  last (string_to_list (pretty n)) = Some (pretty_N_char (n `mod` 10)).
+Proof.
+  rewrite /pretty/pretty_N. case_decide; subst => //.
+  rewrite pretty_N_go_step; [|lia]. by erewrite pretty_N_go_last.
+Qed.
