@@ -423,6 +423,7 @@ Proof.
      split; [|naive_solver congruence]. apply heap_bij_merge_shared. naive_solver.
 Qed.
 
+(*
 (** ** expr_in_bij *)
 Fixpoint expr_in_bij (bij : heap_bij) (e1 e2 : expr) {struct e1} : Prop :=
   match e1, e2 with
@@ -610,7 +611,7 @@ Proof.
   destruct o, v1, v2, v1', v2' => //= *; destruct_all?; simplify_eq. all: split!.
   lia.
 Qed.
-
+*)
 (** *** heap_in_bij *)
 Definition heap_in_bij (bij : heap_bij) (h h' : heap_state) : Prop :=
   ∀ p1 p2 o,

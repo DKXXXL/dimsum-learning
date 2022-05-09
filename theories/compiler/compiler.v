@@ -58,7 +58,8 @@ Proof.
   move => ??.
   etrans. {
     apply: ci2a_codegen.pass_fn_correct; [done..| |done].
-    erewrite ci2a_linearize.pass_fn_args; [|done]. apply ci2a_ssa.pass_fn_args_NoDup.
+    erewrite ci2a_linearize.pass_fn_args; [|done].
+    erewrite ci2a_linearize.pass_fn_vars; [|done]. apply ci2a_ssa.pass_fn_args_NoDup.
   }
   apply imp_to_asm_trefines; [apply _|].
   etrans. {
@@ -75,7 +76,8 @@ Module ci2a_test.
 
 Definition test_fn_1 : fndef := {|
   fd_args := ["x"];
-  fd_body := (BinOp (BinOp (Var "x") ShiftOp (Val 2)) AddOp (Call "f" [Load (Var "x"); Val 1]));
+  fd_vars := [("y", 1)];
+  fd_body := (BinOp (BinOp (Var "x") ShiftOp (Val 2)) AddOp (Call "f" [Load (Var "x"); Load (Var "y"); Val 1]));
   fd_static := I;
 |}.
 
@@ -85,6 +87,7 @@ Compute compile (<["f" := 100]> ∅) test_fn_1.
 
 Definition test_sum : fndef := {|
   fd_args := ["n"];
+  fd_vars := [];
   fd_body :=
     If (BinOp (Var "n") EqOp (Val 0)) (
          (Val 0)

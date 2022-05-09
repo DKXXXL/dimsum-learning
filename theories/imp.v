@@ -58,14 +58,13 @@ Inductive expr : Set :=
 | BinOp (e1 : expr) (o : binop) (e2 : expr)
 | Load (e : expr)
 | Store (e1 e2 : expr)
-(* TODO: Do we want to have Alloca instead of Alloc, i.e. an alloc
-that is automatically freed on function return? *)
-| Alloc (e : expr)
-| Free (e : expr)
 | If (e e1 e2 : expr)
 | LetE (v : string) (e1 e2 : expr)
 | Call (f : string) (args : list expr)
 | UbE
+(* expressions only appearing at runtime: *)
+| AllocA (ls : list (string * Z)) (e : expr)
+| FreeA (ls : list (loc * Z)) (e : expr)
 (* Returning to the context, insert automatically during execution. *)
 | ReturnExt (can_return_further : bool) (e : expr)
 | Waiting (can_return : bool)
@@ -77,19 +76,19 @@ Lemma expr_ind (P : expr → Prop) :
   (∀ (e1 : expr) (op : binop) (e2 : expr), P e1 → P e2 → P (BinOp e1 op e2)) →
   (∀ (e : expr), P e → P (Load e)) →
   (∀ (e1 e2 : expr), P e1 → P e2 → P (Store e1 e2)) →
-  (∀ (e : expr), P e → P (Alloc e)) →
-  (∀ (e : expr), P e → P (Free e)) →
   (∀ (e1 e2 e3 : expr), P e1 → P e2 → P e3 → P (If e1 e2 e3)) →
   (∀ (v : string) (e1 e2 : expr), P e1 → P e2 → P (LetE v e1 e2)) →
   (∀ (f : string) (args : list expr), Forall P args → P (Call f args)) →
   (P UbE) →
+  (∀ ls (e : expr), P e → P (AllocA ls e)) →
+  (∀ ls (e : expr), P e → P (FreeA ls e)) →
   (∀ (can_return_further : bool) (e : expr), P e → P (ReturnExt can_return_further e)) →
   (∀ (can_return : bool), P (Waiting can_return)) →
   ∀ (e : expr), P e.
 Proof.
   move => *. generalize dependent P => P. match goal with | e : expr |- _ => revert e end.
-  fix FIX 1. move => [ ^e] => ????????? Hcall ???.
-  10: { apply Hcall. apply Forall_true => ?. by apply: FIX. }
+  fix FIX 1. move => [ ^e] => ??????? Hcall ?????.
+  8: { apply Hcall. apply Forall_true => ?. by apply: FIX. }
   all: auto.
 Qed.
 
@@ -109,12 +108,12 @@ Fixpoint assigned_vars (e : expr) : list string :=
   | BinOp e1 o e2 => assigned_vars e1 ++ assigned_vars e2
   | Load e => assigned_vars e
   | Store e1 e2 => assigned_vars e1 ++ assigned_vars e2
-  | Alloc e => assigned_vars e
-  | Free e => assigned_vars e
   | If e e1 e2 => assigned_vars e ++ assigned_vars e1 ++ assigned_vars e2
   | LetE v e1 e2 => [v] ++ assigned_vars e1 ++ assigned_vars e2
   | Call f args => mjoin (assigned_vars <$> args)
   | UbE => []
+  | AllocA _ e => assigned_vars e
+  | FreeA _ e => assigned_vars e
   | ReturnExt can_return_further e => assigned_vars e
   | Waiting can_return => []
   end.
@@ -127,12 +126,12 @@ Fixpoint subst (x : string) (v : val) (e : expr) : expr :=
   | BinOp e1 o e2 => BinOp (subst x v e1) o (subst x v e2)
   | Load e => Load (subst x v e)
   | Store e1 e2 => Store (subst x v e1) (subst x v e2)
-  | Alloc e => Alloc (subst x v e)
-  | Free e => Free (subst x v e)
   | If e e1 e2 => If (subst x v e) (subst x v e1) (subst x v e2)
   | LetE y e1 e2 => LetE y (subst x v e1) (if bool_decide (x ≠ y) then subst x v e2 else e2)
   | Call f args => Call f (subst x v <$> args)
   | UbE => UbE
+  | AllocA ls e => AllocA ls (subst x v e)
+  | FreeA ls e => FreeA ls (subst x v e)
   | ReturnExt b e => ReturnExt b (subst x v e)
   | Waiting b => Waiting b
   end.
@@ -149,12 +148,12 @@ Fixpoint subst_map (x : gmap string val) (e : expr) : expr :=
   | BinOp e1 o e2 => BinOp (subst_map x e1) o (subst_map x e2)
   | Load e => Load (subst_map x e)
   | Store e1 e2 => Store (subst_map x e1) (subst_map x e2)
-  | Alloc e => Alloc (subst_map x e)
-  | Free e => Free (subst_map x e)
   | If e e1 e2 => If (subst_map x e) (subst_map x e1) (subst_map x e2)
   | LetE y e1 e2 => LetE y (subst_map x e1) (subst_map (delete y x) e2)
   | Call f args => Call f (subst_map x <$> args)
   | UbE => UbE
+  | AllocA ls e => AllocA ls (subst_map x e)
+  | FreeA ls e => FreeA ls (subst_map x e)
   | ReturnExt b e => ReturnExt b (subst_map x e)
   | Waiting b => Waiting b
   end.
@@ -216,11 +215,10 @@ Inductive expr_ectx :=
 | LoadCtx
 | StoreLCtx (e2 : expr)
 | StoreRCtx (v1 : val)
-| AllocCtx
-| FreeCtx
 | IfCtx (e2 e3 : expr)
 | LetECtx (v : string) (e2 : expr)
 | CallCtx (f : string) (vl : list val) (el : list expr)
+| FreeACtx (ls : list (loc * Z))
 | ReturnExtCtx (can_return_further : bool)
 .
 
@@ -231,11 +229,10 @@ Definition expr_fill_item (Ki : expr_ectx) (e : expr) : expr :=
   | LoadCtx => Load e
   | StoreLCtx e2 => Store e e2
   | StoreRCtx v1 => Store (Val v1) e
-  | AllocCtx => Alloc e
-  | FreeCtx => Free e
   | IfCtx e2 e3 => If e e2 e3
   | LetECtx v e2 => LetE v e e2
   | CallCtx f vl el => Call f ((Val <$> vl) ++ e :: el)
+  | FreeACtx ls => FreeA ls e
   | ReturnExtCtx b => ReturnExt b e
   end.
 
@@ -307,12 +304,12 @@ Fixpoint is_static_expr (allow_loc : bool) (e : expr) : bool :=
   | BinOp e1 o e2 => is_static_expr allow_loc e1 && is_static_expr allow_loc e2
   | Load e1 => is_static_expr allow_loc e1
   | Store e1 e2 => is_static_expr allow_loc e1 && is_static_expr allow_loc e2
-  | Alloc e1 => is_static_expr allow_loc e1
-  | Free e1 => is_static_expr allow_loc e1
   | If e e1 e2 => is_static_expr allow_loc e && is_static_expr allow_loc e1 && is_static_expr allow_loc e2
   | LetE v e1 e2 => is_static_expr allow_loc e1 && is_static_expr allow_loc e2
   | Call f args => forallb (is_static_expr allow_loc) args
   | UbE => true
+  | AllocA _ e => allow_loc && is_static_expr allow_loc e
+  | FreeA _ e => allow_loc && is_static_expr allow_loc e
   | ReturnExt can_return_further e => false
   | Waiting can_return => false
   end.
@@ -331,11 +328,10 @@ Qed.
 
 Lemma is_static_expr_subst_l xs vs e:
   is_static_expr true e →
-  length xs = length vs →
   is_static_expr true (subst_l xs vs e).
 Proof.
   elim: xs vs e. { by case. }
-  move => ?? IH [//|??] /=???. apply IH; [|lia].
+  move => ?? IH [//|??] /=??. apply IH.
   by apply is_static_expr_subst.
 Qed.
 
@@ -359,13 +355,14 @@ Qed.
 (** * fndef *)
 Record fndef : Type := {
   fd_args : list string;
+  fd_vars : list (string * Z);
   fd_body : expr;
   fd_static : is_static_expr false fd_body;
 }.
 
 Lemma fndef_eq fn1 fn2 :
-  fn1 = fn2 ↔ fd_args fn1 = fd_args fn2 ∧ fd_body fn1 = fd_body fn2.
-Proof. split; [naive_solver|]. destruct fn1, fn2 => /= -[??]. subst. f_equal. apply proof_irrel. Qed.
+  fn1 = fn2 ↔ fd_args fn1 = fd_args fn2 ∧ fd_vars fn1 = fd_vars fn2 ∧ fd_body fn1 = fd_body fn2.
+Proof. split; [naive_solver|]. destruct fn1, fn2 => /= -[?[??]]. subst. f_equal. apply proof_irrel. Qed.
 
 (** ** heap *)
 Record heap_state : Set := Heap {
@@ -394,6 +391,9 @@ Next Obligation. apply bool_decide_spec. set_solver. Qed.
 
 Definition heap_alive (h : heap_state) (l : loc) : Prop :=
   is_Some (h.(h_heap) !! l).
+
+Definition heap_range (h : heap_state) (l : loc) (a : Z) : Prop :=
+  ∀ l', l'.1 = l.1 → is_Some (h.(h_heap) !! l') ↔ l.2 ≤ l'.2 < l.2 + a.
 
 Definition heap_is_fresh (h : heap_state) (l : loc) : Prop :=
   l.1 ∉ h_provs h ∧ l.2 = 0.
@@ -468,6 +468,31 @@ Lemma heap_add_provs_provs h p :
   h_provs (heap_add_provs h p) = p ∪ h_provs h.
 Proof. by rewrite /h_provs/= dom_gset_to_gmap. Qed.
 
+Fixpoint heap_fresh_list (xs : list Z) (ps : gset prov) (h : heap_state) : list loc :=
+  match xs with
+  | [] => []
+  | x::xs' =>
+      let l := heap_fresh ps h in
+      l::heap_fresh_list xs' ps (heap_alloc h l x)
+  end.
+
+Fixpoint heap_alloc_list (xs : list Z) (ls : list loc) (h h' : heap_state) : Prop :=
+  match xs with
+  | [] => ls = [] ∧ h' = h
+  | x::xs' => ∃ l ls', ls = l::ls' ∧ heap_is_fresh h l ∧ heap_alloc_list xs' ls' (heap_alloc h l x) h'
+  end.
+
+Fixpoint heap_free_list (xs : list (loc * Z)) (h h' : heap_state) : Prop :=
+  match xs with
+  | [] => h' = h
+  | x::xs' => heap_range h x.1 x.2 ∧ heap_free_list xs' (heap_free h x.1) h'
+  end.
+
+Lemma heap_alloc_list_length xs ls h h' :
+  heap_alloc_list xs ls h h' →
+  length xs = length ls.
+Proof. elim: xs ls h h'. { case; naive_solver. } move => /= ??? [|??] ??; naive_solver. Qed.
+
 Lemma heap_fresh_is_fresh ps h:
   heap_is_fresh h (heap_fresh ps h).
 Proof.
@@ -482,6 +507,14 @@ Proof.
   unfold heap_fresh => /=.
   match goal with | |- context [fresh ?X] => pose proof (is_fresh X) as H; revert H; move: {1 3}(X) => l Hl end.
   set_solver.
+Qed.
+
+Lemma heap_alloc_list_fresh xs ps h:
+  ∃ h', heap_alloc_list xs (heap_fresh_list xs ps h) h h'.
+Proof.
+  elim: xs ps h. { case; naive_solver. }
+  move => a ? IH //= ps h. efeed pose proof IH as Hx. destruct Hx.
+  split!; [|done]. by apply heap_fresh_is_fresh.
 Qed.
 
 Lemma heap_alive_alloc h l l' n :
@@ -602,13 +635,6 @@ Inductive head_step : imp_state → option imp_event → (imp_state → Prop) �
 | StoreS v1 v h fns:
   head_step (Imp (Store (Val v1) (Val v)) h fns) None (λ σ',
     ∃ l, v1 = ValLoc l ∧ heap_alive h l ∧ σ' = Imp (Val v) (heap_update h l v) fns)
-| AllocS h fns l v:
-  heap_is_fresh h l →
-  head_step (Imp (Alloc (Val v)) h fns) None (λ σ',
-    ∃ z, v = ValNum z ∧ 0 < z ∧ σ' = Imp (Val (ValLoc l)) (heap_alloc h l z) fns)
-| FreeS h fns v:
-  head_step (Imp (Free (Val v)) h fns) None (λ σ',
-    ∃ l, v = ValLoc l ∧ heap_alive h l ∧ σ' = Imp (Val (ValNum 0)) (heap_free h l) fns)
 | IfS v fns e1 e2 h:
   head_step (Imp (If (Val v) e1 e2) h fns) None (λ σ,
        ∃ b, val_to_bool v = Some b ∧ σ = Imp (if b then e1 else e2) h fns)
@@ -618,11 +644,18 @@ Inductive head_step : imp_state → option imp_event → (imp_state → Prop) �
   head_step (Imp UbE h fns) None (λ σ, False)
 | VarES fns h v: (* unbound variable *)
   head_step (Imp (Var v) h fns) None (λ σ, False)
+| AllocAS h h' fns ls xs e:
+  heap_alloc_list xs.*2 ls h h' →
+  head_step (Imp (AllocA xs e) h fns) None (λ σ',
+    Forall (λ x, 0 < x) xs.*2 ∧ σ' = Imp (FreeA (zip ls xs.*2) (subst_l xs.*1 (ValLoc <$> ls) e)) h' fns)
+| FreeAS h fns ls v:
+  head_step (Imp (FreeA ls (Val v)) h fns) None (λ σ',
+    ∃ h', heap_free_list ls h h' ∧ σ' = Imp (Val v) h' fns)
 | CallInternalS f fn fns vs h:
   fns !! f = Some fn →
   head_step (Imp (Call f (Val <$> vs)) h fns) None (λ σ,
    length vs = length fn.(fd_args) ∧
-   σ = Imp (subst_l fn.(fd_args) vs fn.(fd_body)) h fns)
+   σ = Imp (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body))) h fns)
 | CallExternalS f fns vs h:
   fns !! f = None →
   head_step (Imp (Call f (Val <$> vs)) h fns) (Some (Outgoing, EICall f vs h)) (λ σ, σ = Imp (Waiting true) h fns)
@@ -632,7 +665,7 @@ Inductive head_step : imp_state → option imp_event → (imp_state → Prop) �
   fns !! f = Some fn →
   head_step (Imp (Waiting b) h fns) (Some (Incoming, EICall f vs h')) (λ σ,
     σ = (Imp (if bool_decide (length vs = length fn.(fd_args)) then
-                ReturnExt b (subst_l fn.(fd_args) vs fn.(fd_body))
+                ReturnExt b (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))
               else
                 UbE) h' fns))
 | RecvReturnS fns v h h':
@@ -755,10 +788,6 @@ Inductive static_expr : Set :=
 | SBinOp (e1 : static_expr) (o : binop) (e2 : static_expr)
 | SLoad (e : static_expr)
 | SStore (e1 e2 : static_expr)
-(* TODO: Do we want to have Alloca instead of Alloc, i.e. an alloc
-that is automatically freed on function return? *)
-| SAlloc (e : static_expr)
-| SFree (e : static_expr)
 | SIf (e e1 e2 : static_expr)
 | SLetE (v : string) (e1 e2 : static_expr)
 | SCall (f : string) (args : list static_expr)
@@ -771,8 +800,6 @@ Lemma static_expr_ind (P : static_expr → Prop) :
   (∀ (e1 : static_expr) (op : binop) (e2 : static_expr), P e1 → P e2 → P (SBinOp e1 op e2)) →
   (∀ (e : static_expr), P e → P (SLoad e)) →
   (∀ (e1 e2 : static_expr), P e1 → P e2 → P (SStore e1 e2)) →
-  (∀ (e : static_expr), P e → P (SAlloc e)) →
-  (∀ (e : static_expr), P e → P (SFree e)) →
   (∀ (e1 e2 e3 : static_expr), P e1 → P e2 → P e3 → P (SIf e1 e2 e3)) →
   (∀ (v : string) (e1 e2 : static_expr), P e1 → P e2 → P (SLetE v e1 e2)) →
   (∀ (f : string) (args : list static_expr), Forall P args → P (SCall f args)) →
@@ -780,8 +807,8 @@ Lemma static_expr_ind (P : static_expr → Prop) :
   ∀ (e : static_expr), P e.
 Proof.
   move => *. generalize dependent P => P. match goal with | e : static_expr |- _ => revert e end.
-  fix FIX 1. move => [ ^e] => ????????? Hcall ?.
-  10: { apply Hcall. apply Forall_true => ?. by apply: FIX. }
+  fix FIX 1. move => [ ^e] => ??????? Hcall ?.
+  8: { apply Hcall. apply Forall_true => ?. by apply: FIX. }
   all: auto.
 Qed.
 
@@ -792,8 +819,6 @@ Fixpoint static_expr_to_expr (e : static_expr) : expr :=
   | SBinOp e1 o e2 => BinOp (static_expr_to_expr e1) o (static_expr_to_expr e2)
   | SLoad e => Load (static_expr_to_expr e)
   | SStore e1 e2 => Store (static_expr_to_expr e1) (static_expr_to_expr e2)
-  | SAlloc e => Alloc (static_expr_to_expr e)
-  | SFree e => Free (static_expr_to_expr e)
   | SIf e e1 e2 => If (static_expr_to_expr e) (static_expr_to_expr e1) (static_expr_to_expr e2)
   | SLetE v e1 e2 => LetE v (static_expr_to_expr e1) (static_expr_to_expr e2)
   | SCall f args => Call f (static_expr_to_expr <$> args)
@@ -815,8 +840,6 @@ Fixpoint expr_to_static_expr (e : expr) : static_expr :=
   | BinOp e1 o e2 => SBinOp (expr_to_static_expr e1) o (expr_to_static_expr e2)
   | Load e => SLoad (expr_to_static_expr e)
   | Store e1 e2 => SStore (expr_to_static_expr e1) (expr_to_static_expr e2)
-  | Alloc e => SAlloc (expr_to_static_expr e)
-  | Free e => SFree (expr_to_static_expr e)
   | If e e1 e2 => SIf (expr_to_static_expr e) (expr_to_static_expr e1) (expr_to_static_expr e2)
   | LetE v e1 e2 => SLetE v (expr_to_static_expr e1) (expr_to_static_expr e2)
   | Call f args => SCall f (expr_to_static_expr <$> args)
@@ -836,17 +859,20 @@ Qed.
 
 Record static_fndef : Type := {
   sfd_args : list string;
+  sfd_vars : list (string * Z);
   sfd_body : static_expr;
 }.
 
 Program Definition static_fndef_to_fndef (fn : static_fndef) : fndef := {|
    fd_args := fn.(sfd_args);
+   fd_vars := fn.(sfd_vars);
    fd_body := static_expr_to_expr fn.(sfd_body);
 |}.
 Next Obligation. move => ?. apply static_expr_is_static. Qed.
 
 Definition fndef_to_static_fndef (fn : fndef) : static_fndef := {|
    sfd_args := fn.(fd_args);
+   sfd_vars := fn.(fd_vars);
    sfd_body := expr_to_static_expr fn.(fd_body);
 |}.
 
@@ -855,7 +881,7 @@ Definition initial_imp_sstate (fns : gmap string static_fndef) : imp_state :=
 
 Lemma static_fndef_to_fndef_to_static_fndef fn :
   static_fndef_to_fndef (fndef_to_static_fndef fn) = fn.
-Proof. apply fndef_eq. split; [done|] => /=. apply static_expr_to_expr_to_static_expr. apply fd_static. Qed.
+Proof. apply fndef_eq. split_and!; [done..|] => /=. apply static_expr_to_expr_to_static_expr. apply fd_static. Qed.
 
 (** * tstep *)
 (** ** ImpExprFill *)
@@ -899,15 +925,10 @@ Lemma imp_expr_fill_StoreR (v1 : val) e2 K e' `{!ImpExprFill e2 K e'} :
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
 Global Hint Resolve imp_expr_fill_StoreR : tstep.
 
-Lemma imp_expr_fill_Alloc e1 K e' `{!ImpExprFill e1 K e'} :
-  ImpExprFill (Alloc e1) (K ++ [AllocCtx]) e'.
+Lemma imp_expr_fill_FreeA e1 K e' ls `{!ImpExprFill e1 K e'} :
+  ImpExprFill (FreeA ls e1) (K ++ [FreeACtx ls]) e'.
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_Alloc : tstep.
-
-Lemma imp_expr_fill_Free e1 K e' `{!ImpExprFill e1 K e'} :
-  ImpExprFill (Free e1) (K ++ [FreeCtx]) e'.
-Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_Free : tstep.
+Global Hint Resolve imp_expr_fill_FreeA : tstep.
 
 Lemma imp_expr_fill_If e e2 e3 K e' `{!ImpExprFill e K e'} :
   ImpExprFill (If e e2 e3) (K ++ [IfCtx e2 e3]) e'.
@@ -951,7 +972,7 @@ Lemma imp_step_Waiting_i fns h K e b `{!ImpExprFill e K (Waiting b)}:
       G true (Some (Incoming, EICall f vs h')) (λ G',  G'
           (Imp (expr_fill K (
            if bool_decide (length vs = length (fd_args fn)) then
-             ReturnExt b ((subst_l fn.(fd_args) vs fn.(fd_body)))
+             ReturnExt b (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))
            else
              UbE)) h' fns))) ∧
     ∀ v h', b → G true (Some (Incoming, EIReturn v h')) (λ G', G' (Imp (expr_fill K (Val v)) h' fns))
@@ -971,7 +992,7 @@ Lemma imp_step_Waiting_s fns h e K b `{!ImpExprFill e K (Waiting b)}:
     (∃ f fn vs h', fns !! f = Some fn ∧
       G (Some (Incoming, EICall f vs h')) (λ G', G'
           (Imp (expr_fill K (if bool_decide (length vs = length (fd_args fn)) then
-                               ReturnExt b ((subst_l fn.(fd_args) vs fn.(fd_body)))
+                               ReturnExt b (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))
                              else
                                UbE)) h' fns))) ∨
     ∃ v h', b ∧ G (Some (Incoming, EIReturn v h')) (λ G', G' (Imp (expr_fill K (Val v)) h' fns))
@@ -1009,7 +1030,7 @@ Global Hint Resolve imp_step_ReturnExt_s : tstep.
 Lemma imp_step_Call_i fns h e K f vs `{!ImpExprFill e K (imp.Call f (Val <$> vs))}:
   TStepI imp_module (Imp e h fns) (λ G,
     (∀ fn, fns !! f = Some fn → G true None (λ G', length vs = length fn.(fd_args) ∧
-         G' (Imp (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) h fns))) ∧
+         G' (Imp (expr_fill K (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))) h fns))) ∧
     (fns !! f = None → G true (Some (Outgoing, EICall f vs h)) (λ G',
            G' (Imp (expr_fill K (Waiting true)) h fns)))).
 Proof.
@@ -1027,7 +1048,7 @@ Global Hint Resolve imp_step_Call_i : tstep.
 Lemma imp_step_Call_s fns h e K f vs `{!ImpExprFill e K (imp.Call f (Val <$> vs))}:
   TStepS imp_module (Imp e h fns) (λ G,
     (∃ fn, fns !! f = Some fn ∧ G None (λ G', length vs = length fn.(fd_args) → G'
-             (Imp (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) h fns))) ∨
+             (Imp (expr_fill K (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))) h fns))) ∨
     (fns !! f = None ∧ G (Some (Outgoing, EICall f vs h)) (λ G',
            G' (Imp (expr_fill K (Waiting true)) h fns)))).
 Proof.
@@ -1146,9 +1167,10 @@ Proof.
 Qed.
 Global Hint Resolve imp_step_Store_s : tstep.
 
-Lemma imp_step_Alloc_i fns h e K n `{!ImpExprFill e K (Alloc (Val (ValNum n)))}:
-  TStepI imp_module (Imp e h fns) (λ G, ∀ l, heap_is_fresh h l →
-    (G true None (λ G', 0 < n ∧ G' (Imp (expr_fill K (Val (ValLoc l))) (heap_alloc h l n) fns)))).
+Lemma imp_step_AllocA_i fns h e K e' vs `{!ImpExprFill e K (AllocA vs e')}:
+  TStepI imp_module (Imp e h fns) (λ G, ∀ ls h', heap_alloc_list vs.*2 ls h h' →
+    (G true None (λ G', Forall (λ z, 0 < z) vs.*2 ∧
+           G' (Imp (expr_fill K (FreeA (zip ls vs.*2) (subst_l vs.*1 (ValLoc <$> ls) e'))) h' fns)))).
 Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
@@ -1156,22 +1178,23 @@ Proof.
   invert_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_Alloc_i : tstep.
+Global Hint Resolve imp_step_AllocA_i : tstep.
 
-Lemma imp_step_Alloc_s fns h e K v `{!ImpExprFill e K (Alloc (Val v))}:
+Lemma imp_step_Alloc_s fns h e e' K vs `{!ImpExprFill e K (AllocA vs e')}:
   TStepS imp_module (Imp e h fns) (λ G,
-    (G None (λ G', ∃ l, heap_is_fresh h l ∧ (∀ n, v = ValNum n → 0 < n → G' (Imp (expr_fill K (Val (ValLoc l))) (heap_alloc h l n) fns))))).
+    (G None (λ G', ∃ ls h', heap_alloc_list vs.*2 ls h h' ∧
+      (Forall (λ z, 0 < z) vs.*2 → G' (Imp (expr_fill K (FreeA (zip ls vs.*2) (subst_l vs.*1 (ValLoc <$> ls) e'))) h' fns))))).
 Proof.
   destruct ImpExprFill0; subst.
-  constructor => ? HG. split!; [done|]. move => /= ?[?[??]].
+  constructor => ? HG. split!; [done|]. move => /= ?[?[?[??]]].
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct_all?; simplify_eq. naive_solver.
 Qed.
 Global Hint Resolve imp_step_Alloc_s : tstep.
 
-Lemma imp_step_Free_i fns h e K l `{!ImpExprFill e K (Free (Val (ValLoc l)))}:
+Lemma imp_step_FreeA_i fns h e K v ls `{!ImpExprFill e K (FreeA ls (Val v))}:
   TStepI imp_module (Imp e h fns) (λ G,
-    (G true None (λ G', heap_alive h l ∧ G' (Imp (expr_fill K (Val (ValNum 0))) (heap_free h l) fns)))).
+    (G true None (λ G', ∃ h', heap_free_list ls h h' ∧ G' (Imp (expr_fill K (Val v)) h' fns)))).
 Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
@@ -1179,18 +1202,18 @@ Proof.
   invert_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_Free_i : tstep.
+Global Hint Resolve imp_step_FreeA_i : tstep.
 
-Lemma imp_step_Free_s fns h e K v `{!ImpExprFill e K (Free (Val v))}:
+Lemma imp_step_FreeA_s fns h e K ls v `{!ImpExprFill e K (FreeA ls (Val v))}:
   TStepS imp_module (Imp e h fns) (λ G,
-    (G None (λ G', ∀ l, v = ValLoc l → heap_alive h l → G' (Imp (expr_fill K (Val 0)) (heap_free h l) fns)))).
+    (G None (λ G', ∀ h', heap_free_list ls h h' → G' (Imp (expr_fill K (Val v)) h' fns)))).
 Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct_all?; simplify_eq. naive_solver.
 Qed.
-Global Hint Resolve imp_step_Free_s : tstep.
+Global Hint Resolve imp_step_FreeA_s : tstep.
 
 Lemma imp_step_LetE_i fns h e K x v e1 `{!ImpExprFill e K (LetE x (Val v) e1)}:
   TStepI imp_module (Imp e h fns) (λ G,
@@ -1273,9 +1296,9 @@ Lemma imp_proof fns1 fns2:
          Imp (expr_fill K1 (Val v1')) h1' fns1
              ⪯{imp_module, imp_module, n', b}
          Imp (expr_fill K2 (Val v2')) h2' fns2) →
-         Imp (expr_fill K1 (subst_l fn1.(fd_args) vs (fd_body fn1))) h fns1
+         Imp (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs (fd_body fn1))) h fns1
              ⪯{imp_module, imp_module, n, false}
-         Imp (expr_fill K2 (subst_l fn2.(fd_args) vs (fd_body fn2))) h fns2)) →
+         Imp (expr_fill K2 (AllocA fn2.(fd_vars) $ subst_l fn2.(fd_args) vs (fd_body fn2))) h fns2)) →
 
   trefines (MS imp_module (initial_imp_state fns1))
            (MS imp_module (initial_imp_state fns2)).
@@ -1314,8 +1337,8 @@ Proof.
        h1 = h2 ∧
        fns1 !! f = Some fn1 ∧
        fns2 !! f = Some fn2 ∧
-       e1 = expr_fill K1 (subst_l (fd_args fn1) vs (fd_body fn1)) ∧
-       e2 = expr_fill K2 (subst_l (fd_args fn2) vs (fd_body fn2)) ∧
+       e1 = expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l (fd_args fn1) vs (fd_body fn1)) ∧
+       e2 = expr_fill K2 (AllocA fn2.(fd_vars) $ subst_l (fd_args fn2) vs (fd_body fn2)) ∧
        length vs = length (fd_args fn1) ∧
        ∀ v' h',
          Imp (expr_fill K1 (Val v')) h' fns1
@@ -1388,9 +1411,9 @@ Lemma imp_prepost_proof {S} {M : ucmra} R `{!∀ b, PreOrder (R b)} i o fns1 fns
           Imp (expr_fill K1 (Val v1)) h1' fns1
               ⪯{imp_module, mod_prepost i o imp_module, n', b}
           (SMProg, Imp (expr_fill K2 (Val v2)) h2' fns2, (PPInside, s3, r3))) →
-      Imp (expr_fill K1 (subst_l fn1.(fd_args) vs1 fn1.(fd_body))) h1 fns1
+      Imp (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs1 fn1.(fd_body))) h1 fns1
           ⪯{imp_module, mod_prepost i o imp_module, n, false}
-          (SMProg, Imp (expr_fill K2 (subst_l fn2.(fd_args) vs2 fn2.(fd_body))) h2 fns2, (PPInside, s2, r2')))))) →
+          (SMProg, Imp (expr_fill K2 (AllocA fn2.(fd_vars) $  subst_l fn2.(fd_args) vs2 fn2.(fd_body))) h2 fns2, (PPInside, s2, r2')))))) →
   trefines (MS imp_module (initial_imp_state fns1))
            (MS (mod_prepost (S:=S) i o imp_module)
                (SMFilter, initial_imp_state fns2, (PPOutside, s0, r0))).
@@ -1657,28 +1680,28 @@ Proof.
       by apply is_static_expr_expr_fill.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
-    + tstep_s => *. split!; [done..|] => /= *; simplify_eq.
-      split!; [done..|] => /= *; simplify_eq. tend. split!.
-      apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
-      by apply is_static_expr_expr_fill.
-    + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
-      by apply is_static_expr_expr_fill.
     + tstep_s => b ?. subst. tend. split!. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       apply is_static_expr_expr_fill. split!. destruct b; naive_solver.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst.
     + tstep_s. done.
     + tstep_s. done.
+    + tstep_s => *. split!; [done..|] => /= *; simplify_eq. tend. split!.
+      apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
+      apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst_l.
+    + tstep_s => *. tend. split!; [done..|].
+      apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
+      by apply is_static_expr_expr_fill.
     + revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|[??]].
       * tstep_s. left. split!. tend. split!.
         apply: Hloop. rewrite !expr_fill_app. split!; [done..|].
-        apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l; [|done].
+        apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l.
         apply is_static_expr_mono. apply fd_static.
       * tstep_s. right. simpl_map_decide. split!.
         tstep_s. left. split!. case_bool_decide.
         2: { tstep_s. done. }
         tend. split!. apply: Hloop. split!; [by econs|done..|].
-        apply is_static_expr_subst_l; [|done]. apply is_static_expr_mono. apply fd_static.
+        apply is_static_expr_subst_l. apply is_static_expr_mono. apply fd_static.
     + revert select ((_ ∪ _) !! _ = None) => /lookup_union_None[??].
       tstep_s. right. simpl_map_decide. split!; [done|]. tend. split!.
       apply: Hloop. split!; [by econs|done..].
@@ -1692,28 +1715,28 @@ Proof.
       by apply is_static_expr_expr_fill.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
-    + tstep_s => *. split!; [done..|] => /= *; simplify_eq.
-      split!; [done..|] => /= *; simplify_eq. tend. split!.
-      apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
-      by apply is_static_expr_expr_fill.
-    + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
-      by apply is_static_expr_expr_fill.
     + tstep_s => b ?. subst. tend. split!. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       apply is_static_expr_expr_fill. split!. destruct b; naive_solver.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst.
     + tstep_s. done.
     + tstep_s. done.
+    + tstep_s => *. split!; [done..|] => /= *; simplify_eq. tend. split!.
+      apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
+      apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst_l.
+    + tstep_s => *. tend. split!; [done..|].
+      apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
+      by apply is_static_expr_expr_fill.
     + revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|[??]].
       * have ? : fns2 !! f = None by apply: map_disjoint_Some_l.
         tstep_s. right. simpl_map_decide. split!.
         tstep_s. left. split!. case_bool_decide.
         2: { by tstep_s. }
         tend. split!. apply: Hloop. split!; [by econs|done..|].
-        apply is_static_expr_subst_l; [|done]. apply is_static_expr_mono. apply fd_static.
+        apply is_static_expr_subst_l. apply is_static_expr_mono. apply fd_static.
       * tstep_s. left. split! => /= ?. tend. split!.
         apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
-        apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l; [|done].
+        apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l.
         apply is_static_expr_mono. apply fd_static.
     + revert select ((_ ∪ _) !! _ = None) => /lookup_union_None[??].
       tstep_s. right. simpl_map_decide. split!;[done|] => /=. tend. split!; [done..|].
@@ -1724,11 +1747,11 @@ Proof.
         tstep_s. eexists (EICall _ _ _) => /=. simpl. simpl_map_decide. split!.
         tstep_s. split!. case_bool_decide. 2: { tstep_s. naive_solver. }
         apply Hloop. split!; [by econs|done..| ].
-        apply is_static_expr_subst_l; [|done]. apply is_static_expr_mono. apply fd_static.
+        apply is_static_expr_subst_l. apply is_static_expr_mono. apply fd_static.
       * tstep_s. eexists (EICall _ _ _) => /=. simpl. simpl_map_decide. split!.
         tstep_s. split!. case_bool_decide. 2: { tstep_s. naive_solver. }
         apply Hloop. split!; [by econs|done..| ].
-        apply is_static_expr_subst_l; [|done]. apply is_static_expr_mono. apply fd_static.
+        apply is_static_expr_subst_l. apply is_static_expr_mono. apply fd_static.
     + move => v h' ?.
       revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _ _) => HK.
       inversion HK; clear HK; simplify_eq/= => //.
@@ -1777,12 +1800,6 @@ Proof.
       * tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.
-      * tstep_s => *. split!; [done..|] => *. tend. split!; [done..|].
-        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
-        by apply is_static_expr_expr_fill.
-      * tstep_s => *. tend. split!; [done..|].
-        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
-        by apply is_static_expr_expr_fill.
       * tstep_s => b ?. subst. tend. split!. apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         apply is_static_expr_expr_fill. split!. destruct b; naive_solver.
       * tstep_s => *. tend. split!; [done..|].
@@ -1790,16 +1807,22 @@ Proof.
         apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst.
       * by tstep_s.
       * by tstep_s.
+      * tstep_s => *. split!; [done..|] => *. tend. split!; [done..|].
+        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
+        apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst_l.
+      * tstep_s => *. tend. split!; [done..|].
+        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
+        by apply is_static_expr_expr_fill.
       * tstep_s. left. split!; [apply lookup_union_Some; naive_solver|] => ?. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..|].
-        apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l; [|done].
+        apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l.
         apply is_static_expr_mono. apply fd_static.
       * move => *. destruct_all?; simplify_eq/=. repeat case_bool_decide => //.
         -- have [??] : is_Some (fns2 !! f) by apply elem_of_dom.
            tstep_s. left. split!; [apply lookup_union_Some; naive_solver|] => ?. tend. split!.
            tstep_i. split => *; simplify_eq. case_bool_decide => //.
            apply: Hloop; [done|]. split!; [by econs|done..|].
-           apply is_static_expr_subst_l; [|done]. apply is_static_expr_mono. apply fd_static.
+           apply is_static_expr_subst_l. apply is_static_expr_mono. apply fd_static.
         -- tstep_s. right. split!; [apply lookup_union_None;split!;by apply not_elem_of_dom| done|].
            tend. split!. apply: Hloop; [done|]. split!; [by econs|done..].
   - destruct (to_val er') eqn:?.
@@ -1825,12 +1848,6 @@ Proof.
       * tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.
-      * tstep_s => *. split!;[done..|] => *. tend. split!; [done..|].
-        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
-        by apply is_static_expr_expr_fill.
-      * tstep_s => *. tend. split!; [done..|].
-        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
-        by apply is_static_expr_expr_fill.
       * tstep_s => b ?. subst. tend. split!. apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         apply is_static_expr_expr_fill. split!. destruct b; naive_solver.
       * tstep_s => *. tend. split!; [done..|].
@@ -1838,9 +1855,15 @@ Proof.
         apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst.
       * by tstep_s.
       * by tstep_s.
+      * tstep_s => *. split!; [done..|] => *. tend. split!; [done..|].
+        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
+        apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst_l.
+      * tstep_s => *. tend. split!; [done..|].
+        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
+        by apply is_static_expr_expr_fill.
       * tstep_s. left. split!; [apply lookup_union_Some; naive_solver|] => ?. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..|].
-        apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l; [|done].
+        apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l.
         apply is_static_expr_mono. apply fd_static.
       * move => *. destruct_all?; simplify_eq/=. repeat case_bool_decide => //.
         -- have [??] : is_Some (fns1 !! f) by apply elem_of_dom.
@@ -1848,7 +1871,7 @@ Proof.
            tend. split!.
            tstep_i. split => *; invert_all imp_prod_filter. case_bool_decide => //.
            apply: Hloop; [done|]. split!; [by econs|done..|].
-           apply is_static_expr_subst_l; [|done]. apply is_static_expr_mono. apply fd_static.
+           apply is_static_expr_subst_l. apply is_static_expr_mono. apply fd_static.
         -- tstep_s. right. split!; [apply lookup_union_None;split!;by apply not_elem_of_dom|done|].
            tend. split!. apply: Hloop; [done|]. split!; [by econs|rewrite ?orb_true_r; done..].
   - tstep_i => *.
@@ -1858,11 +1881,11 @@ Proof.
                [rewrite lookup_union_Some //; naive_solver |].
       * case_bool_decide. 2: { by tstep_s. }
         tstep_i. split => *; destruct_all?; simplify_eq/=. case_bool_decide => //.
-        apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_subst_l; [|done].
+        apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_subst_l.
         apply is_static_expr_mono. apply fd_static.
       * case_bool_decide. 2: { by tstep_s. }
         tstep_i. split => *; destruct_all?; simplify_eq/=. case_bool_decide => //.
-        apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_subst_l; [|done].
+        apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_subst_l.
         apply is_static_expr_mono. apply fd_static.
     + tstep_s. right.
       revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _ _) => HK.

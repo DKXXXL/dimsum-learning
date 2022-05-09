@@ -1,6 +1,5 @@
 # TODOs
 
-- [ ] Define pure_i2a.imp_to_asm
 - [ ] prove vertical compositionality
   - Plan A: prove vertical compositionality directly on ownership based prepost
     - [ ] Add [∗ map] ps\mapsto pi \in hb_shared bij, shared ps pi to
@@ -17,19 +16,29 @@
         pure_bij.heap_bij
     - Should be easier than vertical compositionality for heap_bij since
       e.g. we don't need heap_in_bij for middle module to outside
-  - [ ] Prove equivalence of pure_i2a.imp_to_asm and imp_to_asm
-  - [ ] Prove equivalence of pure_bij.heap_bij and heap_bij
+    - [ ] Define pure_i2a.imp_to_asm
+    - [ ] Prove equivalence of pure_i2a.imp_to_asm and imp_to_asm
+    - [ ] Prove equivalence of pure_bij.heap_bij and heap_bij
+- [ ] Verify optimization that turns local variables into let-bindings
+- [ ] Make accesses to unmapped memory emit events
+- [ ] Allow multiple stacks
+  - [ ] Allow i2a emit page faults for the stack page
+  - [ ] Adjust compiler to do probing (at the beginning before any
+        allocation by just overapproximating the stack size)
+- [ ] example for mmap
+  - [ ] Add mmap and munmap syscalls to asm
+  - [ ] Give spec for mmap at the C-level
+  - [ ] Verify an example using it
+- [ ] green-threading example
+
+Optional:
 - [ ] Add ghost state for f2i and add values of f2i to initial ownership
 - [ ] Add fnptrs to imp (should be easy when one has ghost state for f2i)
 - [ ] Add global variables
-- [ ] Make allocation in Imp like RefinedC allocation
-  - Define alloc_list fixpoint
-- [ ] Compiler
-- [ ] Allow the proof to use a bigger resource than the prepost, e.g.
-      by defining an injection from the prepost resource to the bigger resource
-  - [ ] Use this to define ownership of registers for compiler codegen pass
+- [ ] Additional optimizations
 
 Done:
+- [X] Make allocation in Imp like RefinedC allocation
 - [X] Add system calls to asm
 - [X] Generalize imp_prepost for arbitrary imp_event modules on both sides (without prepost)
 - [X] Prove imp_to_asm refinement for integer pointer casting module
@@ -39,8 +48,12 @@ Done:
 - [X] Verify imp code that links with spec of integer pointer casting.
   - Maybe let x := Alloc 1 in x ← 1; let y = int_to_ptr(ptr_to_int(x)) in let r := !y in Free(y); Return r
     - refines Return 1
+- [X] Compiler
 
 Postponed:
+- [ ] Allow the proof to use a bigger resource than the prepost, e.g.
+      by defining an injection from the prepost resource to the bigger resource
+  - [ ] Use this to define ownership of registers for compiler codegen pass
 - [ ] Add framework for combining compiler passes
 - [ ] Make mod_seq_map only emit events when the inner module accepted them
   - Tricky because the two events are not linked. Maybe it is not

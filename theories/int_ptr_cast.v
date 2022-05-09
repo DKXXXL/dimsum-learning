@@ -178,13 +178,12 @@ void main () {
 
 Definition main_imp : fndef := {|
   fd_args := [];
-  fd_body := LetE "l" (Alloc (Val 1)) $
-             LetE "_" (Store (Var "l") (Val 1)) $
+  fd_vars := [("l", 1)];
+  fd_body := LetE "_" (Store (Var "l") (Val 1)) $
              LetE "z" (imp.Call "cast_ptr_to_int" [(Var "l")]) $
              LetE "z'" (BinOp (BinOp (Var "z") AddOp (Val (-1))) AddOp (Val 1)) $
              LetE "l'" (imp.Call "cast_int_to_ptr" [(Var "z")]) $
              LetE "r" (Load (Var "l'")) $
-             LetE "_" (Free (Var "l")) $
              imp.Call "exit" [(Var "r")];
   fd_static := I
 |}.
@@ -217,8 +216,7 @@ Proof.
   go_s. eexists (_, _, _). go. go_s. split!. go.
   go_s => ?. go. go_s => ?. go. simplify_eq. rewrite bool_decide_true; [|compute_done].
   tstep_i. split! => ???? Hf ?. unfold main_imp_prog in Hf. simplify_map_eq.
-  tstep_i => l ?. split!.
-  tstep_i.
+  tstep_i => ???. destruct_all?; simplify_eq. split!. { repeat econs. }
   tstep_i. split. { apply heap_alive_alloc; [done|lia]. }
   tstep_i. change ([Val (ValLoc l)]) with (Val <$> [ValLoc l]).
   tstep_i. split. { move => *; simplify_map_eq. }
@@ -252,8 +250,6 @@ Proof.
   go_i. split!. move => *. simplify_eq.
   go_i.
   go_i. eexists _. split. { rewrite shift_loc_0. by simplify_map_eq. }
-  go_i.
-  go_i. split. { apply heap_alive_update. apply heap_alive_alloc; [done|lia]. }
   go_i. change ([Val 1]) with (Val <$> [ValNum 1]).
   go_i. split. { move => *; simplify_map_eq. }
   move => ????. rewrite bool_decide_false; [|compute_done].
@@ -357,6 +353,8 @@ Proof.
   - by simplify_map_eq'.
   - by simplify_map_eq'.
 Qed.
+
+(* TODO: something even more high-level? Maybe stated as safety property on traces? *)
 
 Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   '(pc, rs, mem) ← TReceive (λ '(pc, rs, mem), (Incoming, EAJump pc rs mem));;;

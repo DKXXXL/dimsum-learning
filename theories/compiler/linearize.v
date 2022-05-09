@@ -26,8 +26,7 @@ Qed.
 
 Module ci2a_linearize.
 
-Inductive error :=
-| UnsupportedExpr (e : static_expr).
+Inductive error :=.
 
 Definition M := compiler_monad N (fn_compiler_monoid lexpr) error.
 
@@ -80,11 +79,11 @@ Fixpoint pass (e : static_expr) : M var_val :=
                         (p2 (LLetE v (LVarVal v2) x))
                         (p3 (LLetE v (LVarVal v3) x)));;
       mret $ (VVar v)
-  | _ => cerror (UnsupportedExpr e)
   end.
 
 Definition test_fn_1 : fndef := {|
   fd_args := ["x"];
+  fd_vars := [];
   fd_body := (BinOp (BinOp (Var "x") ShiftOp (Val 2)) AddOp (Call "f" [Load (Var "x"); Val 1]));
   fd_static := I;
 |}.
@@ -327,6 +326,7 @@ Definition pass_fn (f : static_fndef) : compiler_success error lfndef :=
   let x := crun 0%N (pass f.(sfd_body)) in
   (λ v, {|
      lfd_args := f.(sfd_args);
+     lfd_vars := f.(sfd_vars);
      lfd_body := x.(c_prog) (LEnd $ LVarVal v);
   |} ) <$> x.(c_result).
 
@@ -337,26 +337,39 @@ Lemma pass_fn_args fn fn' :
   lfd_args fn' = sfd_args fn.
 Proof. rewrite /pass_fn => /(compiler_success_fmap_success _ _ _ _ _ _). naive_solver. Qed.
 
+Lemma pass_fn_vars fn fn' :
+  pass_fn fn = CSuccess fn' →
+  lfd_vars fn' = sfd_vars fn.
+Proof. rewrite /pass_fn => /(compiler_success_fmap_success _ _ _ _ _ _). naive_solver. Qed.
+
 Lemma pass_fn_correct f fn fn' :
   pass_fn fn = CSuccess fn' →
-  NoDup (sfd_args fn ++ assigned_vars (static_expr_to_expr (sfd_body fn))) →
-  (∀ n, tmp_var n ∉ sfd_args fn ++ assigned_vars (static_expr_to_expr (sfd_body fn))) →
+  NoDup (sfd_args fn ++ (sfd_vars fn).*1 ++ assigned_vars (static_expr_to_expr (sfd_body fn))) →
+  (∀ n, tmp_var n ∉ sfd_args fn ++ (sfd_vars fn).*1 ++ assigned_vars (static_expr_to_expr (sfd_body fn))) →
   trefines (MS imp_module (initial_imp_lstate (<[f := fn']> ∅)))
            (MS imp_module (initial_imp_sstate (<[f := fn]> ∅))).
 Proof.
   destruct (crun 0%N (pass (sfd_body fn))) as [?? res] eqn: Hsucc.
   unfold pass_fn. rewrite Hsucc => /= /(compiler_success_fmap_success _ _ _ _ _ _)[?[??]]. subst.
-  move => // /NoDup_app[?[??]]?.
+  move => // /NoDup_app[?[?/NoDup_app[?[??]]]]?.
   apply imp_proof. { move => ?. rewrite !lookup_fmap !fmap_None !lookup_insert_None. naive_solver. }
   move => ???????. rewrite !fmap_insert !fmap_empty /=.
   move => /lookup_insert_Some[[??]|[??]]; simplify_map_eq. split!.
   move => ?? Hret.
   rewrite !subst_l_subst_map; [|lia..].
+  tstep_both => ???.
+  tstep_s. split!; [done|] => ?. tend. split!.
+  efeed pose proof heap_alloc_list_length as Hl; [done|]. rewrite fmap_length in Hl.
+  rewrite !subst_l_subst_map; [|rewrite ?fmap_length; lia..]. rewrite -!subst_map_subst_map.
+  apply tsim_mono_b_false.
+  have ->: ∀ K ls e, expr_fill K (FreeA ls e) = expr_fill (FreeACtx ls :: K) e by [].
   apply: pass_correct; [eauto_tstep|done|done|done|done|set_solver|..].
-  { move => ?. rewrite list_to_map_lookup_is_Some. move => [? /(elem_of_zip_l _ _ _)]. set_solver. }
-  { move => ?. rewrite list_to_map_lookup_is_Some. move => [? /(elem_of_zip_l _ _ _)]. set_solver. }
-  move => /= ???????.
-  erewrite lookup_var_val_to_expr; [|done]. by apply Hret.
+  { move => ?. rewrite lookup_union_is_Some !list_to_map_lookup_is_Some.
+    move => [|] [? /(elem_of_zip_l _ _ _)]; set_solver. }
+  { move => ?. rewrite lookup_union_is_Some !list_to_map_lookup_is_Some.
+    move => [|] [? /(elem_of_zip_l _ _ _)]; set_solver. }
+  move => /= ???????. erewrite lookup_var_val_to_expr; [|done].
+  tstep_s => ??. tstep_i. split!; [done|]. by apply Hret.
 Qed.
 
 End ci2a_linearize.

@@ -282,9 +282,18 @@ Proof.
   - rewrite lookup_partial_alter_ne; naive_solver.
 Qed.
 
-Lemma alter_insert_alter {A} (m : M A) i f :
+Lemma delete_alter {A} (m : M A) i f :
   delete i (alter f i m) = delete i m.
 Proof. by setoid_rewrite <-partial_alter_compose. Qed.
+
+Lemma alter_insert {A} (m : M A) i f x :
+  alter f i (<[i := x]> m) = <[i := f x]> m.
+Proof. by setoid_rewrite <-partial_alter_compose. Qed.
+
+Lemma alter_insert_ne {A} (m : M A) i j f x :
+  i ≠ j →
+  alter f i (<[j := x]> m) = <[j := x]> (alter f i m).
+Proof. move => ?. by setoid_rewrite <-partial_alter_commute at 1. Qed.
 
 End theorems.
 
@@ -352,6 +361,14 @@ Next Obligation. move => ???? /Forall_forall; set_solver. Qed.
 Lemma elem_of_drop {A} x n (xs : list A):
   x ∈ drop n xs → x ∈ xs.
 Proof.  move => /elem_of_list_lookup. setoid_rewrite lookup_drop => -[??]. apply elem_of_list_lookup. naive_solver. Qed.
+
+Lemma mjoin_length {A} (xs : list (list A)):
+  length (mjoin xs) = sum_list (length <$> xs).
+Proof. elim: xs => // ???; csimpl. rewrite app_length. lia. Qed.
+
+Lemma sum_list_with_sum_list {A} f (xs : list A):
+  sum_list_with f xs = sum_list (f <$> xs).
+Proof. elim: xs => // ??; csimpl. lia. Qed.
 
 (** fixpoints based on iris/bi/lib/fixpoint.v *)
 Class MonoPred {A : Type} (F : (A → Prop) → (A → Prop)) := {
@@ -839,6 +856,75 @@ Proof.
   iSplit. 1: iIntros "?"; iSplit; [done|]. 2: iIntros "[_ ?]".
   all: iApply (big_sepL_impl with "[$]"); iIntros "!>" (? [??] ?) "$".
 Qed.
+End big_op.
+
+Section big_op.
+Context {PROP : bi}.
+Implicit Types P Q : PROP.
+Implicit Types Ps Qs : list PROP.
+Implicit Types A : Type.
+Section sep_map.
+  Context `{Countable K} {A : Type}.
+  Implicit Types m : gmap K A.
+  Implicit Types Φ Ψ : K → A → PROP.
+
+  Lemma big_sepM_alter (f : A → A) (Φ : K → A → PROP) m i :
+    ([∗ map] k↦y ∈ alter f i m, Φ k y) ⊣⊢ ([∗ map] k↦y ∈ m, Φ k (if bool_decide (k = i) then f y else y)).
+  Proof.
+    induction m as [|k y m Hk IH] using map_ind.
+    { by rewrite alter_id // !big_sepM_empty. }
+    rewrite big_sepM_insert // -IH. case_bool_decide; subst.
+    - rewrite alter_insert big_sepM_insert // alter_id //. naive_solver.
+    - rewrite alter_insert_ne // big_sepM_insert //. by apply lookup_alter_None.
+  Qed.
+
+  Lemma big_sepM_list_to_map xs Φ :
+    NoDup xs.*1 →
+    ([∗ map] k↦y ∈ list_to_map xs, Φ k y) ⊣⊢ [∗ list] x∈xs, Φ x.1 x.2.
+  Proof.
+    induction xs as [|x xs IH]; csimpl.
+    { intros _. by rewrite big_sepM_empty. }
+    intros [??]%NoDup_cons. rewrite big_sepM_insert ?IH; [done..|].
+    by apply not_elem_of_list_to_map.
+  Qed.
+
+  Lemma big_sepM_map_seq xs n (Φ : nat → A → PROP) :
+    ([∗ map] k↦y ∈ map_seq n xs, Φ k y) ⊣⊢ [∗ list] i↦x∈xs, Φ (n + i) x.
+  Proof.
+    revert n. induction xs as [|x xs IH]; csimpl.
+    { intros _. by rewrite big_sepM_empty. }
+    intros n. rewrite big_sepM_insert ?IH. 2: apply map_seq_cons_disjoint.
+    rewrite Nat.add_0_r. setoid_rewrite Nat.add_succ_r. setoid_rewrite Nat.add_succ_l. done.
+  Qed.
+
+  Lemma big_sepM_map_seq_0 xs (Φ : nat → A → PROP) :
+    ([∗ map] k↦y ∈ map_seq 0 xs, Φ k y) ⊣⊢ [∗ list] i↦x∈xs, Φ i x.
+  Proof. apply big_sepM_map_seq. Qed.
+
+  Lemma big_sepM_kmap_intro {B} `{Countable B} (f : K → B) m Φ `{!Inj (=) (=) f} `{!BiAffine PROP}:
+    ([∗ map] k↦y∈kmap f m, ∃ x, ⌜f x = k⌝ ∗ Φ x y) ⊣⊢
+    [∗ map] k↦y∈m, Φ k y.
+  Proof.
+    induction m as [|k y m Hk IH] using map_ind.
+    { by rewrite kmap_empty !big_sepM_empty. }
+    rewrite kmap_insert !big_sepM_insert //. 2: { apply lookup_kmap_None; [done|]. naive_solver. }
+    rewrite IH. f_equiv.
+    iSplit.
+    - iIntros "[%x [% ?]]". by simplify_eq.
+    - iIntros "?". iExists _. by iFrame.
+  Qed.
+
+  Lemma big_sepM_impl_strong' {B}
+        (Φ : K → A → PROP) (Ψ : K → B → PROP) (m1 : gmap K A) (m2 : gmap K B) `{!BiAffine PROP}:
+    ([∗ map] k↦x ∈ m1, Φ k x) -∗
+    □ (∀ (k : K) (y : B),
+      (if m1 !! k is Some x then Φ k x else emp) -∗
+      ⌜m2 !! k = Some y⌝ →
+      Ψ k y) -∗
+    ([∗ map] k↦y ∈ m2, Ψ k y).
+  Proof. iIntros "Hm Hi". by iDestruct (big_sepM_impl_strong with "Hm Hi") as "[? _]". Qed.
+
+End sep_map.
 End big_op.
 
 Tactic Notation "iDestruct!" :=

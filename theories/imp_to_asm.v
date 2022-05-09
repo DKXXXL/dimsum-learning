@@ -156,6 +156,51 @@ Proof.
   naive_solver.
 Qed.
 
+Lemma i2a_heap_alloc' ih p b:
+  ih !! p = None →
+  i2a_heap_auth ih ==∗ i2a_heap_auth (<[p := I2AConstant b]> ih) ∗ i2a_heap_constant p b.
+Proof.
+  move => ?.
+  rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
+  rewrite -pair_op_1. apply prod_update; [|done].
+  by apply gmap_view_alloc.
+Qed.
+
+Lemma i2a_heap_update' p h h' ih :
+  i2a_heap_auth ih ∗ i2a_heap_constant p h ==∗ i2a_heap_auth (<[p := I2AConstant h']> ih) ∗ i2a_heap_constant p h'.
+Proof.
+  rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update.
+  rewrite -!pair_op_1. apply prod_update; [|done].
+  by apply gmap_view_update.
+Qed.
+
+Lemma i2a_heap_to_shared' p h ih a:
+  i2a_heap_auth ih ∗ i2a_heap_constant p h ==∗ i2a_heap_auth (<[p := I2AShared a]> ih) ∗ i2a_heap_shared p a.
+Proof.
+  rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update.
+  rewrite -!pair_op_1. apply prod_update; [|done].
+  etrans; [by apply gmap_view_update|].
+  apply cmra_update_op; [done|].
+  apply gmap_view_frag_persist.
+Qed.
+
+Lemma i2a_heap_free' h p h' :
+  i2a_heap_auth h ∗ i2a_heap_constant p h' ==∗ i2a_heap_auth (delete p h).
+Proof.
+  rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
+  rewrite -pair_op_1. apply prod_update; [|done].
+  by apply gmap_view_delete.
+Qed.
+
+Lemma i2a_heap_lookup' h p h' :
+  i2a_heap_auth h -∗
+  i2a_heap_constant p h' -∗
+  ⌜h !! p = Some (I2AConstant h')⌝.
+Proof.
+  apply bi.wand_intro_r. rewrite -uPred.ownM_op.
+  etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [/gmap_view_both_valid_L??]. naive_solver.
+Qed.
+
 Lemma i2a_heap_shared_lookup' h p a :
   i2a_heap_auth h -∗
   i2a_heap_shared p a -∗
@@ -283,6 +328,20 @@ Proof.
   - move => ??. apply lookup_insert_None. split; [|lia]. apply Hsp. lia.
 Qed.
 
+Lemma i2a_mem_alloc_big n sp mem :
+  0 ≤ n →
+  i2a_mem_inv sp mem ==∗ i2a_mem_inv (sp - n) mem ∗ [∗ list] a ∈ seqZ (sp - n) n, i2a_mem_constant a (mem !!! a).
+Proof.
+  iIntros (?) "Hmem". iInduction n as [] "IH" using (Z_succ_pred_induction 0) forall (sp). 3: lia.
+  { rewrite Z.sub_0_r. iModIntro. by iFrame. }
+  iMod (i2a_mem_alloc with "Hmem") as "[Hmem ?]".
+  iMod ("IH" with "[//] Hmem") as "[??]". iModIntro.
+  rewrite -Z.add_1_l Z.sub_add_distr. iFrame.
+  have ->: (1 + n) = S (Z.to_nat n) by lia.
+  rewrite seqZ_S big_sepL_app Z2Nat.id /=; [|lia]. iFrame.
+  have ->: (sp - 1 - n + n) = (sp - 1) by lia. iFrame.
+Qed.
+
 Lemma i2a_mem_update v' a v mem sp:
   i2a_mem_inv sp mem -∗
   i2a_mem_constant a v ==∗
@@ -347,6 +406,69 @@ Proof.
   iApply (i2a_mem_delete with "[$] [$]").
 Qed.
 
+Lemma i2a_heap_alloc h l n:
+  heap_is_fresh h l →
+  i2a_heap_inv h ==∗
+  i2a_heap_inv (heap_alloc h l n) ∗ i2a_heap_constant l.1 (h_heap (heap_alloc h l n)).
+Proof.
+  iIntros ([Hl ?]).
+  iDestruct 1 as (? [Hdom Hc]) "[Hs Hauth]".
+  iMod (i2a_heap_alloc' with "Hauth") as "[? $]".
+  { apply not_elem_of_dom. by apply: not_elem_of_weaken; [|done]. }
+  iModIntro. iExists _. iFrame. iSplit.
+  - iPureIntro. split.
+    + rewrite dom_insert_L heap_alloc_provs. set_solver.
+    + move => ?? /lookup_insert_Some[[??]|[??]]; simplify_eq/= => //.
+      rewrite lookup_union_r; [naive_solver|].
+      apply not_elem_of_list_to_map. apply/elem_of_list_fmap => -[[[??]?][? /elem_of_list_fmap[?[??]]]].
+      simplify_eq.
+  - rewrite /i2a_heap_shared_agree big_sepM_union. 2: {
+      apply map_disjoint_list_to_map_l, Forall_forall => -[[??]?] /elem_of_list_fmap[?[??]]. simplify_eq/=.
+      apply eq_None_not_Some => /heap_wf. done.
+    }
+    iSplitR.
+    + iApply big_sepM_intro. iIntros "!>" (?? (?&?&?)%elem_of_list_to_map_2%elem_of_list_fmap). by simplify_map_eq.
+    + iApply (big_sepM_impl with "Hs"). iIntros "!>" (k??) "?".
+      rewrite lookup_insert_ne //. contradict Hl. rewrite Hl. by apply heap_wf.
+Qed.
+
+Lemma i2a_heap_update h l v b:
+  i2a_heap_inv h -∗
+  i2a_heap_constant l.1 b ==∗
+  i2a_heap_inv (heap_update h l v) ∗ i2a_heap_constant l.1 (h_heap (heap_update h l v)).
+Proof.
+  iDestruct 1 as (? [Hdom Hc]) "[Hs Hauth]". iIntros "Hc".
+  iDestruct (i2a_heap_lookup' with "[$] [$]") as %?.
+  iMod (i2a_heap_update' with "[$Hauth $Hc]") as "[? $]".
+  iModIntro. iExists _. iFrame. iSplit.
+  - iPureIntro. split.
+    + rewrite dom_insert_L heap_update_provs. etrans; [|done]. apply union_least; [|done].
+      apply singleton_subseteq_l. by apply elem_of_dom.
+    + move => ?? /lookup_insert_Some[[??]|[??]]; simplify_eq/= => //.
+      rewrite lookup_alter_ne; naive_solver.
+  - rewrite /i2a_heap_shared_agree /= big_sepM_alter.
+    iApply (big_sepM_impl with "Hs"). iIntros "!>" (k ??) "?". case_bool_decide; subst; simplify_map_eq => //.
+    by destruct (decide (k.1 = l.1)) as [->|]; simplify_map_eq.
+Qed.
+
+Lemma i2a_heap_free h l b:
+  i2a_heap_inv h -∗
+  i2a_heap_constant l.1 b ==∗
+  i2a_heap_inv (heap_free h l).
+Proof.
+  iDestruct 1 as (? [Hdom Hc]) "[Hs Hauth]". iIntros "Hc".
+  iDestruct (i2a_heap_lookup' with "[$] [$]") as %?.
+  iMod (i2a_heap_free' with "[$Hauth $Hc]") as "?".
+  iModIntro. iExists _. iFrame. iSplit.
+  - iPureIntro. split.
+    + rewrite dom_delete_L heap_free_provs. set_solver.
+    + move => ?? /lookup_delete_Some[??] /=.
+      rewrite map_filter_lookup_true; naive_solver.
+  - rewrite /i2a_heap_shared_agree big_sepM_filter.
+    iApply (big_sepM_impl with "Hs"). iIntros "!>" (???) "?". iIntros (?).
+    by rewrite lookup_delete_ne.
+Qed.
+
 Lemma i2a_heap_lookup_shared h l v z mem ss:
   h_heap h !! l = Some v →
   i2a_heap_inv h -∗
@@ -362,6 +484,80 @@ Proof.
   iDestruct "Hv" as (?) "[??]".
   iDestruct (i2a_mem_lookup with "[$] [$]") as %?. subst.
   done.
+Qed.
+
+Lemma i2a_heap_alloc_shared h l a n:
+  heap_is_fresh h l →
+  i2a_heap_inv h -∗
+  ([∗ list] a'∈seqZ a n, i2a_mem_constant a' 0) ==∗
+  i2a_heap_shared l.1 a ∗ i2a_heap_inv (heap_alloc h l n).
+Proof.
+  iIntros (Hf) "Hinv Ha".
+  iMod (i2a_heap_alloc with "Hinv") as "[Hinv Hl]"; [done|].
+  destruct Hf as [Hne ?].
+  iDestruct "Hinv" as (?[??]) "[Hag Hauth]".
+  iMod (i2a_heap_to_shared' with "[$]") as "[? $]". iModIntro.
+  iExists _. iFrame. iSplit.
+  - iPureIntro. split.
+    + rewrite ->heap_alloc_provs in *. rewrite dom_insert_L. set_solver.
+    + move => ?? /lookup_insert_Some. naive_solver.
+  - rewrite /i2a_heap_shared_agree /= !big_sepM_union.
+    2,3: apply map_disjoint_list_to_map_l, Forall_forall => ? /elem_of_list_fmap[?[??]];
+         simplify_eq/=; apply eq_None_not_Some => /heap_wf; naive_solver.
+    iDestruct "Hag" as "[_ Hh]".
+    iSplitR "Hh".
+    + rewrite !big_sepM_list_to_map.
+      2: { rewrite -list_fmap_compose. apply NoDup_fmap; [move => ?? /= ?;simplify_eq; lia|]. apply NoDup_seqZ. }
+      iEval rewrite big_sepL_fmap. simplify_map_eq/=.
+      have ->: a = a + 0 by lia.
+      rewrite -(fmap_add_seqZ a 0) big_sepL_fmap.
+      iApply (big_sepL_impl with "[$]"). iIntros "!>" (? o ?) "?". iSplit!.
+      by have -> : (a + 0 + (l.2 + o)) = a + o by lia.
+    + iApply (big_sepM_impl with "Hh"). iIntros "!>" (???) "?".
+      rewrite lookup_insert_ne; [done|]. contradict Hne. rewrite Hne. by apply heap_wf.
+Qed.
+
+Lemma i2a_heap_free_shared h l a n:
+  l.2 = 0 →
+  heap_range h l n →
+  i2a_heap_inv h -∗
+  i2a_heap_shared l.1 a ==∗
+  ([∗ list] a'∈seqZ a n, ∃ v, i2a_mem_constant a' v) ∗ i2a_heap_inv (heap_free h l).
+Proof.
+  iIntros (Hl2 Hr).
+  iDestruct 1 as (? [Hdom Hc]) "[Hs Hauth]". iIntros "Hl".
+  iDestruct (i2a_heap_shared_lookup' with "[$] [$]") as %?.
+  iModIntro.
+  rewrite /i2a_heap_shared_agree -(map_filter_union_complement (λ '(l', _), l'.1 ≠ l.1) (h_heap h)).
+  rewrite big_sepM_union; [|apply map_disjoint_filter_complement].
+  iDestruct "Hs" as "[Hs Ha]". iSplitL "Ha".
+  - iApply big_sepM_map_seq_0.
+    have ?: Inj eq eq (λ n : nat, l +ₗ n) by move => ???; simplify_eq; lia.
+    iApply (big_sepM_kmap_intro (λ n : nat, l +ₗ n)).
+    iApply (big_sepM_impl_strong' with "[$]").
+    iIntros "!>" (??) "Hm". iIntros ([i [?[?[??]%lookup_seqZ]%lookup_map_seq_Some]]%lookup_kmap_Some); [|done].
+    simplify_eq/=. rewrite map_filter_lookup_true; [|naive_solver].
+    case_match. 2: { exfalso. eapply not_eq_None_Some; [|done]. apply Hr; [done|]. simpl. lia. } simplify_map_eq.
+    iDestruct!. iSplit!; [done|]. by rewrite Nat.sub_0_r Hl2.
+  - iExists _. iFrame. iPureIntro. split; [done|]. move => ?? /= Hl.
+    rewrite map_filter_lookup_true; [naive_solver|]. move => ?? Heq. rewrite Heq in Hl.
+    simplify_map_eq.
+Qed.
+
+Lemma i2a_heap_free_list_shared h ls h' adrs:
+  heap_free_list ls h h' →
+  Forall (λ l, l.2 = 0) ls.*1 →
+  i2a_heap_inv h -∗
+  ([∗ list] l;a∈ls.*1;adrs, i2a_heap_shared l.1 a) ==∗
+  (* ([∗ list] l;a∈ls.*2;adrs, ([∗ list] a'∈seqZ a l, ∃ v, i2a_mem_constant a' v)) ∗  *)
+  ([∗ list] a∈mjoin (zip_with (λ a n, seqZ a n) adrs ls.*2), ∃ v, i2a_mem_constant a v) ∗
+    i2a_heap_inv h'.
+Proof.
+  elim: ls h h' adrs => /=.
+  { iIntros (??? -> ?) "? Hs". iDestruct (big_sepL2_nil_inv_l with "Hs") as %->. iModIntro. by iFrame. }
+  move => [l n] ls IH h h' [|a adrs]; try by [iIntros]; csimpl => -[??] /Forall_cons[??]; iIntros "Hh [Hl Hs]".
+  iMod (i2a_heap_free_shared with "Hh Hl") as "[$ ?]"; [done..|].
+  by iApply (IH with "[$]").
 Qed.
 
 Lemma i2a_heap_update_shared h l v z mem ss av:
@@ -383,7 +579,7 @@ Proof.
   - split; [by rewrite heap_update_provs|]. move => * /=. rewrite lookup_alter_ne; [naive_solver|].
     move => ?. simplify_map_eq'.
   - rewrite /i2a_heap_shared_agree/= (big_sepM_delete _ (alter (λ _, v) _ _) l); [|by simplify_map_eq].
-    simplify_map_eq. rewrite alter_insert_alter. iFrame. iExists _. iFrame.
+    simplify_map_eq. rewrite delete_alter. iFrame. iExists _. iFrame.
 Qed.
 
 Lemma i2a_heap_inv_add_provs h ps :
@@ -759,7 +955,7 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
           AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K (Val v)) h' fns, (PPInside, I2A cs lr', rf'))) →
       AsmState (Some []) rs mem ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, false}
-               (SMProg, Imp (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) h fns, (PPInside, I2A cs lr, rf))
+               (SMProg, Imp (expr_fill K (AllocA fn.(fd_vars) $ subst_l fn.(fd_args) vs fn.(fd_body))) h fns, (PPInside, I2A cs lr, rf))
 ) →
   trefines (MS asm_module (initial_asm_state ins))
            (MS (imp_to_asm ins_dom fns_dom f2i imp_module) (initial_imp_to_asm_state imp_module
@@ -820,7 +1016,7 @@ Proof.
                                    i2a_args 0 vs rs1 ∗ r' ∗ r1) ∧
          i2a_regs_call ret rs1 ∧
          i1 = Some [] ∧
-         e1 = expr_fill K' (subst_l fn.(fd_args) vs fn.(fd_body)) ∧
+         e1 = expr_fill K' (AllocA fn.(fd_vars) $ subst_l fn.(fd_args) vs fn.(fd_body)) ∧
          map_scramble touched_registers lr1 rs1 ∧
          length vs = length (fd_args fn) ∧
          t1 = PPInside ∧

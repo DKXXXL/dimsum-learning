@@ -24,6 +24,7 @@ Definition asm_add : gmap Z asm_instr :=
 
 Definition imp_add : fndef := {|
   fd_args := ["a"; "b"];
+  fd_vars := [];
   fd_body := (BinOp (Var "a") AddOp (Var "b"));
   fd_static := I
 |}.
@@ -66,37 +67,21 @@ Definition asm_add_client : gmap Z asm_instr :=
 
 Definition imp_add_client : fndef := {|
   fd_args := [];
-  fd_body := (LetE "tmp" (Alloc (Val 1))
-             (LetE "_" (Store (Var "tmp") (Val 1))
+  fd_vars := [("tmp", 1)];
+  fd_body := (LetE "_" (Store (Var "tmp") (Val 1))
              (LetE "v" (Load (Var "tmp"))
-             (LetE "_" (Free (Var "tmp"))
-             (imp.Call "add" [Val 1; Var "v"])))));
+             (imp.Call "add" [Val 1; Var "v"])));
   fd_static := I
 |}.
 
 Definition imp_add_client_prog : gmap string fndef :=
   <[ "add_client" := imp_add_client ]> ∅.
 
-Definition imp_add' : fndef := {|
-  fd_args := ["a"; "b"];
-  fd_body := UbE;
-  fd_static := I
-|}.
-
-Definition imp_add_client' : fndef := {|
-  fd_args := [];
-  fd_body := (Val 2);
-  fd_static := I
-|}.
-
 Definition full_asm_add : gmap Z asm_instr :=
   asm_add ∪ asm_add_client.
 
 Definition full_imp_add_prog : gmap string fndef :=
   imp_add_prog ∪ imp_add_client_prog.
-
-Definition full_imp_add_prog' : gmap string fndef :=
-  <[ "add_client" := imp_add_client' ]> $ <[ "add" := imp_add' ]> ∅.
 
 Local Ltac go := destruct_all?; simplify_eq/=.
 Local Ltac go_i := tstep_i; go.
@@ -162,7 +147,9 @@ Proof.
   tstep_i; simplify_map_eq'. split; [done|].
   tstep_i => ??. simplify_map_eq'.
   tstep_i; simplify_map_eq'. split!.
+  go_s. split! => ?.
   go_s => n1 n2 ??; subst.
+  go_s => ??; subst.
   iSatStart. simpl. iDestruct!. iSatStop.
   apply: Hret. 1: by simplify_map_eq.
   1: { simplify_map_eq'. iSatMono. iFrame. done. }
@@ -198,22 +185,18 @@ Proof.
   tstep_i; simplify_map_eq'. split; [done|].
   sort_map_insert. simplify_map_eq'.
   tstep_s. split!; [apply (heap_fresh_is_fresh ∅)|]. move => *; simplify_eq.
-  tstep_s.
   tstep_s => *; simplify_eq.
   tstep_s.
   tstep_s => *; simplify_map_eq.
   tstep_s.
-  tstep_s => *; simplify_eq.
-  tstep_s.
-  change (imp.Call "add" [Val 1; Val 1]) with (expr_fill [] (imp.Call "add" [Val 1; Val 1])).
+  change (FreeA [(heap_fresh ∅ h, 1)] (imp.Call "add" [Val 1; Val 1])) with (expr_fill [FreeACtx [(heap_fresh ∅ h, 1)]] (imp.Call "add" [Val 1; Val 1])).
   apply: Hcall. { repeat econs. } { by simplify_map_eq. } { set_solver. } { by simplify_map_eq. }
   { iSatMonoBupd.
     iMod (i2a_mem_alloc with "[$]") as "[??]".
     iMod (i2a_mem_update with "[$] [$]") as "[??]". simplify_map_eq'.
-    iModIntro. iFrame.
-    rewrite heap_free_update // heap_free_alloc //=. 2: { rewrite left_id_L. apply is_fresh. }
-    iDestruct (i2a_heap_inv_add_provs with "[$]") as "$".
-    iSplitR; [|iDestruct!; iAccu].
+    iMod (i2a_heap_alloc _ (heap_fresh ∅ h) 1 with "[$]") as "[??]". { apply heap_fresh_is_fresh. }
+    iMod (i2a_heap_update with "[$] [$]") as "[? ?]".
+    iModIntro. iFrame. iSplit; [|iAccu].
     rewrite !i2a_args_cons ?i2a_args_nil; [|done..].
     iSplit!; by simplify_map_eq.
   }
@@ -227,6 +210,7 @@ Proof.
   tstep_i; simplify_map_eq'. split!; [done..|].
   tstep_i; simplify_map_eq'. split!; [done..|].
   tstep_i => ??. simplify_map_eq'.
+  tstep_s => [?[??]]. simplify_eq.
   have ->: rs !!! "SP" - 1 + 1 = rs !!! "SP" by lia.
   tstep_i; simplify_map_eq'. split; [done|].
   iSatStart. iIntros!.
@@ -236,8 +220,8 @@ Proof.
   1: { by simplify_map_eq'. }
   1: { iSatMonoBupd.
        iMod (i2a_mem_delete with "[$] [$]") as "?".
-       iModIntro.
-       iFrame. simplify_map_eq'.
+       iMod (i2a_heap_free _ (heap_fresh ∅ h) with "[$] [$]") as "?".
+       iModIntro. iFrame. simplify_map_eq'.
        by rewrite Z.sub_add.
   }
   1: { unfold i2a_regs_ret; split!; simplify_map_eq'; split!. apply lookup_lookup_total; simplify_map_eq'. }
