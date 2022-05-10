@@ -35,67 +35,74 @@ Definition asm_instr_wf (i : asm_instr) : bool :=
 Definition asm_instrs_wf (ins : gmap Z asm_instr) : Prop :=
   map_Forall (λ _, asm_instr_wf) ins.
 
+Inductive asm_run_state : Set :=
+| ARunning (i : asm_instr)
+| AWaiting
+| AHalted
+.
+
 Inductive asm_state := AsmState {
-  asm_cur_instr : option asm_instr;
+  asm_cur_instr : asm_run_state;
   asm_regs : gmap string Z;
   asm_mem : gmap Z Z;
   asm_instrs : gmap Z asm_instr;
 }.
 Add Printing Constructor asm_state.
 
-Definition initial_asm_state (instrs : gmap Z asm_instr) := AsmState None ∅ ∅ instrs.
+Definition initial_asm_state (instrs : gmap Z asm_instr) := AsmState AWaiting ∅ ∅ instrs.
 
 Inductive asm_ev :=
 | EAJump (pc : Z) (regs : gmap string Z) (mem : gmap Z Z)
 | EASyscallCall (args : list Z)
 | EASyscallRet (ret : Z)
+| EAPagefault (a : Z)
 .
 
 Definition asm_event := io_event asm_ev.
 
 Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) → Prop :=
 | SWriteReg regs instrs r f es mem:
-  asm_step (AsmState (Some (WriteReg r f :: es)) regs mem instrs) None (λ σ',
+  asm_step (AsmState (ARunning (WriteReg r f :: es)) regs mem instrs) None (λ σ',
          is_Some (regs !! r) ∧
-         σ' = AsmState (Some es) (<[r := f regs]>regs) mem instrs)
+         σ' = AsmState (ARunning es) (<[r := f regs]>regs) mem instrs)
 | SReadMem regs instrs r1 r2 f es mem:
-  asm_step (AsmState (Some (ReadMem r1 r2 f :: es)) regs mem instrs) None (λ σ', ∃ a,
+  asm_step (AsmState (ARunning (ReadMem r1 r2 f :: es)) regs mem instrs) None (λ σ', ∃ a,
          regs !! r2 = Some a ∧
          (* mem !! f a = Some v ∧ *)
          is_Some (regs !! r1) ∧
-         σ' = AsmState (Some es) (<[r1 := mem !!! f a]>regs) mem instrs)
+         σ' = AsmState (ARunning es) (<[r1 := mem !!! f a]>regs) mem instrs)
 | SWriteMem regs instrs r1 r2 f es mem:
-  asm_step (AsmState (Some (WriteMem r1 r2 f :: es)) regs mem instrs) None (λ σ', ∃ a v,
+  asm_step (AsmState (ARunning (WriteMem r1 r2 f :: es)) regs mem instrs) None (λ σ', ∃ a v,
          regs !! r2 = Some a ∧
          regs !! r1 = Some v ∧
          (* TODO: Should we have the following constraint? *)
          (* is_Some (mem !! f a) ∧ *)
-         σ' = AsmState (Some es) regs (<[f a := v]>mem) instrs)
+         σ' = AsmState (ARunning es) regs (<[f a := v]>mem) instrs)
 | SSyscallCall regs instrs es mem:
-  asm_step (AsmState (Some (Syscall false :: es)) regs mem instrs)
+  asm_step (AsmState (ARunning (Syscall false :: es)) regs mem instrs)
            (Some (Outgoing, EASyscallCall (extract_syscall_args regs)))
-           (λ σ', σ' = AsmState (Some (Syscall true :: es)) regs mem instrs)
+           (λ σ', σ' = AsmState (ARunning (Syscall true :: es)) regs mem instrs)
 | SSyscallRet regs instrs es mem ret:
-  asm_step (AsmState (Some (Syscall true :: es)) regs mem instrs)
+  asm_step (AsmState (ARunning (Syscall true :: es)) regs mem instrs)
            (Some (Incoming, EASyscallRet ret))
-           (λ σ', σ' = AsmState (Some es) (<["R0" := ret]>regs) mem instrs)
+           (λ σ', σ' = AsmState (ARunning es) (<["R0" := ret]>regs) mem instrs)
 | SJumpInternal regs instrs pc es mem:
   regs !! "PC" = Some pc →
   instrs !! pc = Some es →
-  asm_step (AsmState (Some []) regs mem instrs) None
-           (λ σ', σ' = AsmState (Some es) regs mem instrs)
+  asm_step (AsmState (ARunning []) regs mem instrs) None
+           (λ σ', σ' = AsmState (ARunning es) regs mem instrs)
 | SJumpExternal regs instrs pc mem:
   regs !! "PC" = Some pc →
   instrs !! pc = None →
-  asm_step (AsmState (Some []) regs mem instrs) (Some (Outgoing, EAJump pc regs mem))
-           (λ σ', σ' = AsmState None regs mem instrs)
+  asm_step (AsmState (ARunning []) regs mem instrs) (Some (Outgoing, EAJump pc regs mem))
+           (λ σ', σ' = AsmState AWaiting regs mem instrs)
 | SRecvJump regs regs' instrs pc es mem mem':
   regs' !! "PC" = Some pc →
   instrs !! pc = Some es →
-  asm_step (AsmState None regs mem instrs)
+  asm_step (AsmState AWaiting regs mem instrs)
            (Some (Incoming, EAJump pc regs' mem'))
            (* We use [] here such that each instruction starts from [] *)
-           (λ σ', σ' = AsmState (Some []) regs' mem' instrs)
+           (λ σ', σ' = AsmState (ARunning []) regs' mem' instrs)
 .
 
 Definition asm_module := Mod asm_step.
@@ -105,8 +112,8 @@ Proof. move => *. invert_all @m_step; naive_solver. Qed.
 
 (** * tstep *)
 Lemma asm_step_WriteReg_i r f es rs ins mem:
-  TStepI asm_module (AsmState (Some (WriteReg r f::es)) rs mem ins)
-            (λ G, G true None (λ G', is_Some (rs !! r) ∧ G' (AsmState (Some (es)) (<[r:=f rs]>rs) mem ins))).
+  TStepI asm_module (AsmState (ARunning (WriteReg r f::es)) rs mem ins)
+            (λ G, G true None (λ G', is_Some (rs !! r) ∧ G' (AsmState (ARunning es) (<[r:=f rs]>rs) mem ins))).
 Proof.
   constructor => ? ?. apply steps_impl_step_end => ???.
   invert_all @m_step. eexists _, _. split_and!; [done|done|].
@@ -115,8 +122,8 @@ Qed.
 Global Hint Resolve asm_step_WriteReg_i : tstep.
 
 Lemma asm_step_WriteReg_s r f es rs ins mem:
-  TStepS asm_module (AsmState (Some (WriteReg r f::es)) rs mem ins)
-            (λ G, G None (λ G', is_Some (rs !! r) → G' (AsmState (Some (es)) (<[r:=f rs]>rs) mem ins))).
+  TStepS asm_module (AsmState (ARunning (WriteReg r f::es)) rs mem ins)
+            (λ G, G None (λ G', is_Some (rs !! r) → G' (AsmState (ARunning (es)) (<[r:=f rs]>rs) mem ins))).
 Proof.
   constructor => ??. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { econs. }
@@ -125,9 +132,9 @@ Qed.
 Global Hint Resolve asm_step_WriteReg_s : tstep.
 
 Lemma asm_step_ReadMem_i r1 r2 f es rs ins mem:
-  TStepI asm_module (AsmState (Some (ReadMem r1 r2 f::es)) rs mem ins)
+  TStepI asm_module (AsmState (ARunning (ReadMem r1 r2 f::es)) rs mem ins)
             (λ G, G true None (λ G',
-             ∃ a, rs !! r2 = Some a ∧ is_Some (rs !! r1) ∧ G' (AsmState (Some es) (<[r1:=mem !!! f a]>rs) mem ins))).
+             ∃ a, rs !! r2 = Some a ∧ is_Some (rs !! r1) ∧ G' (AsmState (ARunning es) (<[r1:=mem !!! f a]>rs) mem ins))).
 Proof.
   constructor => ? ?. apply steps_impl_step_end => ???.
   invert_all @m_step. eexists _, _. split_and!; [done|done|].
@@ -136,8 +143,8 @@ Qed.
 Global Hint Resolve asm_step_ReadMem_i : tstep.
 
 Lemma asm_step_ReadMem_s r1 r2 f es rs ins mem:
-  TStepS asm_module (AsmState (Some (ReadMem r1 r2 f::es)) rs mem ins)
-            (λ G, G None (λ G', ∀ a, rs !! r2 = Some a → is_Some (rs !! r1) → G' (AsmState (Some (es)) (<[r1:=mem !!! f a]>rs) mem ins))).
+  TStepS asm_module (AsmState (ARunning (ReadMem r1 r2 f::es)) rs mem ins)
+            (λ G, G None (λ G', ∀ a, rs !! r2 = Some a → is_Some (rs !! r1) → G' (AsmState (ARunning (es)) (<[r1:=mem !!! f a]>rs) mem ins))).
 Proof.
   constructor => ??. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { econs. }
@@ -146,9 +153,9 @@ Qed.
 Global Hint Resolve asm_step_ReadMem_s : tstep.
 
 Lemma asm_step_WriteMem_i r1 r2 f es rs ins mem:
-  TStepI asm_module (AsmState (Some (WriteMem r1 r2 f::es)) rs mem ins)
+  TStepI asm_module (AsmState (ARunning (WriteMem r1 r2 f::es)) rs mem ins)
             (λ G, G true None (λ G',
-             ∃ a v, rs !! r2 = Some a ∧ rs !! r1 = Some v ∧ G' (AsmState (Some es) rs (<[f a:=v]>mem) ins))).
+             ∃ a v, rs !! r2 = Some a ∧ rs !! r1 = Some v ∧ G' (AsmState (ARunning es) rs (<[f a:=v]>mem) ins))).
 Proof.
   constructor => ? ?. apply steps_impl_step_end => ???.
   invert_all @m_step. eexists _, _. split_and!; [done|done|].
@@ -157,8 +164,8 @@ Qed.
 Global Hint Resolve asm_step_WriteMem_i : tstep.
 
 Lemma asm_step_WriteMem_s r1 r2 f es rs ins mem:
-  TStepS asm_module (AsmState (Some (WriteMem r1 r2 f::es)) rs mem ins)
-            (λ G, G None (λ G', ∀ a v, rs !! r2 = Some a → rs !! r1 = Some v → G' (AsmState (Some es) rs (<[f a:=v]>mem) ins))).
+  TStepS asm_module (AsmState (ARunning (WriteMem r1 r2 f::es)) rs mem ins)
+            (λ G, G None (λ G', ∀ a v, rs !! r2 = Some a → rs !! r1 = Some v → G' (AsmState (ARunning es) rs (<[f a:=v]>mem) ins))).
 Proof.
   constructor => ??. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { econs. }
@@ -167,9 +174,9 @@ Qed.
 Global Hint Resolve asm_step_WriteMem_s : tstep.
 
 Lemma asm_step_Syscall_call_i es rs ins mem:
-  TStepI asm_module (AsmState (Some (Syscall false::es)) rs mem ins)
+  TStepI asm_module (AsmState (ARunning (Syscall false::es)) rs mem ins)
             (λ G, G true (Some (Outgoing, EASyscallCall (extract_syscall_args rs)))
-                    (λ G', G' (AsmState (Some (Syscall true :: es)) rs mem ins))).
+                    (λ G', G' (AsmState (ARunning (Syscall true :: es)) rs mem ins))).
 Proof.
   constructor => ? ?. apply steps_impl_step_end => ???.
   invert_all @m_step. eexists _, _. split_and!; [done|done|].
@@ -178,9 +185,9 @@ Qed.
 Global Hint Resolve asm_step_Syscall_call_i : tstep.
 
 Lemma asm_step_Syscall_call_s es rs ins mem:
-  TStepS asm_module (AsmState (Some (Syscall false::es)) rs mem ins)
+  TStepS asm_module (AsmState (ARunning (Syscall false::es)) rs mem ins)
             (λ G, G (Some (Outgoing, EASyscallCall (extract_syscall_args rs)))
-                    (λ G', G' (AsmState (Some (Syscall true :: es)) rs mem ins))).
+                    (λ G', G' (AsmState (ARunning (Syscall true :: es)) rs mem ins))).
 Proof.
   constructor => ??. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { econs. } naive_solver.
@@ -188,9 +195,9 @@ Qed.
 Global Hint Resolve asm_step_Syscall_call_s : tstep.
 
 Lemma asm_step_Syscall_ret_i es rs ins mem:
-  TStepI asm_module (AsmState (Some (Syscall true::es)) rs mem ins)
+  TStepI asm_module (AsmState (ARunning (Syscall true::es)) rs mem ins)
             (λ G, ∀ ret, G true (Some (Incoming, EASyscallRet ret))
-                    (λ G', G' (AsmState (Some es) (<["R0" := ret]> rs) mem ins))).
+                    (λ G', G' (AsmState (ARunning es) (<["R0" := ret]> rs) mem ins))).
 Proof.
   constructor => ? ?. apply steps_impl_step_end => ???.
   invert_all @m_step. eexists _, _. split_and!; [naive_solver|done|].
@@ -199,9 +206,9 @@ Qed.
 Global Hint Resolve asm_step_Syscall_ret_i : tstep.
 
 Lemma asm_step_Syscall_ret_s es rs ins mem:
-  TStepS asm_module (AsmState (Some (Syscall true::es)) rs mem ins)
+  TStepS asm_module (AsmState (ARunning (Syscall true::es)) rs mem ins)
             (λ G, ∃ ret, G (Some (Incoming, EASyscallRet ret))
-                    (λ G', G' (AsmState (Some es) (<["R0":=ret]> rs) mem ins))).
+                    (λ G', G' (AsmState (ARunning es) (<["R0":=ret]> rs) mem ins))).
 Proof.
   constructor => ? [??]. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { econs. } naive_solver.
@@ -209,12 +216,12 @@ Qed.
 Global Hint Resolve asm_step_Syscall_ret_s : tstep.
 
 Lemma asm_step_Jump_i rs ins mem:
-  TStepI asm_module (AsmState (Some []) rs mem ins) (λ G,
+  TStepI asm_module (AsmState (ARunning []) rs mem ins) (λ G,
     ∀ pc, rs !! "PC" = Some pc →
           if ins !! pc is Some i then
-            G true None (λ G', G' (AsmState (Some i) rs mem ins))
+            G true None (λ G', G' (AsmState (ARunning i) rs mem ins))
           else
-            G true (Some (Outgoing, EAJump pc rs mem)) (λ G', G' (AsmState None rs mem ins))
+            G true (Some (Outgoing, EAJump pc rs mem)) (λ G', G' (AsmState AWaiting rs mem ins))
    ).
 Proof.
   constructor => ? HG. apply steps_impl_step_end => ???.
@@ -224,12 +231,12 @@ Qed.
 Global Hint Resolve asm_step_Jump_i : tstep.
 
 Lemma asm_step_Jump_s rs ins mem:
-  TStepS asm_module (AsmState (Some []) rs mem ins) (λ G,
+  TStepS asm_module (AsmState (ARunning []) rs mem ins) (λ G,
     ∃ pc, rs !! "PC" = Some pc ∧
       if ins !! pc is Some i then
-        G None (λ G', G' (AsmState (Some i) rs mem ins))
+        G None (λ G', G' (AsmState (ARunning i) rs mem ins))
       else
-        G (Some (Outgoing, EAJump pc rs mem)) (λ G', G' (AsmState None rs mem ins))).
+        G (Some (Outgoing, EAJump pc rs mem)) (λ G', G' (AsmState AWaiting rs mem ins))).
 Proof.
   constructor => ?[?[??]]. case_match.
   all: eexists _, _; split; [done|] => ? /= ?.
@@ -237,29 +244,29 @@ Proof.
 Qed.
 Global Hint Resolve asm_step_Jump_s : tstep.
 
-Lemma asm_step_None_i rs ins mem:
-  TStepI asm_module (AsmState None rs mem ins) (λ G,
+Lemma asm_step_AWaiting_i rs ins mem:
+  TStepI asm_module (AsmState AWaiting rs mem ins) (λ G,
     ∀ pc i rs' mem',
       rs' !! "PC" = Some pc →
       ins !! pc = Some i →
-      G true (Some (Incoming, EAJump pc rs' mem')) (λ G', G' (AsmState (Some []) rs' mem' ins))
+      G true (Some (Incoming, EAJump pc rs' mem')) (λ G', G' (AsmState (ARunning []) rs' mem' ins))
    ).
 Proof.
   constructor => ? HG. apply steps_impl_step_end => ???.
   invert_all @m_step. eexists _, _. split_and!; [naive_solver..|]. naive_solver.
 Qed.
-Global Hint Resolve asm_step_None_i : tstep.
+Global Hint Resolve asm_step_AWaiting_i : tstep.
 
-Lemma asm_step_None_s rs mem ins:
-  TStepS asm_module (AsmState None rs mem ins) (λ G,
+Lemma asm_step_AWaiting_s rs mem ins:
+  TStepS asm_module (AsmState AWaiting rs mem ins) (λ G,
     ∃ pc i rs' mem', rs' !! "PC" = Some pc ∧
       ins !! pc = Some i ∧
-      G (Some (Incoming, EAJump pc rs' mem')) (λ G', G' (AsmState (Some []) rs' mem' ins))).
+      G (Some (Incoming, EAJump pc rs' mem')) (λ G', G' (AsmState (ARunning []) rs' mem' ins))).
 Proof.
   constructor => ??. destruct_all!. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { by econs. } naive_solver.
 Qed.
-Global Hint Resolve asm_step_None_s : tstep.
+Global Hint Resolve asm_step_AWaiting_s : tstep.
 
 (** * closing *)
 Inductive asm_closed_event : Type :=
@@ -334,6 +341,7 @@ Definition asm_prod_filter (ins1 ins2 : gset Z) : seq_product_state → option s
         s' = None ∧
         p' ≠ SPNone ∧
         p  = SPNone
+    | EAPagefault _ => False
     end.
 Arguments asm_prod_filter _ _ _ _ _ _ _ _ /.
 
@@ -355,9 +363,9 @@ Definition asm_link_prod_inv (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_module.(m
   insr = ins2 ∧
   s = None ∧
   match σf with
-  | MLFLeft => ∃ i, i1 = Some i ∧ il = i1 ∧ rsl = rs1 ∧ meml = mem1 ∧ ir = None ∧ asm_instr_wf i
-  | MLFRight => ∃ i, i1 = Some i ∧ ir = i1 ∧ rsr = rs1 ∧ memr = mem1 ∧ il = None ∧ asm_instr_wf i
-  | MLFNone => i1 = None ∧ ir = None ∧ il = None
+  | MLFLeft => ∃ i, i1 = ARunning i ∧ il = i1 ∧ rsl = rs1 ∧ meml = mem1 ∧ ir = AWaiting ∧ asm_instr_wf i
+  | MLFRight => ∃ i, i1 = ARunning i ∧ ir = i1 ∧ rsr = rs1 ∧ memr = mem1 ∧ il = AWaiting ∧ asm_instr_wf i
+  | MLFNone => i1 = AWaiting ∧ ir = AWaiting ∧ il = AWaiting
   | _ => False
   end.
 
@@ -664,29 +672,29 @@ Lemma tsim_asm_loop n b rs mem ins t insaddrs:
          rs1'' !! "PC" = Some pc'' →
           (∀ pc''' rs''' mem''' i,
               rs''' !! "PC" = Some pc''' → ins !! pc''' = Some i →
-              AsmState (Some i) rs''' mem''' ins ⪯{asm_module, mod_itree asm_event (), n, b} (h' (pc''', rs''', mem'''), ())) →
-          (AsmState (Some []) rs1'' mem1'' ins)
+              AsmState (ARunning i) rs''' mem''' ins ⪯{asm_module, mod_itree asm_event (), n, b} (h' (pc''', rs''', mem'''), ())) →
+          (AsmState (ARunning []) rs1'' mem1'' ins)
             ⪯{asm_module, mod_itree asm_event (), n, true}
           (y ← rec rc (Some (pc'', rs2'', mem2''));;; h' y, ())) →
       (∀ pc rs1 rs2 mem1 mem2,
           rs1 = rs2 →
           mem1 = mem2 →
           rs1 !! "PC" = Some pc →
-          tsim n true asm_module (mod_itree asm_event ()) (AsmState (Some []) rs1 mem1 ins) tnil (k (pc, rs2, mem2), ())) →
-    AsmState (Some i) rs' mem' ins ⪯{asm_module, mod_itree asm_event (), n, true}
+          tsim n true asm_module (mod_itree asm_event ()) (AsmState (ARunning []) rs1 mem1 ins) tnil (k (pc, rs2, mem2), ())) →
+    AsmState (ARunning i) rs' mem' ins ⪯{asm_module, mod_itree asm_event (), n, true}
        (r ← interp (recursive rc) (t pc' rs' mem');;; k r, ())) →
   (** Then we can prove an asm_loop *)
-  AsmState None rs mem ins ⪯{asm_module, mod_itree asm_event (), n, b} (asm_loop insaddrs t, ()).
+  AsmState AWaiting rs mem ins ⪯{asm_module, mod_itree asm_event (), n, b} (asm_loop insaddrs t, ()).
 Proof.
   rewrite /asm_loop => Hins Hl. set rc := (X in (rec X)).
   apply (tsim_remember_rec (mi:=asm_module)
    (λ a σi s,
      if a is Some (pc, rs, mem) then
-       σi = AsmState (Some []) rs mem ins ∧ rs !! "PC" = Some pc
+       σi = AsmState (ARunning []) rs mem ins ∧ rs !! "PC" = Some pc
      else
-       ∃ rs mem, σi = AsmState None rs mem ins
+       ∃ rs mem, σi = AsmState AWaiting rs mem ins
    )
-   (λ σi '(pc, rs, mem) s', ∃ i, σi = AsmState (Some i) rs mem ins ∧ rs !! "PC" = Some pc ∧ ins !! pc = Some i)).
+   (λ σi '(pc, rs, mem) s', ∃ i, σi = AsmState (ARunning i) rs mem ins ∧ rs !! "PC" = Some pc ∧ ins !! pc = Some i)).
   { naive_solver. }
   { move => ????. go_s. done. }
   move => {}n _ Hloop σi [] CONT a Ha HCONT.

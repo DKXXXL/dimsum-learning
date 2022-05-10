@@ -419,7 +419,7 @@ Definition sim (n : trace_index) (b : bool) (dins : list deep_asm_instr) (e : ex
   ⌜deep_to_asm_instrs (rs !!! "PC") dins ⊆ pf_ins⌝ -∗
   rf -∗
   ci2a_inv s lr rs mem h' -∗
-  iSat_end (AsmState (Some []) rs mem pf_ins
+  iSat_end (AsmState (ARunning []) rs mem pf_ins
              ⪯{asm_module, imp_to_asm (dom _ pf_ins) (dom _ pf_fns) s.(s_f2i) imp_module, n, b}
            (SMProg, Imp e h pf_fns, (PPInside, I2A pf_cs lr, rf))).
 
@@ -1313,7 +1313,7 @@ Lemma sim_intro s dins rs mem ins ins_dom fns_dom f2i n b e h fns cs lr rf P:
   f2i = s.(s_f2i) →
   satisfiable (rf ∗ ci2a_inv s lr rs mem h ∗ P) →
   (P -∗ sim n b dins e s rs h h) →
-  AsmState (Some []) rs mem ins
+  AsmState (ARunning []) rs mem ins
      ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, b}
   (SMProg, Imp e h fns, (PPInside, I2A cs lr, rf))
 .

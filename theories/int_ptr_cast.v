@@ -95,7 +95,7 @@ Proof.
   apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember. { simpl. exact (λ _ σa '(σf, (t, ps), (pp, σi2a, P)),
     t ≈ int_to_ptr_itree ∧
-    σa.(asm_cur_instr) = None ∧
+    σa.(asm_cur_instr) = AWaiting ∧
     σa.(asm_instrs) = int_to_ptr_asm ∧
     σi2a.(i2a_calls) = [] ∧
     σf = SMFilter ∧
@@ -342,7 +342,7 @@ Proof.
   go_i. split. { by simplify_map_eq. }
   sort_map_insert. simplify_map_eq'.
   unshelve eapply tsim_remember. { exact (λ _ '(AsmState i rs _ ins) _,
-      i = Some [] ∧ rs !! "PC" = Some 102 ∧ ins = exit_asm). }
+      i = ARunning [] ∧ rs !! "PC" = Some 102 ∧ ins = exit_asm). }
   { split!. by simplify_map_eq. } { done. }
   move => ?? Hloop [????] ? ?. destruct_all?; simplify_eq.
   go_i => ??. simplify_map_eq.

@@ -818,7 +818,7 @@ Proof.
   all: move => [cs1 lr1] [cs2 lr2] [cs lr] x1 x2 x ? ics.
   - move => e ? e' /= ? ?.
     destruct_all?; simplify_eq.
-    destruct e as [pc rs mem| |]; destruct_all?; simplify_eq/=.
+    destruct e as [pc rs mem| | |]; destruct_all?; simplify_eq/=.
     move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
     + move => ret f vs Hin Hf2i /not_elem_of_union[??] ? ??.
@@ -838,7 +838,7 @@ Proof.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
   - move => e ? e' /= ? ?.
     destruct_all?; simplify_eq.
-    destruct e as [pc rs mem| |]; destruct_all?; simplify_eq/=.
+    destruct e as [pc rs mem| | |]; destruct_all?; simplify_eq/=.
     move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
     + move => ret f vs Hin Hf2i /not_elem_of_union[??] ???.
@@ -941,9 +941,9 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
                            i2a_val_rel v av ∗ rf'' ∗ r') →
               i2a_regs_ret rs'' rs' av →
               map_scramble touched_registers lr'' rs'' →
-              AsmState (Some []) rs'' mem'' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
+              AsmState (ARunning []) rs'' mem'' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K (expr_fill K' (Val v))) h'' fns, (PPInside, I2A cs lr'', rf''))) →
-          AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
+          AsmState (ARunning []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K (expr_fill K' (imp.Call f' es))) h' fns, (PPInside, I2A cs lr', rf'))) →
       (* Return *)
       (∀ rs' mem' av v h' lr' rf',
@@ -952,9 +952,9 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
                       i2a_val_rel v av ∗ rf' ∗ rc) →
           i2a_regs_ret rs' rs av →
           map_scramble touched_registers lr' rs' →
-          AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
+          AsmState (ARunning []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K (Val v)) h' fns, (PPInside, I2A cs lr', rf'))) →
-      AsmState (Some []) rs mem ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, false}
+      AsmState (ARunning []) rs mem ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, false}
                (SMProg, Imp (expr_fill K (AllocA fn.(fd_vars) $ subst_l fn.(fd_args) vs fn.(fd_body))) h fns, (PPInside, I2A cs lr, rf))
 ) →
   trefines (MS asm_module (initial_asm_state ins))
@@ -966,7 +966,7 @@ Proof.
   unshelve eapply tsim_remember_call.
   { simpl. exact (λ d b '((AsmState i1 rs1 mem1 ins'1), (σfs1, Imp e1 h1 fns'1, (t1, I2A cs1 lr1, r1)))
                         '((AsmState i2 rs2 mem2 ins'2), (σfs2, Imp e2 h2 fns'2, (t2, I2A cs2 lr2, r2))),
-      ∃ K, i2 = None ∧ ins'2 = ins ∧ e2 = expr_fill K (Waiting (bool_decide (d ≠ 0%nat))) ∧ fns'2 = fns ∧
+      ∃ K, i2 = AWaiting ∧ ins'2 = ins ∧ e2 = expr_fill K (Waiting (bool_decide (d ≠ 0%nat))) ∧ fns'2 = fns ∧
               t2 = PPOutside ∧ σfs2 = SMFilter ∧ (d = 0%nat ↔ cs2 = []) ∧
       if b then
         e2 = e1 ∧
@@ -982,7 +982,7 @@ Proof.
       ins !! pc = Some i ∧
       satisfiable (i2a_mem_inv (rs2 !!! "SP") mem2 ∗ i2a_heap_inv h2 ∗ i2a_val_rel v av ∗ r1 ∗ r2) ∧
       i2a_regs_ret rs2 lr' av ∧
-      i2 = Some [] ∧
+      i2 = ARunning [] ∧
       ins'1 = ins'2 ∧
       σfs2 = SMProg ∧
       e1 = expr_fill K (Waiting true) ∧
@@ -1015,7 +1015,7 @@ Proof.
          satisfiable (i2a_mem_inv (rs1 !!! "SP") mem1 ∗ i2a_heap_inv h1 ∗
                                    i2a_args 0 vs rs1 ∗ r' ∗ r1) ∧
          i2a_regs_call ret rs1 ∧
-         i1 = Some [] ∧
+         i1 = ARunning [] ∧
          e1 = expr_fill K' (AllocA fn.(fd_vars) $ subst_l fn.(fd_args) vs fn.(fd_body)) ∧
          map_scramble touched_registers lr1 rs1 ∧
          length vs = length (fd_args fn) ∧
@@ -1027,7 +1027,7 @@ Proof.
                       i2a_val_rel v av ∗ r' ∗ rf') →
           i2a_regs_ret rs' rs1 av  →
           map_scramble touched_registers lr' rs' →
-          AsmState (Some []) rs' mem' ins ⪯{asm_module, imp_to_asm (dom _ ins) (dom _ fns) f2i imp_module, n, true}
+          AsmState (ARunning []) rs' mem' ins ⪯{asm_module, imp_to_asm (dom _ ins) (dom _ fns) f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K' (Val v)) h' fns, (PPInside, I2A cs1 lr', rf'))) ). }
     { eexists (ReturnExtCtx _:: _). split! => //. { iSatMono. iIntros!. iFrame. iAccu. }
       iSatClear. move => *.
