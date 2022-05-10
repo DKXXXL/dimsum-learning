@@ -263,7 +263,6 @@ Definition main_asm_dom : gset Z := {[200]}.
 Definition main_f2i : gmap string Z := <["main" := 200]> $ <["exit" := 100]> int_to_ptr_f2i .
 
 Axiom main_asm : gmap Z asm_instr.
-Axiom main_asm_wf : asm_instrs_wf main_asm.
 Axiom main_asm_dom_eq : dom (gset Z) main_asm = main_asm_dom.
 
 (*
@@ -288,7 +287,7 @@ Definition exit_asm : gmap Z asm_instr :=
         WriteReg "PC" (λ rs, rs !!! "PC" + 1)
     ] ]> $
   <[ 101 := [
-        Syscall false;
+        Syscall;
         WriteReg "PC" (λ rs, rs !!! "PC" + 1)
     ] ]> $
   <[ 102 := [
@@ -450,17 +449,13 @@ Lemma complete_refinement :
 Proof.
   etrans. {
     apply asm_link_refines_prod.
-    - apply map_disjoint_dom_2. rewrite dom_union main_asm_dom_eq. compute_done.
-    - apply map_Forall_union_2; [apply main_asm_wf|compute_done].
-    - compute_done.
+    apply map_disjoint_dom_2. rewrite dom_union main_asm_dom_eq. compute_done.
   }
   etrans. {
     apply: asm_prod_trefines.
     - etrans. {
         apply asm_link_refines_prod.
-        - apply map_disjoint_dom_2. rewrite main_asm_dom_eq. compute_done.
-        - apply main_asm_wf.
-        - compute_done.
+        apply map_disjoint_dom_2. rewrite main_asm_dom_eq. compute_done.
       }
       etrans. {
         apply: asm_prod_trefines.
