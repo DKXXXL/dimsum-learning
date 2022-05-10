@@ -10,6 +10,7 @@ Require Import refframe.imp.
 Require Import refframe.asm.
 Require Import refframe.itree.
 Require Import refframe.imp_to_asm.
+Require Import refframe.compiler.compiler.
 
 Local Open Scope Z_scope.
 
@@ -259,11 +260,13 @@ Proof.
   go_s. done.
 Qed.
 
-Definition main_asm_dom : gset Z := {[200]}.
 Definition main_f2i : gmap string Z := <["main" := 200]> $ <["exit" := 100]> int_to_ptr_f2i .
 
-Axiom main_asm : gmap Z asm_instr.
-Axiom main_asm_dom_eq : dom (gset Z) main_asm = main_asm_dom.
+Definition main_asm : gmap Z asm_instr :=
+  deep_to_asm_instrs 200 ltac:(let e := eval vm_compute in match compile main_f2i main_imp with | monad.CSuccess i => i | monad.CError _ => [] end in exact e).
+
+(* We need to lock this, otherwise simpl goes crazy. *)
+Definition main_asm_dom : gset Z := locked (dom _) main_asm.
 
 (*
   asm_module(main_asm) {asm_event}
@@ -273,9 +276,15 @@ Axiom main_asm_dom_eq : dom (gset Z) main_asm = main_asm_dom.
 
 Lemma main_asm_refines_imp :
   trefines (MS asm_module (initial_asm_state main_asm))
-           (MS (imp_to_asm main_asm_dom (dom _ main_imp_prog) main_f2i imp_module)
+           (MS (imp_to_asm (dom _ main_asm) {["main"]} main_f2i imp_module)
                (initial_imp_to_asm_state imp_module (initial_imp_state main_imp_prog))).
-Proof. Admitted.
+Proof.
+  apply: compile_correct; [|done|..].
+  - by vm_compute.
+  - by vm_compute.
+  - move => ??. rewrite /main_f2i/int_to_ptr_f2i !lookup_insert_Some !lookup_empty.
+    move => ?. destruct_all?; simplify_eq; compute_done.
+Qed.
 
 (* https://thog.github.io/syscalls-table-aarch64/latest.html *)
 Definition __NR_EXIT : Z := 93.
@@ -359,7 +368,7 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   '(pc, rs, mem) ← TReceive (λ '(pc, rs, mem), (Incoming, EAJump pc rs mem));;;
   TAssume (pc = 200);;;;
   TAssume (map_list_included touched_registers rs);;;;
-  TAssume (rs !!! "R30" ∉ ({[200; 400; 401]} : gset _));;;;
+  TAssume (rs !!! "R30" ∉ main_asm_dom ∪ dom (gset Z) int_to_ptr_asm);;;;
   args ← TExist _;;;
   TAssert (length args = length syscall_arg_regs);;;;
   TAssert (args !! 0%nat = Some 1);;;;
@@ -392,11 +401,12 @@ Proof.
   go_s => ?. go.
   go_s => ?. go.
   go_s => ?. go. simplify_eq/=.
-  rewrite bool_decide_true; [|compute_done].
+  rewrite bool_decide_true; [|unfold main_asm_dom;unlock; compute_done].
   go_i => ??. simplify_eq.
   go_i. eexists true => /=. split; [done|]. eexists initial_heap_state, (regs !!! "R30"), "main", [].
-  split!. { unfold i2a_regs_call. split!. apply lookup_lookup_total.
-            apply: map_list_included_is_Some; [done|]. compute_done. }
+  split!.
+  { unfold i2a_regs_call. split!. apply lookup_lookup_total.
+    apply: map_list_included_is_Some; [done|]. compute_done. }
   { apply: satisfiable_mono; [eapply i2a_res_init|].
     iIntros!. iFrame. rewrite i2a_args_nil. iSplit; [done|]. iAccu. }
   go_i => -[[??]?]. go.
@@ -406,7 +416,8 @@ Proof.
   go_i => ?. go.
   go_i.
   go_i. move => *. unfold main_f2i in *. destruct_all?; simplify_map_eq.
-  rewrite bool_decide_false; [|compute_done]. rewrite bool_decide_true; [|compute_done].
+  rewrite bool_decide_false; [|unfold main_asm_dom;unlock;compute_done].
+  rewrite bool_decide_true; [|compute_done].
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
@@ -448,14 +459,12 @@ Lemma complete_refinement :
            (MS (mod_itree _ _) (top_level_itree, tt)).
 Proof.
   etrans. {
-    apply asm_link_refines_prod.
-    apply map_disjoint_dom_2. rewrite dom_union main_asm_dom_eq. compute_done.
+    apply asm_link_refines_prod. compute_done.
   }
   etrans. {
     apply: asm_prod_trefines.
     - etrans. {
-        apply asm_link_refines_prod.
-        apply map_disjoint_dom_2. rewrite main_asm_dom_eq. compute_done.
+        apply asm_link_refines_prod. compute_done.
       }
       etrans. {
         apply: asm_prod_trefines.
@@ -463,17 +472,16 @@ Proof.
         - apply int_to_ptr_asm_refines_itree.
       }
       etrans. {
-        rewrite -main_asm_dom_eq.
         apply: imp_to_asm_combine.
-        - rewrite main_asm_dom_eq. compute_done.
         - compute_done.
-        - move => ?. rewrite !dom_insert_L dom_empty_L main_asm_dom_eq.
-          set_solver.
+        - compute_done.
+        - move => ??. eexists 200. split; [compute_done|]. set_solver.
         - move => ?. set_solver.
         - move => ???. rewrite /main_f2i /int_to_ptr_f2i !lookup_insert_Some.
           naive_solver.
         - move => ??. rewrite /main_f2i !lookup_insert_Some. naive_solver.
-        - move => ??. rewrite main_asm_dom_eq /int_to_ptr_f2i !lookup_insert_Some. naive_solver.
+        - move => ??. rewrite /int_to_ptr_f2i !lookup_insert_Some.
+          move => ?. destruct_all?; simplify_eq; compute_done.
       }
       etrans. {
         apply: imp_to_asm_trefines.
@@ -484,8 +492,8 @@ Proof.
     - apply exit_asm_refines_itree.
   }
   etrans. {
-    rewrite dom_union_L main_asm_dom_eq.
-    apply: top_level_refines_itree.
+    etrans; [|apply: top_level_refines_itree].
+    rewrite dom_union_L /main_asm_dom. unlock. done.
   }
   done.
 Qed.
