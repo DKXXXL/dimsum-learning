@@ -130,9 +130,9 @@ Ltac simpl_map_ext tac ::=
          end.
 
 
-Lemma asm_add_refines_imp_add :
+Lemma asm_add_refines_imp_add gp :
   trefines (MS asm_module (initial_asm_state asm_add))
-           (MS (imp_to_asm (dom _ asm_add) (dom _ imp_add_prog) (<["add" := 100]> ∅) imp_module) (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_prog))).
+           (MS (imp_to_asm (dom _ asm_add) (dom _ imp_add_prog) (<["add" := 100]> ∅) gp imp_module) (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_prog))).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
   move => n i rs mem K f fn vs h cs pc ret rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
@@ -157,10 +157,10 @@ Proof.
   1: by simplify_map_eq'.
 Qed.
 
-Lemma asm_add_client_refines_imp_add_client :
+Lemma asm_add_client_refines_imp_add_client gp :
   trefines (MS asm_module (initial_asm_state asm_add_client))
            (MS (imp_to_asm (dom _ asm_add_client) (dom _ imp_add_client_prog)
-                           (<["add_client" := 200]> $ <["add" := 100]> ∅) imp_module)
+                           (<["add_client" := 200]> $ <["add" := 100]> ∅) gp imp_module)
                (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_client_prog) )).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
@@ -178,7 +178,7 @@ Proof.
   tstep_i; simplify_map_eq'. split; [done|].
   tstep_i => ??. simplify_map_eq'.
   tstep_i; simplify_map_eq'. split; [simplify_map_eq'|].
-  tstep_i; simplify_map_eq'. split!; [done..|].
+  tstep_i; simplify_map_eq'. split!; [done..|]. case_match; [|by tstep_i].
   tstep_i; simplify_map_eq'. split!; [done..|].
   tstep_i => ??. simplify_map_eq'.
   tstep_i; simplify_map_eq'. split; [done|].
@@ -192,8 +192,9 @@ Proof.
   change (FreeA [(heap_fresh ∅ h, 1)] (imp.Call "add" [Val 1; Val 1])) with (expr_fill [FreeACtx [(heap_fresh ∅ h, 1)]] (imp.Call "add" [Val 1; Val 1])).
   apply: Hcall. { repeat econs. } { by simplify_map_eq. } { set_solver. } { by simplify_map_eq. }
   { iSatMonoBupd.
-    iMod (i2a_mem_alloc with "[$]") as "[??]".
-    iMod (i2a_mem_update with "[$] [$]") as "[??]". simplify_map_eq'.
+    iMod (i2a_mem_alloc with "[$]") as (?) "[? Hp]"; [done|done|].
+    iDestruct "Hp" as "[[% ?] _]" => /=. rewrite Z.add_0_l.
+    iMod (i2a_mem_update with "[$] [$]") as "[? ?]". simplify_map_eq'.
     iMod (i2a_heap_alloc _ (heap_fresh ∅ h) 1 with "[$]") as "[??]". { apply heap_fresh_is_fresh. }
     iMod (i2a_heap_update with "[$] [$]") as "[? ?]".
     iModIntro. iFrame. iSplit; [|iAccu].
@@ -206,7 +207,7 @@ Proof.
   move => rs'' mem'' av v h'' rf'' lr'' Hpc'' Hsat'' Hr ?.
   move: Hr => [?[? Hm]]; simplify_map_eq'.
   tstep_i => ??. simplify_map_eq.
-  tstep_i; simplify_map_eq'. split!; [by simplify_map_eq'..|].
+  tstep_i; simplify_map_eq'. split!; [by simplify_map_eq'..|]. case_match; [|by tstep_i].
   tstep_i; simplify_map_eq'. split!; [done..|].
   tstep_i; simplify_map_eq'. split!; [done..|].
   tstep_i => ??. simplify_map_eq'.
@@ -219,7 +220,9 @@ Proof.
   apply: Hret.
   1: { by simplify_map_eq'. }
   1: { iSatMonoBupd.
-       iMod (i2a_mem_delete with "[$] [$]") as "?".
+       iDestruct select (i2a_mem_constant _ _) as "Hret".
+       iMod (i2a_mem_delete 1 with "[$] [Hret]") as "?"; [done|..].
+       { iSplitL; [|done]. iExists _. iFrame. }
        iMod (i2a_heap_free _ (heap_fresh ∅ h) with "[$] [$]") as "?".
        iModIntro. iFrame. simplify_map_eq'.
        by rewrite Z.sub_add.
@@ -264,10 +267,10 @@ Proof.
 Qed.
 *)
 
-Lemma full_add_stack :
+Lemma full_add_stack gp :
   trefines (MS asm_module (initial_asm_state full_asm_add))
            (MS (imp_to_asm {[ 100; 101; 200; 201; 202; 203; 204; 205 ]} {[ "add"; "add_client" ]}
-                           (<["add_client" := 200]> $ <["add" := 100]> ∅) imp_module)
+                           (<["add_client" := 200]> $ <["add" := 100]> ∅) gp imp_module)
                (initial_imp_to_asm_state imp_module (initial_imp_state full_imp_add_prog))).
 Proof.
   etrans. {

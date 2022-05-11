@@ -33,6 +33,8 @@ Inductive asm_run_state : Set :=
 | ARunning (i : asm_instr)
 | AWaiting
 | AWaitingSyscall (i : asm_instr)
+(* TODO: Should we use the following? *)
+| APagefaulting (a : Z)
 | AHalted
 .
 
@@ -63,16 +65,23 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
 | SReadMem regs instrs r1 r2 f es mem:
   asm_step (AsmState (ARunning (ReadMem r1 r2 f :: es)) regs mem instrs) None (λ σ', ∃ a,
          regs !! r2 = Some a ∧
-         (* mem !! f a = Some v ∧ *)
          is_Some (regs !! r1) ∧
-         σ' = AsmState (ARunning es) (<[r1 := mem !!! f a]>regs) mem instrs)
+         σ' = if mem !! f a is Some v then
+                AsmState (ARunning es) (<[r1 := v]>regs) mem instrs
+              else
+                (* TODO: Should this be (APagefaulting (f a)) ? *)
+                AsmState AHalted regs mem instrs)
 | SWriteMem regs instrs r1 r2 f es mem:
   asm_step (AsmState (ARunning (WriteMem r1 r2 f :: es)) regs mem instrs) None (λ σ', ∃ a v,
          regs !! r2 = Some a ∧
          regs !! r1 = Some v ∧
          (* TODO: Should we have the following constraint? *)
          (* is_Some (mem !! f a) ∧ *)
-         σ' = AsmState (ARunning es) regs (<[f a := v]>mem) instrs)
+         σ' = if mem !! f a is Some v' then
+                AsmState (ARunning es) regs (<[f a := v]>mem) instrs
+              else
+                (* TODO: Should this be (APagefaulting (f a)) ? *)
+                AsmState AHalted regs mem instrs)
 | SSyscallCall regs instrs es mem:
   asm_step (AsmState (ARunning (Syscall :: es)) regs mem instrs)
            (Some (Outgoing, EASyscallCall (extract_syscall_args regs)))
@@ -98,6 +107,10 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
            (Some (Incoming, EAJump pc regs' mem'))
            (* We use [] here such that each instruction starts from [] *)
            (λ σ', σ' = AsmState (ARunning []) regs' mem' instrs)
+| SPagefaulting regs instrs a mem:
+  asm_step (AsmState (APagefaulting a) regs mem instrs)
+           (Some (Outgoing, EAPagefault a))
+           (λ σ', σ' = AsmState AHalted regs mem instrs)
 .
 
 Definition asm_module := Mod asm_step.
@@ -129,7 +142,11 @@ Global Hint Resolve asm_step_WriteReg_s : tstep.
 Lemma asm_step_ReadMem_i r1 r2 f es rs ins mem:
   TStepI asm_module (AsmState (ARunning (ReadMem r1 r2 f::es)) rs mem ins)
             (λ G, G true None (λ G',
-             ∃ a, rs !! r2 = Some a ∧ is_Some (rs !! r1) ∧ G' (AsmState (ARunning es) (<[r1:=mem !!! f a]>rs) mem ins))).
+             ∃ a, rs !! r2 = Some a ∧ is_Some (rs !! r1) ∧
+                      G' (if mem !! f a is Some v then
+                            AsmState (ARunning es) (<[r1:= v]>rs) mem ins
+                          else
+                            AsmState AHalted rs mem ins))).
 Proof.
   constructor => ? ?. apply steps_impl_step_end => ???.
   invert_all @m_step. eexists _, _. split_and!; [done|done|].
@@ -139,7 +156,11 @@ Global Hint Resolve asm_step_ReadMem_i : tstep.
 
 Lemma asm_step_ReadMem_s r1 r2 f es rs ins mem:
   TStepS asm_module (AsmState (ARunning (ReadMem r1 r2 f::es)) rs mem ins)
-            (λ G, G None (λ G', ∀ a, rs !! r2 = Some a → is_Some (rs !! r1) → G' (AsmState (ARunning (es)) (<[r1:=mem !!! f a]>rs) mem ins))).
+            (λ G, G None (λ G', ∀ a, rs !! r2 = Some a → is_Some (rs !! r1) →
+      G' (if mem !! f a is Some v then
+            AsmState (ARunning (es)) (<[r1:=v]>rs) mem ins
+          else
+            AsmState AHalted rs mem ins))).
 Proof.
   constructor => ??. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { econs. }
@@ -150,7 +171,11 @@ Global Hint Resolve asm_step_ReadMem_s : tstep.
 Lemma asm_step_WriteMem_i r1 r2 f es rs ins mem:
   TStepI asm_module (AsmState (ARunning (WriteMem r1 r2 f::es)) rs mem ins)
             (λ G, G true None (λ G',
-             ∃ a v, rs !! r2 = Some a ∧ rs !! r1 = Some v ∧ G' (AsmState (ARunning es) rs (<[f a:=v]>mem) ins))).
+             ∃ a v, rs !! r2 = Some a ∧ rs !! r1 = Some v ∧
+                      G' (if mem !! f a is Some v' then
+                            AsmState (ARunning es) rs (<[f a:=v]>mem) ins
+                          else
+                            AsmState AHalted rs mem ins))).
 Proof.
   constructor => ? ?. apply steps_impl_step_end => ???.
   invert_all @m_step. eexists _, _. split_and!; [done|done|].
@@ -160,7 +185,11 @@ Global Hint Resolve asm_step_WriteMem_i : tstep.
 
 Lemma asm_step_WriteMem_s r1 r2 f es rs ins mem:
   TStepS asm_module (AsmState (ARunning (WriteMem r1 r2 f::es)) rs mem ins)
-            (λ G, G None (λ G', ∀ a v, rs !! r2 = Some a → rs !! r1 = Some v → G' (AsmState (ARunning es) rs (<[f a:=v]>mem) ins))).
+            (λ G, G None (λ G', ∀ a v, rs !! r2 = Some a → rs !! r1 = Some v →
+                      G' (if mem !! f a is Some v' then
+                            AsmState (ARunning es) rs (<[f a:=v]>mem) ins
+                          else
+                            AsmState AHalted rs mem ins))).
 Proof.
   constructor => ??. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { econs. }
@@ -263,11 +292,38 @@ Proof.
 Qed.
 Global Hint Resolve asm_step_AWaiting_s : tstep.
 
+Lemma asm_step_APagefaulting_i rs ins mem a:
+  TStepI asm_module (AsmState (APagefaulting a) rs mem ins) (λ G,
+      G true (Some (Outgoing, EAPagefault a)) (λ G', G' (AsmState AHalted rs mem ins))
+   ).
+Proof.
+  constructor => ? HG. apply steps_impl_step_end => ???.
+  invert_all @m_step. eexists _, _. split_and!; [naive_solver..|]. naive_solver.
+Qed.
+Global Hint Resolve asm_step_APagefaulting_i : tstep.
+
+Lemma asm_step_APagefaulting_s rs mem ins a:
+  TStepS asm_module (AsmState (APagefaulting a) rs mem ins) (λ G,
+      G (Some (Outgoing, EAPagefault a)) (λ G', G' (AsmState AHalted rs mem ins))).
+Proof.
+  constructor => ??. eexists _, _. split; [done|] => ? /= ?.
+  apply: steps_spec_step_end. { by econs. } naive_solver.
+Qed.
+Global Hint Resolve asm_step_APagefaulting_s : tstep.
+
+Lemma asm_step_AHalted_i rs ins mem:
+  TStepI asm_module (AsmState AHalted rs mem ins) (λ G, True).
+Proof.
+  constructor => ? HG. apply steps_impl_step_end => ???. invert_all @m_step.
+Qed.
+Global Hint Resolve asm_step_AHalted_i : tstep.
+
 (** * closing *)
 Inductive asm_closed_event : Type :=
 | EACStart (pc : Z) (rs : gmap string Z) (mem : gmap Z Z)
 | EACSyscallCall (args : list Z)
 | EACSyscallRet (ret : Z)
+| EACPagefault (a : Z)
 .
 
 (* s tells us if we already started the execution *)
@@ -291,6 +347,7 @@ Definition asm_closed_post (e : asm_event) (s : bool) :
   prepost (asm_closed_event * bool) unitUR :=
   match e with
   | (Outgoing, EASyscallCall args) => pp_end (EACSyscallCall args, s)
+  | (Outgoing, EAPagefault a) => pp_end (EACPagefault a, s)
   | _ => pp_prop False (pp_quant $ λ e', pp_end e')
   end.
 
@@ -313,8 +370,9 @@ Definition asm_ctx_refines (instrsi instrss : gmap Z asm_instr) :=
 
 (** * semantic linking *)
 
-(* State s says whether we are currently in the environment and expecting a syscall return *)
-(* TODO: instead of bool have option that tracks which side was last *)
+(* State s says whether we are currently in the environment and
+expecting a syscall return. Some SPNone means that the program
+executed a page fault and is not waiting for any return. *)
 Definition asm_prod_filter (ins1 ins2 : gset Z) : seq_product_state → option seq_product_state → asm_ev → seq_product_state → option seq_product_state → asm_ev → Prop :=
   λ p s e p' s' e',
     e' = e ∧
@@ -335,7 +393,11 @@ Definition asm_prod_filter (ins1 ins2 : gset Z) : seq_product_state → option s
         s' = None ∧
         p' ≠ SPNone ∧
         p  = SPNone
-    | EAPagefault _ => False
+    | EAPagefault _ =>
+        s = None ∧
+        s' = Some SPNone ∧
+        p' = SPNone ∧
+        p ≠ SPNone
     end.
 Arguments asm_prod_filter _ _ _ _ _ _ _ _ /.
 
@@ -383,8 +445,12 @@ Proof.
         split!. simpl_map_decide. simplify_option_eq. split! => /=.
         apply: Hloop; [done|]. naive_solver.
     + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
-    + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
-    + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
+    + tstep_both. tstep_s => *. tend. split!. case_match.
+      * apply: Hloop; [done|]. naive_solver.
+      * by tstep_i.
+    + tstep_both. tstep_s => *. tend. split!. case_match.
+      * apply: Hloop; [done|]. naive_solver.
+      * by tstep_i.
     + tstep_both. tstep_s => *. split!; [done|]. tend.
       tstep_both => *. tstep_s => *. split!; [|done|]; [done|].
       tstep_s. split!. tend. apply: Hloop; [done|]. naive_solver.
@@ -398,8 +464,12 @@ Proof.
         split!. simpl_map_decide. simplify_option_eq. split!.
         apply: Hloop; [done|]. naive_solver.
     + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
-    + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
-    + tstep_both. tstep_s => *. tend. split!. apply: Hloop; [done|]. naive_solver.
+    + tstep_both. tstep_s => *. tend. split!. case_match.
+      * apply: Hloop; [done|]. naive_solver.
+      * by tstep_i.
+    + tstep_both. tstep_s => *. tend. split!. case_match.
+      * apply: Hloop; [done|]. naive_solver.
+      * by tstep_i.
     + tstep_both. tstep_s => *. split!; [done|]. tend.
       tstep_both => *. tstep_s => *. split!; [|done|]; [done|].
       tstep_s. split!. tend. apply: Hloop; [done|]. naive_solver.
@@ -430,8 +500,12 @@ Proof.
         -- tstep_i => *; simplify_eq. tstep_i => *. simplify_map_eq. apply: Hloop; [done|]. naive_solver.
         -- split!. apply: Hloop; [done|]. naive_solver.
     + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
-    + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
-    + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
+    + tstep_both => *. tstep_s => ?. tend. split!. case_match.
+      * apply: Hloop; [done|]. naive_solver.
+      * by tstep_i.
+    + tstep_both => *. tstep_s => ?. tend. split!. case_match.
+      * apply: Hloop; [done|]. naive_solver.
+      * by tstep_i.
     + tstep_both => *. destruct_all?; simplify_eq. tstep_s. split!; [done|]. tend.
       tstep_both => *. destruct_all?; case_match; destruct_all?; simplify_eq/=. tstep_s. split!; [done|]. tend.
       tstep_i => *. simplify_eq/=. apply: Hloop; [done|]. naive_solver.
@@ -444,8 +518,12 @@ Proof.
         -- tstep_i => *; simplify_eq. tstep_i => *. simplify_map_eq. apply: Hloop; [done|]. naive_solver.
         -- split!. apply: Hloop; [done|]. naive_solver.
     + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
-    + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
-    + tstep_both => *. tstep_s => ?. tend. split!. apply: Hloop; [done|]. naive_solver.
+    + tstep_both => *. tstep_s => ?. tend. split!. case_match.
+      * apply: Hloop; [done|]. naive_solver.
+      * by tstep_i.
+    + tstep_both => *. tstep_s => ?. tend. split!. case_match.
+      * apply: Hloop; [done|]. naive_solver.
+      * by tstep_i.
     + tstep_both => *. destruct_all?; simplify_eq. tstep_s. split!; [done|]. tend.
       tstep_both => *. destruct_all?; case_match; destruct_all?; simplify_eq/=. tstep_s. split!; [done|]. tend.
       tstep_i => *. simplify_eq/=. apply: Hloop; [done|]. naive_solver.

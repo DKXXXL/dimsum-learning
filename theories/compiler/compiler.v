@@ -44,13 +44,13 @@ Definition compile (f2i : gmap string Z) (fn : fndef) : compiler_success compile
   linear ← compile_linear fn;
   compiler_success_fmap_error CodegenError (ci2a_codegen.pass_fn f2i linear).
 
-Lemma compile_correct f2i f fn dins ins a:
+Lemma compile_correct f2i f fn dins ins a gp:
   compile f2i fn = CSuccess dins →
   ins = deep_to_asm_instrs a dins →
   f2i !! f = Some a →
   (∀ f' i', f2i !! f' = Some i' → ins !! i' = None ↔ f' ≠ f) →
   trefines (MS asm_module (initial_asm_state ins))
-           (MS (imp_to_asm (dom _ ins) {[f]} f2i imp_module)
+           (MS (imp_to_asm (dom _ ins) {[f]} f2i gp imp_module)
                (initial_imp_to_asm_state imp_module (initial_imp_state (<[f := fn]> ∅)))).
 Proof.
   unfold compile.
