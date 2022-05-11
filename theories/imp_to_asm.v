@@ -230,6 +230,18 @@ Proof.
   by apply gmap_view_alloc.
 Qed.
 
+Lemma i2a_mem_alloc_big' mem mem' :
+  mem' ##ₘ mem →
+  i2a_mem_auth mem ==∗ i2a_mem_auth (mem' ∪ mem) ∗ [∗ map] a↦v∈mem', i2a_mem_constant a v.
+Proof.
+  iIntros (?) "Hmem".
+  iInduction mem' as [|a v mem' ?] "IH" using map_ind; decompose_map_disjoint.
+  { rewrite left_id big_sepM_empty. by iFrame. }
+  iMod ("IH" with "[//] [$]") as "[??]". rewrite -insert_union_l.
+  iMod (i2a_mem_alloc' a with "[$]") as "[$ ?]". { by apply lookup_union_None. }
+  rewrite big_sepM_insert //. by iFrame.
+Qed.
+
 Lemma i2a_mem_update' v' a v amem :
   i2a_mem_auth amem ∗ i2a_mem_constant a v ==∗ i2a_mem_auth (<[a := v']> amem) ∗ i2a_mem_constant a v'.
 Proof.
@@ -623,18 +635,50 @@ Proof.
   set_solver.
 Qed.
 
-Lemma i2a_res_init sp gp mem:
-  gp + GUARD_PAGE_SIZE ≤ sp →
-  (∀ a, gp ≤ a < gp + GUARD_PAGE_SIZE → mem !! a = None) →
-  (∀ a, gp + GUARD_PAGE_SIZE ≤ a < sp → is_Some (mem !! a)) →
-  satisfiable (i2a_mem_inv sp gp mem ∗ i2a_heap_inv initial_heap_state).
+Lemma i2a_res_init mem:
+  satisfiable (i2a_mem_auth mem ∗ ([∗ map] a↦v∈mem, i2a_mem_constant a v) ∗ i2a_heap_inv initial_heap_state).
 Proof.
-  move => ???.
   apply: (satisfiable_init (i2a_mem_inj (gmap_view_auth (DfracOwn 1) ∅) ⋅
                               i2a_heap_inj (gmap_view_auth (DfracOwn 1) ∅))).
   { split => /=; rewrite ?left_id ?right_id; apply gmap_view_auth_valid. }
   rewrite uPred.ownM_op. iIntros "[Hmem Hh]".
-Admitted.
+  iMod (i2a_mem_alloc_big' with "[$]") as "[? $]"; [solve_map_disjoint|]. rewrite right_id_L. iFrame.
+  iModIntro.
+  iExists _. by iFrame.
+Qed.
+
+Lemma i2a_mem_inv_init gp sp mem:
+  gp + GUARD_PAGE_SIZE ≤ sp →
+  (∀ a, gp ≤ a < gp + GUARD_PAGE_SIZE → mem !! a = Some None) →
+  (∀ a, gp + GUARD_PAGE_SIZE ≤ a < sp → ∃ v, mem !! a = Some (Some v)) →
+  i2a_mem_auth mem -∗
+  ([∗ map] a↦v∈mem, i2a_mem_constant a v) -∗
+  i2a_mem_inv sp gp mem.
+Proof.
+  iIntros (? Hgp Hsp) "$ H".
+  rewrite -(map_filter_union_complement (λ a, a.1 < gp + GUARD_PAGE_SIZE) mem).
+  rewrite big_sepM_union. 2: apply map_disjoint_filter_complement.
+  iDestruct "H" as "[H1 H2]".
+  iSplit; [done|]. iSplitL "H1".
+  - unfold i2a_guard_page.
+    iApply big_sepM_map_seq_0.
+    iApply (big_sepM_kmap_intro (λ x, gp + Z.of_nat x)). { move => ???. lia. }
+    iApply (big_sepM_impl_strong' with "[$]").
+    iIntros "!>" (k ?) "?". iIntros ([?[?[? Hseq]%lookup_map_seq_Some]]%lookup_kmap_Some).
+    2: { move => ???. lia. }
+    unlock in Hseq. move: Hseq => /lookup_seqZ[??]. rewrite map_filter_lookup_true. 2: naive_solver lia.
+    rewrite Hgp. 2: lia. iExists (Z.to_nat (k - gp)). iSplit!; [lia|]. simplify_eq. by rewrite Nat.sub_0_r.
+  - unfold i2a_mem_uninit.
+    iApply big_sepM_map_seq_0.
+    iApply (big_sepM_kmap_intro (λ x, gp + GUARD_PAGE_SIZE + Z.of_nat x)). { move => ???. lia. }
+    iApply (big_sepM_impl_strong' with "[$]").
+    iIntros "!>" (k ?) "?". iIntros ([a [?[? [??]%lookup_seqZ]%lookup_map_seq_Some]]%lookup_kmap_Some).
+    2: { move => ???. lia. } simplify_eq.
+    rewrite map_filter_lookup_true. 2: { move => ?? /= Hx. clear -Hx. lia. }
+    have [|? ->]:= Hsp (gp + GUARD_PAGE_SIZE + a); [lia|].
+    iSplit!; [done|]. by rewrite Nat.sub_0_r.
+Qed.
+
 (*   iAssert () *)
 (* iModIntro. *)
 (*   iSplitL "Hmem". *)

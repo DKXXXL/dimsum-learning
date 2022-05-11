@@ -370,8 +370,8 @@ Definition top_level_itree gp : itree (moduleE asm_event unit) unit :=
   TAssume (map_list_included touched_registers rs);;;;
   TAssume (rs !!! "R30" ∉ main_asm_dom ∪ dom (gset Z) int_to_ptr_asm);;;;
   TAssume (gp + GUARD_PAGE_SIZE ≤ rs !!! "SP" ∧
-            (∀ a, gp ≤ a < gp + GUARD_PAGE_SIZE → mem !! a = None) ∧
-            (∀ a, gp + GUARD_PAGE_SIZE ≤ a < rs !!! "SP" → is_Some (mem !! a)));;;;
+            (∀ a, gp ≤ a < gp + GUARD_PAGE_SIZE → mem !! a = Some None) ∧
+            (∀ a, gp + GUARD_PAGE_SIZE ≤ a < rs !!! "SP" → ∃ v, mem !! a = Some (Some v)));;;;
   args ← TExist _;;;
   TAssert (length args = length syscall_arg_regs);;;;
   TAssert (args !! 0%nat = Some 1);;;;
@@ -412,7 +412,9 @@ Proof.
   { unfold i2a_regs_call. split!. apply lookup_lookup_total.
     apply: map_list_included_is_Some; [done|]. compute_done. }
   { apply: satisfiable_mono; [by eapply i2a_res_init|].
-    iIntros!. iFrame. rewrite i2a_args_nil. iSplit; [done|]. iAccu. }
+    iIntros!.
+    iDestruct (i2a_mem_inv_init with "[$] [$]") as "$"; [done..|].
+    iFrame. rewrite i2a_args_nil. iSplit; [done|]. iAccu. }
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
