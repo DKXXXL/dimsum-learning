@@ -178,7 +178,10 @@ Proof.
   tstep_i; simplify_map_eq'. split; [done|].
   tstep_i => ??. simplify_map_eq'.
   tstep_i; simplify_map_eq'. split; [simplify_map_eq'|].
-  tstep_i; simplify_map_eq'. split!; [done..|]. case_match; [|by tstep_i].
+  iSatStart.
+  iDestruct (i2a_mem_exists 1 with "[$]") as %[??]; [done|].
+  iSatStop.
+  tstep_i; simplify_map_eq'. split!. case_match; [|by tstep_i].
   tstep_i; simplify_map_eq'. split!; [done..|].
   tstep_i => ??. simplify_map_eq'.
   tstep_i; simplify_map_eq'. split; [done|].
@@ -207,20 +210,20 @@ Proof.
   move => rs'' mem'' av v h'' rf'' lr'' Hpc'' Hsat'' Hr ?.
   move: Hr => [?[? Hm]]; simplify_map_eq'.
   tstep_i => ??. simplify_map_eq.
-  tstep_i; simplify_map_eq'. split!; [by simplify_map_eq'..|]. case_match; [|by tstep_i].
+  iSatStart. iIntros!.
+  iDestruct select (i2a_mem_constant _ _) as "Hret".
+  iDestruct (i2a_mem_lookup with "[$] [$]") as %?.
+  iSatStop.
+  tstep_i; simplify_map_eq'. split!; [by simplify_map_eq'..|].
   tstep_i; simplify_map_eq'. split!; [done..|].
   tstep_i; simplify_map_eq'. split!; [done..|].
   tstep_i => ??. simplify_map_eq'.
   tstep_s => [?[??]]. simplify_eq.
   have ->: rs !!! "SP" - 1 + 1 = rs !!! "SP" by lia.
   tstep_i; simplify_map_eq'. split; [done|].
-  iSatStart. iIntros!.
-  iDestruct (i2a_mem_lookup with "[$] [$]") as %?.
-  iSatStop.
   apply: Hret.
   1: { by simplify_map_eq'. }
   1: { iSatMonoBupd.
-       iDestruct select (i2a_mem_constant _ _) as "Hret".
        iMod (i2a_mem_delete 1 with "[$] [Hret]") as "?"; [done|..].
        { iSplitL; [|done]. iExists _. iFrame. }
        iMod (i2a_heap_free _ (heap_fresh ∅ h) with "[$] [$]") as "?".

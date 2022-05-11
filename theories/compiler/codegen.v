@@ -370,7 +370,7 @@ Definition ci2a_regs_inv (s : state) (lr rs : gmap string Z) : uPred imp_to_asmU
   ⌜map_list_included touched_registers rs⌝ ∗
   ⌜s.(s_f2i) = pf_f2i⌝.
 
-Definition ci2a_inv (s : state) (lr rs : gmap string Z) (mem : gmap Z Z) (h : heap_state) : uPred _ :=
+Definition ci2a_inv (s : state) (lr rs : gmap string Z) (mem : gmap Z (option Z)) (h : heap_state) : uPred _ :=
     i2a_mem_inv (pf_sp - Z.of_N s.(s_stacksize)) pf_gp mem ∗
     i2a_heap_inv h ∗
     ci2a_regs_inv s lr rs.
@@ -379,7 +379,7 @@ Definition ci2a_inv (s : state) (lr rs : gmap string Z) (mem : gmap Z Z) (h : he
 Lemma stack_slot_lookup slot v mem sp:
   stack_slot slot v -∗
   i2a_mem_inv sp pf_gp mem -∗
-  ⌜mem !! (pf_sp - Z.of_N slot - 1) = Some v⌝.
+  ⌜mem !! (pf_sp - Z.of_N slot - 1) = Some (Some v)⌝.
 Proof. iIntros "[% ?] ?". iApply (i2a_mem_lookup with "[$] [$]"). Qed.
 
 Lemma ci2a_regs_inv_mono_insert rs s r lr v :
@@ -546,10 +546,13 @@ Proof.
   tstep_i => ??. simplify_map_eq'.
   move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
   rewrite orb_true_r.
-  tstep_i. split!. rewrite Z.sub_simpl_r. case_match; [|by tstep_i].
+  iSatStart.
+  iDestruct "Hinv" as "(?&?&?)".
+  iDestruct (i2a_mem_lookup with "[$] [$]") as %?.
+  iSatStop.
+  tstep_i. split!; rewrite Z.sub_simpl_r; [done|].
   tstep_i. simplify_map_eq'. split!.
   iSatStartBupd.
-  iDestruct "Hinv" as "(?&?&?)".
   iMod (i2a_mem_update with "[$] [$]") as "[? ?]". iModIntro.
   iApply ("Hcont" with "[$] [] Hrf"). { by simplify_map_eq'. }
   iFrame. by iApply ci2a_regs_inv_mono_insert; [compute_done|].
@@ -592,6 +595,7 @@ Qed.
 
 Lemma alloc_stack_correct s s' p p' r n b e rs h h' sz:
   crun s (alloc_stack sz) = CResult s' p (CSuccess r) →
+  0 < Z.of_N sz →
   (∀ pc' r17', ⌜s' = s <|s_stacksize := (s.(s_stacksize) + sz)%N |>⌝ -∗
    ⌜r = s.(s_stacksize)⌝ -∗
    ⌜pf_gp ≤ pf_sp - Z.of_N (s.(s_stacksize)) - Z.of_N sz⌝ -∗
@@ -599,7 +603,7 @@ Lemma alloc_stack_correct s s' p p' r n b e rs h h' sz:
    sim n true p' e s' (<["PC" := pc']> $ <["R17" := r17']>rs) h h') -∗
   sim n b (p ++ p') e s rs h h'.
 Proof.
-  unfold alloc_stack. move => ?. simplify_crun_eq. iIntros "Hcont".
+  unfold alloc_stack. move => ??. simplify_crun_eq. iIntros "Hcont".
   iApply sim_get_sp. iIntros (?).
   iApply sim_regs_included. iIntros (?).
   iIntros (??? Hins) "Hrf (Hmem&Hheap&Hregs)".
@@ -607,8 +611,12 @@ Proof.
   tstep_i => ??. simplify_map_eq'.
   move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
   rewrite orb_true_r.
+  iSatStart.
+  iDestruct (i2a_mem_exists (Z.of_N sz) with "[$]") as %[??]; [lia|].
+  iSatStop.
   tstep_i. split!. { apply: map_list_included_is_Some; [done|compute_done]. }
-  case_match; [|done]. rewrite Z.add_opp_r Z.sub_add_distr. case_match; [|by tstep_i].
+  { case_match; [|done]. rewrite Z.add_opp_r Z.sub_add_distr. done. }
+  case_match; [|done]. case_match; [|by tstep_i].
   tstep_i. simplify_map_eq'. split!.
   iSatStartBupd.
   iMod (i2a_mem_alloc (Z.of_N sz) with "[$]") as (?) "[? Ha]"; [done|lia|]. iModIntro.
@@ -632,7 +640,7 @@ Lemma alloc_stack_correct_slot s s' p p' r n b e rs h h':
   sim n b (p ++ p') e s rs h h'.
 Proof.
   iIntros (?) "Hcont".
-  iApply alloc_stack_correct; [done|]. iIntros (?????) "[[%v ?] _]".
+  iApply alloc_stack_correct; [done..|]. iIntros (?????) "[[%v ?] _]".
   iApply "Hcont"; [done..|]. by iFrame.
 Qed.
 
@@ -652,13 +660,15 @@ Proof.
   tstep_i => ??. simplify_map_eq'.
   move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
   rewrite orb_true_r.
+  iSatStart.
+  iDestruct (stack_slot_lookup with "[$] [$]") as %?.
+  iSatStop.
   tstep_i. split!. { apply: map_list_included_is_Some; [done|]. naive_solver. }
-  have -> : (if s_sp_above s then pf_sp else pf_sp - Z.of_N (s_stacksize s)) +
+  { have -> : (if s_sp_above s then pf_sp else pf_sp - Z.of_N (s_stacksize s)) +
        ((if s_sp_above s then 0 else Z.of_N (s_stacksize s)) - Z.of_N slot - 1) = pf_sp - Z.of_N slot - 1 by case_match; lia.
-  match goal with | |- context [ match ?x with _ => _ end ] => destruct x eqn:? end. 2: by tstep_i.
+    done. }
   tstep_i. split!; simplify_map_eq'; [done|].
   iSatStart.
-  iDestruct (stack_slot_lookup with "[$] [$]") as %?. simplify_eq.
   iApply ("Hcont" with "[//] [$] [%] Hrf"). { by simplify_map_eq'. } iFrame.
   iApply ci2a_regs_inv_mono_insert; [compute_done| ].
   by iApply ci2a_regs_inv_mono_insert.
@@ -1030,7 +1040,7 @@ Proof.
   unfold initialize_locals => ? /NoDup_cons[??] ? /Forall_cons[??]. destruct_all?. simplify_crun_eq.
   iIntros "Hinv Hcont". rewrite -!app_assoc /=.
   iApply sim_get_sp. iIntros (Hsp). simplify_eq/=. case_match; [|done].
-  iApply alloc_stack_correct; [done|].
+  iApply alloc_stack_correct; [done|lia|].
   iIntros (?????) "Hs". simplify_eq. rewrite Z2N.id; [|lia].
   iApply sim_Aadd; [compute_done|] => /=. rewrite -!app_assoc /=.
   iApply (clear_mem_correct with "[$]"); [done|simplify_map_eq';f_equal;lia|compute_done|].
@@ -1191,12 +1201,14 @@ Proof.
     tstep_s => ????. subst.
     tstep_i => ??. simplify_map_eq'.
     move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
-    tstep_i. split!; simplify_map_eq'; [done| |]. { apply: map_list_included_is_Some; [done|compute_done]. }
-    rewrite Z.add_0_r. case_match; [|by tstep_i].
-    tstep_i; simplify_map_eq'. split!.
     iSatStart. iDestruct "Hv" as (??) "Hv". simplify_eq.
     iDestruct "Hinv" as "(?&?&?)".
     iDestruct (i2a_heap_lookup_shared with "[$] [$] [$]") as (? ?) "#?"; [done|].
+    iSatStop.
+    tstep_i. split!; simplify_map_eq'; [done| |by rewrite Z.add_0_r|].
+    { apply: map_list_included_is_Some; [done|compute_done]. }
+    tstep_i; simplify_map_eq'. split!.
+    iSatStart.
     iApply ("Hcont" with "[] [] [//] [Hp] [%] Hrf"); [by simplify_map_eq|done| | |].
     + iApply ci2a_places_inv_mono_rs; [|done].
       apply map_preserved_insert_r_not_in; [compute_done|].
@@ -1212,13 +1224,16 @@ Proof.
     iApply (read_var_val_correct with "Hp"); [typeclasses eauto with tstep|done|compute_done|].
     iIntros (?? v2' ?) "#Hv2 Hp". simplify_eq/=.
     iIntros (??? Hins) "Hrf Hinv". iSatStop.
-    tstep_s => ???. subst.
+    tstep_s => ?? Halive. subst. move: (Halive) => [??].
     tstep_i => ??. simplify_map_eq'.
     move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
-    tstep_i. split!; simplify_map_eq'; [done..|]. rewrite Z.add_0_r. case_match; [|by tstep_i].
-    tstep_i; simplify_map_eq'. split!.
-    iSatStartBupd. iDestruct "Hv1" as (??) "Hv1". simplify_eq.
+    iSatStart. iDestruct "Hv1" as (??) "Hv1". simplify_eq.
     iDestruct "Hinv" as "(?&?&?)".
+    iDestruct (i2a_heap_lookup_shared with "[$] [$] [$]") as (? ?) "#_"; [done|].
+    iSatStop.
+    tstep_i. split!; simplify_map_eq'; [done..|rewrite Z.add_0_r; done|].
+    tstep_i; simplify_map_eq'. split!. rewrite Z.add_0_r.
+    iSatStartBupd.
     iMod (i2a_heap_update_shared with "[$] [$] [$] [$]") as "[??]"; [done|]. iModIntro.
     iApply ("Hcont" with "[] [] [//] [Hp] [%] Hrf"); [by simplify_map_eq|done| | |].
     + iApply ci2a_places_inv_mono_rs; [|done].

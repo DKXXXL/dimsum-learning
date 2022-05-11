@@ -41,7 +41,7 @@ Inductive asm_run_state : Set :=
 Inductive asm_state := AsmState {
   asm_cur_instr : asm_run_state;
   asm_regs : gmap string Z;
-  asm_mem : gmap Z Z;
+  asm_mem : gmap Z (option Z);
   asm_instrs : gmap Z asm_instr;
 }.
 Add Printing Constructor asm_state.
@@ -49,7 +49,7 @@ Add Printing Constructor asm_state.
 Definition initial_asm_state (instrs : gmap Z asm_instr) := AsmState AWaiting ∅ ∅ instrs.
 
 Inductive asm_ev :=
-| EAJump (pc : Z) (regs : gmap string Z) (mem : gmap Z Z)
+| EAJump (pc : Z) (regs : gmap string Z) (mem : gmap Z (option Z))
 | EASyscallCall (args : list Z)
 | EASyscallRet (ret : Z)
 | EAPagefault (a : Z)
@@ -63,22 +63,24 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
          is_Some (regs !! r) ∧
          σ' = AsmState (ARunning es) (<[r := f regs]>regs) mem instrs)
 | SReadMem regs instrs r1 r2 f es mem:
-  asm_step (AsmState (ARunning (ReadMem r1 r2 f :: es)) regs mem instrs) None (λ σ', ∃ a,
+  asm_step (AsmState (ARunning (ReadMem r1 r2 f :: es)) regs mem instrs) None (λ σ', ∃ a v,
          regs !! r2 = Some a ∧
          is_Some (regs !! r1) ∧
-         σ' = if mem !! f a is Some v then
-                AsmState (ARunning es) (<[r1 := v]>regs) mem instrs
+         mem !! f a = Some v ∧
+         σ' = if v is Some v' then
+                AsmState (ARunning es) (<[r1 := v']>regs) mem instrs
               else
                 (* TODO: Should this be (APagefaulting (f a)) ? *)
                 AsmState AHalted regs mem instrs)
 | SWriteMem regs instrs r1 r2 f es mem:
-  asm_step (AsmState (ARunning (WriteMem r1 r2 f :: es)) regs mem instrs) None (λ σ', ∃ a v,
+  asm_step (AsmState (ARunning (WriteMem r1 r2 f :: es)) regs mem instrs) None (λ σ', ∃ a v mv,
          regs !! r2 = Some a ∧
          regs !! r1 = Some v ∧
+         mem !! f a = Some mv ∧
          (* TODO: Should we have the following constraint? *)
          (* is_Some (mem !! f a) ∧ *)
-         σ' = if mem !! f a is Some v' then
-                AsmState (ARunning es) regs (<[f a := v]>mem) instrs
+         σ' = if mv is Some mv' then
+                AsmState (ARunning es) regs (<[f a := Some v]>mem) instrs
               else
                 (* TODO: Should this be (APagefaulting (f a)) ? *)
                 AsmState AHalted regs mem instrs)
@@ -142,13 +144,14 @@ Global Hint Resolve asm_step_WriteReg_s : tstep.
 Lemma asm_step_ReadMem_i r1 r2 f es rs ins mem:
   TStepI asm_module (AsmState (ARunning (ReadMem r1 r2 f::es)) rs mem ins)
             (λ G, G true None (λ G',
-             ∃ a, rs !! r2 = Some a ∧ is_Some (rs !! r1) ∧
-                      G' (if mem !! f a is Some v then
+             ∃ a mv, rs !! r2 = Some a ∧ is_Some (rs !! r1) ∧ mem !! f a = Some mv ∧
+                      G' (if mv is Some v then
                             AsmState (ARunning es) (<[r1:= v]>rs) mem ins
                           else
                             AsmState AHalted rs mem ins))).
 Proof.
-  constructor => ? ?. apply steps_impl_step_end => ???.
+  constructor => ? ?.
+  apply steps_impl_step_end => ???.
   invert_all @m_step. eexists _, _. split_and!; [done|done|].
   move => ? /=. naive_solver.
 Qed.
@@ -156,24 +159,24 @@ Global Hint Resolve asm_step_ReadMem_i : tstep.
 
 Lemma asm_step_ReadMem_s r1 r2 f es rs ins mem:
   TStepS asm_module (AsmState (ARunning (ReadMem r1 r2 f::es)) rs mem ins)
-            (λ G, G None (λ G', ∀ a, rs !! r2 = Some a → is_Some (rs !! r1) →
-      G' (if mem !! f a is Some v then
+            (λ G, G None (λ G', ∀ a mv, rs !! r2 = Some a → is_Some (rs !! r1) → mem !! f a = Some mv →
+      G' (if mv is Some v then
             AsmState (ARunning (es)) (<[r1:=v]>rs) mem ins
           else
             AsmState AHalted rs mem ins))).
 Proof.
   constructor => ??. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { econs. }
-  move => ? /= [? [? [? ->]]]. naive_solver.
+  move => ? /= [? [? [? [? [? ->]]]]]. naive_solver.
 Qed.
 Global Hint Resolve asm_step_ReadMem_s : tstep.
 
 Lemma asm_step_WriteMem_i r1 r2 f es rs ins mem:
   TStepI asm_module (AsmState (ARunning (WriteMem r1 r2 f::es)) rs mem ins)
             (λ G, G true None (λ G',
-             ∃ a v, rs !! r2 = Some a ∧ rs !! r1 = Some v ∧
-                      G' (if mem !! f a is Some v' then
-                            AsmState (ARunning es) rs (<[f a:=v]>mem) ins
+             ∃ a v mv, rs !! r2 = Some a ∧ rs !! r1 = Some v ∧ mem !! f a = Some mv ∧
+                      G' (if mv is Some mv' then
+                            AsmState (ARunning es) rs (<[f a:=Some v]>mem) ins
                           else
                             AsmState AHalted rs mem ins))).
 Proof.
@@ -185,15 +188,15 @@ Global Hint Resolve asm_step_WriteMem_i : tstep.
 
 Lemma asm_step_WriteMem_s r1 r2 f es rs ins mem:
   TStepS asm_module (AsmState (ARunning (WriteMem r1 r2 f::es)) rs mem ins)
-            (λ G, G None (λ G', ∀ a v, rs !! r2 = Some a → rs !! r1 = Some v →
-                      G' (if mem !! f a is Some v' then
-                            AsmState (ARunning es) rs (<[f a:=v]>mem) ins
+            (λ G, G None (λ G', ∀ a v mv, rs !! r2 = Some a → rs !! r1 = Some v → mem !! f a = Some mv →
+                      G' (if mv is Some mv' then
+                            AsmState (ARunning es) rs (<[f a:=Some v]>mem) ins
                           else
                             AsmState AHalted rs mem ins))).
 Proof.
   constructor => ??. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { econs. }
-  move => ? /= [? [? [? [? ->]]]]. naive_solver.
+  move => ? /= [? [? [? [? [? [? ->]]]]]]. naive_solver.
 Qed.
 Global Hint Resolve asm_step_WriteMem_s : tstep.
 
@@ -320,7 +323,7 @@ Global Hint Resolve asm_step_AHalted_i : tstep.
 
 (** * closing *)
 Inductive asm_closed_event : Type :=
-| EACStart (pc : Z) (rs : gmap string Z) (mem : gmap Z Z)
+| EACStart (pc : Z) (rs : gmap string Z) (mem : gmap Z (option Z))
 | EACSyscallCall (args : list Z)
 | EACSyscallRet (ret : Z)
 | EACPagefault (a : Z)
@@ -693,8 +696,8 @@ Local Ltac go_i :=
 (* TODO: Get rid of Some in recursive call (maybe by passing an itree to t instead of the +'? ) *)
 (* TODO: prove merging of two asm loops (should just be all choice between the two implementations ) *)
 Definition asm_loop (ins : list Z)
-   (t : Z → gmap string Z → gmap Z Z → itree (callE
-     (option (Z * gmap string Z * gmap Z Z)) (Z * gmap string Z * gmap Z Z) +' moduleE asm_event unit) (Z * gmap string Z * gmap Z Z))
+   (t : Z → gmap string Z → gmap Z (option Z) → itree (callE
+     (option (Z * gmap string Z * gmap Z (option Z))) (Z * gmap string Z * gmap Z (option Z)) +' moduleE asm_event unit) (Z * gmap string Z * gmap Z (option Z)))
   : itree (moduleE asm_event unit) unit :=
   rec (λ a,
     '(pc, rs, mem) ← (
