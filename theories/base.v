@@ -200,6 +200,16 @@ Proof.
   destruct (m1 !! i) as [x'|], (m2 !! i) => /=; intuition congruence.
 Qed.
 End theorems.
+Section theorems.
+Context `{FinMap K M}.
+Lemma map_difference_difference {A} (m1 m2 m3 : M A) :
+     m1 ∖ m2 ∖ m3 = m1 ∖ (m2 ∪ m3).
+Proof.
+  apply map_eq. intros i. apply option_eq. intros v.
+  rewrite !lookup_difference_Some lookup_union_None.
+  naive_solver.
+Qed.
+End theorems.
 
 Section map.
   Context `{FinMap K M}.
@@ -672,10 +682,11 @@ Section map_seqZ.
     rewrite lookup_map_seq, option_guard_True by lia.
     by rewrite Nat.add_sub_swap, Nat.sub_diag.
   Qed.
-  Lemma lookup_map_seq_Some start xs i x :
-    map_seq (M:=M A) start xs !! i = Some x ↔ start ≤ i ∧ xs !! (i - start) = Some x.
-  Proof. rewrite lookup_map_seq. case_option_guard; naive_solver. Qed.
 *)
+  Lemma lookup_map_seqZ_Some start xs i x :
+    map_seqZ (M:=M A) start xs !! i = Some x ↔ (start ≤ i)%Z ∧ xs !! (Z.to_nat (i - start)) = Some x.
+  Proof. rewrite lookup_map_seqZ. case_option_guard; naive_solver. Qed.
+
   Lemma lookup_map_seqZ_None start xs i :
     map_seqZ (M:=M A) start xs !! i = None ↔ (i < start ∨ start + length xs ≤ i)%Z.
   Proof.
@@ -926,6 +937,43 @@ Section sep_map.
 
 End sep_map.
 End big_op.
+
+Section sep_map.
+Context {PROP : bi}.
+Implicit Types P Q : PROP.
+Implicit Types Ps Qs : list PROP.
+Implicit Types A : Type.
+  Context `{Countable K} {A : Type}.
+  Implicit Types m : gmap K A.
+  Implicit Types Φ Ψ : K → A → PROP.
+  Lemma big_sepM_delete_2 Φ m i:
+    (∀ y, Affine (Φ i y)) →
+    ([∗ map] k↦y ∈ m, Φ k y) -∗
+    ([∗ map] k↦y ∈ delete i m, Φ k y).
+  Proof.
+    iIntros (?) "Hm".
+    destruct (m !! i) as [v|] eqn: Hi.
+    - rewrite big_sepM_delete; [|done]. iDestruct "Hm" as "[_ $]".
+    - by rewrite delete_notin.
+  Qed.
+
+  Lemma big_sepM_union_2 Φ m1 m2 :
+    (∀ i y, Affine (Φ i y)) →
+    ([∗ map] k↦y ∈ m1, Φ k y) -∗
+    ([∗ map] k↦y ∈ m2, Φ k y) -∗
+    ([∗ map] k↦y ∈ m1 ∪ m2, Φ k y).
+  Proof.
+    iIntros (?) "Hm1 Hm2".
+    iInduction m2 as [|k x m2 ?] "IH" using map_ind forall (m1). { by rewrite right_id_L. }
+    rewrite big_sepM_insert //. iDestruct "Hm2" as "[? ?]". iDestruct ("IH" with "Hm1 [$]") as "?".
+    destruct (m1 !! k) as [y|] eqn:?.
+    - have -> : (m1 ∪ <[k:=x]> m2) = m1 ∪ m2. 2: done.
+      apply map_eq => ?. apply option_eq => ?.
+      rewrite !lookup_union_Some_raw lookup_insert_Some. naive_solver.
+    - rewrite -insert_union_r //. rewrite !big_sepM_insert //. 2: { by apply lookup_union_None. }
+      iFrame.
+Qed.
+End sep_map.
 
 Tactic Notation "iDestruct!" :=
   repeat (

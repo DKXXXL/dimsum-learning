@@ -160,7 +160,8 @@ Local Ltac prepare_goal :=
   repeat (destruct_all!; unfold fresh_var in *; simplify_crun_eq);
   learn_state.
 
-Lemma pass_correct ei' Ki ei Ks es es' n h fns1 fns2 v s s' vsi vss `{!ImpExprFill es Ks (subst_map vss (static_expr_to_expr es'))}:
+Lemma pass_correct ei' Ki ei Ks es es' n h fns1 fns2 v s s' vsi vss
+      `{!ImpExprFill es Ks (subst_map vss (static_expr_to_expr es'))}:
   imp_proof_call n fns1 fns2 →
   crun s (pass es') = CResult s' ei (CSuccess v) →
   vss ⊆ vsi →

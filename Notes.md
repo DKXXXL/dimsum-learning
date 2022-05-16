@@ -36,6 +36,16 @@ Optional:
 - [ ] Add fnptrs to imp (should be easy when one has ghost state for f2i)
 - [ ] Add global variables
 - [ ] Additional optimizations
+- [ ] Remove the disjointness condition on asm and imp linking to the
+      condition that the instructions agree on overlapping
+      instructions and replace the choice of the side by an angelic
+      choice. This should work with the following changes:
+      - Allow asm modules to receive all jump events but raise UB if
+        there is no matching instructions.
+      - When fetching a new instruction, do an angelic choice whether
+        to emit an event or whether to fetch the next instruction.
+
+
 
 Done:
 - [X] Make allocation in Imp like RefinedC allocation

@@ -220,12 +220,16 @@ Tactic Notation "iSatStartBupd" :=
   | H : satisfiable _ |- _ => iSatStartBupd H
   end.
 
-Ltac iSatStop :=
+Tactic Notation "iSatStop" ident(H) :=
   lazymatch goal with
   | |- environments.envs_entails _ (iSat_end _) =>
-      iExists _; iSplitL; [iSatAccu|iPureIntro => ?]
+      iExists _; iSplitL; [iSatAccu|iPureIntro => H]
   | |- _ => fail "unknown goal!"
   end.
+Tactic Notation "iSatStop" :=
+  let H := fresh in
+  iSatStop H;
+  move: H => ?.
 
 Ltac iSatClear :=
   repeat match goal with | H : satisfiable _ |- _ => clear H end.

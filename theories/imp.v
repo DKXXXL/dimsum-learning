@@ -7,6 +7,54 @@ Require Import refframe.link.
 Require Import refframe.prepost.
 Require Import refframe.proof_techniques.
 
+
+(*
+
+  f() :=
+   let x := 1;
+   let y := Call ext(x);
+   y
+
+
+  Waiting false
+
+  - (Incoming, Call f []) ->
+
+  ReturnExt false (let x := 1; let y := Call ext (x); y)
+
+  - ->
+
+  ReturnExt false (Call ext (1))
+
+  - (Outgoing, Call ext [1]) ->
+
+  ReturnExt false (let y := Waiting true; y)
+
+  - (Incoming, Call f []) ->
+
+  ReturnExt false (let y := ReturnExt true (let x := 1; let y := Call ext (x); y); y)
+
+  - ->
+
+  ReturnExt false (let y := ReturnExt true (let y := Call ext (1); y); y)
+
+  - (Outgoing, Call ext [1]) ->
+
+  ReturnExt false (let y := ReturnExt true (let y := Waiting true; y); y)
+
+  - (Incoming, Return 2) ->
+
+  ReturnExt false (let y := ReturnExt true (let y := 2; y); y)
+
+  - ->
+
+  ReturnExt false (let y := ReturnExt true 2; y)
+
+  - (Outgoing, Return 2) ->
+
+  ReturnExt false (let y := Waiting true; y)
+*)
+
 Local Open Scope Z_scope.
 
 (** * C-like language language *)
@@ -663,6 +711,7 @@ Inductive head_step : imp_state → option imp_event → (imp_state → Prop) �
   head_step (Imp (ReturnExt b (Val v)) h fns) (Some (Outgoing, EIReturn v h)) (λ σ, σ = (Imp (Waiting b) h fns))
 | RecvCallS fns f fn vs b h h':
   fns !! f = Some fn →
+  (* TODO: reduce to Call f vs*)
   head_step (Imp (Waiting b) h fns) (Some (Incoming, EICall f vs h')) (λ σ,
     σ = (Imp (if bool_decide (length vs = length fn.(fd_args)) then
                 ReturnExt b (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))
@@ -1296,9 +1345,10 @@ Lemma imp_proof fns1 fns2:
          Imp (expr_fill K1 (Val v1')) h1' fns1
              ⪯{imp_module, imp_module, n', b}
          Imp (expr_fill K2 (Val v2')) h2' fns2) →
-         Imp (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs (fd_body fn1))) h fns1
-             ⪯{imp_module, imp_module, n, false}
-         Imp (expr_fill K2 (AllocA fn2.(fd_vars) $ subst_l fn2.(fd_args) vs (fd_body fn2))) h fns2)) →
+
+       Imp (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs (fd_body fn1))) h fns1
+           ⪯{imp_module, imp_module, n, false}
+       Imp (expr_fill K2 (AllocA fn2.(fd_vars) $ subst_l fn2.(fd_args) vs (fd_body fn2))) h fns2)) →
 
   trefines (MS imp_module (initial_imp_state fns1))
            (MS imp_module (initial_imp_state fns2)).
@@ -1632,6 +1682,7 @@ Definition imp_link_prod_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : 
   | MLFNone => e1' = Waiting (bl || br) ∧ el' = Waiting bl ∧ er' = Waiting br
   | _ => False
   end.
+
 
 Lemma imp_link_refines_prod fns1 fns2:
   fns1 ##ₘ fns2 →
