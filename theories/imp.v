@@ -1446,13 +1446,13 @@ Lemma imp_prepost_proof {S} {M : ucmra} R `{!∀ b, PreOrder (R b)} i o fns1 fns
                    pp_to_all (i (Incoming, EIReturn v1'' h1'') s5) (λ '(e''''', s6) r6, ∀ r6',
                      satisfiable (r5 ∗ r6 ∗ r6') →
             ∃ v2'' h2'', e''''' = (Incoming, EIReturn v2'' h2'') ∧
-          Imp (expr_fill K1 (expr_fill K1' (Val v1''))) h1'' fns1
+          Imp (expr_fill K1' (Val v1'')) h1'' fns1
               ⪯{imp_module, mod_prepost i o imp_module, n', true}
-          (SMProg, Imp (expr_fill K2 (expr_fill K2' (Val v2''))) h2'' fns2, (PPInside, s6, r6')))) →
+          (SMProg, Imp (expr_fill K2' (Val v2'')) h2'' fns2, (PPInside, s6, r6')))) →
 
-          Imp (expr_fill K1 (expr_fill K1' (Call f es1))) h1' fns1
+          Imp (expr_fill K1' (Call f es1)) h1' fns1
               ⪯{imp_module, mod_prepost i o imp_module, n', b}
-          (SMProg, Imp (expr_fill K2 (expr_fill K2' (Call f es2))) h2' fns2, (PPInside, s3, r3))) →
+          (SMProg, Imp (expr_fill K2' (Call f es2)) h2' fns2, (PPInside, s3, r3))) →
       (* Return *)
       (∀ n' v1 v2 h1' h2' b s3 r3,
          n' ⊆ n →
@@ -1524,8 +1524,7 @@ Proof.
       move => [??] ? Hsim ??. move: Hsim => /(_ _ ltac:(done))?. destruct_all?. simplify_eq/=.
       tstep_s. right. split!.
       repeat match goal with | H : expr_fill _ _ = expr_fill _ _ |- _ => apply expr_fill_Waiting_inj in H end.
-      destruct_all?; simplify_eq.
-      by rewrite !expr_fill_app.
+      destruct_all?; simplify_eq. done.
     + move => *. tstep_s. tstep_i. rewrite orb_true_r. tstep_s. apply: pp_to_ex_mono; [done|].
       move => [??] ? [?[?[??]]] /=. subst. split!; [done|]. apply: tsim_mono; [|done].
       apply: Hstay; [done|]. split!; [done..|]. naive_solver.

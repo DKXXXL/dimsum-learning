@@ -232,6 +232,12 @@ Lemma tsim_implies_trefines {EV} (mi ms : mod_state EV) :
   trefines mi ms.
 Proof. move => Hsim. constructor => ? /thas_trace_n [??]. by apply: Hsim => /=. Qed.
 
+Lemma tsim_mono_to_true {EV} {mi ms : module EV} σi σs n n' κs:
+  σi ⪯{mi, ms, n', true, κs} σs →
+  tiS n ⊆ n' →
+  σi ⪯{mi, ms, n, false, κs} σs.
+Proof. move => Hsim Hn ???. apply: Hsim. etrans; [|done]. by econs. Qed.
+
 Lemma tsim_mono {EV} {mi ms : module EV} σi σs b n n' κs:
   σi ⪯{mi, ms, n', b, κs} σs →
   n ⊆ n' →
@@ -252,6 +258,26 @@ Definition Plater (P : bool → Prop) : Prop :=
   P true → P false.
 Arguments Plater _ /.
 
+Lemma tsim_remember' {EV} {mi ms : module EV} (Pσ : _ → _ → _ → Prop) σi σs b n :
+  Pσ n σi σs →
+  (* TODO: can the following be removed? *)
+  (∀ n n' σi σs, tiS?b n' ⊆ n → Pσ n σi σs → Pσ n' σi σs) →
+  (* (∀ n', tiS?b n' ⊆ n → Plater (λ b', ∀ σi σs, Pσ n' σi σs → σi ⪯{mi, ms, n', b'} σs)) → *)
+  (∀ n', tiS?b n' ⊆ n →
+         (∀ n'' σi σs, n'' ⊆ n' → (∀ n''', tiS n''' ⊆ n'' → Pσ n''' σi σs) → σi ⪯{mi, ms, n'', true} σs) →
+         (∀ σi σs, Pσ n' σi σs → σi ⪯{mi, ms, n', false} σs)) →
+  σi ⪯{mi, ms, n, b} σs.
+Proof.
+  move => HP HPmono Hsim κs' n' Hn Ht /=.
+  move: HP => /HPmono HP. move: (HP _ ltac:(done)) => {}HP.
+  elim/ti_lt_ind: n' κs' σi σs Hn HP Ht.
+  move => n' IHn κs' σi σs Hn HP Ht.
+  apply: Hsim; [done| |done| |done]. 2: done.
+  move => ???? HP'???? /=. eapply IHn; [by etrans| | |done].
+  - etrans; [|done]. apply tiS_maybe_mono; [done|]. etrans; [|done]. etrans; [|done]. apply ti_le_S.
+  - apply: HP'. by etrans.
+Qed.
+
 Lemma tsim_remember {EV} {mi ms : module EV} (Pσ : _ → _ → _ → Prop) σi σs b n :
   Pσ n σi σs →
   (∀ n n' σi σs, tiS?b n' ⊆ n → Pσ n σi σs → Pσ n' σi σs) →
@@ -261,14 +287,9 @@ Lemma tsim_remember {EV} {mi ms : module EV} (Pσ : _ → _ → _ → Prop) σi 
          (∀ σi σs, Pσ n' σi σs → σi ⪯{mi, ms, n', false} σs)) →
   σi ⪯{mi, ms, n, b} σs.
 Proof.
-  move => HP HPmono Hsim κs' n' Hn Ht /=.
-  move: HP => /HPmono HP. move: (HP _ ltac:(done)) => {}HP.
-  elim/ti_lt_ind: n' κs' σi σs Hn HP Ht.
-  move => n' IHn κs' σi σs Hn HP Ht.
-  apply: Hsim; [done| |done| |done]. 2: done.
-  move => ????????? /=. eapply IHn; [by etrans | | |done].
-  - etrans; [|done]. apply tiS_maybe_mono; [done|]. etrans; [|done]. etrans; [|done]. apply ti_le_S.
-  - apply: HPmono; [|done]. etrans; [|done]. by apply tiS_maybe_mono.
+  move => ? HPmono Hsim. apply: tsim_remember'; [done..|]. move => ?? Hrec ???. apply Hsim; [done| |done].
+  move => ?????. apply: Hrec; [done|]. move => n3 ?. apply: HPmono; [|done]. etrans; [|done].
+  change (tiS n3) with (tiS?true n3). by apply tiS_maybe_mono.
 Qed.
 
 Lemma tsim_remember_all {EV A} {mi ms : module EV} σi σs b n:
