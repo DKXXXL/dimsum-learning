@@ -52,8 +52,7 @@ Fixpoint pass (x: string) (e : lexpr) : M lexpr :=
   | LLetE v e1 e2 =>
     if bool_decide (v = x) then
       '(e1', _) ← cscope (lexpr_op_pass x e1);
-      e2' ← pass x e2;
-      mret $ LLetE v e1' e2'
+      mret $ LLetE v e1' e2
     else
       '(e1', upd) ← cscope (lexpr_op_pass x e1);
       e2' ← pass x e2;
@@ -76,7 +75,7 @@ Definition pass_fn (f : lfndef) : lfndef :=
   let (e, vars) := foldr (λ '(x, n) '(r, vars),
     let res := crun () (pass x r) in
     match res.(c_result) with
-    | CSuccess r' => (r', vars)
+    | CSuccess r' => (LLetE x (LVarVal (VVal (StaticValNum 0))) r', vars)
     | CError _ => (r, (x, n)::vars)
     end
   ) (f.(lfd_body), []) f.(lfd_vars) in
