@@ -73,26 +73,15 @@ int gtyield_with_val(int n) {
 
 /************************************************************************************/
 
-int int_stream_val = 0;
-void int_stream()
-{
-  int_stream_val++;
-  int chk = gtyield_with_val(int_stream_val);
-  assert(chk == -1);
-  int_stream();
+void int_stream_inner(int n) {
+  gtyield_with_val(n);
+  int_stream_inner(n+1);
 }
 
-
-/* int fib_stream_val0 = 1; */
-/* int fib_stream_val1 = 1; */
-/* void fib_stream() */
-/* { */
-/*   gtyield_with_val(fib_stream_val0); */
-/*   int tmp = fib_stream_val0 + fib_stream_val1; */
-/*   fib_stream_val0 = fib_stream_val1; */
-/*   fib_stream_val1 = tmp; */
-/*   fib_stream(); */
-/* } */
+void int_stream()
+{
+  int_stream_inner(0);
+}
 
 int main(void)
 {
