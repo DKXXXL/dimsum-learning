@@ -145,6 +145,19 @@ Lemma i2a_ih_shared_empty:
   i2a_ih_shared ∅ = ∅.
 Proof. by rewrite /i2a_ih_shared omap_empty. Qed.
 
+Lemma i2a_ih_shared_union ih1 ih2:
+  ih1 ##ₘ ih2 →
+  i2a_ih_shared (ih1 ∪ ih2) = i2a_ih_shared ih1 ∪ i2a_ih_shared ih2.
+Proof. apply map_omap_union. Qed.
+
+Lemma i2a_ih_shared_fmap ih:
+  i2a_ih_shared (I2AShared <$> ih) = ih.
+Proof.
+  apply map_eq => ?. apply option_eq => ?.
+  rewrite i2a_ih_shared_Some lookup_fmap fmap_Some.
+  naive_solver.
+Qed.
+
 Lemma i2a_ih_shared_insert i h ih:
   i2a_ih_shared (<[i := I2AShared h]> ih) = <[i := h]> (i2a_ih_shared ih).
 Proof.
@@ -245,14 +258,6 @@ Proof.
   by apply gmap_view_alloc.
 Qed.
 
-Lemma i2a_heap_update' p h h' ih :
-  i2a_heap_auth ih ∗ i2a_heap_constant p h ==∗ i2a_heap_auth (<[p := I2AConstant h']> ih) ∗ i2a_heap_constant p h'.
-Proof.
-  rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -!pair_op_1. apply prod_update; [|done].
-  by apply gmap_view_update.
-Qed.
-
 Lemma i2a_heap_to_shared' p h ih a:
   i2a_heap_auth ih ∗ i2a_heap_constant p h ==∗ i2a_heap_auth (<[p := I2AShared a]> ih) ∗ i2a_heap_shared p a.
 Proof.
@@ -261,6 +266,37 @@ Proof.
   etrans; [by apply gmap_view_update|].
   apply cmra_update_op; [done|].
   apply gmap_view_frag_persist.
+Qed.
+
+Lemma i2a_heap_alloc_shared' ih p a:
+  ih !! p = None →
+  i2a_heap_auth ih ==∗ i2a_heap_auth (<[p := I2AShared a]> ih) ∗ i2a_heap_shared p a.
+Proof.
+  iIntros (?) "?".
+  iMod (i2a_heap_alloc' _ _ ∅ with "[$]"); [done|].
+  iMod (i2a_heap_to_shared' with "[$]"). iModIntro. by rewrite insert_insert.
+Qed.
+
+Lemma i2a_heap_alloc_shared_big' ih ih' :
+  (I2AShared <$> ih') ##ₘ ih →
+  i2a_heap_auth ih ==∗ i2a_heap_auth ((I2AShared <$> ih') ∪ ih) ∗ [∗ map] p↦a∈ih', i2a_heap_shared p a.
+Proof.
+  iIntros (?) "Hh".
+  iInduction ih' as [|p a ih' ?] "IH" using map_ind;
+    rewrite ->?fmap_empty, ?fmap_insert in *; decompose_map_disjoint.
+  { rewrite left_id big_sepM_empty. by iFrame. }
+  iMod ("IH" with "[//] [$]") as "[??]". rewrite -insert_union_l.
+  iMod (i2a_heap_alloc_shared' with "[$]") as "[$ ?]".
+  { apply lookup_union_None. split!. rewrite lookup_fmap. by apply fmap_None. }
+  rewrite big_sepM_insert //. by iFrame.
+Qed.
+
+Lemma i2a_heap_update' p h h' ih :
+  i2a_heap_auth ih ∗ i2a_heap_constant p h ==∗ i2a_heap_auth (<[p := I2AConstant h']> ih) ∗ i2a_heap_constant p h'.
+Proof.
+  rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update.
+  rewrite -!pair_op_1. apply prod_update; [|done].
+  by apply gmap_view_update.
 Qed.
 
 Lemma i2a_heap_free' h p h' :
@@ -287,6 +323,32 @@ Lemma i2a_heap_shared_lookup' h p a :
 Proof.
   apply bi.wand_intro_r. rewrite -uPred.ownM_op.
   etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [/gmap_view_both_valid_L??]. naive_solver.
+Qed.
+
+Lemma i2a_heap_lookup_big' m h :
+  i2a_heap_auth h -∗
+  ([∗ map] p↦b∈m, i2a_heap_constant p b) -∗
+  ⌜m ⊆ i2a_ih_constant h⌝.
+Proof.
+  iIntros "Ha Hm".
+  iInduction m as [|a v m' ?] "IH" using map_ind. { iPureIntro. apply map_empty_subseteq. }
+  rewrite big_sepM_insert //. iDestruct "Hm" as "[Hv Hm]".
+  iDestruct (i2a_heap_lookup' with "[$] [$]") as %?.
+  iDestruct ("IH" with "[$] [$]") as %?. iPureIntro.
+  apply insert_subseteq_l; [|done]. by apply i2a_ih_constant_Some.
+Qed.
+
+Lemma i2a_heap_shared_lookup_big' m h :
+  i2a_heap_auth h -∗
+  ([∗ map] p↦a∈m, i2a_heap_shared p a) -∗
+  ⌜m ⊆ i2a_ih_shared h⌝.
+Proof.
+  iIntros "Ha Hm".
+  iInduction m as [|a v m' ?] "IH" using map_ind. { iPureIntro. apply map_empty_subseteq. }
+  rewrite big_sepM_insert //. iDestruct "Hm" as "[Hv Hm]".
+  iDestruct (i2a_heap_shared_lookup' with "[$] [$]") as %?.
+  iDestruct ("IH" with "[$] [$]") as %?. iPureIntro.
+  apply insert_subseteq_l; [|done]. by apply i2a_ih_shared_Some.
 Qed.
 
 Lemma i2a_heap_shared_ag p a1 a2 :

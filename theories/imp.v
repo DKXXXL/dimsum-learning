@@ -815,6 +815,8 @@ Proof. move => *. invert_all' @m_step; invert_all head_step; naive_solver. Qed.
 
 (** * static expr *)
 Inductive static_val := | StaticValNum (z : Z) | StaticValBool (b : bool).
+Global Instance static_val_eqdec : EqDecision static_val.
+Proof. solve_decision. Qed.
 
 Definition static_val_to_val (v : static_val) : val :=
   match v with
