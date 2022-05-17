@@ -437,6 +437,18 @@ Program Definition initial_heap_state : heap_state :=
   Heap ∅ ∅ _.
 Next Obligation. apply bool_decide_spec. set_solver. Qed.
 
+Definition h_block (h : heap_state) (p : prov) : gmap Z val :=
+  gmap_curry (h_heap h) !!! p.
+
+Lemma h_block_lookup h p z:
+  h_block h p !! z = h_heap h !! (p, z).
+Proof.
+  rewrite /h_block -lookup_gmap_curry /=.
+  apply option_eq => ?.
+  rewrite bind_Some lookup_total_alt. simpl.
+  destruct (gmap_curry (h_heap h) !! p); naive_solver.
+Qed.
+
 Definition heap_alive (h : heap_state) (l : loc) : Prop :=
   is_Some (h.(h_heap) !! l).
 
@@ -607,8 +619,8 @@ Proof.
 Qed.
 
 (** *** heap_preserved *)
-Definition heap_preserved (m : gmap prov (gmap loc val)) (h : heap_state) :=
-  ∀ l h', m !! l.1 = Some h' → h.(h_heap) !! l = h' !! l.
+Definition heap_preserved (m : gmap prov (gmap Z val)) (h : heap_state) :=
+  ∀ l h', m !! l.1 = Some h' → h.(h_heap) !! l = h' !! l.2.
 
 Lemma heap_preserved_mono m1 m2 h:
   heap_preserved m1 h →
@@ -620,7 +632,7 @@ Lemma heap_preserved_lookup_r m h h' l v:
   h_heap h !! l = v →
   heap_preserved m h →
   m !! l.1 = Some h' →
-  h' !! l = v.
+  h' !! l.2 = v.
 Proof. move => Hl Hp ?. by rewrite -Hp. Qed.
 
 Lemma heap_preserved_update l v h m:
@@ -651,10 +663,11 @@ Qed.
 
 Lemma heap_preserved_insert_const p m h:
   heap_preserved (delete p m) h →
-  heap_preserved (<[p := h_heap h]> m) h.
+  heap_preserved (<[p := h_block h p]> m) h.
 Proof.
-  move => Hp l f /= /lookup_insert_Some[[??]|[??]]; simplify_eq. 1: by destruct l.
-  apply: Hp => /=. rewrite lookup_delete_Some. done.
+  move => Hp l f /= /lookup_insert_Some[[??]|[??]]; simplify_eq.
+  - rewrite h_block_lookup. by destruct l.
+  - apply: Hp => /=. rewrite lookup_delete_Some. done.
 Qed.
 
 (** ** state *)

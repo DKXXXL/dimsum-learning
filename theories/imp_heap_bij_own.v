@@ -19,9 +19,9 @@ Set Default Proof Using "Type".
 
 (** * camera definition *)
 Inductive heap_bij_elem :=
-| HBShared (p : prov) | HBConstant (h : gmap loc val).
+| HBShared (p : prov) | HBConstant (h : gmap Z val).
 Canonical Structure heap_bij_elemO := leibnizO heap_bij_elem.
-Inductive heap_bij_priv_elem := HBIConstant (h : gmap loc val).
+Inductive heap_bij_priv_elem := HBIConstant (h : gmap Z val).
 Canonical Structure heap_bij_priv_elemO := leibnizO heap_bij_priv_elem.
 
 Definition heap_bijUR : ucmra :=
@@ -46,7 +46,7 @@ IMP_HEAP_BIJ [ m ]     : ---> PRE e_in         POST e_out ------->
 
 Record heap_bij := HeapBij {
   hb_bij : gmap prov heap_bij_elem;
-  hb_priv_i : gmap prov (gmap loc val);
+  hb_priv_i : gmap prov (gmap Z val);
   hb_disj ps pi:
    hb_bij !! ps = Some (HBShared pi) →
    hb_priv_i !! pi = None;
@@ -107,7 +107,7 @@ Proof.
 Qed.
 
 (** hb_priv_s *)
-Definition hb_priv_s (bij : heap_bij) : gmap prov (gmap loc val) :=
+Definition hb_priv_s (bij : heap_bij) : gmap prov (gmap Z val) :=
   omap (λ v, if v is HBConstant h then Some h else None) (hb_bij bij).
 
 Lemma hb_priv_s_lookup_None bij ps :
@@ -148,7 +148,7 @@ Next Obligation.
   by apply: hb_iff.
 Qed.
 
-Program Definition heap_bij_update_const_s (p : prov) (h : gmap loc val) (bij : heap_bij) :=
+Program Definition heap_bij_update_const_s (p : prov) (h : gmap Z val) (bij : heap_bij) :=
   HeapBij (<[p := HBConstant h]> (hb_bij bij)) (hb_priv_i bij) _ _.
 Next Obligation.
   move => ?????.
@@ -159,7 +159,7 @@ Next Obligation.
   rewrite !lookup_insert_Some => ??. destruct_all?; simplify_eq/= => //. by apply: hb_iff.
 Qed.
 
-Program Definition heap_bij_update_const_i (p : prov) (h : gmap loc val) (bij : heap_bij)
+Program Definition heap_bij_update_const_i (p : prov) (h : gmap Z val) (bij : heap_bij)
   (H : p ∉ hb_shared_i bij) :=
   HeapBij (hb_bij bij) (<[p := h]> $ hb_priv_i bij) _ _.
 Next Obligation.
@@ -247,10 +247,10 @@ Definition heap_bij_auth (bij : heap_bij) : uPred heap_bijUR :=
 Definition heap_bij_shared (p1 p2 : prov) : uPred (heap_bijUR) :=
   uPred_ownM (heap_bijUR_s_inj $ gmap_view_frag p2 DfracDiscarded (HBShared p1)).
 
-Definition heap_bij_const_s (p : prov) (h : gmap loc val) : uPred (heap_bijUR) :=
+Definition heap_bij_const_s (p : prov) (h : gmap Z val) : uPred (heap_bijUR) :=
   uPred_ownM (heap_bijUR_s_inj $ gmap_view_frag p (DfracOwn 1) (HBConstant h)).
 
-Definition heap_bij_const_i (p : prov) (h : gmap loc val) : uPred (heap_bijUR) :=
+Definition heap_bij_const_i (p : prov) (h : gmap Z val) : uPred (heap_bijUR) :=
   uPred_ownM (heap_bijUR_i_inj $ gmap_view_frag p (DfracOwn 1) (HBIConstant h)).
 
 Lemma heap_bij_alloc_shared bij p1 p2 H:
@@ -684,7 +684,7 @@ Qed.
 Lemma heap_bij_inv_lookup_s l hi hs hs':
   heap_bij_inv hi hs -∗
   heap_bij_const_s l.1 hs' -∗
-  ⌜h_heap hs !! l = hs' !! l⌝.
+  ⌜h_heap hs !! l = hs' !! l.2⌝.
 Proof.
   iIntros "[% [% [% [%Hs [% [? [Ha Hbij]]]]]]] Hl".
   iDestruct (heap_bij_const_s_lookup with "[$] [$]") as %?.
@@ -708,7 +708,7 @@ Qed.
 Lemma heap_bij_inv_update_s l v hi hs hs' :
   heap_bij_inv hi hs -∗
   heap_bij_const_s l.1 hs' ==∗
-  heap_bij_inv hi (heap_update hs l v) ∗ heap_bij_const_s l.1 (h_heap (heap_update hs l v)).
+  heap_bij_inv hi (heap_update hs l v) ∗ heap_bij_const_s l.1 (h_block (heap_update hs l v) l.1).
 Proof.
   iIntros "[% [% [% [% [% [? [Ha Hbij]]]]]]] Hcont".
   iDestruct (heap_bij_const_s_lookup with "[$] [$]") as %?.
@@ -729,7 +729,7 @@ Qed.
 Lemma heap_bij_inv_alloc_s hi hs ls n:
   heap_is_fresh hs ls →
   heap_bij_inv hi hs ==∗
-  heap_bij_inv hi (heap_alloc hs ls n) ∗ heap_bij_const_s ls.1 (h_heap (heap_alloc hs ls n)).
+  heap_bij_inv hi (heap_alloc hs ls n) ∗ heap_bij_const_s ls.1 (h_block (heap_alloc hs ls n) ls.1).
 Proof.
   iIntros ([Hnotin ?])  "[% [%Hsub [% [% [% [? [Ha Hbij]]]]]]]".
   iMod (heap_bij_alloc_const_s with "[$]") as "[? $]"; [set_solver|]. iModIntro.
@@ -1322,7 +1322,7 @@ Proof.
   iSatStop.
   tstep_i. tstep_i. split!.
   tstep_s.
-  tstep_s => ???. simplify_eq. rewrite Hl => ?. simplify_map_eq.
+  tstep_s => ???. simplify_eq. rewrite Hl h_block_lookup => ?. simplify_map_eq.
   tstep_s => ?[??]. simplify_eq.
   apply Hret; [done|].
   iSatMonoBupd.

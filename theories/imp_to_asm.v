@@ -125,12 +125,12 @@ Definition i2a_regs_ret (rs rsold : gmap string Z) (av : Z) : Prop :=
 
 (** ** mapping of provenances *)
 Inductive imp_to_asm_elem :=
-| I2AShared (a : Z) | I2AConstant (h : gmap loc val).
+| I2AShared (a : Z) | I2AConstant (h : gmap Z val).
 
 Definition i2a_ih_shared (ih : gmap prov imp_to_asm_elem) : gmap prov Z :=
   omap (λ k, if k is I2AShared a then Some a else None) ih.
 
-Definition i2a_ih_constant (ih : gmap prov imp_to_asm_elem) : gmap prov (gmap loc val) :=
+Definition i2a_ih_constant (ih : gmap prov imp_to_asm_elem) : gmap prov (gmap Z val) :=
   omap (λ k, if k is I2AConstant b then Some b else None) ih.
 
 Lemma i2a_ih_shared_Some h p a :
@@ -234,7 +234,7 @@ Definition i2a_heap_auth (h : gmap prov imp_to_asm_elemO) : uPred imp_to_asmUR :
   uPred_ownM (i2a_heap_inj (gmap_view_auth (DfracOwn 1) h)).
 Definition i2a_heap_shared (p : prov) (a : Z) : uPred imp_to_asmUR :=
   uPred_ownM (i2a_heap_inj (gmap_view_frag p DfracDiscarded (I2AShared a))).
-Definition i2a_heap_constant (p : prov) (b : gmap loc val) : uPred imp_to_asmUR :=
+Definition i2a_heap_constant (p : prov) (b : gmap Z val) : uPred imp_to_asmUR :=
   uPred_ownM (i2a_heap_inj (gmap_view_frag p (DfracOwn 1) (I2AConstant b))).
 
 Definition i2a_mem_auth (amem : gmap Z (option Z)) : uPred imp_to_asmUR :=
@@ -660,7 +660,7 @@ Qed.
 Lemma i2a_heap_alloc h l n:
   heap_is_fresh h l →
   i2a_heap_inv h ==∗
-  i2a_heap_inv (heap_alloc h l n) ∗ i2a_heap_constant l.1 (h_heap (heap_alloc h l n)).
+  i2a_heap_inv (heap_alloc h l n) ∗ i2a_heap_constant l.1 (h_block (heap_alloc h l n) l.1).
 Proof.
   iIntros ([Hl ?]).
   iDestruct 1 as (? Hdom Hc) "[Hsh [Hs Hauth]]".
@@ -687,7 +687,7 @@ Qed.
 Lemma i2a_heap_update h l v b:
   i2a_heap_inv h -∗
   i2a_heap_constant l.1 b ==∗
-  i2a_heap_inv (heap_update h l v) ∗ i2a_heap_constant l.1 (h_heap (heap_update h l v)).
+  i2a_heap_inv (heap_update h l v) ∗ i2a_heap_constant l.1 (h_block (heap_update h l v) l.1).
 Proof.
   iDestruct 1 as (? Hdom Hc) "[Hsh [Hs Hauth]]". iIntros "Hc".
   iDestruct (i2a_heap_lookup' with "[$] [$]") as %?.
