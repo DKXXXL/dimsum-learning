@@ -606,6 +606,57 @@ Proof.
   move => ?? /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap[?[??]]. simplify_eq/=. by apply.
 Qed.
 
+(** *** heap_preserved *)
+Definition heap_preserved (m : gmap prov (gmap loc val)) (h : heap_state) :=
+  ∀ l h', m !! l.1 = Some h' → h.(h_heap) !! l = h' !! l.
+
+Lemma heap_preserved_mono m1 m2 h:
+  heap_preserved m1 h →
+  m2 ⊆ m1 →
+  heap_preserved m2 h.
+Proof. unfold heap_preserved => Hp Hsub ???. apply: Hp. by eapply map_subseteq_spec. Qed.
+
+Lemma heap_preserved_lookup_r m h h' l v:
+  h_heap h !! l = v →
+  heap_preserved m h →
+  m !! l.1 = Some h' →
+  h' !! l = v.
+Proof. move => Hl Hp ?. by rewrite -Hp. Qed.
+
+Lemma heap_preserved_update l v h m:
+  heap_preserved m h →
+  m !! l.1 = None →
+  heap_preserved m (heap_update h l v).
+Proof.
+  move => Hp ???? /=. rewrite lookup_alter_ne; [by eapply Hp|naive_solver].
+Qed.
+
+Lemma heap_preserved_alloc l n h m:
+  heap_preserved m h →
+  m !! l.1 = None →
+  heap_preserved m (heap_alloc h l n).
+Proof.
+  move => Hp ? l' f /= ?. rewrite lookup_union_r; [by apply Hp|].
+  apply not_elem_of_list_to_map_1 => /elem_of_list_fmap[[[??]?] [?/elem_of_list_fmap[?[??]]]]; simplify_eq/=.
+Qed.
+
+Lemma heap_preserved_free l h m:
+  heap_preserved m h →
+  m !! l.1 = None →
+  heap_preserved m (heap_free h l).
+Proof.
+  move => Hp ? l' f ? /=. rewrite map_filter_lookup. etrans; [|by eapply Hp].
+  destruct (h_heap h !! l') => //=. case_option_guard => //. destruct l, l'; naive_solver.
+Qed.
+
+Lemma heap_preserved_insert_const p m h:
+  heap_preserved (delete p m) h →
+  heap_preserved (<[p := h_heap h]> m) h.
+Proof.
+  move => Hp l f /= /lookup_insert_Some[[??]|[??]]; simplify_eq. 1: by destruct l.
+  apply: Hp => /=. rewrite lookup_delete_Some. done.
+Qed.
+
 (** ** state *)
 Record imp_state := Imp {
   st_expr : expr;

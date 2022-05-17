@@ -209,6 +209,20 @@ Proof.
   rewrite !lookup_difference_Some lookup_union_None.
   naive_solver.
 Qed.
+
+Lemma map_difference_id {A} (m1 m2 : M A) :
+  m2 ⊆ m1 →
+  m1 ∖ (m1 ∖ m2) = m2.
+Proof.
+  move => Hm.
+  apply map_eq. intros i. apply option_eq. intros v.
+  rewrite !lookup_difference_Some lookup_difference_None.
+  split.
+  - move => [Hm1 [?|[v' Hm2]]]; simplify_eq.
+    have ? : m1 !! i = Some v' by apply: lookup_weaken.
+    naive_solver.
+  - move => ?. split; [|naive_solver]. by apply: lookup_weaken.
+Qed.
 End theorems.
 
 Section map.

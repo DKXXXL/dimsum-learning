@@ -158,6 +158,14 @@ Proof.
   naive_solver.
 Qed.
 
+Lemma i2a_ih_shared_fmap_l ih:
+  I2AShared <$> i2a_ih_shared ih ⊆ ih.
+Proof.
+  apply map_subseteq_spec => ??.
+  rewrite lookup_fmap fmap_Some. move => [? [/i2a_ih_shared_Some??]].
+  naive_solver.
+Qed.
+
 Lemma i2a_ih_shared_insert i h ih:
   i2a_ih_shared (<[i := I2AShared h]> ih) = <[i := h]> (i2a_ih_shared ih).
 Proof.
@@ -187,6 +195,29 @@ Proof.
   rewrite /i2a_ih_constant lookup_omap_Some. split.
   - move => [?[??]]. case_match; naive_solver.
   - move => ?. split!.
+Qed.
+
+Lemma i2a_ih_constant_delete i ih:
+  i2a_ih_constant (delete i ih) = delete i (i2a_ih_constant ih).
+Proof.
+  apply map_eq => ?. apply option_eq => ?.
+  by rewrite !i2a_ih_constant_Some !lookup_delete_Some !i2a_ih_constant_Some.
+Qed.
+
+Lemma i2a_ih_constant_insert i h ih:
+  i2a_ih_constant (<[i := I2AConstant h]> ih) = <[i := h]> (i2a_ih_constant ih).
+Proof.
+  apply map_eq => ?. apply option_eq => ?. rewrite !i2a_ih_constant_Some.
+  rewrite !lookup_insert_Some !i2a_ih_constant_Some. naive_solver.
+Qed.
+
+Lemma i2a_ih_constant_insert_shared i a ih:
+  (∀ x, ih !! i ≠ Some (I2AConstant x)) →
+  i2a_ih_constant (<[i := I2AShared a]> ih) = i2a_ih_constant ih.
+Proof.
+  move => ?.
+  apply map_eq => ?. apply option_eq => ?. rewrite !i2a_ih_constant_Some.
+  rewrite lookup_insert_Some. naive_solver.
 Qed.
 
 
@@ -446,10 +477,6 @@ Definition i2a_mem_inv (sp : Z) (gp : Z) (mem : gmap Z (option Z)) : uPred imp_t
   i2a_guard_page gp ∗ i2a_mem_uninit (gp + GUARD_PAGE_SIZE) (sp - (gp + GUARD_PAGE_SIZE)) ∗
   i2a_mem_auth mem.
 
-Definition i2a_heap_agree (h : heap_state) (ih : gmap prov imp_to_asm_elem) : Prop :=
-  dom _ ih ⊆ h_provs h ∧
-  ∀ l b, ih !! l.1 = Some (I2AConstant b) → h_heap h !! l = b !! l.
-
 Definition i2a_heap_shared_agree (h : gmap loc val) (ih : gmap prov imp_to_asm_elem) : uPred imp_to_asmUR :=
   [∗ map] l↦v∈h,
     if ih !! l.1 is Some (I2AShared a) then
@@ -458,7 +485,8 @@ Definition i2a_heap_shared_agree (h : gmap loc val) (ih : gmap prov imp_to_asm_e
       True.
 
 Definition i2a_heap_inv (h : heap_state) : uPred imp_to_asmUR :=
-  ∃ ih, ⌜i2a_heap_agree h ih⌝ ∗ ([∗ map] p↦a ∈ i2a_ih_shared ih, i2a_heap_shared p a) ∗
+  ∃ ih, ⌜dom _ ih ⊆ h_provs h⌝ ∗ ⌜heap_preserved (i2a_ih_constant ih) h⌝ ∗
+         ([∗ map] p↦a ∈ i2a_ih_shared ih, i2a_heap_shared p a) ∗
          i2a_heap_shared_agree (h_heap h) ih ∗ i2a_heap_auth ih.
 
 Definition i2a_args (o : nat) (vs : list val) (rs : gmap string Z) : uPred imp_to_asmUR :=
@@ -635,18 +663,17 @@ Lemma i2a_heap_alloc h l n:
   i2a_heap_inv (heap_alloc h l n) ∗ i2a_heap_constant l.1 (h_heap (heap_alloc h l n)).
 Proof.
   iIntros ([Hl ?]).
-  iDestruct 1 as (? [Hdom Hc]) "[Hsh [Hs Hauth]]".
+  iDestruct 1 as (? Hdom Hc) "[Hsh [Hs Hauth]]".
   iMod (i2a_heap_alloc' with "Hauth") as "[? $]".
   { apply not_elem_of_dom. by apply: not_elem_of_weaken; [|done]. }
   iModIntro. iExists _. iFrame. rewrite i2a_ih_shared_insert_const.
   2: { move => ?. contradict Hl. apply Hdom. by apply elem_of_dom. }
-  iFrame. iSplit.
-  - iPureIntro. split.
-    + rewrite dom_insert_L heap_alloc_provs. set_solver.
-    + move => ?? /lookup_insert_Some[[??]|[??]]; simplify_eq/= => //.
-      rewrite lookup_union_r; [naive_solver|].
-      apply not_elem_of_list_to_map. apply/elem_of_list_fmap => -[[[??]?][? /elem_of_list_fmap[?[??]]]].
-      simplify_eq.
+  iFrame. repeat iSplit.
+  - iPureIntro. rewrite dom_insert_L heap_alloc_provs. set_solver.
+  - iPureIntro. rewrite i2a_ih_constant_insert.
+    eapply heap_preserved_insert_const.
+    eapply heap_preserved_alloc. 2: apply lookup_delete.
+    eapply heap_preserved_mono; [done| apply delete_subseteq].
   - rewrite /i2a_heap_shared_agree big_sepM_union. 2: {
       apply map_disjoint_list_to_map_l, Forall_forall => -[[??]?] /elem_of_list_fmap[?[??]]. simplify_eq/=.
       apply eq_None_not_Some => /heap_wf. done.
@@ -662,16 +689,17 @@ Lemma i2a_heap_update h l v b:
   i2a_heap_constant l.1 b ==∗
   i2a_heap_inv (heap_update h l v) ∗ i2a_heap_constant l.1 (h_heap (heap_update h l v)).
 Proof.
-  iDestruct 1 as (? [Hdom Hc]) "[Hsh [Hs Hauth]]". iIntros "Hc".
+  iDestruct 1 as (? Hdom Hc) "[Hsh [Hs Hauth]]". iIntros "Hc".
   iDestruct (i2a_heap_lookup' with "[$] [$]") as %?.
   iMod (i2a_heap_update' with "[$Hauth $Hc]") as "[? $]".
   iModIntro. iExists _. iFrame. rewrite i2a_ih_shared_insert_const.
-  2: { move => ??. simplify_map_eq. } iFrame. iSplit.
-  - iPureIntro. split.
-    + rewrite dom_insert_L heap_update_provs. etrans; [|done]. apply union_least; [|done].
-      apply singleton_subseteq_l. by apply elem_of_dom.
-    + move => ?? /lookup_insert_Some[[??]|[??]]; simplify_eq/= => //.
-      rewrite lookup_alter_ne; naive_solver.
+  2: { move => ??. simplify_map_eq. } iFrame. repeat iSplit.
+  - iPureIntro. rewrite dom_insert_L heap_update_provs. etrans; [|done]. apply union_least; [|done].
+    apply singleton_subseteq_l. by apply elem_of_dom.
+  - iPureIntro. rewrite i2a_ih_constant_insert.
+    eapply heap_preserved_insert_const.
+    eapply heap_preserved_update. 2: apply lookup_delete.
+    eapply heap_preserved_mono; [done| apply delete_subseteq].
   - rewrite /i2a_heap_shared_agree /= big_sepM_alter.
     iApply (big_sepM_impl with "Hs"). iIntros "!>" (k ??) "?". case_bool_decide; subst; simplify_map_eq => //.
     by destruct (decide (k.1 = l.1)) as [->|]; simplify_map_eq.
@@ -682,14 +710,14 @@ Lemma i2a_heap_free h l b:
   i2a_heap_constant l.1 b ==∗
   i2a_heap_inv (heap_free h l).
 Proof.
-  iDestruct 1 as (? [Hdom Hc]) "[Hsh [Hs Hauth]]". iIntros "Hc".
+  iDestruct 1 as (? Hdom Hc) "[Hsh [Hs Hauth]]". iIntros "Hc".
   iDestruct (i2a_heap_lookup' with "[$] [$]") as %?.
   iMod (i2a_heap_free' with "[$Hauth $Hc]") as "?".
-  iModIntro. iExists _. iFrame. iSplit!.
-  - split.
-    + rewrite dom_delete_L heap_free_provs. set_solver.
-    + move => ?? /lookup_delete_Some[??] /=.
-      rewrite map_filter_lookup_true; naive_solver.
+  iModIntro. iExists _. iFrame. repeat iSplit.
+  - iPureIntro. rewrite dom_delete_L heap_free_provs. set_solver.
+  - iPureIntro. rewrite i2a_ih_constant_delete.
+    eapply heap_preserved_free. 2: apply lookup_delete.
+    eapply heap_preserved_mono; [done| apply delete_subseteq].
   - rewrite i2a_ih_shared_delete. by iApply big_sepM_delete_2.
   - rewrite /i2a_heap_shared_agree big_sepM_filter.
     iApply (big_sepM_impl with "Hs"). iIntros "!>" (???) "?". iIntros (?).
@@ -704,7 +732,7 @@ Lemma i2a_heap_lookup_shared h l v z mem ss gp:
   ∃ av, ⌜mem !! (z + l.2)%Z = Some (Some av)⌝ ∗ i2a_val_rel v av.
 Proof.
   iIntros (?).
-  iDestruct 1 as (? Hag) "[Hsh [Hs Hauth]]".
+  iDestruct 1 as (? ? Hag) "[Hsh [Hs Hauth]]".
   iIntros "Hmem Hl".
   iDestruct (i2a_heap_shared_lookup' with "[$] [$]") as %?.
   iDestruct (big_sepM_lookup with "Hs") as "Hv"; [done|]. simplify_map_eq.
@@ -722,12 +750,12 @@ Proof.
   iIntros (Hf) "Hinv Ha".
   iMod (i2a_heap_alloc with "Hinv") as "[Hinv Hl]"; [done|].
   destruct Hf as [Hne ?].
-  iDestruct "Hinv" as (?[??]) "[Hsh [Hag Hauth]]".
+  iDestruct "Hinv" as (???) "[Hsh [Hag Hauth]]".
   iMod (i2a_heap_to_shared' with "[$]") as "[? #Hs1]". iModIntro. iFrame "Hs1".
   iExists _. iFrame. iSplit!.
-  - split.
-    + rewrite ->heap_alloc_provs in *. rewrite dom_insert_L. set_solver.
-    + move => ?? /lookup_insert_Some. naive_solver.
+  - rewrite ->heap_alloc_provs in *. rewrite dom_insert_L. set_solver.
+  - move => ?? /i2a_ih_constant_Some/lookup_insert_Some[[??]//|[??]].
+    apply H0. by apply i2a_ih_constant_Some.
   - rewrite i2a_ih_shared_insert. by iApply big_sepM_insert_2.
   - rewrite /i2a_heap_shared_agree /= !big_sepM_union.
     2,3: apply map_disjoint_list_to_map_l, Forall_forall => ? /elem_of_list_fmap[?[??]];
@@ -753,8 +781,8 @@ Lemma i2a_heap_free_shared h l a n:
   i2a_mem_uninit a n ∗ i2a_heap_inv (heap_free h l).
 Proof.
   iIntros (Hl2 Hr).
-  iDestruct 1 as (? [Hdom Hc]) "[Hsh [Hs Hauth]]". iIntros "Hl".
-  iDestruct (i2a_heap_shared_lookup' with "[$] [$]") as %?.
+  iDestruct 1 as (? Hdom Hc) "[Hsh [Hs Hauth]]". iIntros "Hl".
+  iDestruct (i2a_heap_shared_lookup' with "[$] [$]") as %Hl.
   iModIntro.
   rewrite /i2a_heap_shared_agree -(map_filter_union_complement (λ '(l', _), l'.1 ≠ l.1) (h_heap h)).
   rewrite big_sepM_union; [|apply map_disjoint_filter_complement].
@@ -767,9 +795,9 @@ Proof.
     simplify_eq/=. rewrite map_filter_lookup_true; [|naive_solver].
     case_match. 2: { exfalso. eapply not_eq_None_Some; [|done]. apply Hr; [done|]. simpl. lia. } simplify_map_eq.
     iDestruct!. iSplit!; [done|]. by rewrite Nat.sub_0_r Hl2.
-  - iExists _. iFrame. iPureIntro. split; [done|]. move => ?? /= Hl.
-    rewrite map_filter_lookup_true; [naive_solver|]. move => ?? Heq. rewrite Heq in Hl.
-    simplify_map_eq.
+  - iExists _. iFrame. iPureIntro. split; [done|].
+    apply heap_preserved_free; [done|].
+    apply eq_None_ne_Some_2 => ?. rewrite i2a_ih_constant_Some. by rewrite Hl.
 Qed.
 
 Lemma i2a_heap_free_list_shared h ls h' adrs:
@@ -796,15 +824,16 @@ Lemma i2a_heap_update_shared h l v z mem ss av gp:
   i2a_heap_inv (heap_update h l v) ∗ i2a_mem_inv ss gp (<[z + l.2 := Some av]>mem).
 Proof.
   iIntros ([??]).
-  iDestruct 1 as (? [Hdom Hag]) "[Hsh [Hs Hauth]]".
+  iDestruct 1 as (? Hdom Hag) "[Hsh [Hs Hauth]]".
   iIntros "Hmem Hl Hv".
-  iDestruct (i2a_heap_shared_lookup' with "[$] [$]") as %?.
+  iDestruct (i2a_heap_shared_lookup' with "[$] [$]") as %Hl.
   rewrite /i2a_heap_shared_agree (big_sepM_delete _ (h_heap h)); [|done]. simplify_map_eq.
   iDestruct "Hs" as "[[% [??]] Hs]".
   iMod (i2a_mem_update with "[$] [$]") as "[$ ?]". iModIntro.
-  iExists _. iFrame. iSplit; [iPureIntro|].
-  - split; [by rewrite heap_update_provs|]. move => * /=. rewrite lookup_alter_ne; [naive_solver|].
-    move => ?. simplify_map_eq'.
+  iExists _. iFrame. repeat iSplit; [iPureIntro..|].
+  - by rewrite heap_update_provs.
+  - apply heap_preserved_update; [done|].
+    apply eq_None_ne_Some_2 => ?. rewrite i2a_ih_constant_Some. by rewrite Hl.
   - rewrite /i2a_heap_shared_agree/= (big_sepM_delete _ (alter (λ _, v) _ _) l); [|by simplify_map_eq].
     simplify_map_eq. rewrite delete_alter. iFrame. iExists _. iFrame.
 Qed.
@@ -813,7 +842,7 @@ Lemma i2a_heap_inv_add_provs h ps :
   i2a_heap_inv h -∗
   i2a_heap_inv (heap_add_provs h ps).
 Proof.
-  iDestruct 1 as (?[??]) "[??]". iExists _. iFrame.
+  iDestruct 1 as (???) "[??]". iExists _. iFrame.
   iPureIntro. split; [|done]. rewrite heap_add_provs_provs.
   set_solver.
 Qed.
