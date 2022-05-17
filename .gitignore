@@ -19,3 +19,5 @@ Makefile.coq.conf
 html/
 builddep/
 _opam
+*.o
+theories/coro/gttest
