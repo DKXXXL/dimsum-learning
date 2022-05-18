@@ -141,6 +141,10 @@ Proof.
   - move => ?. split!.
 Qed.
 
+Lemma i2a_ih_shared_None h p :
+  i2a_ih_shared h !! p = None ↔ ¬ ∃ a, h !! p = Some (I2AShared a).
+Proof. rewrite eq_None_not_Some /is_Some. setoid_rewrite i2a_ih_shared_Some. naive_solver. Qed.
+
 Lemma i2a_ih_shared_empty:
   i2a_ih_shared ∅ = ∅.
 Proof. by rewrite /i2a_ih_shared omap_empty. Qed.
@@ -196,6 +200,10 @@ Proof.
   - move => [?[??]]. case_match; naive_solver.
   - move => ?. split!.
 Qed.
+
+Lemma i2a_ih_constant_None h p :
+  i2a_ih_constant h !! p = None ↔ ¬ ∃ a, h !! p = Some (I2AConstant a).
+Proof. rewrite eq_None_not_Some /is_Some. setoid_rewrite i2a_ih_constant_Some. naive_solver. Qed.
 
 Lemma i2a_ih_constant_delete i ih:
   i2a_ih_constant (delete i ih) = delete i (i2a_ih_constant ih).
@@ -289,6 +297,20 @@ Proof.
   by apply gmap_view_alloc.
 Qed.
 
+Lemma i2a_heap_alloc_big' ih ih' :
+  (I2AConstant <$> ih') ##ₘ ih →
+  i2a_heap_auth ih ==∗ i2a_heap_auth ((I2AConstant <$> ih') ∪ ih) ∗ [∗ map] p↦a∈ih', i2a_heap_constant p a.
+Proof.
+  iIntros (?) "Hh".
+  iInduction ih' as [|p a ih' ?] "IH" using map_ind;
+    rewrite ->?fmap_empty, ?fmap_insert in *; decompose_map_disjoint.
+  { rewrite left_id big_sepM_empty. by iFrame. }
+  iMod ("IH" with "[//] [$]") as "[??]". rewrite -insert_union_l.
+  iMod (i2a_heap_alloc' with "[$]") as "[$ ?]".
+  { apply lookup_union_None. split!. rewrite lookup_fmap. by apply fmap_None. }
+  rewrite big_sepM_insert //. by iFrame.
+Qed.
+
 Lemma i2a_heap_to_shared' p h ih a:
   i2a_heap_auth ih ∗ i2a_heap_constant p h ==∗ i2a_heap_auth (<[p := I2AShared a]> ih) ∗ i2a_heap_shared p a.
 Proof.
@@ -336,6 +358,18 @@ Proof.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
   rewrite -pair_op_1. apply prod_update; [|done].
   by apply gmap_view_delete.
+Qed.
+
+Lemma i2a_heap_free_big' h m :
+  i2a_heap_auth h -∗
+  ([∗ map] p↦a ∈m, i2a_heap_constant p a) ==∗
+  i2a_heap_auth (h ∖ (I2AConstant <$> m)).
+Proof.
+  iIntros "Hauth Hm".
+  iInduction m as [|a v m' ?] "IH" using map_ind. { iModIntro. by rewrite fmap_empty right_id_L. }
+  rewrite big_sepM_insert //. iDestruct "Hm" as "[? Hm]".
+  iMod ("IH" with "[$] [$]"). iMod (i2a_heap_free' with "[$]"). iModIntro.
+  rewrite fmap_insert. by rewrite -delete_difference.
 Qed.
 
 Lemma i2a_heap_lookup' h p h' :
@@ -428,6 +462,16 @@ Proof.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
   rewrite -pair_op_2. apply prod_update; [done|].
   by apply gmap_view_delete.
+Qed.
+
+Lemma i2a_mem_delete_big' m amem :
+  i2a_mem_auth amem -∗ i2a_mem_map m ==∗ i2a_mem_auth (amem ∖ m).
+Proof.
+  iIntros "Hauth Hm".
+  iInduction m as [|a v m' ?] "IH" using map_ind. { iModIntro. by rewrite right_id_L. }
+  rewrite /i2a_mem_map big_sepM_insert //. iDestruct "Hm" as "[? Hm]".
+  iMod ("IH" with "[$] [$]"). iMod (i2a_mem_delete' with "[$]"). iModIntro.
+  by rewrite -delete_difference.
 Qed.
 
 Lemma i2a_mem_lookup' a v amem :
