@@ -18,19 +18,13 @@ struct gt {
 
 struct gt gttbl[2];
 char stack[StackSize];
-int gtcur;
+int gtcur = 0;
 
 void gtinit(void);
 void gtswtch(struct gt *old, struct gt *new);
 bool gtyield(void);
 /* static void gtstop(void); */
 int gtgo(void (*f)(void));
-
-void
-gtinit(void)
-{
-	gtcur = 0;
-}
 
 bool
 gtyield(void)
@@ -85,7 +79,6 @@ void int_stream()
 
 int main(void)
 {
-  gtinit();
   gtgo(int_stream);
   /* gtgo(fib_stream); */
   for(int i=0; i<5; i++) {
@@ -103,7 +96,6 @@ void f() {
 }
 
 int main() {
-  gtinit();
   gtgo(f);
   while(true) {
     printf("B\n");
