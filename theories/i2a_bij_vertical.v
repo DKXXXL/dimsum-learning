@@ -891,14 +891,8 @@ Proof.
       iSatStart HP'. iIntros!. iDestruct (i2a_mem_lookup_big' with "[$] [$]") as %?. iSatStop HP'.
 
       iSatStartBupd HPb. iIntros!.
-      rewrite i2a_combine_priv_diff //.
+      rewrite i2a_combine_priv_diff // (map_difference_difference_add (hb_priv_s bijb)).
       (* TODO: clean up *)
-      have -> : (hb_priv_s bijb ∖ ho) = hb_priv_s bijb ∖ (ho ∖ (ho ∖ hb_priv_s bijb)). {
-        clear.
-        apply map_eq => ?. apply option_eq => ?.
-        rewrite !lookup_difference_Some !lookup_difference_None /is_Some.
-        setoid_rewrite lookup_difference_Some. naive_solver.
-      }
       have Hsubs : (∀ i x1 x2, ho !! i = Some x1 → hb_priv_s bijb !! i = Some x2 → x1 = x2) →
         ho ∖ (ho ∖ hb_priv_s bijb) ⊆ hb_priv_s bijb. {
         move => Hin.
