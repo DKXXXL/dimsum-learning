@@ -40,12 +40,17 @@ Proof.
 Admitted.
 
 Lemma heap_bij_update_all bij' bij ho :
-  hb_shared bij = hb_shared bij' →
+  ho ⊆ hb_priv_s bij →
+  ho ⊆ hb_priv_s bij' →
+  hb_shared bij ⊆ hb_shared bij' →
   hb_priv_i bij = hb_priv_i bij' →
   heap_bij_auth bij -∗
+  ([∗ map] p2↦p1∈ hb_shared bij, heap_bij_shared p1 p2) -∗
   ([∗ map] p↦h∈ hb_priv_s bij ∖ ho, heap_bij_const_s p h) ==∗
   heap_bij_auth bij' ∗
-  ([∗ map] p↦h∈ hb_priv_s bij' ∖ ho, heap_bij_const_s p h).
+  ([∗ map] p2↦p1∈ hb_shared bij', heap_bij_shared p1 p2) ∗
+  ([∗ map] p↦h∈ hb_priv_s bij' ∖ ho, heap_bij_const_s p h)
+.
 Proof.
   (* iIntros (????) "Hauth Hsh Hho". *)
 Admitted.
@@ -1026,18 +1031,19 @@ Proof.
       iSatStart HP'. iIntros!. iDestruct (i2a_mem_lookup_big' with "[$] [$]") as %?. iSatStop HP'.
 
       iSatStartBupd HPb. iIntros!.
-      have ? : ∀ p1 p2 : prov, (hb_shared bijb' ∖ hb_shared bijb) !! p2 = Some p1 → p1 ∉ hb_provs_i bijb. {
-        admit.
-      }
-      unshelve iMod (heap_bij_alloc_big (hb_shared bijb' ∖ hb_shared bijb) with "[$]") as "[? Hs2]"; [done| |]. {
-        admit.
-      }
-      iDestruct select ([∗ map] _↦_∈hb_shared _, heap_bij_shared _ _)%I as "Hs1".
-      iDestruct (big_sepM_union_2 with "Hs1 Hs2") as "Hs". rewrite map_difference_union //.
-      iDestruct "Hs" as "#Hs".
-      iDestruct select ([∗ map] _↦_∈_, heap_bij_const_s _ _)%I as "Hp".
-      iMod (heap_bij_update_all bijb' _ ho with "[$] [Hp]") as "[??]".
-      { admit. } { done. } { rewrite i2a_combine_priv_diff //. admit. }
+      rewrite i2a_combine_priv_diff //.
+      iMod (heap_bij_update_all bijb' with "[$] [$] [$]") as "[?[#Hs ?]]".
+      { admit. } { admit. } { done. } { done. }
+      (* have ? : ∀ p1 p2 : prov, (hb_shared bijb' ∖ hb_shared bijb) !! p2 = Some p1 → p1 ∉ hb_provs_i bijb. { *)
+      (*   admit. *)
+      (* } *)
+      (* unshelve iMod (heap_bij_alloc_big (hb_shared bijb' ∖ hb_shared bijb) with "[$]") as "[? Hs2]"; [done| |]. { *)
+      (*   admit. *)
+      (* } *)
+      (* iDestruct select ([∗ map] _↦_∈hb_shared _, heap_bij_shared _ _)%I as "Hs1". *)
+      (* iDestruct (big_sepM_union_2 with "Hs1 Hs2") as "Hs". rewrite map_difference_union //. *)
+      (* iMod (heap_bij_update_all bijb' _ ho with "[$] [Hp]") as "[??]". *)
+      (* { admit. } { done. } { rewrite i2a_combine_priv_diff //. admit. } *)
       iModIntro.
       iSatStop HPb.
 
@@ -1064,8 +1070,15 @@ Proof.
         -- rewrite heap_merge_provs !heap_restrict_provs dom_union_L heap_through_bij_provs.
            apply union_mono; [|done]. admit. (* provable with maybe tweaks to the result of i2a_combine_extend *)
         -- move => l ?. rewrite i2a_ih_constant_union // i2a_ih_constant_fmap_shared left_id_L.
-           move => ? /=.
-           have ? : l.1 ∉ dom (gset prov) (ih' ∪ i2a_ih_shared iha). { admit. (* provable by map disjoint *) }
+           move => /i2a_ih_constant_Some ? /=.
+           have ? : l.1 ∉ dom (gset prov) (ih' ∪ i2a_ih_shared iha). {
+             rewrite dom_union. apply not_elem_of_union. split.
+             - revert select (dom (gset prov) ih' ## h_provs hprev) => Hih'.
+               symmetry in Hih'. apply: Hih'.
+               revert select (dom (gset prov) iha ⊆ h_provs hprev). apply.
+               by apply elem_of_dom.
+             - apply not_elem_of_dom. apply i2a_ih_shared_None. naive_solver.
+           }
            rewrite lookup_union_r. 2: { apply map_filter_lookup_None. naive_solver. }
            rewrite map_filter_lookup_true; [by apply Hpreva|naive_solver].
         -- iApply i2a_heap_shared_agree_union. {
@@ -1135,6 +1148,7 @@ Proof.
                  iIntros (??[?[?[?[??]]]]%heap_through_bij_Some ?). simplify_bij.
                  iApply (val_in_through_bij with "[$]"); [|done].
                  admit. (* use i2a_heap_shared_agree_pure (h_heap h) (i2a_ih_shared ih) m0 *)
+                 (* TRICKY !*)
               ** rewrite lookup_union_r. 2: { apply map_filter_lookup_None. naive_solver. }
                  rewrite map_filter_lookup_true; [|naive_solver].
                  revert select (heap_preserved (i2a_ih_constant ih) h) => Hpre.
