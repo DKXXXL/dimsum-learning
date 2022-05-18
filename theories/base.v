@@ -200,6 +200,7 @@ Proof.
   destruct (m1 !! i) as [x'|], (m2 !! i) => /=; intuition congruence.
 Qed.
 End theorems.
+
 Section theorems.
 Context `{FinMap K M}.
 Lemma map_difference_difference {A} (m1 m2 m3 : M A) :
@@ -222,6 +223,26 @@ Proof.
     have ? : m1 !! i = Some v' by apply: lookup_weaken.
     naive_solver.
   - move => ?. split; [|naive_solver]. by apply: lookup_weaken.
+Qed.
+
+Lemma map_difference_union_distr {A} (m1 m2 m : M A) :
+  (m1 ∪ m2) ∖ m = (m1 ∖ m) ∪ (m2 ∖ m).
+Proof.
+  apply map_eq. intros i.
+  apply option_eq. intros v.
+  rewrite !(lookup_difference_Some, lookup_difference_None, lookup_union_Some_raw) /is_Some.
+  naive_solver.
+Qed.
+
+Lemma map_difference_disj_id {A} (m1 m2 : M A) :
+  m1 ##ₘ m2 →
+  m1 ∖ m2 = m1.
+Proof.
+  intros Hdisj.
+  apply map_eq. intros i.
+  apply option_eq. intros v.
+  rewrite !lookup_difference_Some. split; [naive_solver|]. move => ?. split; [done|].
+  by apply: map_disjoint_Some_l.
 Qed.
 End theorems.
 

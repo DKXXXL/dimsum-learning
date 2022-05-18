@@ -266,6 +266,22 @@ Proof.
   rewrite lookup_insert_Some. naive_solver.
 Qed.
 
+Lemma i2a_ih_shared_constant_disj ih:
+  I2AShared <$> (i2a_ih_shared ih) ##ₘ I2AConstant <$> (i2a_ih_constant ih).
+Proof.
+  apply map_disjoint_spec => ???. rewrite !lookup_fmap !fmap_Some.
+  setoid_rewrite i2a_ih_shared_Some. setoid_rewrite i2a_ih_constant_Some. naive_solver.
+Qed.
+
+Lemma i2a_ih_shared_constant ih :
+  (I2AShared <$> i2a_ih_shared ih) ∪ (I2AConstant <$> i2a_ih_constant ih) = ih.
+Proof.
+  apply map_eq => ?. apply option_eq => e.
+  rewrite !lookup_union_Some. 2: { apply i2a_ih_shared_constant_disj. }
+  rewrite !lookup_fmap !fmap_Some.
+  setoid_rewrite i2a_ih_shared_Some. setoid_rewrite i2a_ih_constant_Some.
+  split; destruct e; naive_solver.
+Qed.
 
 (** ** ghost state  *)
 Canonical Structure imp_to_asm_elemO := leibnizO imp_to_asm_elem.

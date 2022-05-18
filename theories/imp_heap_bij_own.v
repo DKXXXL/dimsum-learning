@@ -272,6 +272,19 @@ Proof.
   etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [/gmap_view_both_valid_L? ?]. naive_solver.
 Qed.
 
+Lemma heap_bij_shared_lookup_big m bij :
+  heap_bij_auth bij -∗
+  ([∗ map] p2↦p1 ∈ m, heap_bij_shared p1 p2) -∗
+  ⌜m ⊆ hb_shared bij⌝.
+Proof.
+  iIntros "Hauth Hsh".
+  iInduction m as [|p h m ?] "IH" using map_ind. { iPureIntro. apply map_empty_subseteq. }
+  rewrite big_sepM_insert //. iDestruct "Hsh" as "[??]".
+  iDestruct ("IH" with "[$] [$]") as %?.
+  iDestruct (heap_bij_shared_lookup with "[$] [$]") as %?. iPureIntro.
+  apply insert_subseteq_l; [|done]. by apply hb_shared_lookup_Some.
+Qed.
+
 Lemma heap_bij_alloc_const_s bij p h:
   p ∉ dom (gset _) (hb_bij bij) →
   heap_bij_auth bij ==∗ heap_bij_auth (heap_bij_update_const_s p h bij) ∗ heap_bij_const_s p h.
