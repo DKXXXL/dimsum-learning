@@ -170,6 +170,12 @@ Proof.
   naive_solver.
 Qed.
 
+Lemma i2a_ih_shared_fmap_constant ih:
+  i2a_ih_shared (I2AConstant <$> ih) = ∅.
+Proof.
+  apply map_eq => ?. apply option_eq => ?. rewrite i2a_ih_shared_Some lookup_fmap fmap_Some. naive_solver.
+Qed.
+
 Lemma i2a_ih_shared_insert i h ih:
   i2a_ih_shared (<[i := I2AShared h]> ih) = <[i := h]> (i2a_ih_shared ih).
 Proof.
@@ -204,6 +210,38 @@ Qed.
 Lemma i2a_ih_constant_None h p :
   i2a_ih_constant h !! p = None ↔ ¬ ∃ a, h !! p = Some (I2AConstant a).
 Proof. rewrite eq_None_not_Some /is_Some. setoid_rewrite i2a_ih_constant_Some. naive_solver. Qed.
+
+Lemma i2a_ih_constant_empty:
+  i2a_ih_constant ∅ = ∅.
+Proof. by rewrite /i2a_ih_constant omap_empty. Qed.
+
+Lemma i2a_ih_constant_union ih1 ih2:
+  ih1 ##ₘ ih2 →
+  i2a_ih_constant (ih1 ∪ ih2) = i2a_ih_constant ih1 ∪ i2a_ih_constant ih2.
+Proof. apply map_omap_union. Qed.
+
+
+Lemma i2a_ih_constant_fmap ih:
+  i2a_ih_constant (I2AConstant <$> ih) = ih.
+Proof.
+  apply map_eq => ?. apply option_eq => ?.
+  rewrite i2a_ih_constant_Some lookup_fmap fmap_Some.
+  naive_solver.
+Qed.
+
+Lemma i2a_ih_constant_fmap_l ih:
+  I2AConstant <$> i2a_ih_constant ih ⊆ ih.
+Proof.
+  apply map_subseteq_spec => ??.
+  rewrite lookup_fmap fmap_Some. move => [? [/i2a_ih_constant_Some??]].
+  naive_solver.
+Qed.
+
+Lemma i2a_ih_constant_fmap_shared ih:
+  i2a_ih_constant (I2AShared <$> ih) = ∅.
+Proof.
+  apply map_eq => ?. apply option_eq => ?. rewrite i2a_ih_constant_Some lookup_fmap fmap_Some. naive_solver.
+Qed.
 
 Lemma i2a_ih_constant_delete i ih:
   i2a_ih_constant (delete i ih) = delete i (i2a_ih_constant ih).

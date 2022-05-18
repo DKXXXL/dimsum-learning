@@ -304,6 +304,19 @@ Proof.
   etrans; [apply uPred.ownM_valid|]. iPureIntro. move => [/gmap_view_both_valid_L??]. naive_solver.
 Qed.
 
+Lemma heap_bij_const_s_lookup_big m bij :
+  heap_bij_auth bij -∗
+  ([∗ map] p↦h ∈ m, heap_bij_const_s p h) -∗
+  ⌜m ⊆ hb_priv_s bij⌝.
+Proof.
+  iIntros "Hauth Hconst".
+  iInduction m as [|p h m ?] "IH" using map_ind. { iPureIntro. apply map_empty_subseteq. }
+  rewrite big_sepM_insert //. iDestruct "Hconst" as "[??]".
+  iDestruct ("IH" with "[$] [$]") as %?.
+  iDestruct (heap_bij_const_s_lookup with "[$] [$]") as %?. iPureIntro.
+  apply insert_subseteq_l; [|done]. by apply hb_priv_s_lookup_Some.
+Qed.
+
 Lemma heap_bij_frag_update_const_s bij p f h:
   heap_bij_auth bij ∗ heap_bij_const_s p f ==∗
   heap_bij_auth (heap_bij_update_const_s p h bij) ∗ heap_bij_const_s p h.
