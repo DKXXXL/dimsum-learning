@@ -83,6 +83,24 @@ Lemma hb_shared_lookup_None bij ps :
   hb_shared bij !! ps = None ↔ ∀ pi, hb_bij bij !! ps = Some (HBShared pi) → False.
 Proof. rewrite hb_shared_lookup. destruct (hb_bij bij !! ps) => //=. case_match; naive_solver. Qed.
 
+(** hb_shared_rev *)
+Definition hb_shared_rev (bij : heap_bij) : gmap prov prov :=
+  list_to_map $ (λ x, (x.2, x.1)) <$> map_to_list (hb_shared bij).
+
+Lemma hb_shared_rev_lookup_Some bij ps pi :
+  hb_shared_rev bij !! pi = Some ps ↔ hb_bij bij !! ps = Some (HBShared pi).
+Proof.
+  rewrite /hb_shared_rev -elem_of_list_to_map. 2: {
+    rewrite -list_fmap_compose. apply NoDup_fmap_2_strong; [|apply NoDup_map_to_list].
+    move => [??][??] /elem_of_map_to_list/hb_shared_lookup_Some? /elem_of_map_to_list /hb_shared_lookup_Some?/= ?.
+    by simplify_bij.
+  }
+  rewrite elem_of_list_fmap -hb_shared_lookup_Some.
+  split.
+  - move => [[??] /=[? /elem_of_map_to_list ?]]. naive_solver.
+  - move => ?. eexists (_, _). rewrite elem_of_map_to_list. naive_solver.
+Qed.
+
 (** hb_shared_s *)
 Definition hb_shared_s (bij : heap_bij) : gset prov :=
   (locked (dom _) (hb_shared bij)).

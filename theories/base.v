@@ -244,6 +244,14 @@ Proof.
   rewrite !lookup_difference_Some. split; [naive_solver|]. move => ?. split; [done|].
   by apply: map_disjoint_Some_l.
 Qed.
+
+Lemma map_difference_fmap {A B} (m1 m2 : M A) (f : A → B) :
+  f <$> m1 ∖ m2 = (f <$> m1) ∖ (f <$> m2).
+Proof.
+  apply map_eq => ?. apply option_eq => ?.
+  rewrite lookup_fmap fmap_Some. setoid_rewrite lookup_difference_Some.
+  rewrite !lookup_fmap fmap_Some fmap_None. naive_solver.
+Qed.
 End theorems.
 
 Section map.

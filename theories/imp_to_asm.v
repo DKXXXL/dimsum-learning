@@ -550,6 +550,81 @@ Proof.
   by apply insert_subseteq_l.
 Qed.
 
+Lemma i2a_mem_update_all mem mem' mo :
+  mo ⊆ mem →
+  mo ⊆ mem' →
+  i2a_mem_auth mem' -∗
+  i2a_mem_map (mem' ∖ mo) ==∗
+  i2a_mem_auth mem ∗ i2a_mem_map (mem ∖ mo).
+Proof.
+  iIntros (Hsub ?) "Hmem Hconst".
+  iMod (i2a_mem_delete_big' with "[$] [$]").
+  iMod (i2a_mem_alloc_big' with "[$]") as "[? $]".
+  { apply map_disjoint_spec => ???. rewrite !lookup_difference_Some lookup_difference_None /is_Some.
+    move => ??. destruct_all?; simplify_eq. } iModIntro.
+  rewrite map_difference_id // map_union_comm ?map_difference_union //. apply map_disjoint_difference_l'.
+Qed.
+
+Lemma i2a_heap_update_all ihs ihc ih hob :
+  hob ⊆ i2a_ih_constant ih →
+  hob ⊆ ihc →
+  i2a_ih_shared ih ⊆ ihs →
+  dom (gset _) ihs ## dom _ ihc →
+  i2a_heap_auth ih -∗
+  ([∗ map] p↦a∈i2a_ih_shared ih, i2a_heap_shared p a) -∗
+  ([∗ map] p↦a∈i2a_ih_constant ih ∖ hob, i2a_heap_constant p a) ==∗
+  i2a_heap_auth ((I2AShared <$> ihs) ∪ (I2AConstant <$> ihc)) ∗
+  ([∗ map] p↦a∈ihs, i2a_heap_shared p a) ∗
+  ([∗ map] p↦a∈ihc ∖ hob, i2a_heap_constant p a).
+Proof.
+  iIntros (Hsub1 Hsub2 Hsh Hdisj) "Hauth #Hsh Hconst".
+  iMod (i2a_heap_free_big' with "[$] [$]") as "?".
+  iMod (i2a_heap_alloc_shared_big' _ (ihs ∖ i2a_ih_shared ih) with "[$]") as "[??]".
+  { apply map_disjoint_spec => ? x y.
+    rewrite lookup_fmap fmap_Some !lookup_difference_Some lookup_fmap fmap_None lookup_difference_None.
+    setoid_rewrite lookup_difference_Some. unfold is_Some.
+    setoid_rewrite i2a_ih_constant_None.
+    setoid_rewrite i2a_ih_shared_None.
+    move => ??. destruct_all?; simplify_eq.
+    - destruct y; naive_solver.
+    - have ? := lookup_weaken _ _ _ _ ltac:(done) Hsub2.
+      apply: Hdisj; by apply elem_of_dom.
+  }
+  have -> : ((I2AShared <$> ihs ∖ i2a_ih_shared ih) ∪ ih ∖ (I2AConstant <$> i2a_ih_constant ih ∖ hob)) =
+             (I2AShared <$> ihs) ∪ (I2AConstant <$> hob). {
+    rewrite - {2}(i2a_ih_shared_constant ih).
+    rewrite map_difference_union_distr assoc. f_equal.
+    - rewrite (map_difference_disj_id _ (I2AConstant <$> _)).
+      2: { rewrite map_difference_fmap. apply: map_disjoint_weaken_r; [apply i2a_ih_shared_constant_disj|].
+           by apply map_subseteq_difference_l. }
+      rewrite -map_fmap_union map_union_comm ?map_difference_union //.
+      apply map_disjoint_difference_l'.
+    - rewrite map_difference_fmap. apply map_difference_id. by apply map_fmap_mono.
+  }
+  iMod (i2a_heap_alloc_big' with "[$]") as "[? $]".
+  { apply map_disjoint_spec => ???.
+    rewrite lookup_union_Some_raw !lookup_fmap !fmap_Some !fmap_None.
+    setoid_rewrite lookup_difference_Some.
+    move => ??. destruct_all?; simplify_eq.
+    apply: Hdisj; by apply elem_of_dom.
+  } iModIntro.
+  iAssert ([∗ map] p↦a ∈ ihs, i2a_heap_shared p a)%I as "#Hsh'". {
+    rewrite - {3} (map_difference_union (i2a_ih_shared ih) ihs) //.
+    by iApply big_sepM_union_2.
+  } iFrame "Hsh'".
+  iDestruct (i2a_heap_shared_lookup_big' with "[$] Hsh'") as %Hsub.
+  have -> : ((I2AConstant <$> ihc ∖ hob) ∪ ((I2AShared <$> ihs) ∪ (I2AConstant <$> hob))) =
+             ((I2AShared <$> ihs) ∪ (I2AConstant <$> ihc)). {
+    rewrite assoc_L (map_union_comm _ (I2AShared <$> _)). 2: {
+      rewrite map_difference_fmap. apply: map_disjoint_weaken_l; [|by apply map_subseteq_difference_l].
+      apply map_disjoint_dom_2. by rewrite !dom_fmap_L.
+    }
+    rewrite -assoc. f_equal. rewrite -map_fmap_union. rewrite map_union_comm ?map_difference_union //.
+    apply map_disjoint_difference_l'.
+  }
+  done.
+Qed.
+
 (** ** invariants *)
 Definition i2a_val_rel (iv : val) (av : Z) : uPred imp_to_asmUR :=
   match iv with
@@ -625,6 +700,23 @@ Proof.
   iDestruct "Hvs" as "[??]". iDestruct ("IH" with "[$]") as "?".
   rewrite /i2a_mem_uninit /= Nat2Z.inj_succ (seqZ_cons a) ?Z.pred_succ /=; [|lia]. iFrame.
   by iExists _.
+Qed.
+
+Lemma i2a_heap_shared_agree_union h1 h2 ih:
+  h1 ##ₘ h2 →
+  i2a_heap_shared_agree (h1 ∪ h2) ih ⊣⊢ i2a_heap_shared_agree h1 ih ∗ i2a_heap_shared_agree h2 ih.
+Proof. apply big_sepM_union. Qed.
+
+Lemma i2a_heap_shared_agree_impl h1 h2 ih1 ih2:
+  (∀ l v a, h2 !! l = Some v → ih2 !! l.1 = Some (I2AShared a) →
+            h1 !! l = Some v ∧ ih1 !! l.1 = Some (I2AShared a)) →
+  i2a_heap_shared_agree h1 ih1 -∗
+  i2a_heap_shared_agree h2 ih2.
+Proof.
+  iIntros (Himpl) "Hag".
+  iApply (big_sepM_impl_strong' with "[$]").
+  iIntros "!>" (k ?) "H1". iIntros (?). destruct (ih2 !! k.1) as [[]|] eqn:? => //.
+  have [??]:= Himpl _ _ _ ltac:(done) ltac:(done). by simplify_map_eq.
 Qed.
 
 Lemma i2a_guard_page_lookup a sp gp mem :
