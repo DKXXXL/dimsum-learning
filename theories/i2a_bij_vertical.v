@@ -1032,6 +1032,11 @@ Proof.
 
       iSatStartBupd HPb. iIntros!.
       rewrite i2a_combine_priv_diff //.
+      (* have -> : (hb_priv_s bijb ∖ ho) = hb_priv_s bijb ∖ (ho ∖ (ho ∖ hb_priv_s bijb)). { *)
+      (*   admit. *)
+      (*   (* rewrite -map_difference_difference. symmetry. apply map_difference_disj_id. *) *)
+      (*   (* admit. *) *)
+      (* } *)
       iMod (heap_bij_update_all bijb' with "[$] [$] [$]") as "[?[#Hs ?]]".
       { admit. } { admit. } { done. } { done. }
       (* have ? : ∀ p1 p2 : prov, (hb_shared bijb' ∖ hb_shared bijb) !! p2 = Some p1 → p1 ∉ hb_provs_i bijb. { *)
@@ -1070,8 +1075,9 @@ Proof.
         -- rewrite heap_merge_provs !heap_restrict_provs dom_union_L heap_through_bij_provs.
            apply union_mono; [|done]. admit. (* provable with maybe tweaks to the result of i2a_combine_extend *)
         -- move => l ?. rewrite i2a_ih_constant_union // i2a_ih_constant_fmap_shared left_id_L.
-           move => /i2a_ih_constant_Some ? /=.
+           move => Hih /=.
            have ? : l.1 ∉ dom (gset prov) (ih' ∪ i2a_ih_shared iha). {
+             move: Hih => /i2a_ih_constant_Some?.
              rewrite dom_union. apply not_elem_of_union. split.
              - revert select (dom (gset prov) ih' ## h_provs hprev) => Hih'.
                symmetry in Hih'. apply: Hih'.
