@@ -904,17 +904,19 @@ Abort.
 
 (** prepost  *)
 Definition imp_heap_bij_pre (e : imp_event) (s : unit) : prepost (imp_event * unit) heap_bijUR :=
+  let vsi := vals_of_event e.2 in
   let hi := heap_of_event e.2 in
   pp_quant $ λ vss,
   pp_quant $ λ hs,
-  pp_star (heap_bij_inv hi hs ∗ [∗ list] v1;v2∈vals_of_event e.2; vss, val_in_bij v1 v2) $
+  pp_star (heap_bij_inv hi hs ∗ [∗ list] v1;v2∈vsi;vss, val_in_bij v1 v2) $
   pp_end ((e.1, event_set_vals_heap e.2 vss hs), tt).
 
 Definition imp_heap_bij_post (e : imp_event) (s : unit) : prepost (imp_event * unit) heap_bijUR :=
+  let vss := vals_of_event e.2 in
   let hs := heap_of_event e.2 in
   pp_quant $ λ vsi,
   pp_quant $ λ hi,
-  pp_star (heap_bij_inv hi hs ∗ [∗ list] v1;v2∈vsi;vals_of_event e.2, val_in_bij v1 v2) $
+  pp_star (heap_bij_inv hi hs ∗ [∗ list] v1;v2∈vsi;vss, val_in_bij v1 v2) $
   pp_end ((e.1, event_set_vals_heap e.2 vsi hi), tt).
 
 Definition imp_heap_bij (m : module imp_event) : module imp_event :=
@@ -942,7 +944,8 @@ Definition imp_heap_bij_proof_call (n : trace_index) (fns1 fns2 : gmap string fn
 
 Lemma imp_heap_bij_proof fns1 fns2 :
   dom (gset _) fns1 = dom _ fns2 →
-  (∀ f fn1, fns1 !! f = Some fn1 → ∃ fn2, fns2 !! f = Some fn2 ∧ length (fd_args fn1) = length (fd_args fn2)) →
+  (∀ f fn1, fns1 !! f = Some fn1 → ∃ fn2, fns2 !! f = Some fn2
+                                          ∧ length (fd_args fn1) = length (fd_args fn2)) →
   (∀ n K1 K2 f fn1 fn2 vs1 vs2 h1 h2 r rf,
       fns1 !! f = Some fn1 →
       fns2 !! f = Some fn2 →
@@ -958,11 +961,13 @@ Lemma imp_heap_bij_proof fns1 fns2 :
         Imp (expr_fill K1 (Val v1)) h1' fns1
             ⪯{imp_module, imp_heap_bij imp_module, n', b}
         (SMProg, Imp (expr_fill K2 (Val v2)) h2' fns2, (PPInside, tt, rf'))) →
+
       Imp (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs1 (fd_body fn1))) h1 fns1
           ⪯{imp_module, imp_heap_bij imp_module, n, false}
       (SMProg, Imp (expr_fill K2 (AllocA fn2.(fd_vars) $ subst_l fn2.(fd_args) vs2 (fd_body fn2))) h2 fns2, (PPInside, tt, rf))) →
   trefines (MS imp_module (initial_imp_state fns1))
-           (MS (imp_heap_bij imp_module) (initial_imp_heap_bij_state imp_module (initial_imp_state fns2))).
+           (MS (imp_heap_bij imp_module)
+               (initial_imp_heap_bij_state imp_module (initial_imp_state fns2))).
 Proof.
   move => Hdom Hlen Hf.
   rewrite (lock (dom _)) in Hdom.
@@ -1360,7 +1365,7 @@ Proof.
     iMod (heap_bij_inv_alloc_s with "[$]") as "[? ?]"; [apply (heap_fresh_is_fresh ∅)|].
     iMod (heap_bij_inv_update_s with "[$] [$]") as "[$ ?]". iModIntro. iAccu. }
   iSatClear.
-  move => v1'' v2'' h1'' h2'' rf'' ?.
+  move => v1'' v2'' h1'' h2'' rf'' ? /=.
   iSatStart. iIntros!.
   iDestruct (heap_bij_inv_lookup_s (heap_fresh ∅ h2) with "[$] [$]") as %Hl.
   iSatStop.

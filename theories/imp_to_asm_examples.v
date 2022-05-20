@@ -130,12 +130,12 @@ Ltac simpl_map_ext tac ::=
          end.
 
 
-Lemma asm_add_refines_imp_add gp :
+Lemma asm_add_refines_imp_add :
   trefines (MS asm_module (initial_asm_state asm_add))
-           (MS (imp_to_asm (dom _ asm_add) (dom _ imp_add_prog) (<["add" := 100]> ∅) gp imp_module) (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_prog))).
+           (MS (imp_to_asm (dom _ asm_add) (dom _ imp_add_prog) (<["add" := 100]> ∅) imp_module) (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_prog))).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
-  move => n i rs mem K f fn vs h cs pc ret rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
+  move => n i rs mem K f fn vs h cs pc ret gp rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
   unfold imp_add_prog in Hf. unfold asm_add in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   destruct vs as [|v1 [|v2 []]] => //=.
@@ -157,14 +157,14 @@ Proof.
   1: by simplify_map_eq'.
 Qed.
 
-Lemma asm_add_client_refines_imp_add_client gp :
+Lemma asm_add_client_refines_imp_add_client :
   trefines (MS asm_module (initial_asm_state asm_add_client))
            (MS (imp_to_asm (dom _ asm_add_client) (dom _ imp_add_client_prog)
-                           (<["add_client" := 200]> $ <["add" := 100]> ∅) gp imp_module)
+                           (<["add_client" := 200]> $ <["add" := 100]> ∅) imp_module)
                (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_client_prog) )).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
-  move => n i rs mem K f fn vs h cs pc ret rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
+  move => n i rs mem K f fn vs h cs pc ret gp rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
   unfold imp_add_client_prog in Hf. unfold asm_add_client in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
   destruct vs as [|] => //=.
@@ -270,10 +270,10 @@ Proof.
 Qed.
 *)
 
-Lemma full_add_stack gp :
+Lemma full_add_stack :
   trefines (MS asm_module (initial_asm_state full_asm_add))
            (MS (imp_to_asm {[ 100; 101; 200; 201; 202; 203; 204; 205 ]} {[ "add"; "add_client" ]}
-                           (<["add_client" := 200]> $ <["add" := 100]> ∅) gp imp_module)
+                           (<["add_client" := 200]> $ <["add" := 100]> ∅) imp_module)
                (initial_imp_to_asm_state imp_module (initial_imp_state full_imp_add_prog))).
 Proof.
   etrans. {

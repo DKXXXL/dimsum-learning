@@ -1113,6 +1113,7 @@ Qed.
 Record imp_to_asm_stack_item := I2AI {
   i2as_extern : bool;
   i2as_ret : Z;
+  i2as_gp : Z;
   i2as_regs : gmap string Z;
 }.
 Add Printing Constructor imp_to_asm_stack_item.
@@ -1123,7 +1124,7 @@ Record imp_to_asm_state := I2A {
 }.
 Add Printing Constructor imp_to_asm_state.
 
-Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string Z) (gp : Z)
+Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string Z)
  (e : asm_event) (s : imp_to_asm_state) :
  prepost (imp_event * imp_to_asm_state) imp_to_asmUR :=
   match e with
@@ -1132,6 +1133,7 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
     pp_quant $ λ b : bool,
     pp_prop (i = Incoming) $
     pp_quant $ λ h,
+    pp_quant $ λ gp,
     pp_star (i2a_mem_inv (rs !!! "SP") gp mem ∗ i2a_heap_inv h) $
     if b then
       (* env chooses return address *)
@@ -1150,7 +1152,7 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
       (* env proves that rs corresponds to vs and ret *)
       pp_prop (i2a_regs_call ret rs) $
       (* track the registers and return address (false means ret belongs to env) *)
-      pp_end ((i, EICall f vs h), I2A ((I2AI false ret rs)::s.(i2a_calls)) rs)
+      pp_end ((i, EICall f vs h), I2A ((I2AI false ret gp rs)::s.(i2a_calls)) rs)
     else
       (* env chooses return value *)
       pp_quant $ λ v,
@@ -1161,19 +1163,20 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
       (* env chooses rest of cs *)
       pp_quant $ λ cs',
       (* get registers from stack (true means pc belongs to the program) *)
-      pp_prop (s.(i2a_calls) = (I2AI true pc rsold)::cs') $
+      pp_prop (s.(i2a_calls) = (I2AI true pc gp rsold)::cs') $
       (* env proves that rs is updated correctly *)
       pp_prop (i2a_regs_ret rs rsold av) $
       pp_end ((i, EIReturn v h), I2A cs' rs)
   | _ => pp_prop False $ pp_quant $ λ e, pp_end e
   end.
 
-Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string Z) (gp : Z)
+Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string Z)
            (e : imp_event) (s : imp_to_asm_state) : prepost (asm_event * imp_to_asm_state) imp_to_asmUR :=
   pp_prop (e.1 = Outgoing) $
   pp_quant $ λ pc,
   pp_quant $ λ rs,
   pp_quant $ λ mem,
+  pp_quant $ λ gp,
   pp_star (i2a_mem_inv (rs !!! "SP") gp mem ∗ i2a_heap_inv (heap_of_event e.2)) $
   match e with
   | (i, EICall f vs h) =>
@@ -1192,7 +1195,7 @@ Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string
       (* program proves it only touched a specific set of registers *)
       pp_prop (map_scramble touched_registers s.(i2a_last_regs) rs) $
       (* track the registers and return address (true means ret belongs to program) *)
-      pp_end ((Outgoing, EAJump pc rs mem), (I2A ((I2AI true ret rs)::s.(i2a_calls)) s.(i2a_last_regs)))
+      pp_end ((Outgoing, EAJump pc rs mem), (I2A ((I2AI true ret gp rs)::s.(i2a_calls)) s.(i2a_last_regs)))
   | (i, EIReturn v h) =>
       pp_quant $ λ av,
       (* program chooses new physical blocks *)
@@ -1202,7 +1205,7 @@ Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string
       (* program chooses rest of cs *)
       pp_quant $ λ cs',
       (* get registers from stack (false means pc belongs to the env) *)
-      pp_prop (s.(i2a_calls) = (I2AI false pc rsold)::cs') $
+      pp_prop (s.(i2a_calls) = (I2AI false pc gp rsold)::cs') $
       (* prog proves that rs is updated correctly *)
       pp_prop (i2a_regs_ret rs rsold av) $
       (* program proves it only touched a specific set of registers *)
@@ -1210,17 +1213,17 @@ Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string
       pp_end ((Outgoing, EAJump pc rs mem), (I2A cs' s.(i2a_last_regs)))
   end.
 
-Definition imp_to_asm (ins : gset Z) (fns : gset string) (f2i : gmap string Z) (gp : Z)
+Definition imp_to_asm (ins : gset Z) (fns : gset string) (f2i : gmap string Z)
            (m : module imp_event) : module asm_event :=
-  mod_prepost (imp_to_asm_pre ins fns f2i gp) (imp_to_asm_post ins fns f2i gp) m.
+  mod_prepost (imp_to_asm_pre ins fns f2i) (imp_to_asm_post ins fns f2i) m.
 
 Definition initial_imp_to_asm_state (m : module imp_event) (σ : m.(m_state)) :=
   (@SMFilter imp_event, σ, (@PPOutside imp_event asm_event, I2A [] ∅, (True : uPred imp_to_asmUR)%I)).
 
-Lemma imp_to_asm_trefines m m' σ σ' ins fns f2i gp `{!VisNoAll m}:
+Lemma imp_to_asm_trefines m m' σ σ' ins fns f2i `{!VisNoAll m}:
   trefines (MS m σ) (MS m' σ') →
-  trefines (MS (imp_to_asm ins fns f2i gp m) (initial_imp_to_asm_state m σ))
-           (MS (imp_to_asm ins fns f2i gp m') (initial_imp_to_asm_state m' σ')).
+  trefines (MS (imp_to_asm ins fns f2i m) (initial_imp_to_asm_state m σ))
+           (MS (imp_to_asm ins fns f2i m') (initial_imp_to_asm_state m' σ')).
 Proof. move => ?. by apply: mod_prepost_trefines. Qed.
 
 Inductive imp_to_asm_combine_stacks (ins1 ins2 : gset Z) :
@@ -1229,32 +1232,32 @@ Inductive imp_to_asm_combine_stacks (ins1 ins2 : gset Z) :
  Prop :=
 | IAC_nil :
   imp_to_asm_combine_stacks ins1 ins2 SPNone [] [] [] []
-| IAC_NoneLeft ret rs ics cs cs1 cs2:
+| IAC_NoneLeft ret gp rs ics cs cs1 cs2:
   ret ∉ ins1 →
   ret ∉ ins2 →
   imp_to_asm_combine_stacks ins1 ins2 SPNone ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 SPLeft (SPNone :: ics) ((I2AI false ret rs) :: cs) ((I2AI false ret rs) :: cs1) cs2
-| IAC_NoneRight ret rs ics cs cs1 cs2:
+  imp_to_asm_combine_stacks ins1 ins2 SPLeft (SPNone :: ics) ((I2AI false ret gp rs) :: cs) ((I2AI false ret gp rs) :: cs1) cs2
+| IAC_NoneRight ret rs gp ics cs cs1 cs2:
   ret ∉ ins1 →
   ret ∉ ins2 →
   imp_to_asm_combine_stacks ins1 ins2 SPNone ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 SPRight (SPNone :: ics) ((I2AI false ret rs) :: cs) cs1 ((I2AI false ret rs) :: cs2)
-| IAC_LeftRight ret rs ics cs cs1 cs2:
+  imp_to_asm_combine_stacks ins1 ins2 SPRight (SPNone :: ics) ((I2AI false ret gp rs) :: cs) cs1 ((I2AI false ret gp rs) :: cs2)
+| IAC_LeftRight ret rs gp ics cs cs1 cs2:
   ret ∈ ins1 →
   imp_to_asm_combine_stacks ins1 ins2 SPLeft ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 SPRight (SPLeft :: ics) cs ((I2AI true ret rs) :: cs1) ((I2AI false ret rs) :: cs2)
-| IAC_LeftNone ret rs ics cs cs1 cs2:
+  imp_to_asm_combine_stacks ins1 ins2 SPRight (SPLeft :: ics) cs ((I2AI true ret gp rs) :: cs1) ((I2AI false ret gp rs) :: cs2)
+| IAC_LeftNone ret gp rs ics cs cs1 cs2:
   ret ∈ ins1 →
   imp_to_asm_combine_stacks ins1 ins2 SPLeft ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 SPNone (SPLeft :: ics) ((I2AI true ret rs) :: cs) ((I2AI true ret rs) :: cs1) cs2
-| IAC_RightLeft ret rs ics cs cs1 cs2:
+  imp_to_asm_combine_stacks ins1 ins2 SPNone (SPLeft :: ics) ((I2AI true ret gp rs) :: cs) ((I2AI true ret gp rs) :: cs1) cs2
+| IAC_RightLeft ret gp rs ics cs cs1 cs2:
   ret ∈ ins2 →
   imp_to_asm_combine_stacks ins1 ins2 SPRight ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 SPLeft (SPRight :: ics) cs ((I2AI false ret rs) :: cs1) ((I2AI true ret rs) :: cs2)
-| IAC_RightNone ret rs ics cs cs1 cs2:
+  imp_to_asm_combine_stacks ins1 ins2 SPLeft (SPRight :: ics) cs ((I2AI false ret gp rs) :: cs1) ((I2AI true ret gp rs) :: cs2)
+| IAC_RightNone ret gp rs ics cs cs1 cs2:
   ret ∈ ins2 →
   imp_to_asm_combine_stacks ins1 ins2 SPRight ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 SPNone (SPRight :: ics) ((I2AI true ret rs) :: cs) cs1 ((I2AI true ret rs) :: cs2)
+  imp_to_asm_combine_stacks ins1 ins2 SPNone (SPRight :: ics) ((I2AI true ret gp rs) :: cs) cs1 ((I2AI true ret gp rs) :: cs2)
 .
 
 Local Ltac go := repeat match goal with | x : asm_ev |- _ => destruct x end;
@@ -1273,7 +1276,7 @@ Local Ltac split_solve :=
 Local Ltac split_tac ::=
   repeat (original_split_tac; try split_solve).
 
-Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 m1 m2 σ1 σ2 gp `{!VisNoAll m1} `{!VisNoAll m2}:
+Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m2}:
   ins1 ## ins2 →
   fns1 ## fns2 →
   (∀ f, f ∈ fns1 → ∃ i, i ∈ ins1 ∧ f2i1 !! f = Some i) →
@@ -1281,10 +1284,10 @@ Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 m1 m2 σ1 σ2 gp `{!VisNo
   (∀ f i1 i2, f2i1 !! f = Some i1 → f2i2 !! f = Some i2 → i1 = i2) →
   (∀ f i, f2i1 !! f = Some i → i ∈ ins2 → f ∈ fns2) →
   (∀ f i, f2i2 !! f = Some i → i ∈ ins1 → f ∈ fns1) →
-  trefines (MS (asm_prod ins1 ins2 (imp_to_asm ins1 fns1 f2i1 gp m1) (imp_to_asm ins2 fns2 f2i2 gp m2))
+  trefines (MS (asm_prod ins1 ins2 (imp_to_asm ins1 fns1 f2i1 m1) (imp_to_asm ins2 fns2 f2i2 m2))
                (MLFNone, None, initial_imp_to_asm_state m1 σ1,
                  initial_imp_to_asm_state m2 σ2))
-           (MS (imp_to_asm (ins1 ∪ ins2) (fns1 ∪ fns2) (f2i1 ∪ f2i2) gp (imp_prod fns1 fns2 m1 m2))
+           (MS (imp_to_asm (ins1 ∪ ins2) (fns1 ∪ fns2) (f2i1 ∪ f2i2) (imp_prod fns1 fns2 m1 m2))
                (initial_imp_to_asm_state (imp_prod _ _ _ _)
                   (MLFNone, [], σ1, σ2) )
 ).
@@ -1396,10 +1399,10 @@ Proof.
 Qed.
 
 
-Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i gp :
+Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
   ins_dom = dom _ ins →
   fns_dom = dom _ fns →
-  (∀ n i rs mem K f fn vs h cs pc ret rf rc lr,
+  (∀ n i rs mem K f fn vs h cs pc ret gp rf rc lr,
       rs !! "PC" = Some pc →
       ins !! pc = Some i →
       fns !! f = Some fn →
@@ -1409,25 +1412,25 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i gp :
       length vs = length (fd_args fn) →
       map_scramble touched_registers lr rs →
       (* Call *)
-      (∀ K' rs' mem' f' es vs pc' ret' h' lr' rf' r',
+      (∀ K' rs' mem' f' es vs pc' ret' gp' h' lr' rf' r',
           Forall2 (λ e v, e = Val v) es vs →
           rs' !! "PC" = Some pc' →
           (ins !! pc' = None ↔ fns !! f' = None) →
           f2i !! f' = Some pc' →
-          satisfiable (i2a_mem_inv (rs' !!! "SP") gp mem' ∗ i2a_heap_inv h' ∗
+          satisfiable (i2a_mem_inv (rs' !!! "SP") gp' mem' ∗ i2a_heap_inv h' ∗
                       i2a_args 0 vs rs' ∗ rf' ∗ r') →
           i2a_regs_call ret' rs' →
           is_Some (ins !! ret') →
           map_scramble touched_registers lr' rs' →
           (∀ rs'' mem'' av v h'' rf'' lr'',
               rs'' !! "PC" = Some ret' →
-              satisfiable (i2a_mem_inv (rs'' !!! "SP") gp mem'' ∗ i2a_heap_inv h'' ∗
+              satisfiable (i2a_mem_inv (rs'' !!! "SP") gp' mem'' ∗ i2a_heap_inv h'' ∗
                            i2a_val_rel v av ∗ rf'' ∗ r') →
               i2a_regs_ret rs'' rs' av →
               map_scramble touched_registers lr'' rs'' →
-              AsmState (ARunning []) rs'' mem'' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i gp imp_module, n, true}
+              AsmState (ARunning []) rs'' mem'' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K (expr_fill K' (Val v))) h'' fns, (PPInside, I2A cs lr'', rf''))) →
-          AsmState (ARunning []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i gp imp_module, n, true}
+          AsmState (ARunning []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K (expr_fill K' (imp.Call f' es))) h' fns, (PPInside, I2A cs lr', rf'))) →
       (* Return *)
       (∀ rs' mem' av v h' lr' rf',
@@ -1436,13 +1439,13 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i gp :
                       i2a_val_rel v av ∗ rf' ∗ rc) →
           i2a_regs_ret rs' rs av →
           map_scramble touched_registers lr' rs' →
-          AsmState (ARunning []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i gp imp_module, n, true}
+          AsmState (ARunning []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K (Val v)) h' fns, (PPInside, I2A cs lr', rf'))) →
-      AsmState (ARunning []) rs mem ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i gp imp_module, n, false}
+      AsmState (ARunning []) rs mem ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, false}
                (SMProg, Imp (expr_fill K (AllocA fn.(fd_vars) $ subst_l fn.(fd_args) vs fn.(fd_body))) h fns, (PPInside, I2A cs lr, rf))
 ) →
   trefines (MS asm_module (initial_asm_state ins))
-           (MS (imp_to_asm ins_dom fns_dom f2i gp imp_module) (initial_imp_to_asm_state imp_module
+           (MS (imp_to_asm ins_dom fns_dom f2i imp_module) (initial_imp_to_asm_state imp_module
              (initial_imp_state fns))).
 Proof.
   move => ? ? Hf. subst.
@@ -1461,7 +1464,7 @@ Proof.
                  ). }
   { simpl. exact (λ  '(AsmState i1 rs1 mem1 ins'1) '(σfs1, Imp e1 h1 fns'1, (t1, I2A cs1 lr1, r1))
                      '(AsmState i2 rs2 mem2 ins'2) '(σfs2, Imp e2 h2 fns'2, (t2, I2A cs2 lr2, r2)),
-    ∃ i K av v pc lr',
+    ∃ i K av v pc lr' gp,
       rs2 !! "PC" = Some pc ∧
       ins !! pc = Some i ∧
       satisfiable (i2a_mem_inv (rs2 !!! "SP") gp mem2 ∗ i2a_heap_inv h2 ∗ i2a_val_rel v av ∗ r1 ∗ r2) ∧
@@ -1473,7 +1476,7 @@ Proof.
       e2 = expr_fill K (Val v) ∧
       fns'1 = fns'2 ∧
       t2 = PPInside ∧
-      cs1 = I2AI true pc lr' :: cs2 ∧
+      cs1 = I2AI true pc gp lr' :: cs2 ∧
       lr2 = rs2
 ). }
   { move => ??? *. destruct_all?. repeat case_match; naive_solver. }
@@ -1483,13 +1486,13 @@ Proof.
   tstep_i => ??????.
   go_s. split!.
   go_s => -[] ? /=.
-  - move => ???? /elem_of_dom[??] ? /not_elem_of_dom ? ???.
+  - move => ????? /elem_of_dom[??] ? /not_elem_of_dom ? ???.
     go_s. split!.
     repeat case_bool_decide (_ = _); try by tstep_s.
     (* This inner loop deals with calls inside of the module. We use
     Hf both for calls triggered from inside and outside the module. *)
     unshelve eapply tsim_remember. { exact (λ n '(AsmState i1 rs1 mem1 ins'1) '(σfs1, Imp e1 h1 fns'1, (t1, I2A cs1 lr1, r1)),
-       ∃ K' pc i ret f fn vs r',
+       ∃ K' pc i ret f fn vs r' gp,
          rs1 !! "PC" = Some pc ∧
          ins !! pc = Some i ∧
          fns !! f = Some fn ∧
@@ -1511,7 +1514,7 @@ Proof.
                       i2a_val_rel v av ∗ r' ∗ rf') →
           i2a_regs_ret rs' rs1 av  →
           map_scramble touched_registers lr' rs' →
-          AsmState (ARunning []) rs' mem' ins ⪯{asm_module, imp_to_asm (dom _ ins) (dom _ fns) f2i gp imp_module, n, true}
+          AsmState (ARunning []) rs' mem' ins ⪯{asm_module, imp_to_asm (dom _ ins) (dom _ fns) f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K' (Val v)) h' fns, (PPInside, I2A cs1 lr', rf'))) ). }
     { eexists (ReturnExtCtx _:: _). split! => //. { iSatMono. iIntros!. iFrame. iAccu. }
       iSatClear. move => *.
@@ -1527,7 +1530,7 @@ Proof.
     apply: Hf; [try eassumption..| |].
     { iSatMono. iIntros!. iFrame. iAccu. }
     + iSatClear.
-      move => K'' rs'' mem'' f'' es vs'' pc'' ret'' h'' lr rf'' r'' Hall ??????? Hret'.
+      move => K'' rs'' mem'' f'' es vs'' pc'' ret'' gp'' h'' lr rf'' r'' Hall ??????? Hret'.
       have ?: es = Val <$> vs''. { clear -Hall. elim: Hall; naive_solver. } subst.
       destruct (ins !! pc'') eqn:Hi.
       * have [??] : is_Some (fns !! f''). { apply not_eq_None_Some. naive_solver. }

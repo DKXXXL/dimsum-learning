@@ -87,9 +87,9 @@ Local Ltac go_i :=
   imp_to_asm(itree_module(int_to_ptr_itree {imp_event}) {imp_event}) {asm_event}
 *)
 
-Lemma int_to_ptr_asm_refines_itree gp :
+Lemma int_to_ptr_asm_refines_itree :
   trefines (MS asm_module (initial_asm_state int_to_ptr_asm))
-           (MS (imp_to_asm (dom _ int_to_ptr_asm) int_to_ptr_fns int_to_ptr_f2i gp
+           (MS (imp_to_asm (dom _ int_to_ptr_asm) int_to_ptr_fns int_to_ptr_f2i
                            (mod_itree imp_event (gmap prov Z)))
                (initial_imp_to_asm_state (mod_itree _ _) (int_to_ptr_itree, ∅))).
 Proof.
@@ -274,9 +274,9 @@ Definition main_asm_dom : gset Z := locked (dom _) main_asm.
   imp_to_asm(imp_module(main_imp) {imp_event}) {asm_event}
 *)
 
-Lemma main_asm_refines_imp gp :
+Lemma main_asm_refines_imp :
   trefines (MS asm_module (initial_asm_state main_asm))
-           (MS (imp_to_asm (dom _ main_asm) {["main"]} main_f2i gp imp_module)
+           (MS (imp_to_asm (dom _ main_asm) {["main"]} main_f2i imp_module)
                (initial_imp_to_asm_state imp_module (initial_imp_state main_imp_prog))).
 Proof.
   apply: compile_correct; [|done|..].
@@ -364,12 +364,12 @@ Qed.
 
 (* TODO: something even more high-level? Maybe stated as safety property on traces? *)
 
-Definition top_level_itree gp : itree (moduleE asm_event unit) unit :=
+Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   '(pc, rs, mem) ← TReceive (λ '(pc, rs, mem), (Incoming, EAJump pc rs mem));;;
   TAssume (pc = 200);;;;
   TAssume (map_list_included touched_registers rs);;;;
   TAssume (rs !!! "R30" ∉ main_asm_dom ∪ dom (gset Z) int_to_ptr_asm);;;;
-  TAssume (gp + GUARD_PAGE_SIZE ≤ rs !!! "SP" ∧
+  TAssume (∃ gp, gp + GUARD_PAGE_SIZE ≤ rs !!! "SP" ∧
             (∀ a, gp ≤ a < gp + GUARD_PAGE_SIZE → mem !! a = Some None) ∧
             (∀ a, gp + GUARD_PAGE_SIZE ≤ a < rs !!! "SP" → ∃ v, mem !! a = Some (Some v)));;;;
   args ← TExist _;;;
@@ -388,14 +388,14 @@ Definition top_level_itree gp : itree (moduleE asm_event unit) unit :=
    itree_module(toplevel_itree {asm_event}) {asm_event}
 *)
 
-Lemma top_level_refines_itree gp :
+Lemma top_level_refines_itree :
   trefines (MS (asm_prod (main_asm_dom ∪ dom _ int_to_ptr_asm) (dom _ exit_asm)
                          (imp_to_asm (main_asm_dom ∪ dom _ int_to_ptr_asm)
                                      (dom _ main_imp_prog ∪ int_to_ptr_fns)
-                                     main_f2i gp
+                                     main_f2i
                                      (mod_itree _ _)) (mod_itree _ _))
                (MLFNone, None, initial_imp_to_asm_state (mod_itree _ _) (main_itree, tt), (exit_itree, tt)))
-           (MS (mod_itree _ _) (top_level_itree gp, tt)).
+           (MS (mod_itree _ _) (top_level_itree, tt)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   go_i => ?????. case_match; destruct_all?; simplify_eq.
@@ -407,7 +407,7 @@ Proof.
   go_s => ?. go. destruct_all?. simplify_eq/=.
   rewrite bool_decide_true; [|unfold main_asm_dom;unlock; compute_done].
   go_i => ??. simplify_eq.
-  go_i. eexists true => /=. split; [done|]. eexists initial_heap_state, (regs !!! "R30"), "main", [].
+  go_i. eexists true => /=. split; [done|]. eexists initial_heap_state, _, (regs !!! "R30"), "main", [].
   split!.
   { unfold i2a_regs_call. split!. apply lookup_lookup_total.
     apply: map_list_included_is_Some; [done|]. compute_done. }
@@ -460,9 +460,9 @@ Qed.
   itree_module(toplevel_itree {asm_event}) {asm_event}
 *)
 
-Lemma complete_refinement gp :
+Lemma complete_refinement :
   trefines (MS asm_module (initial_asm_state (main_asm ∪ int_to_ptr_asm ∪ exit_asm)))
-           (MS (mod_itree _ _) (top_level_itree gp, tt)).
+           (MS (mod_itree _ _) (top_level_itree, tt)).
 Proof.
   etrans. {
     apply asm_link_refines_prod. compute_done.
@@ -498,9 +498,8 @@ Proof.
     - apply exit_asm_refines_itree.
   }
   etrans. {
-    etrans; [|apply: (top_level_refines_itree gp)].
-    rewrite dom_union_L /main_asm_dom. unlock.
-    instantiate (1 := gp). done.
+    etrans; [|apply: (top_level_refines_itree)].
+    rewrite dom_union_L /main_asm_dom. unlock. done.
   }
   done.
 Qed.

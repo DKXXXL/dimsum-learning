@@ -788,10 +788,10 @@ Qed.
 
 (** * Main vertical compositionality theorem:  *)
 
-Lemma i2a_bij_vertical m σ `{!VisNoAll m} ins fns f2i gp:
-  trefines (MS (imp_to_asm ins fns f2i gp (imp_heap_bij m))
+Lemma i2a_bij_vertical m σ `{!VisNoAll m} ins fns f2i:
+  trefines (MS (imp_to_asm ins fns f2i (imp_heap_bij m))
                (initial_imp_to_asm_state (imp_heap_bij m) (initial_imp_heap_bij_state m σ)))
-           (MS (imp_to_asm ins fns f2i gp m)
+           (MS (imp_to_asm ins fns f2i m)
                (initial_imp_to_asm_state m σ))
 .
 Proof.
@@ -856,7 +856,7 @@ Proof.
     - eexists ∅. move => ?? /map_filter_lookup_Some. naive_solver.
   }
   all: move => [csa lra] [] [cs lr] Pa Pb P [? e] ?/=; destruct_all?; simplify_eq.
-  - move: e => []//= pc regs mem b ? h. move: b => [] /=.
+  - move: e => []//= pc regs mem b ? h ?. move: b => [] /=.
     + move => i f args ???? P' HP'. eexists true => /=. setoid_subst.
       rename select (satisfiable (Pa ∗ _)) into HPa.
       rename select (satisfiable (Pb ∗ _)) into HPb.
@@ -895,6 +895,7 @@ Proof.
       (* TODO: clean up *)
       have Hsubs : (∀ i x1 x2, ho !! i = Some x1 → hb_priv_s bijb !! i = Some x2 → x1 = x2) →
         ho ∖ (ho ∖ hb_priv_s bijb) ⊆ hb_priv_s bijb. {
+        clear.
         move => Hin.
         apply map_subseteq_spec => ??.
         rewrite !lookup_difference_Some !lookup_difference_None /is_Some. naive_solver.
@@ -914,7 +915,7 @@ Proof.
                                          (λ p, p ∈ dom (gset _) (ih' ∪ i2a_ih_shared iha)))
                   (heap_restrict hprev
                                  (λ x, x ∉ dom (gset _) (ih' ∪ i2a_ih_shared iha) ∨ x ∉ hb_shared_i bijb'))).
-      eexists _, _, (val_through_bij bijb' <$> args).
+      eexists _, _, _. eexists (val_through_bij bijb' <$> args).
       split!.
       * iSatMono HPa. iIntros!.
         iAssert ([∗ map] p↦a ∈ i2a_ih_shared ((I2AShared <$> ih') ∪ iha), i2a_heap_shared p a)%I as "#Hsh". {
@@ -1111,7 +1112,7 @@ Proof.
       * by apply map_subseteq_difference_l.
       *)
       admit.
-  - move => vs hb' Pb' HPb' ? i rs' mem''.
+  - move => vs hb' Pb' HPb' ? i rs' mem'' ?.
     destruct e as [fn args h|v h]; simplify_eq/=.
     + move => ret ????? Pa' HPa'. setoid_subst.
       rename select (satisfiable (P ∗ _)) into HP.

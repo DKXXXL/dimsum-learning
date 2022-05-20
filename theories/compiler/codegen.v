@@ -440,7 +440,7 @@ Definition sim (n : trace_index) (b : bool) (dins : list deep_asm_instr) (e : ex
   rf -∗
   ci2a_inv s lr rs mem h' -∗
   iSat_end (AsmState (ARunning []) rs mem pf_ins
-             ⪯{asm_module, imp_to_asm (dom _ pf_ins) (dom _ pf_fns) s.(s_f2i) pf_gp imp_module, n, b}
+             ⪯{asm_module, imp_to_asm (dom _ pf_ins) (dom _ pf_fns) s.(s_f2i) imp_module, n, b}
            (SMProg, Imp e h pf_fns, (PPInside, I2A pf_cs lr, rf))).
 
 Lemma to_sim n b dins e s rs h h' :
@@ -1376,7 +1376,7 @@ Lemma sim_intro s dins rs mem ins ins_dom fns_dom f2i n b e h fns cs lr rf P gp:
   satisfiable (rf ∗ ci2a_inv s lr rs mem h ∗ P) →
   (P -∗ sim n b dins e s rs h h) →
   AsmState (ARunning []) rs mem ins
-     ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i gp imp_module, n, b}
+     ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, b}
   (SMProg, Imp e h fns, (PPInside, I2A cs lr, rf))
 .
 Proof.
@@ -1385,19 +1385,19 @@ Proof.
   iApply (Hcont with "[$] [//] Hrf Hinv").
 Qed.
 
-Lemma pass_correct a f2i f s' dins ins fn gp:
+Lemma pass_correct a f2i f s' dins ins fn:
   crun (initial_state f2i) (pass fn.(lfd_args) fn.(lfd_vars) fn.(lfd_body)) = CResult s' dins (CSuccess tt) →
   ins = deep_to_asm_instrs a dins →
   f2i !! f = Some a →
   NoDup (fn.(lfd_args) ++ fn.(lfd_vars).*1) →
   (∀ f' i', f2i !! f' = Some i' → ins !! i' = None ↔ f' ≠ f) →
   trefines (MS asm_module (initial_asm_state ins))
-           (MS (imp_to_asm (dom _ ins) {[f]} f2i gp imp_module) (initial_imp_to_asm_state imp_module
+           (MS (imp_to_asm (dom _ ins) {[f]} f2i imp_module) (initial_imp_to_asm_state imp_module
              (initial_imp_lstate (<[f := fn]> ∅)))).
 Proof.
   move => Hrun ? Ha /NoDup_app[?[??]] Hf2i.
   apply imp_to_asm_proof; [done|set_solver|].
-  move => n i rs mem K f' fn' vs h cs pc ret rf rc lr Hpc Hins Hf ? Hsat Hargs Hlen Hlr Hcall Hret.
+  move => n i rs mem K f' fn' vs h cs pc ret gp rf rc lr Hpc Hins Hf ? Hsat Hargs Hlen Hlr Hcall Hret.
   move: Hf. rewrite {1}fmap_insert {1}fmap_empty lookup_insert_Some lookup_empty => ?.
   destruct_all?; simplify_map_eq. move: Hargs => [??].
 
@@ -1566,14 +1566,14 @@ Definition pass_fn (f2i : gmap string Z) (fn : lfndef) : compiler_success error 
   let res := crun (initial_state f2i) (pass fn.(lfd_args) fn.(lfd_vars) fn.(lfd_body)) in
   (λ _, res.(c_prog)) <$> res.(c_result).
 
-Lemma pass_fn_correct a f2i f dins ins fn gp:
+Lemma pass_fn_correct a f2i f dins ins fn:
   pass_fn f2i fn = CSuccess dins →
   ins = deep_to_asm_instrs a dins →
   f2i !! f = Some a →
   NoDup (fn.(lfd_args) ++ fn.(lfd_vars).*1) →
   (∀ f' i', f2i !! f' = Some i' → ins !! i' = None ↔ f' ≠ f) →
   trefines (MS asm_module (initial_asm_state ins))
-           (MS (imp_to_asm (dom _ ins) {[f]} f2i gp imp_module) (initial_imp_to_asm_state imp_module
+           (MS (imp_to_asm (dom _ ins) {[f]} f2i imp_module) (initial_imp_to_asm_state imp_module
              (initial_imp_lstate (<[f := fn]> ∅)))).
 Proof.
   unfold pass_fn.
