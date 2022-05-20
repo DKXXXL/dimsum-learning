@@ -788,11 +788,11 @@ Qed.
 
 (** * Main vertical compositionality theorem:  *)
 
-Lemma i2a_bij_vertical m σ `{!VisNoAll m} ins fns f2i:
+Lemma i2a_bij_vertical m σ moinit `{!VisNoAll m} ins fns f2i:
   trefines (MS (imp_to_asm ins fns f2i (imp_heap_bij m))
-               (initial_imp_to_asm_state (imp_heap_bij m) (initial_imp_heap_bij_state m σ)))
+               (initial_imp_to_asm_state moinit (imp_heap_bij m) (initial_imp_heap_bij_state m σ)))
            (MS (imp_to_asm ins fns f2i m)
-               (initial_imp_to_asm_state m σ))
+               (initial_imp_to_asm_state moinit m σ))
 .
 Proof.
   unshelve apply: mod_prepost_combine. {
@@ -839,13 +839,13 @@ Proof.
           hob ⊆ i2a_ih_constant ih
 ). }
   { simpl. split_and!; [done..|].
-    eexists ∅, ∅, ∅, ∅, ∅, ∅, ∅, initial_heap_state, ∅, initial_heap_state. split!.
-    - by rewrite map_difference_empty.
+    eexists moinit, ∅, moinit, ∅, ∅, ∅, ∅, initial_heap_state, ∅, initial_heap_state. split!.
+    - by rewrite map_difference_diag.
     - rewrite map_difference_empty. compute_done.
-    - iSplit; iIntros!; [|done].
+    - iSplit; iIntros!; [|done]. iFrame.
       rewrite /i2a_mem_map i2a_ih_shared_empty /i2a_combine_bij omap_empty !big_sepM_empty. done.
     - apply: satisfiable_mono; [apply i2a_res_init|]. iIntros!. iFrame.
-      rewrite i2a_ih_shared_empty big_sepM_empty. iSplit; [|done].
+      rewrite i2a_ih_shared_empty /i2a_mem_map !big_sepM_empty. iSplit; [|done].
       iDestruct select (i2a_heap_inv _) as (ih Hsub ?) "(?&?&?)".
       have -> : ih = ∅; [|done]. apply map_eq => i. apply option_eq => ?. split => // ?.
       have : i ∈ h_provs initial_heap_state; [|done]. apply Hsub. by apply elem_of_dom.

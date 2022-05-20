@@ -91,7 +91,7 @@ Lemma int_to_ptr_asm_refines_itree :
   trefines (MS asm_module (initial_asm_state int_to_ptr_asm))
            (MS (imp_to_asm (dom _ int_to_ptr_asm) int_to_ptr_fns int_to_ptr_f2i
                            (mod_itree imp_event (gmap prov Z)))
-               (initial_imp_to_asm_state (mod_itree _ _) (int_to_ptr_itree, ∅))).
+               (initial_imp_to_asm_state ∅ (mod_itree _ _) (int_to_ptr_itree, ∅))).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember. { simpl. exact (λ _ σa '(σf, (t, ps), (pp, σi2a, P)),
@@ -102,7 +102,7 @@ Proof.
     σf = SMFilter ∧
     pp = PPOutside ∧
     (P ⊢ [∗ map] p↦z∈ps, i2a_heap_shared p z)). }
-  { split!. by rewrite big_sepM_empty. } { done. }
+  { split!. iIntros!. by rewrite big_sepM_empty. } { done. }
   move => n _ Hloop [????] [[?[? ps]][[??]?]] ?. destruct_all?; simplify_eq/=.
   tstep_i => ????? Hi. tstep_s. split!.
   tstep_i => ??. simplify_map_eq.
@@ -277,7 +277,7 @@ Definition main_asm_dom : gset Z := locked (dom _) main_asm.
 Lemma main_asm_refines_imp :
   trefines (MS asm_module (initial_asm_state main_asm))
            (MS (imp_to_asm (dom _ main_asm) {["main"]} main_f2i imp_module)
-               (initial_imp_to_asm_state imp_module (initial_imp_state main_imp_prog))).
+               (initial_imp_to_asm_state ∅ imp_module (initial_imp_state main_imp_prog))).
 Proof.
   apply: compile_correct; [|done|..].
   - by vm_compute.
@@ -394,7 +394,7 @@ Lemma top_level_refines_itree :
                                      (dom _ main_imp_prog ∪ int_to_ptr_fns)
                                      main_f2i
                                      (mod_itree _ _)) (mod_itree _ _))
-               (MLFNone, None, initial_imp_to_asm_state (mod_itree _ _) (main_itree, tt), (exit_itree, tt)))
+               (MLFNone, None, initial_imp_to_asm_state ∅ (mod_itree _ _) (main_itree, tt), (exit_itree, tt)))
            (MS (mod_itree _ _) (top_level_itree, tt)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
@@ -414,7 +414,7 @@ Proof.
   { apply: satisfiable_mono; [by eapply i2a_res_init|].
     iIntros!.
     iDestruct (i2a_mem_inv_init with "[$] [$]") as "$"; [done..|].
-    iFrame. rewrite i2a_args_nil. iSplit; [done|]. iAccu. }
+    iFrame. rewrite /i2a_mem_map i2a_args_nil big_sepM_empty. iSplit; [done|]. iSplit; [done|]. iAccu. }
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
@@ -481,6 +481,7 @@ Proof.
         apply: imp_to_asm_combine.
         - compute_done.
         - compute_done.
+        - done.
         - move => ??. eexists 200. split; [compute_done|]. set_solver.
         - move => ?. set_solver.
         - move => ???. rewrite /main_f2i /int_to_ptr_f2i !lookup_insert_Some.
@@ -499,7 +500,7 @@ Proof.
   }
   etrans. {
     etrans; [|apply: (top_level_refines_itree)].
-    rewrite dom_union_L /main_asm_dom. unlock. done.
+    rewrite dom_union_L /main_asm_dom left_id_L. unlock. done.
   }
   done.
 Qed.

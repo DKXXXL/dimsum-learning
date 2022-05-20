@@ -1392,7 +1392,7 @@ Lemma pass_correct a f2i f s' dins ins fn:
   NoDup (fn.(lfd_args) ++ fn.(lfd_vars).*1) →
   (∀ f' i', f2i !! f' = Some i' → ins !! i' = None ↔ f' ≠ f) →
   trefines (MS asm_module (initial_asm_state ins))
-           (MS (imp_to_asm (dom _ ins) {[f]} f2i imp_module) (initial_imp_to_asm_state imp_module
+           (MS (imp_to_asm (dom _ ins) {[f]} f2i imp_module) (initial_imp_to_asm_state ∅ imp_module
              (initial_imp_lstate (<[f := fn]> ∅)))).
 Proof.
   move => Hrun ? Ha /NoDup_app[?[??]] Hf2i.
@@ -1573,7 +1573,7 @@ Lemma pass_fn_correct a f2i f dins ins fn:
   NoDup (fn.(lfd_args) ++ fn.(lfd_vars).*1) →
   (∀ f' i', f2i !! f' = Some i' → ins !! i' = None ↔ f' ≠ f) →
   trefines (MS asm_module (initial_asm_state ins))
-           (MS (imp_to_asm (dom _ ins) {[f]} f2i imp_module) (initial_imp_to_asm_state imp_module
+           (MS (imp_to_asm (dom _ ins) {[f]} f2i imp_module) (initial_imp_to_asm_state ∅ imp_module
              (initial_imp_lstate (<[f := fn]> ∅)))).
 Proof.
   unfold pass_fn.

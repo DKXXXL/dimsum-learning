@@ -132,7 +132,7 @@ Ltac simpl_map_ext tac ::=
 
 Lemma asm_add_refines_imp_add :
   trefines (MS asm_module (initial_asm_state asm_add))
-           (MS (imp_to_asm (dom _ asm_add) (dom _ imp_add_prog) (<["add" := 100]> ∅) imp_module) (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_prog))).
+           (MS (imp_to_asm (dom _ asm_add) (dom _ imp_add_prog) (<["add" := 100]> ∅) imp_module) (initial_imp_to_asm_state ∅ imp_module (initial_imp_state imp_add_prog))).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
   move => n i rs mem K f fn vs h cs pc ret gp rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
@@ -161,7 +161,7 @@ Lemma asm_add_client_refines_imp_add_client :
   trefines (MS asm_module (initial_asm_state asm_add_client))
            (MS (imp_to_asm (dom _ asm_add_client) (dom _ imp_add_client_prog)
                            (<["add_client" := 200]> $ <["add" := 100]> ∅) imp_module)
-               (initial_imp_to_asm_state imp_module (initial_imp_state imp_add_client_prog) )).
+               (initial_imp_to_asm_state ∅ imp_module (initial_imp_state imp_add_client_prog) )).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
   move => n i rs mem K f fn vs h cs pc ret gp rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
@@ -274,7 +274,7 @@ Lemma full_add_stack :
   trefines (MS asm_module (initial_asm_state full_asm_add))
            (MS (imp_to_asm {[ 100; 101; 200; 201; 202; 203; 204; 205 ]} {[ "add"; "add_client" ]}
                            (<["add_client" := 200]> $ <["add" := 100]> ∅) imp_module)
-               (initial_imp_to_asm_state imp_module (initial_imp_state full_imp_add_prog))).
+               (initial_imp_to_asm_state ∅ imp_module (initial_imp_state full_imp_add_prog))).
 Proof.
   etrans. {
     apply asm_link_refines_prod. { unfold asm_add, asm_add_client. eauto with map_disjoint. }
@@ -290,6 +290,7 @@ Proof.
     - apply _.
     - set_solver.
     - set_solver.
+    - done.
     - move => f ?. have ->: f = "add" by set_solver. eexists 100; simplify_map_eq. set_solver.
     - move => f ?. have ->: f = "add_client" by set_solver. eexists 200; simplify_map_eq. set_solver.
     - move => f ??. rewrite !lookup_insert_Some => ??. naive_solver.
@@ -301,6 +302,7 @@ Proof.
     apply imp_prod_refines_link.
     unfold imp_add_prog, imp_add_client_prog. eauto with map_disjoint.
   }
+  rewrite left_id.
   done.
   (* etrans. { *)
   (*   apply: imp_to_asm_trefines. *)

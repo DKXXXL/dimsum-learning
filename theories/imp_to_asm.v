@@ -1217,13 +1217,14 @@ Definition imp_to_asm (ins : gset Z) (fns : gset string) (f2i : gmap string Z)
            (m : module imp_event) : module asm_event :=
   mod_prepost (imp_to_asm_pre ins fns f2i) (imp_to_asm_post ins fns f2i) m.
 
-Definition initial_imp_to_asm_state (m : module imp_event) (σ : m.(m_state)) :=
-  (@SMFilter imp_event, σ, (@PPOutside imp_event asm_event, I2A [] ∅, (True : uPred imp_to_asmUR)%I)).
+Definition initial_imp_to_asm_state (mo : gmap Z (option Z)) (m : module imp_event) (σ : m.(m_state)) :=
+  (@SMFilter imp_event, σ, (@PPOutside imp_event asm_event, I2A [] ∅,
+    (i2a_mem_map mo)%I)).
 
-Lemma imp_to_asm_trefines m m' σ σ' ins fns f2i `{!VisNoAll m}:
+Lemma imp_to_asm_trefines mo m m' σ σ' ins fns f2i `{!VisNoAll m}:
   trefines (MS m σ) (MS m' σ') →
-  trefines (MS (imp_to_asm ins fns f2i m) (initial_imp_to_asm_state m σ))
-           (MS (imp_to_asm ins fns f2i m') (initial_imp_to_asm_state m' σ')).
+  trefines (MS (imp_to_asm ins fns f2i m) (initial_imp_to_asm_state mo m σ))
+           (MS (imp_to_asm ins fns f2i m') (initial_imp_to_asm_state mo m' σ')).
 Proof. move => ?. by apply: mod_prepost_trefines. Qed.
 
 Inductive imp_to_asm_combine_stacks (ins1 ins2 : gset Z) :
@@ -1276,23 +1277,24 @@ Local Ltac split_solve :=
 Local Ltac split_tac ::=
   repeat (original_split_tac; try split_solve).
 
-Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m2}:
+Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 mo1 mo2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m2}:
   ins1 ## ins2 →
   fns1 ## fns2 →
+  mo1 ##ₘ mo2 →
   (∀ f, f ∈ fns1 → ∃ i, i ∈ ins1 ∧ f2i1 !! f = Some i) →
   (∀ f, f ∈ fns2 → ∃ i, i ∈ ins2 ∧ f2i2 !! f = Some i) →
   (∀ f i1 i2, f2i1 !! f = Some i1 → f2i2 !! f = Some i2 → i1 = i2) →
   (∀ f i, f2i1 !! f = Some i → i ∈ ins2 → f ∈ fns2) →
   (∀ f i, f2i2 !! f = Some i → i ∈ ins1 → f ∈ fns1) →
   trefines (MS (asm_prod ins1 ins2 (imp_to_asm ins1 fns1 f2i1 m1) (imp_to_asm ins2 fns2 f2i2 m2))
-               (MLFNone, None, initial_imp_to_asm_state m1 σ1,
-                 initial_imp_to_asm_state m2 σ2))
+               (MLFNone, None, initial_imp_to_asm_state mo1 m1 σ1,
+                 initial_imp_to_asm_state mo2 m2 σ2))
            (MS (imp_to_asm (ins1 ∪ ins2) (fns1 ∪ fns2) (f2i1 ∪ f2i2) (imp_prod fns1 fns2 m1 m2))
-               (initial_imp_to_asm_state (imp_prod _ _ _ _)
+               (initial_imp_to_asm_state (mo1 ∪ mo2) (imp_prod _ _ _ _)
                   (MLFNone, [], σ1, σ2) )
 ).
 Proof.
-  move => Hdisji Hdisjf Hin1 Hin2 Hagree Ho1 Ho2.
+  move => Hdisji Hdisjf Hdisjm Hin1 Hin2 Hagree Ho1 Ho2.
   unshelve apply: mod_prepost_link. { exact (λ ips '(I2A cs1 lr1) '(I2A cs2 lr2) '(I2A cs lr) x1 x2 x s ics,
   imp_to_asm_combine_stacks ins1 ins2 ips ics cs cs1 cs2 ∧ s = None ∧
   ((ips = SPNone ∧ (x ⊣⊢ x1 ∗ x2)) ∨
@@ -1301,7 +1303,7 @@ Proof.
   (ips = SPRight ∧ x2 = (x ∗ x1)%I
       ∧ map_scramble touched_registers lr lr2)))). }
   { move => ?? [] /=*; naive_solver. }
-  { split!. econs. by rewrite right_id. }
+  { split!. econs. by rewrite /i2a_mem_map big_sepM_union. }
   all: move => [cs1 lr1] [cs2 lr2] [cs lr] x1 x2 x ? ics.
   - move => e ? e' /= ? ?.
     destruct_all?; simplify_eq.
@@ -1445,7 +1447,7 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
                (SMProg, Imp (expr_fill K (AllocA fn.(fd_vars) $ subst_l fn.(fd_args) vs fn.(fd_body))) h fns, (PPInside, I2A cs lr, rf))
 ) →
   trefines (MS asm_module (initial_asm_state ins))
-           (MS (imp_to_asm ins_dom fns_dom f2i imp_module) (initial_imp_to_asm_state imp_module
+           (MS (imp_to_asm ins_dom fns_dom f2i imp_module) (initial_imp_to_asm_state ∅ imp_module
              (initial_imp_state fns))).
 Proof.
   move => ? ? Hf. subst.
