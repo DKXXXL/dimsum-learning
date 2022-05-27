@@ -20,14 +20,12 @@ struct gt gttbl[2];
 char stack[StackSize];
 int gtcur = 0;
 
-void gtinit(void);
 void gtswtch(struct gt *old, struct gt *new);
-bool gtyield(void);
+void gtyield(void);
 /* static void gtstop(void); */
 int gtgo(void (*f)(void));
 
-bool
-gtyield(void)
+void gtyield(void)
 {
 	struct gt *old, *new;
 
@@ -35,7 +33,6 @@ gtyield(void)
         gtcur = (gtcur+1)%2; // rand()%2;
 	new = &gttbl[gtcur];
 	gtswtch(old, new);
-	return true;
 }
 
 /* static void */
