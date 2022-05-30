@@ -150,87 +150,147 @@ Compute test_opt_fn test_fn_3.
 
 
 
-
-Lemma subst_map_var_val_identical x v vss vsi:
-  (∀ y, y ≠ x → vss !! y = vsi !! y) →
-  v ≠ VVar x →
-  subst_map vss (var_val_to_expr v) = subst_map vsi (var_val_to_expr v).
-Proof.
-  destruct v as [y|]; last done.
-  intros Hlook Hneq.
-  assert (y ≠ x) as Heq%Hlook by naive_solver.
-  rewrite /= Heq //.
-Qed.
+Definition empty_block (l: loc) (n: Z) : gmap Z val :=
+  gmap_curry (list_to_map ((λ z : Z, (l +ₗ z, ValNum 0%Z)) <$> seqZ 0 n)) !!! l.1.
 
 
-Lemma pass_lexpr_op_correct ei' Ki ei Ks es es' x (l: loc) n hi hs fns1 fns2 vsi vss w rf upd
+Definition imp_heap_bij_cont n fns1 fns2 Ks Ki r :=
+  (∀ n' v1 v2 h1' h2' rf' b,
+      n' ⊆ n →
+      satisfiable (heap_bij_inv h1' h2' ∗ val_in_bij v1 v2 ∗ r ∗ rf') →
+      Imp (expr_fill Ki (Val v1)) h1' fns1
+        ⪯{imp_module, imp_heap_bij imp_module, n', b}
+      (SMProg, Imp (expr_fill Ks (Val v2)) h2' fns2, (PPInside, (), rf'))).
+
+
+(* FIXME: place these definitions somewhere shared *)
+Definition lookup_var_val (vs : gmap string val) (v : var_val) : option val :=
+  match v with
+  | VVal v => Some (static_val_to_val v)
+  | VVar v => vs !! v
+  end.
+
+Lemma lookup_var_val_to_expr vs v v' :
+  lookup_var_val vs v = Some v' →
+  subst_map vs (var_val_to_expr v) = Val v'.
+Proof. by destruct v => //= ?; simplify_option_eq. Qed.
+
+Lemma lookup_var_val_to_expr_fmap vs v v' :
+  Forall2 (λ v v', lookup_var_val vs v = Some v') v v' →
+  subst_map vs <$> (var_val_to_expr <$> v) = Val <$> v'.
+Proof. elim => //; csimpl => ???? /lookup_var_val_to_expr -> ? ->. done. Qed.
+
+Lemma lookup_var_val_mono vs vs' v v':
+  lookup_var_val vs v = Some v' →
+  vs ⊆ vs' →
+  lookup_var_val vs' v = Some v'.
+Proof. destruct v => //. simplify_eq/=. apply lookup_weaken. Qed.
+
+
+
+
+
+
+Lemma pass_lexpr_op_correct ei' Ki ei Ks es es' x k (l: loc) n hi hs fns1 fns2 vsi vss wi ws r rf upd
   `{Hfill1: !ImpExprFill es Ks (subst_map vss (lexpr_op_to_expr es'))}
   `{Hfill2: !ImpExprFill ei Ki (subst_map vsi (lexpr_op_to_expr ei'))}:
     imp_heap_bij_proof_call n fns1 fns2 →
-    crun () (lexpr_op_pass x es') = CResult () upd (CSuccess ei') →
-    (∀ y, y ≠ x → vsi !! y = vss !! y) →
+    (∀ w, imp_heap_bij_cont n fns1 fns2 Ks Ki (r ∗ heap_bij_const_s l.1 (<[0%Z := w]> (empty_block l k)))) →
+    satisfiable (heap_bij_inv hi hs ∗ val_in_bij wi ws ∗ heap_bij_const_s l.1 (<[0%Z := ws]> (empty_block l k)) ∗ ([∗ map] v1;v2 ∈ (delete x vss);(delete x vsi), val_in_bij v1 v2) ∗ r ∗ rf) →
     vss !! x = Some (ValLoc l) →
-    vsi !! x = Some w →
-    (* This should become local ownership eventually *)
-    hs.(h_heap) !! l = Some w →
+    vsi !! x = Some wi →
+    l.2 = 0 →
+    crun () (lexpr_op_pass x es') = CResult () upd (CSuccess ei') →
+    (* FIXME: this is not a realistic assumption, there's more variable stuff missing here *)
+    (∀ v, is_Some (lookup_var_val vss v)) →
+    (∀ v, is_Some (lookup_var_val vsi v)) →
     Imp ei hi fns1
       ⪯{imp_module, imp_heap_bij imp_module, n, true}
     (SMProg, Imp es hs fns2, (PPInside, (), rf)).
 Proof.
-  intros Hbij Hrun Hlook Hxs Hxi Hl; destruct es' as [v|v1 op v2|v|v1 v2|y vs|]; simpl in Hrun.
+  intros Hcalls Hcont Hsat Hxs Hxi Hl Hrun Hlook1 Hlook2.
+  destruct Hfill1 as [->], Hfill2 as [->].
+  destruct es' as [v|v1 op v2|v|v1 v2|y vs|]; simpl in Hrun.
   - rewrite is_var_dec bool_decide_decide in Hrun.
     destruct decide; first by eapply cerror_success in Hrun.
-    eapply cret_success in Hrun as (_ & ? & ?); subst.
-    simpl in Hfill1, Hfill2.
+    eapply cret_success in Hrun as (_ & ? & ?); subst; simpl.
+
+    destruct (Hlook1 v) as [vs Hvs].
+    destruct (Hlook2 v) as [vi Hvi].
+    rewrite (lookup_var_val_to_expr vss _ vs) //.
+    rewrite (lookup_var_val_to_expr vsi _ vi) //.
+    eapply Hcont; first done.
+    iSatMono. iIntros "($ & _ & $ & Hbij & $)".
+    (* FIXME: what if the value here is a literal? *)
     admit.
   - rewrite is_var_dec bool_decide_decide in Hrun.
     destruct decide; first by eapply cerror_success in Hrun.
     rewrite is_var_dec bool_decide_decide in Hrun.
     destruct decide; first by eapply cerror_success in Hrun.
-    eapply cret_success in Hrun as (_ & ? & ?); subst.
-    simpl in Hfill1, Hfill2.
+    eapply cret_success in Hrun as (_ & ? & ?); subst; simpl.
+
+    destruct (Hlook1 v1) as [v1s Hv1s].
+    destruct (Hlook2 v1) as [v1i Hv1i].
+    rewrite (lookup_var_val_to_expr vss _ v1s) //.
+    rewrite (lookup_var_val_to_expr vsi _ v1i) //.
+    destruct (Hlook1 v2) as [v2s Hv2s].
+    destruct (Hlook2 v2) as [v2i Hv2i].
+    rewrite (lookup_var_val_to_expr vss _ v2s) //.
+    rewrite (lookup_var_val_to_expr vsi _ v2i) //.
+
+    tstep_s. intros w' Heval. eapply eval_binop_bij in Heval.
+    (* here we need the same reasoning about the bijection *)
     admit.
   - rewrite is_var_dec bool_decide_decide in Hrun.
     destruct decide; eapply cret_success in Hrun as (_ & ? & ?); subst.
-    + simpl in Hfill1, Hfill2.
-      rewrite Hxs in Hfill1; rewrite Hxi in Hfill2.
-      tstep_s. intros ??; injection 1 as <-; intros ?.
-      simplify_eq.
-      admit. (* there the continuation should apply *)
-    + simpl in Hfill1, Hfill2.
-      (* We should be able to proceed with the load here.
-         Still need to fix the substitution stuff. *)
-      tstep_both. admit.
+    + simpl. rewrite Hxs Hxi.
+      tstep_s. intros ??; injection 1 as <-; intros Heq.
+      eapply Hcont; first done.
+
+      iSatMono.
+      iIntros "(Hbij & Hval & Hl & Hvals & $ & $)".
+      iDestruct (heap_bij_inv_lookup_s with "Hbij Hl") as "%Heq'".
+      rewrite Heq in Heq'. rewrite Hl in Heq'.
+      rewrite lookup_insert in Heq'. simplify_eq. iFrame.
+    + simpl.
+
+      destruct (Hlook1 v) as [vs Hvs].
+      destruct (Hlook2 v) as [vi Hvi].
+      rewrite (lookup_var_val_to_expr vss _ vs) //.
+      rewrite (lookup_var_val_to_expr vsi _ vi) //.
+
+      tstep_s. intros l' v' -> Hlook'. admit.
+      (* iSatStart.
+      iIntros "(Hbij & Hval & Hl & Hvals & ? & ?)".
+      iDestruct (heap_bij_inv_lookup with "Hbij Hl") as "%Heq'". *)
   - rewrite !is_var_dec !bool_decide_decide in Hrun.
     destruct decide; first by eapply cerror_success in Hrun.
     destruct decide.
     + admit.
     + eapply cret_success in Hrun as (_ & ? & ?); subst.
-      simpl in Hfill1, Hfill2.
-      (* We should be able to proceed with the load here.
-         Still need to fix the substitution stuff. *)
-      tstep_both. admit.
+      admit.
   - eapply cbind_success in Hrun as ([] & g & vs' & ? & Hrun1 & Hrun2 & ->).
     eapply cret_success in Hrun2 as (_ & ? & ?); subst.
-    eapply cassert_success in Hrun1 as (_ & ? & ? & ?); subst.
-    simpl in Hfill1, Hfill2.
-    eapply Hbij; eauto.
-    (* we need the function call case here *)
-    all: admit.
-  - eapply cret_success in Hrun as (_ & ? & ?); subst.
-    simpl in Hfill1, Hfill2.
+    eapply cassert_success in Hrun1 as (_ & ? & ? & ?); subst; simpl.
+    eapply Hcalls.
+    { eapply imp_expr_fill_expr_fill, imp_expr_fill_end. }
+    { eapply imp_expr_fill_expr_fill, imp_expr_fill_end. }
+    { done. }
+    { admit. }
+    { admit. }
+    { admit. }
+    { admit. }
+  - eapply cret_success in Hrun as (_ & ? & ?); subst; simpl.
     tstep_s. done.
   Admitted.
 
 
-Definition empty_block (l: loc) (n: Z) : gmap Z val :=
-  gmap_curry (list_to_map ((λ z : Z, (l +ₗ z, ValNum 0%Z)) <$> seqZ 0 n)) !!! l.1.
-
-
-Lemma pass_correct ei' Ki ei Ks es es' x (l: loc) n k h h' fns1 fns2 vsi vss v r rf r_p
+Lemma pass_correct  r rf ei' Ki ei Ks es es' x (l: loc) n k h h' fns1 fns2 vsi vss v r_p
   `{Hfill1: !ImpExprFill es Ks (subst_map vss (lexpr_to_expr es'))}
   `{Hfill2: !ImpExprFill ei Ki (subst_map vsi (lexpr_to_expr ei'))}:
+    l.2 = 0 →
     imp_heap_bij_proof_call n fns1 fns2 →
+    (∀ w, imp_heap_bij_cont n fns1 fns2 Ks Ki (r ∗ heap_bij_const_s l.1 (<[0%Z := w]> (empty_block l k)))) →
     vss !! x = Some (ValLoc l) →
     vsi !! x = Some v →
     satisfiable (heap_bij_inv h h' ∗ heap_bij_const_s l.1 (<[0%Z := v]> (empty_block l k)) ∗ ([∗ map] v1;v2 ∈ (delete x vss);(delete x vsi), val_in_bij v1 v2) ∗ r ∗ rf) →
@@ -238,24 +298,31 @@ Lemma pass_correct ei' Ki ei Ks es es' x (l: loc) n k h h' fns1 fns2 vsi vss v r
     Imp ei h fns1
       ⪯{imp_module, imp_heap_bij imp_module, n, true}
     (SMProg, Imp es h' fns2, (PPInside, (), rf)).
-Proof. Admitted.
-  (* revert ei' Ki ei Ks es x n h h' fns1 fns2 vsi vss rf r_p Hfill1 Hfill2.
+Proof.
+  intros Hl; revert r rf ei' Ki ei Ks es x n k h h' fns1 fns2 vsi vss v r_p Hfill1 Hfill2.
   induction es' as [y op es' IH| op es1' IH1 es2' IH2 | op];
-    intros ei' Ki ei Ks es x n h h' fns1 fns2 vsi vss rf r_p Hfill1 Hfill2;
-    intros Hcall Hrun; simpl in Hrun.
+    intros r rf ei' Ki ei Ks es x n k h h' fns1 fns2 vsi vss v r_p Hfill1 Hfill2;
+    intros Hcall Hcont Hvss Hvsi Hsat Hrun; simpl in Hrun.
   - rewrite bool_decide_decide in Hrun.
     destruct decide.
     + subst. eapply cbind_success in Hrun as ([] & a2 & r2 & a3' & Hrun1 & Hrun2 & ->).
       eapply cret_success in Hrun2 as (_ & -> & ->).
       simpl in Hfill1, Hfill2.
-      admit.
-    + eapply cbind_success in Hrun as ([] & a2 & [e1' upd] & a3' & Hrun1 & Hrun2 & ->).
-      eapply cbind_success in Hrun2 as ([] & a2' & r2 & ? & Hrun2 & Hrun3 & ->).
-      eapply cret_success in Hrun3 as (_ & -> & ->).
-      admit.
+      eapply pass_lexpr_op_correct in Hrun1; first by eapply Hrun1.
+      { rewrite (@imp_expr_fill_proof es). eapply imp_expr_fill_expr_fill, imp_expr_fill_LetE, imp_expr_fill_end. }
+      { rewrite (@imp_expr_fill_proof ei). eapply imp_expr_fill_expr_fill, imp_expr_fill_LetE, imp_expr_fill_end. }
+      { done. }
+      { admit. }
+      { admit. }
+      { done. }
+      { done. }
+      { done. }
+      { admit. }
+      { admit. }
+    + admit.
   - admit.
   - admit.
-Admitted. *)
+Admitted.
 
 
 Lemma pass_lookup_singleton (f g: string) fn fn':
@@ -351,16 +418,25 @@ Proof.
   by erewrite IHL.
 Qed.
 
-Lemma empty_block_insert_zero l k:
-  <[0%Z:=ValNum 0%Z]> (empty_block l k) = empty_block l k.
+Lemma empty_block_insert_zero l (k: Z):
+  (k > 0)%Z → l.2 = 0%Z → <[0%Z:=ValNum 0%Z]> (empty_block l k) = empty_block l k.
 Proof.
-  rewrite /empty_block.
+  intros Hk Hl; rewrite /empty_block.
   eapply map_leibniz, map_equiv_iff; intros i.
   destruct (decide (i = 0)).
   - subst. rewrite lookup_insert gmap_curry_total_lookup.
-    symmetry. admit.
+    symmetry. eapply leibniz_equiv_iff.
+    eapply elem_of_list_to_map_1; last first.
+    { eapply elem_of_list_fmap. exists 0%Z. rewrite elem_of_seqZ.
+      split; last lia. rewrite shift_loc_0. f_equal.
+      destruct l; simpl in *. by subst. }
+    eapply NoDup_fmap_fst; last first.
+    { eapply NoDup_fmap_2, NoDup_seqZ.
+      intros z1 z2; injection 1. lia. }
+    intros x y1 y2 [? []]%elem_of_list_fmap_2 [? []]%elem_of_list_fmap_2.
+    by simplify_eq.
   - rewrite lookup_insert_ne //.
-Admitted.
+Qed.
 
 
 Lemma pass_correct_refines' f x args vars exprs i k cont expri:
@@ -429,10 +505,18 @@ Proof.
       naive_solver. }
 
 
-    eapply (pass_correct _ _ _ _ _ _ _ l); last done.
+    eapply (pass_correct (r ∗ [∗ list] l1;l2 ∈ li;delete i ls, loc_in_bij l1 l2) _ _ _ _ _ _ _ _ l _ k); last done.
     + eapply imp_expr_fill_expr_fill, imp_expr_fill_FreeA, imp_expr_fill_end.
     + eapply imp_expr_fill_expr_fill, imp_expr_fill_FreeA, imp_expr_fill_end.
+    + admit. (* this is part of the freshness of l *)
     + done.
+    + simpl. intros w n' v1 v2 h1' h2' rf' b Hle Hsat'. simpl.
+      tstep_s. intros h2'' Hfree.
+      iSatStart Hsat'. iIntros "(Hbij & Hv & [_ Hlocs] & Hl)".
+      admit.
+      (* FIXME: here we need something for releasing the location that is not in bijection *)
+      (* tstep_i. eexists. split; first admit. *)
+      (* eapply Hcont; [done|].  *)
     + rewrite list_to_map_app lookup_union_r; last first.
       { admit. }
       eapply elem_of_list_to_map.
@@ -440,14 +524,32 @@ Proof.
       eapply (elem_of_list_lookup_2 _ i).
       admit.
     + rewrite lookup_insert //.
-    + rewrite empty_block_insert_zero.
+    + rewrite (empty_block_insert_zero l k); last first.
+      { admit. }
+      { admit. }
       iSatMonoBupd. iIntros "(Hbij & Hvals & r & rf)".
-      iFrame "rf". iMod (heap_bij_alloc_elim with "Hbij") as "(Hbij & Hconst & Hlocs)"; eauto.
+      iFrame "rf r". iMod (heap_bij_alloc_elim with "Hbij") as "(Hbij & Hconst & #Hlocs)"; eauto.
       { rewrite list_lookup_fmap Heq //. }
       { rewrite -list_delete_fmap //. }
-      iFrame "Hbij Hconst".
+      iFrame "Hbij Hconst Hlocs".
       rewrite delete_insert_delete.
-      rewrite delete_notin; last admit.
+      (* we resolve the remaining open things with an induction *)
+      iStopProof.
+      clear Hcalls Hcont h' Halloc h Heap Hsat Hall.
+      revert vs1 vs2 Hlen1 Hlen2.
+      induction args as [|a args IH].
+      * intros [|v1 vs1] [|v2 vs2]; try discriminate.
+        intros _ _. simpl.
+        revert i li Hlen Hl Heq. fold ls.
+        generalize ls. clear ls. admit.
+        (* induction vars as [|[y p] vars IH].
+        -- discriminate.
+        -- intros [|l' ls] i li Hlen Hl Heq; try discriminate.
+           injection Hlen as Hlen. rewrite !fmap_cons.
+           destruct i as [|i].
+           ++ simpl in *. injection Hl as ?. injection Heq as ??. subst.
+              rewrite delete_insert_delete.
+              iIntros "Hctx". iMod (IH with "[Hctx]"). *)
 Admitted.
 
 
