@@ -5,7 +5,7 @@ Inductive var_val :=
 | VVal (v : static_val).
 
 Global Instance var_val_eqdec : EqDecision var_val.
-Proof. solve_decision. Qed.
+Proof. solve_decision. Defined.
 
 Definition var_val_to_expr (v : var_val) : expr :=
   match v with
