@@ -17,7 +17,7 @@ Require Import refframe.imp_heap_bij_own.
 
 Module ci2a_mem2reg.
 
-Inductive error := UsedAsLoc.
+Inductive error := UsedAsLoc | NotSupported.
 
 Definition M := compiler_monad unit (fn_compiler_monoid (option var_val)) error.
 
@@ -63,7 +63,7 @@ Definition lexpr_op_pass (x: string) (e: lexpr_op) : M lexpr_op :=
   end.
 
 
-Definition LetM (x: string) (v: option var_val) (e: lexpr) :=
+Definition LLetM (x: string) (v: option var_val) (e: lexpr) :=
   match v with
   | None => e
   | Some w => LLetE x (LVarVal w) e
@@ -78,15 +78,22 @@ Fixpoint pass (x: string) (e : lexpr) : M lexpr :=
     else
       '(e1', f) ← cscope (lexpr_op_pass x e1);
       e2' ← pass x e2;
+      (* FIXME: discuss this constraint *)
+      (* f None is the var_val that is assigned to x in e1'.
+         if that var_val is v, then the meaning changes when
+         we move the assignment to x underneath the
+         assignment of v.*)
+      cassert NotSupported (f None ≠ Some (VVar v));;
       mret $
-        LetM x (f None) $
-        LLetE v e1' $ e2'
+        LLetE v e1' $
+        LLetM x (f None) $
+        e2'
   | LIf e1 e2 e3 =>
     '(e1', f) ← cscope (lexpr_op_pass x e1);
     e2' ← pass x e2;
     e3' ← pass x e3;
     mret $
-      LIf e1' (LetM x (f None) e2') (LetM x (f None) e3')
+      LIf e1' (LLetM x (f None) e2') (LLetM x (f None) e3')
   | LEnd e =>
     e' ← lexpr_op_pass x e;
     mret $ LEnd e'
@@ -279,14 +286,53 @@ Local Existing Instance imp_expr_fill_Load.
 Local Existing Instance imp_expr_fill_StoreR.
 Local Existing Instance imp_expr_fill_StoreL.
 Local Existing Instance imp_expr_fill_LetE.
+Local Existing Instance imp_expr_fill_If.
 
 
 
-Lemma heap_update_block hs l w2 k:
+Lemma gmap_curry_total_lookup {K1 K2 : Type} `{Countable K1} `{Countable K2} {A : Type} (m : gmap (K1 * K2) A) (i : K1) (j : K2):
+  ((gmap_curry m !!! i): gmap K2 A) !! j = m !! (i, j).
+Proof.
+  rewrite -lookup_gmap_curry lookup_total_alt.
+  destruct (gmap_curry m !! i); simpl; first done.
+  by eapply lookup_empty.
+Qed.
+
+Lemma block_heap_alloc h l n:
+  heap_is_fresh h l →
+  (h_block (heap_alloc h l n) l.1) = empty_block l n.
+Proof.
+  intros Hfresh.
+  rewrite /h_block /heap_alloc /empty_block /=.
+  eapply map_leibniz, map_equiv_iff; intros i.
+  rewrite !gmap_curry_total_lookup.
+  assert (h_heap h !! (l.1, i) = None) as Hlook.
+  { rewrite /heap_is_fresh in Hfresh.
+    destruct lookup eqn: Hlook; last done.
+    destruct l; simpl in *.
+    exfalso. eapply Hfresh, (heap_wf _ (p, i)); eauto.
+  }
+  rewrite lookup_union; rewrite Hlook; clear Hlook.
+  destruct lookup; done.
+Qed.
+
+Lemma heap_update_block hs l w1 w2 k:
+  l.2 = 0%Z →
+  (∀ z, h_heap hs !! (l.1, z) = (<[0%Z:=w1]> (empty_block l k) !! z)) →
   (h_block (heap_update hs l w2) l.1) = (<[0%Z:=w2]> (empty_block l k)).
 Proof.
-  rewrite /h_block /heap_update /=.
-Admitted.
+  intros Hz Hs. rewrite /h_block /heap_alloc /=.
+  eapply map_leibniz, map_equiv_iff; intros i.
+  rewrite !gmap_curry_total_lookup.
+  destruct l as [p z]; simpl in *; subst.
+  destruct (decide (i = 0%Z)); subst.
+  - rewrite lookup_insert.
+    rewrite lookup_alter.
+    rewrite Hs lookup_insert //.
+  - rewrite lookup_insert_ne //.
+    rewrite lookup_alter_ne; last by naive_solver.
+    rewrite Hs. rewrite lookup_insert_ne //.
+Qed.
 
 
 Lemma imp_heap_bij_proof_call_downclosed n n' fns1 fns2:
@@ -362,7 +408,13 @@ Proof.
       eapply Hcont; [done..|].
       iSatMonoBupd. iIntros "(Hvals & #Hbij & Hinv & #Hval & Hl & r & rf)".
       iMod (heap_bij_inv_update_s with "Hinv Hl") as "[Hinv Hl]".
-      iFrame. erewrite heap_update_block. iFrame. by iFrame "Hbij".
+      iFrame. erewrite heap_update_block; last first.
+      { intros z. destruct l as [p z']; simpl in Hl. subst.
+        iSatStart. iIntros "(? & ? & Hinv & ? & Hl & ?)"; simpl.
+        iDestruct (heap_bij_inv_lookup_s (p, z) with "Hinv Hl") as "%".
+        iSatStop. iSatClear. done. }
+      { done. }
+      { iFrame. by iFrame "Hbij". }
     + apply: (lexpr_tsim_var_val); eauto; clear Hsat.
       intros w1 w2 _ _ Hsat; simpl.
       apply: (lexpr_tsim_var_val); eauto; clear Hsat.
@@ -391,13 +443,13 @@ Qed.
 
 
 
-Lemma LetM_sim Ki Ks vsi vss x o ei es n hi hs fns1 fns2 rf vi wi:
+Lemma LLetM_sim Ki Ks vsi vss x o ei es n hi hs fns1 fns2 rf vi wi:
   vsi !! x = Some vi →
   default (Val vi) (subst_map vsi <$> (var_val_to_expr <$> o)) = Val wi →
   Imp (expr_fill Ki (subst_map (<[x := wi]> vsi) (lexpr_to_expr ei))) hi fns1
     ⪯{imp_module, imp_heap_bij imp_module, n, true}
   (SMProg, Imp (expr_fill Ks (subst_map vss (lexpr_to_expr es))) hs fns2, (PPInside, (), rf)) →
-  Imp (expr_fill Ki (subst_map vsi (lexpr_to_expr (LetM x o ei)))) hi fns1
+  Imp (expr_fill Ki (subst_map vsi (lexpr_to_expr (LLetM x o ei)))) hi fns1
     ⪯{imp_module, imp_heap_bij imp_module, n, true}
   (SMProg, Imp (expr_fill Ks (subst_map vss (lexpr_to_expr es))) hs fns2, (PPInside, (), rf)).
 Proof.
@@ -444,19 +496,66 @@ Proof.
     + (* FIXME: the next step should be automatic *)
       destruct x0, x2.
       simplify_crun_eq.
-(*
-      eapply LetM_sim.
 
       apply: pass_lexpr_op_correct; eauto; last first.
-      { iSatMono. iIntros "($ & $ & $ & $ & r & $)". iExact "r". }
+      { iSatMono. iIntros "($ & $ & $ & #H & r & $)". iFrame "H". iCombine "H r" as "r". iExact "r". }
       simpl. clear Hsat. intros w1 w2 Hdef. intros n' v1 v2 h1' h2' rf' b Hsub Hsat.
       simpl. tstep_s. tstep_i.
-      rewrite -!subst_subst_map_delete orb_true_r. *)
-      admit.
-  - admit.
-  - admit.
-Admitted.
+      rewrite -!subst_subst_map_delete orb_true_r.
+      eapply LLetM_sim.
+      { rewrite lookup_insert_ne //. }
+      { destruct o; last done.
+        rewrite -Hdef /=. simpl in Hdef.
+        destruct v as [z|]; last done; simpl.
+        destruct (decide (z = y)); subst; first naive_solver.
+        rewrite lookup_insert_ne //. }
+      eapply IH; eauto using imp_heap_bij_proof_call_downclosed; first last.
+      { iSatMono. iIntros "($ & Hv & ([Hall r] & $ & $) & $)".
+        rewrite delete_insert_delete. rewrite !delete_insert_ne //.
+        iSplitR "r"; last iExact "r".
+        iApply (big_sepM2_insert_2 with "[Hv] Hall"); simpl.
+        iFrame. }
+      { set_solver. }
+      { rewrite lookup_insert //. }
+      { rewrite lookup_insert_ne //. }
+      clear Hsat. intros w n'' v3 v4 h1'' h2'' rf'' b' Hn'' Hsat.
+      eapply Hcont; eauto. by etrans.
+  - simplify_crun_eq.
+    (* FIXME: the next step should be automatic *)
+    destruct x0, x2.
+    simplify_crun_eq.
+    destruct x0.
 
+    apply: pass_lexpr_op_correct; eauto; last first.
+    { iSatMono. iIntros "($ & $ & $ & #H & r & $)". iFrame "H". iCombine "H r" as "r". iExact "r". }
+    simpl. clear Hsat. intros w1 w2 Hdef. intros n' v1 v2 h1' h2' rf' b Hsub Hsat.
+    simpl. tstep_s. intros bb ->.
+    assert (v1 = ValBool bb) as ->.
+    { iSatStart. iIntros "(? & Hval & ? & ?)". destruct v1; eauto.
+      iDestruct "Hval" as "%". subst. iSatStop. done. }
+    tstep_i. rewrite orb_true_r.
+    destruct bb; eapply LLetM_sim; eauto.
+    + eapply IH1; eauto using imp_heap_bij_proof_call_downclosed; first last.
+      { iSatMono. iIntros "($ & Hv & ([Hall r] & $ & $) & $)".
+        rewrite delete_insert_delete. iFrame. iExact "r". }
+      { set_solver. }
+      { rewrite lookup_insert //. }
+      clear Hsat. intros w n'' v3 v4 h1'' h2'' rf'' b' Hn'' Hsat.
+      eapply Hcont; eauto. by etrans.
+    + eapply IH2; eauto using imp_heap_bij_proof_call_downclosed; first last.
+      { iSatMono. iIntros "($ & Hv & ([Hall r] & $ & $) & $)".
+        rewrite delete_insert_delete. iFrame. iExact "r". }
+      { set_solver. }
+      { rewrite lookup_insert //. }
+      clear Hsat. intros w n'' v3 v4 h1'' h2'' rf'' b' Hn'' Hsat.
+      eapply Hcont; eauto. by etrans.
+  - simplify_crun_eq.
+    apply: pass_lexpr_op_correct; eauto; last first.
+    { iSatMono. iIntros "($ & $ & $ & $ & r & $)". iExact "r". }
+    simpl. clear Hsat. intros w1 w2 Hdef. intros n' v1 v2 h1' h2' rf' b Hsub Hsat.
+    simpl. eapply Hcont; eauto.
+    iSatMono. iIntros "($ & $ & ($ & $ & ?) & $)".
+Admitted.
 
 Lemma pass_lookup_singleton (f g: string) fn fn':
   (lfndef_to_fndef <$> <[f:=fn]> ∅: gmap string fndef) !! g = Some fn' →
@@ -485,32 +584,6 @@ Proof.
     simpl; by rewrite Hlen.
 Qed.
 
-
-Lemma gmap_curry_total_lookup {K1 K2 : Type} `{Countable K1} `{Countable K2} {A : Type} (m : gmap (K1 * K2) A) (i : K1) (j : K2):
-  ((gmap_curry m !!! i): gmap K2 A) !! j = m !! (i, j).
-Proof.
-  rewrite -lookup_gmap_curry lookup_total_alt.
-  destruct (gmap_curry m !! i); simpl; first done.
-  by eapply lookup_empty.
-Qed.
-
-Lemma block_heap_alloc h l n:
-  heap_is_fresh h l →
-  (h_block (heap_alloc h l n) l.1) = empty_block l n.
-Proof.
-  intros Hfresh.
-  rewrite /h_block /heap_alloc /empty_block /=.
-  eapply map_leibniz, map_equiv_iff; intros i.
-  rewrite !gmap_curry_total_lookup.
-  assert (h_heap h !! (l.1, i) = None) as Hlook.
-  { rewrite /heap_is_fresh in Hfresh.
-    destruct lookup eqn: Hlook; last done.
-    destruct l; simpl in *.
-    exfalso. eapply Hfresh, (heap_wf _ (p, i)); eauto.
-  }
-  rewrite lookup_union; rewrite Hlook; clear Hlook.
-  destruct lookup; done.
-Qed.
 
 Lemma heap_bij_alloc_elim vs l ls li i h1 h2 n h h':
   ls !! i = Some l →
