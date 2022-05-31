@@ -232,6 +232,11 @@ Lemma tsim_implies_trefines {EV} (mi ms : mod_state EV) :
   trefines mi ms.
 Proof. move => Hsim. constructor => ? /thas_trace_n [??]. by apply: Hsim => /=. Qed.
 
+Lemma trefines_implies_tsim {EV} (mi ms : module EV) σi σs n b:
+  trefines (MS mi σi) (MS ms σs) →
+  σi ⪯{mi, ms, n, b} σs.
+Proof. move => [Hr] ??? /=?. apply Hr. by apply: thas_trace_n_2. Qed.
+
 Lemma tsim_mono_to_true {EV} {mi ms : module EV} σi σs n n' κs:
   σi ⪯{mi, ms, n', true, κs} σs →
   tiS n ⊆ n' →

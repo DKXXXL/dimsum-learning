@@ -633,11 +633,23 @@ Lemma i2a_heap_shared_agree_of_pure ih h m :
   i2a_mem_map m -∗
   i2a_heap_shared_agree h ih.
 Proof.
-  iIntros ([m2l Hag]) "#Hsh Hm".
-  (* iApply (big_sepM_kmap_intro). *)
-  (* iApply (big_sepM_impl_strong' with "[Hm]"). *)
-  (* iApply (big_sepM_kmap_intro). *)
-Admitted.
+  iIntros (Hag) "#Hsh Hm".
+  iInduction h as [|l v h Hl] "IH" using map_ind forall (m Hag). { by iApply big_sepM_empty. }
+  move: Hag => [m2l /map_Forall_insert [//|? Hag]].
+  iApply big_sepM_insert; [done|].
+  case_match as Heq; destruct_all?; rewrite ?i2a_ih_shared_Some ?i2a_ih_shared_None in Heq; simplify_option_eq.
+  - erewrite <-(insert_delete m); [|done].
+    iDestruct (big_sepM_insert with "Hm") as "[Ha Hm]". { by simplify_map_eq. }
+    iSplitL "Ha".
+    + iSplit!; [|done]. by iApply i2a_val_rel_of_pure.
+    + iApply ("IH" with "[] Hm"). iPureIntro. eexists m2l. move => l' v' Hl'.
+      have := (Hag l' v' ltac:(done)). case_match => // ?. destruct_all?. split!; [done|].
+      apply lookup_delete_Some. split!. move => Hx. rewrite <-Hx in *. simplify_option_eq.
+      by rewrite Hl in Hl'.
+  - iSplitR.
+    + do 2 case_match => //. naive_solver.
+    + iApply ("IH" with "[%] Hm"). by eexists _.
+Qed.
 
 Lemma i2a_heap_shared_agree_pure_lookup l v ih h m :
   i2a_heap_shared_agree_pure h ih m →
