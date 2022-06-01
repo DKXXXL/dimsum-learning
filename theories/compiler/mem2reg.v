@@ -687,8 +687,43 @@ Proof.
   induction i in l1, l2 |-*; destruct l1, l2; naive_solver.
 Qed.
 
+
+
+Lemma big_sepM2_delete_val_bij li ls i (x: string) (vars: list string):
+  vars !! i = Some x →
+  length ls = length vars →
+  ([∗ list] l1;l2 ∈ li;delete i ls, loc_in_bij l1 l2) -∗
+  ([∗ map] v1;v2 ∈ delete x (list_to_map (zip (delete i vars) (ValLoc <$> li))); delete x (list_to_map (zip vars (ValLoc <$> ls))), val_in_bij v1 v2).
+Proof.
+  induction vars as [|v vars IH] in i, li, ls |-*; first by naive_solver.
+  destruct i as [|i].
+  - simpl; intros ? Hlen; simplify_eq.
+    destruct ls; try discriminate; simpl.
+    rewrite delete_insert_delete.
+    simpl in Hlen. simplify_eq. clear IH.
+    induction li as [|l' li IH'] in vars, ls, Hlen |-*;
+      iIntros "Hlocs"; destruct ls; try done; destruct vars as [|s vars]; try discriminate.
+    + simpl. rewrite delete_empty //.
+    + simpl in *. simplify_eq. iDestruct "Hlocs" as "[Hl Hlocs]".
+      destruct (decide (x = s)); subst.
+      * rewrite !delete_insert_delete. iApply IH'; first done. iFrame.
+      * rewrite !delete_insert_ne //.
+        iApply (big_sepM2_insert_2 with "[Hl]"); first by iFrame.
+        iApply IH'; done.
+  - destruct ls; try discriminate; simpl.
+    intros Hlook Hlen; simplify_eq.
+    iIntros "Hlocs". destruct li; simpl; try done.
+    iDestruct ("Hlocs") as "[Hl Hlocs]".
+    iPoseProof (IH with "Hlocs") as "Hbij"; eauto.
+    destruct (decide (x = v)); subst.
+    + rewrite !delete_insert_delete. iFrame.
+    + rewrite !delete_insert_ne //.
+      iApply (big_sepM2_insert_2 with "[Hl]"); by iFrame.
+Qed.
+
 Lemma pass_correct_refines f x args vars exprs i k cont expri:
   vars !! i = Some (x, k) →
+  (NoDup (args ++ (vars.*1))) →
   crun () (pass x exprs) = CResult () cont (CSuccess expri) →
   trefines
     (MS imp_module
@@ -705,7 +740,7 @@ Lemma pass_correct_refines f x args vars exprs i k cont expri:
             (lfndef_to_fndef <$>
               <[f:={| lfd_args := args; lfd_vars := vars; lfd_body := exprs |}]> ∅)))).
 Proof.
-  intros Heq Hrun. apply: imp_heap_bij_proof.
+  intros Heq Hnodup Hrun. apply: imp_heap_bij_proof.
   - set_solver.
   - move => ??. intros [-> ->]%pass_lookup_singleton.
     eexists. split; simpl.
@@ -752,22 +787,25 @@ Proof.
       eapply lookup_lt_is_Some_2 in Heq as [].
       naive_solver. }
 
+    eapply heap_alloc_list_length in Halloc as Hlen3.
+    eapply heap_alloc_list_length in Heap as Hlen4.
+    assert (vars.*1 !! i = Some x) as Hvars1.
+    { rewrite list_lookup_fmap Heq //. }
+    assert (vars.*2 !! i = Some k) as Hvars2.
+    { rewrite list_lookup_fmap Heq //. }
 
-    eapply (pass_correct (r ∗ [∗ list] l1;l2 ∈ li;delete i ls, loc_in_bij l1 l2) _ _ _ _ _ _ _ _ l _ k); last done.
+    eapply (pass_correct (r ∗ [∗ list] l1;l2 ∈ li;delete i ls, loc_in_bij l1 l2) _ _ _ _ _ _ _ _ l _ k _ _ _ _ _ _ _ 0%Z); last done.
     + eapply imp_expr_fill_expr_fill, imp_expr_fill_FreeA, imp_expr_fill_end.
     + eapply imp_expr_fill_expr_fill, imp_expr_fill_FreeA, imp_expr_fill_end.
     + by eapply heap_alloc_list_offset_zero.
     + done.
     + iSatClear. simpl. intros w n' v1 v2 h1' h2' rf' b Hle Hsat. simpl.
       tstep_s. intros h2'' Hfree. tstep_i.
-      eapply heap_alloc_list_length in Halloc as Hlen3.
-      eapply heap_alloc_list_length in Heap as Hlen4.
       iSatStartBupd. iIntros "(Hbij & Hv & [[r Hlocs] Hloc] & Hl)".
       rewrite list_delete_fmap in Hlen3.
       iPoseProof ((heap_bij_free_elim (zip li (delete i vars.*2))) with "Hbij") as "Hw".
       { done. }
-      { eapply zip_lookup; eauto.
-        rewrite list_lookup_fmap Heq //. }
+      { eapply zip_lookup; eauto. }
       { rewrite snd_zip ?Hlen3 //.
         f_equal. rewrite snd_zip //. rewrite Hlen4 //. }
       rewrite fst_zip ?Hlen3 //.
@@ -779,46 +817,62 @@ Proof.
       rewrite orb_true_r.
       eapply Hcont; first done.
       iSatMono. iFrame.
-    + rewrite list_to_map_app lookup_union_r; last first.
-      { admit. }
-      eapply elem_of_list_to_map.
-      { rewrite fst_zip; admit. }
-      eapply (elem_of_list_lookup_2 _ i).
-      admit.
-    + rewrite lookup_insert //.
-    + admit.
-    + admit.
-      (* rewrite (empty_block_insert_zero l k); last first.
-      { admit. }
-      { admit. }
-      iSatMonoBupd. iIntros "(Hbij & Hvals & r & rf)".
-      iFrame "rf r". iMod (heap_bij_alloc_elim with "Hbij") as "(Hbij & Hconst & #Hlocs)"; eauto.
+    + eapply elem_of_list_to_map_1.
+      { rewrite fmap_app fst_zip ?Hlen2 //.
+        rewrite fst_zip ?fmap_length -?Hlen4 ?fmap_length //. }
+      eapply elem_of_app. right. eapply (elem_of_list_lookup_2 _ i).
+      eapply zip_lookup.
       { rewrite list_lookup_fmap Heq //. }
+      { rewrite list_lookup_fmap Hl //. }
+    + rewrite lookup_insert //.
+    + rewrite dom_insert_L !dom_list_to_map_L.
+      rewrite !fmap_app !list_to_set_app.
+      rewrite fst_zip ?Hlen2 //.
+      rewrite fst_zip ?fmap_length -?Hlen4 ?fmap_length //.
+      rewrite fst_zip ?Hlen1 //.
+      rewrite fst_zip ?fmap_length -?Hlen3 ?fmap_length //.
+      rewrite list_delete_fmap.
+      rewrite {1}(delete_Permutation vars.*1); last done.
+      simpl. set_solver.
+    + rewrite (empty_block_insert_zero l k); last first.
+      { by eapply heap_alloc_list_offset_zero. }
+      { eapply Forall_lookup_1 in Hall; eauto. lia. }
+      iSatMonoBupd. iIntros "(Hbij & Hvals & r & rf)".
+      iFrame "rf r".
+      iMod (heap_bij_alloc_elim with "Hbij") as "(Hbij & Hconst & #Hlocs)"; eauto.
       { rewrite -list_delete_fmap //. }
       iFrame "Hbij Hconst Hlocs".
       rewrite delete_insert_delete.
-      (* we resolve the remaining open things with an induction *)
-      iStopProof.
-      clear Hcalls Hcont h' Halloc h Heap Hsat Hall.
-      revert vs1 vs2 Hlen1 Hlen2.
-      induction args as [|a args IH].
-      * intros [|v1 vs1] [|v2 vs2]; try discriminate.
-        intros _ _. simpl.
-        revert i li Hlen Hl Heq. fold ls.
-        generalize ls. clear ls. admit.
-        (* induction vars as [|[y p] vars IH].
-        -- discriminate.
-        -- intros [|l' ls] i li Hlen Hl Heq; try discriminate.
-           injection Hlen as Hlen. rewrite !fmap_cons.
-           destruct i as [|i].
-           ++ simpl in *. injection Hl as ?. injection Heq as ??. subst.
-              rewrite delete_insert_delete.
-              iIntros "Hctx". iMod (IH with "[Hctx]"). *) *)
-Admitted.
+      iModIntro. iSplit; first done.
+
+      rewrite fmap_length in Hlen3.
+      assert (x ∉ args) as Hx.
+      { eapply NoDup_app in Hnodup as (_ & Hnd & _).
+        intros ?. eapply Hnd; first done.
+        by eapply elem_of_list_lookup_2. }
+      fold ls. clear -Hx Heq Hlen Hlen1 Hlen2. revert Hlen.
+      generalize ls. clear ls; intros ls. intros Hlen.
+
+      iInduction args as [|a args] "IH" forall (vs1 vs2 Hlen Hlen1 Hlen2).
+      * destruct vs1, vs2; try discriminate.
+        simpl. iClear "Hvals".
+        rewrite list_delete_fmap.
+        iApply (big_sepM2_delete_val_bij with "[]"); last done.
+        { rewrite list_lookup_fmap Heq //. }
+        { rewrite -Hlen !fmap_length //. }
+      * destruct vs1, vs2; try discriminate.
+        simpl in Hlen1, Hlen2. simplify_eq.
+        simpl. assert (x ≠ a) as Hne by set_solver.
+        rewrite !delete_insert_ne //.
+        iDestruct "Hvals" as "[Hv Hvals]".
+        iApply (big_sepM2_insert_2 with "[Hv]"); first by iFrame.
+        iApply ("IH"); [iPureIntro; set_solver|done|done|done|iFrame].
+Qed.
 
 
 
 Lemma pass_single_var_correct f x args exprs varss expri varsi :
+  (NoDup (args ++ (varss.*1))) →
   pass_single_var x exprs varss = (expri, varsi) →
   trefines
   (MS imp_module (initial_imp_state
@@ -830,7 +884,7 @@ Lemma pass_single_var_correct f x args exprs varss expri varsi :
            (lfndef_to_fndef <$>
             <[f:={| lfd_args := args; lfd_vars := varss; lfd_body := exprs |}]> ∅)))).
 Proof.
-  rewrite /pass_single_var.
+  intros Hnd. rewrite /pass_single_var.
   destruct list_find as [[i [y n]]|] eqn: Hfind;
     first destruct (crun () (pass x exprs)) as [[] ? [res|]] eqn: Hrun; simpl;
     last first.
@@ -856,6 +910,7 @@ Fixpoint initial_imp_heap_bij_state_N n (M: module imp_event) (s: M.(m_state)) :
 
 Lemma pass_body_correct f args varss exprs expri varsi:
   pass_body exprs varss = (expri, varsi) →
+  NoDup (args ++ varss.*1) →
   trefines
     (MS imp_module (initial_imp_state
       (lfndef_to_fndef <$>
@@ -865,12 +920,11 @@ Lemma pass_body_correct f args varss exprs expri varsi:
           (initial_imp_lstate
              (<[f:={| lfd_args := args; lfd_vars := varss; lfd_body := exprs |}]> ∅)))).
 Proof.
-  rewrite /pass_body. remember varss as L. rewrite {1 5}HeqL. clear HeqL.
+  rewrite /pass_body. remember varss as L. rewrite {1 3 6}HeqL. clear HeqL.
   induction L as [|[x n] L IHL] in varss, varsi, exprs, expri |-*; simpl.
   - injection 1 as ??. subst; reflexivity.
   - destruct foldr as [expri' varsi'] eqn: Hbody.
-    intros Hsingle.
-    eapply IHL in Hbody as IH. etrans; last first.
+    intros Hsingle Hnd. eapply pass_single_var_correct in Hsingle.
 Admitted.
 
 
@@ -881,7 +935,7 @@ Lemma pass_fn_correct f fn :
 Proof.
   rewrite /pass_fn. destruct pass_body as [expri varsi] eqn: Hpass.
   revert Hpass. destruct fn as [args varss exprs]; simpl.
-  by eapply pass_body_correct.
-Qed.
+  (* by eapply pass_body_correct. *)
+Admitted.
 
 End ci2a_mem2reg.
