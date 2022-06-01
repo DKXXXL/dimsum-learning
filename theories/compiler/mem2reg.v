@@ -644,8 +644,50 @@ Proof.
   - rewrite lookup_insert_ne //.
 Qed.
 
+Lemma heap_alloc_list_offset_zero vs ls h1 h2 i l:
+  heap_alloc_list vs ls h1 h2 →
+  ls !! i = Some l →
+  l.2 = 0%Z.
+Proof.
+  induction vs as [|v vs IHvs] in i, ls, h1, h2 |-*; destruct ls; simpl; try naive_solver.
+  intros (? & ? & ? & Hf & ?) Hlook. simplify_eq.
+  destruct i; last by eauto.
+  injection Hlook as ->. by destruct Hf.
+Qed.
 
-Lemma pass_correct_refines' f x args vars exprs i k cont expri:
+
+Lemma heap_bij_free_elim lis lss hi hs hs' w l k i:
+  heap_free_list lss hs hs' →
+  lss !! i = Some (l, k) →
+  lis.*2 = (delete i lss.*2) →
+    heap_bij_inv hi hs -∗
+    heap_bij_const_s l.1 (<[0%Z:=w]> (empty_block l k)) -∗
+    ([∗ list] li;ls ∈ lis.*1;(delete i lss.*1), loc_in_bij li ls) ==∗
+      ∃ hi' : heap_state, ⌜heap_free_list lis hi hi'⌝ ∗
+        heap_bij_inv hi' hs'.
+Proof.
+  induction lss as [|[l' k'] lss IH] in i, lis, hi, hs, hs' |-*; first by naive_solver.
+  destruct i; simpl.
+  - intros [Hr Hfree] ? Heq. simplify_eq. simpl in *.
+    iIntros "Hbij Hl Hlocs".
+    iMod (heap_bij_inv_free_s with "Hbij Hl") as "Hbij".
+    iDestruct (heap_bij_inv_free_list with "Hbij Hlocs") as "?"; eauto.
+  - intros [Hr Hfree] ? Heq. destruct lis as [|[l'' k''] lis]; first naive_solver.
+    simpl in Heq. simplify_eq. simpl.
+    iIntros "Hbij Hl [Hl' Hlocs]".
+    iDestruct (heap_bij_inv_range with "Hbij Hl'") as "%"; first done.
+    iDestruct (heap_bij_inv_free with "Hbij Hl'") as "Hbij".
+    iMod (IH with "Hbij Hl Hlocs") as "[%hi' [% Hbij]]"; eauto.
+Qed.
+
+
+Lemma zip_lookup {X Y} (l1: list X) (l2: list Y) i j k :
+  l1 !! i = Some k → l2 !! i = Some j → zip l1 l2 !! i = Some (k, j).
+Proof.
+  induction i in l1, l2 |-*; destruct l1, l2; naive_solver.
+Qed.
+
+Lemma pass_correct_refines f x args vars exprs i k cont expri:
   vars !! i = Some (x, k) →
   crun () (pass x exprs) = CResult () cont (CSuccess expri) →
   trefines
@@ -714,24 +756,39 @@ Proof.
     eapply (pass_correct (r ∗ [∗ list] l1;l2 ∈ li;delete i ls, loc_in_bij l1 l2) _ _ _ _ _ _ _ _ l _ k); last done.
     + eapply imp_expr_fill_expr_fill, imp_expr_fill_FreeA, imp_expr_fill_end.
     + eapply imp_expr_fill_expr_fill, imp_expr_fill_FreeA, imp_expr_fill_end.
-    + admit. (* this is part of the freshness of l *)
+    + by eapply heap_alloc_list_offset_zero.
     + done.
-    + simpl. intros w n' v1 v2 h1' h2' rf' b Hle Hsat'. simpl.
-      tstep_s. intros h2'' Hfree.
-      iSatStart Hsat'. iIntros "(Hbij & Hv & [_ Hlocs] & Hl)".
-      admit.
-      (* FIXME: here we need something for releasing the location that is not in bijection *)
-      (* tstep_i. eexists. split; first admit. *)
-      (* eapply Hcont; [done|].  *)
+    + iSatClear. simpl. intros w n' v1 v2 h1' h2' rf' b Hle Hsat. simpl.
+      tstep_s. intros h2'' Hfree. tstep_i.
+      eapply heap_alloc_list_length in Halloc as Hlen3.
+      eapply heap_alloc_list_length in Heap as Hlen4.
+      iSatStartBupd. iIntros "(Hbij & Hv & [[r Hlocs] Hloc] & Hl)".
+      rewrite list_delete_fmap in Hlen3.
+      iPoseProof ((heap_bij_free_elim (zip li (delete i vars.*2))) with "Hbij") as "Hw".
+      { done. }
+      { eapply zip_lookup; eauto.
+        rewrite list_lookup_fmap Heq //. }
+      { rewrite snd_zip ?Hlen3 //.
+        f_equal. rewrite snd_zip //. rewrite Hlen4 //. }
+      rewrite fst_zip ?Hlen3 //.
+      rewrite fst_zip ?Hlen4 //.
+      iSpecialize ("Hw" with "Hloc Hlocs").
+      iMod "Hw" as "(%hi' & %Hfree' & Hbij)". iModIntro.
+      iSatStop. eexists _; split.
+      { rewrite list_delete_fmap //. }
+      rewrite orb_true_r.
+      eapply Hcont; first done.
+      iSatMono. iFrame.
     + rewrite list_to_map_app lookup_union_r; last first.
       { admit. }
       eapply elem_of_list_to_map.
       { rewrite fst_zip; admit. }
       eapply (elem_of_list_lookup_2 _ i).
-      rewrite
       admit.
     + rewrite lookup_insert //.
-    + rewrite (empty_block_insert_zero l k); last first.
+    + admit.
+    + admit.
+      (* rewrite (empty_block_insert_zero l k); last first.
       { admit. }
       { admit. }
       iSatMonoBupd. iIntros "(Hbij & Hvals & r & rf)".
@@ -756,41 +813,17 @@ Proof.
            destruct i as [|i].
            ++ simpl in *. injection Hl as ?. injection Heq as ??. subst.
               rewrite delete_insert_delete.
-              iIntros "Hctx". iMod (IH with "[Hctx]"). *)
+              iIntros "Hctx". iMod (IH with "[Hctx]"). *) *)
 Admitted.
 
-
-Lemma pass_correct_refines f x args vars exprs i n cont expri:
-  vars !! i = Some (x, n) →
-  crun () (pass x exprs) = CResult () cont (CSuccess expri) →
-  trefines
-    (MS (imp_heap_bij imp_module)
-      (initial_imp_heap_bij_state imp_module
-          (initial_imp_state
-            (lfndef_to_fndef <$>
-              <[f:={|
-                    lfd_args := args;
-                    lfd_vars := delete i vars;
-                    lfd_body := LLetE x (LVarVal (VVal (StaticValNum 0))) expri
-                  |}]> ∅))))
-    (MS (imp_heap_bij imp_module)
-      (initial_imp_heap_bij_state imp_module
-          (initial_imp_state
-            (lfndef_to_fndef <$>
-              <[f:={| lfd_args := args; lfd_vars := vars; lfd_body := exprs |}]> ∅)))).
-Proof.
-  (* FIXME: we actually need the lemma pass_correct_refines with a heap bijection on both sides *)
-Admitted.
 
 
 Lemma pass_single_var_correct f x args exprs varss expri varsi :
   pass_single_var x exprs varss = (expri, varsi) →
   trefines
-  (MS (imp_heap_bij imp_module)
-     (initial_imp_heap_bij_state imp_module
-        (initial_imp_state
-           (lfndef_to_fndef <$>
-            <[f:={| lfd_args := args; lfd_vars := varsi; lfd_body := expri |}]> ∅))))
+  (MS imp_module (initial_imp_state
+    (lfndef_to_fndef <$>
+    <[f:={| lfd_args := args; lfd_vars := varsi; lfd_body := expri |}]> ∅)))
   (MS (imp_heap_bij imp_module)
      (initial_imp_heap_bij_state imp_module
         (initial_imp_state
@@ -801,37 +834,14 @@ Proof.
   destruct list_find as [[i [y n]]|] eqn: Hfind;
     first destruct (crun () (pass x exprs)) as [[] ? [res|]] eqn: Hrun; simpl;
     last first.
-  - injection 1 as ??; subst. reflexivity.
-  - injection 1 as ??; subst. reflexivity.
+  - injection 1 as ??; subst. eapply imp_heap_bij_imp_refl.
+  - injection 1 as ??; subst. eapply imp_heap_bij_imp_refl.
   - injection 1 as ??; subst.
     eapply list_find_Some in Hfind as (Hlook & Hdec & _).
     eapply bool_decide_unpack in Hdec. subst.
     by eapply pass_correct_refines.
 Qed.
 
-
-
-Lemma pass_body_correct f args varss exprs expri varsi:
-  pass_body exprs varss = (expri, varsi) →
-  trefines
-    (MS (imp_heap_bij imp_module)
-       (initial_imp_heap_bij_state imp_module
-          (initial_imp_state
-             (lfndef_to_fndef <$>
-              <[f:={| lfd_args := args; lfd_vars := varsi; lfd_body := expri |}]> ∅))))
-    (MS (imp_heap_bij imp_module)
-       (initial_imp_heap_bij_state imp_module
-          (initial_imp_lstate
-             (<[f:={| lfd_args := args; lfd_vars := varss; lfd_body := exprs |}]> ∅)))).
-Proof.
-  rewrite /pass_body. generalize varss at 2 as L.
-  induction L as [|[x n] L IHL] in varss, varsi, exprs, expri |-*; simpl.
-  - injection 1 as ??. subst; reflexivity.
-  - destruct foldr as [expri' varsi'] eqn: Hbody.
-    intros Hsingle.
-    eapply IHL in Hbody as IH.
-    etrans; last eapply IH. eapply pass_single_var_correct, Hsingle.
-Qed.
 
 
 Definition imp_heap_bij_N n (M: module imp_event) : module imp_event :=
@@ -844,7 +854,24 @@ Fixpoint initial_imp_heap_bij_state_N n (M: module imp_event) (s: M.(m_state)) :
   end.
 
 
-
+Lemma pass_body_correct f args varss exprs expri varsi:
+  pass_body exprs varss = (expri, varsi) →
+  trefines
+    (MS imp_module (initial_imp_state
+      (lfndef_to_fndef <$>
+      <[f:={| lfd_args := args; lfd_vars := varsi; lfd_body := expri |}]> ∅)))
+    (MS (imp_heap_bij_N (length varss) imp_module)
+       (initial_imp_heap_bij_state_N _ imp_module
+          (initial_imp_lstate
+             (<[f:={| lfd_args := args; lfd_vars := varss; lfd_body := exprs |}]> ∅)))).
+Proof.
+  rewrite /pass_body. remember varss as L. rewrite {1 5}HeqL. clear HeqL.
+  induction L as [|[x n] L IHL] in varss, varsi, exprs, expri |-*; simpl.
+  - injection 1 as ??. subst; reflexivity.
+  - destruct foldr as [expri' varsi'] eqn: Hbody.
+    intros Hsingle.
+    eapply IHL in Hbody as IH. etrans; last first.
+Admitted.
 
 
 Lemma pass_fn_correct f fn :
@@ -852,7 +879,6 @@ Lemma pass_fn_correct f fn :
            (MS (imp_heap_bij_N (length fn.(lfd_vars)) imp_module) (initial_imp_heap_bij_state_N _ imp_module
                                             (initial_imp_lstate (<[f := fn]> ∅)))).
 Proof.
-  etrans; first eapply imp_heap_bij_imp_refl.
   rewrite /pass_fn. destruct pass_body as [expri varsi] eqn: Hpass.
   revert Hpass. destruct fn as [args varss exprs]; simpl.
   by eapply pass_body_correct.
