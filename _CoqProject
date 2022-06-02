@@ -16,6 +16,7 @@ theories/satisfiable.v
 theories/module.v
 theories/example_modules.v
 theories/srefines.v
+theories/lrefines.v
 theories/filter.v
 theories/product.v
 theories/seq_product.v

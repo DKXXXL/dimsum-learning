@@ -78,6 +78,12 @@ Lemma tiChoice_mono T f1 f2:
   tiChoice T f1 ⊆ tiChoice T f2.
 Proof. move => ?. econs. econs. naive_solver. Qed.
 
+Lemma ti_le_choice_inv n T f:
+  tiS n ⊆ tiChoice T f → ∃ x: T, tiS n ⊆ (f x).
+Proof.
+  inversion 1; subst. eexists. done.
+Qed.
+
 Definition tiS_maybe (b : bool) (n : trace_index) :=
   if b then tiS n else n.
 Notation "'tiS?' b n" := (tiS_maybe b n)

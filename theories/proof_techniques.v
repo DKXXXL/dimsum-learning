@@ -215,22 +215,13 @@ Proof.
 Qed.
 
 
-(* coinductive version of wp *)
+(**  coinductive version of wp *)
 CoInductive sim {EV} (m1 m2 : module EV) σi1 σs1: Prop :=
 | sim_step  :
     (∀ Pσi2 κ, m_step m1 σi1 κ Pσi2 ->
      ∃ Pσ2, σs1 ~{ m2, option_trace κ }~>ₜ Pσ2 ∧
       ∀ σs2, Pσ2 σs2 → ∃ σi2, Pσi2 σi2 ∧ sim m1 m2 σi2 σs2) ->
     sim m1 m2 σi1 σs1.
-
-
-
-Lemma ti_le_choice_inv n T f:
-  tiS n ⊆ tiChoice T f → ∃ x: T, tiS n ⊆ (f x).
-Proof.
-  inversion 1; subst. eexists. done.
-Qed.
-
 
 Lemma sim_wp {EV} (m1 m2 : module EV) σi σs :
   sim m1 m2 σi σs → ∀ n, wp m1 m2 n σi σs.
