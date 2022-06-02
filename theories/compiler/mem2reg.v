@@ -1075,6 +1075,71 @@ Fixpoint initial_imp_heap_bij_state_N n (M: module imp_event) (s: M.(m_state)) :
   end.
 
 
+Lemma pass_single_vars x es ei varss varsi:
+  pass_single_var x es varss = (ei, varsi) →
+  varsi ⊆ varss.
+Proof.
+  rewrite /pass_single_var.
+  destruct list_find as [[p i]|]; first destruct c_result;
+    intros ?; simplify_eq; try done.
+    pose proof (submseteq_delete varss p).
+    intros ??. by eapply elem_of_submseteq.
+Qed.
+
+
+Lemma NoDup_delete {X} p (L: list X):
+  NoDup L →
+  NoDup (delete p L).
+Proof.
+  intros Hnd. induction Hnd in p |-*; destruct p; simpl; eauto using NoDup_nil_2.
+  eapply NoDup_cons. split; last done.
+  intros [j Hlook]%elem_of_list_lookup_1.
+  destruct (decide (j < p)).
+  - rewrite lookup_delete_lt // in Hlook.
+    eapply elem_of_list_lookup_2 in Hlook. done.
+  - rewrite lookup_delete_ge // in Hlook; last lia.
+    eapply elem_of_list_lookup_2 in Hlook. done.
+Qed.
+
+Lemma pass_single_nodup x es ei varss varsi:
+  NoDup varss.*1 →
+  pass_single_var x es varss = (ei, varsi) →
+  NoDup varsi.*1.
+Proof.
+  rewrite /pass_single_var.
+  destruct list_find as [[p i]|]; first destruct c_result;
+    intros Hnd ?; simplify_eq; try done.
+    rewrite list_delete_fmap.
+    by eapply NoDup_delete.
+Qed.
+
+
+Lemma foldr_pass_single_vars exprs varss expri varsi (L : list (string * Z)):
+  foldr (λ '(x, _) '(r, vars), pass_single_var x r vars) (exprs, varss) L = (expri, varsi) →
+  varsi ⊆ varss.
+Proof.
+  induction L as [|[x ?] L IH] in exprs, varss, expri, varsi |-*; simpl.
+  - injection 1 as ??; by subst.
+  - destruct foldr as [exprs' varss'] eqn: Heq.
+    eapply IH in Heq. intros ?%pass_single_vars.
+    set_solver.
+Qed.
+
+Lemma foldr_pass_single_nodup exprs varss expri varsi (L : list (string * Z)):
+  NoDup varss.*1 →
+  foldr (λ '(x, _) '(r, vars), pass_single_var x r vars) (exprs, varss) L = (expri, varsi) →
+  NoDup varsi.*1.
+Proof.
+  induction L as [|[x ?] L IH] in exprs, varss, expri, varsi |-*; simpl.
+  - intros ?. injection 1 as ??; by subst.
+  - destruct foldr as [exprs' varss'] eqn: Heq.
+    intros Hnd.
+    eapply IH in Heq; last done.
+    intros ?%pass_single_nodup; done.
+Qed.
+
+
+
 Lemma pass_body_correct f args varss exprs expri varsi:
   pass_body exprs varss = (expri, varsi) →
   NoDup (args ++ varss.*1) →
@@ -1088,21 +1153,31 @@ Lemma pass_body_correct f args varss exprs expri varsi:
              (<[f:={| lfd_args := args; lfd_vars := varss; lfd_body := exprs |}]> ∅)))).
 Proof.
   rewrite /pass_body. remember varss as L. rewrite {1 3 6}HeqL. clear HeqL.
-  induction L as [|[x n] L IHL] in varss, varsi, exprs, expri |-*; simpl.
+  induction L as [|[x n] L IH] in varss, varsi, exprs, expri |-*; simpl.
   - injection 1 as ??. subst; reflexivity.
   - destruct foldr as [expri' varsi'] eqn: Hbody.
-    intros Hsingle Hnd. eapply pass_single_var_correct in Hsingle.
-Admitted.
+    eapply foldr_pass_single_vars in Hbody as Hsub.
+    intros Hsingle Hnd.
+    eapply IH in Hbody as Hx; last done.
+    eapply imp_heap_bij_trefines in Hx; last apply imp_vis_no_all.
+    eapply pass_single_var_correct in Hsingle; last first.
+    + eapply NoDup_app. eapply NoDup_app in Hnd as [Hnd [Hinter Hvarss]].
+      split; first apply Hnd. split.
+      { set_solver. }
+      { by eapply foldr_pass_single_nodup. }
+    + etrans; done.
+Qed.
 
 
 Lemma pass_fn_correct f fn :
+  NoDup (fn.(lfd_args) ++ fn.(lfd_vars).*1) →
   trefines (MS imp_module (initial_imp_lstate (<[f := pass_fn fn]> ∅)))
            (MS (imp_heap_bij_N (length fn.(lfd_vars)) imp_module) (initial_imp_heap_bij_state_N _ imp_module
                                             (initial_imp_lstate (<[f := fn]> ∅)))).
 Proof.
   rewrite /pass_fn. destruct pass_body as [expri varsi] eqn: Hpass.
   revert Hpass. destruct fn as [args varss exprs]; simpl.
-  (* by eapply pass_body_correct. *)
-Admitted.
+  intros Heq Hnd. by eapply pass_body_correct.
+Qed.
 
 End ci2a_mem2reg.
