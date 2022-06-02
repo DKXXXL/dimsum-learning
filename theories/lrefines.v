@@ -27,10 +27,11 @@ g(s, aw, u) = g(s, a, g (s, w, u)). corresponds to
 σ -{a}-> (σ ~{ m , w }~>ₗ Pσ)
 is equivalent to
 ∃ Pσ', σ -{a}-> Pσ' ∧ (Pσ' ⊆ σ ~{ m , w }~>ₗ Pσ)
-
 assuming that σ -{a}-> Pσ is covariant in Pσ.
-Our formulation makes σ ~{ m , w }~>ₗ Pσ covariant when σ -{a}-> Pσ which is nice for technical reasons,
+
+Our formulation makes σ ~{ m , w }~>ₗ Pσ covariant even when σ -{a}-> Pσ is not which is nice for technical reasons,
 but should not really matter.
+Modulo this difference and the fact that we have silent steps whereas the reference has not, the two seems the same.
 
 *)
 
