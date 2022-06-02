@@ -925,6 +925,12 @@ Definition imp_heap_bij (m : module imp_event) : module imp_event :=
 Definition initial_imp_heap_bij_state (m : module imp_event) (σ : m.(m_state)) :=
   (@SMFilter imp_event, σ, (@PPOutside imp_event imp_event, tt, (True : uPred heap_bijUR)%I)).
 
+Lemma imp_heap_bij_trefines m m' σ σ' `{!VisNoAll m}:
+  trefines (MS m σ) (MS m' σ') →
+  trefines (MS (imp_heap_bij m) (initial_imp_heap_bij_state m σ))
+           (MS (imp_heap_bij m') (initial_imp_heap_bij_state m' σ')).
+Proof. move => ?. by apply: mod_prepost_trefines. Qed.
+
 Definition imp_heap_bij_proof_call (n : trace_index) (fns1 fns2 : gmap string fndef) :=
   (∀ n' f es1' es2' K1' K2' es1 es2 vs1' vs2' h1' h2' b r rf',
       ImpExprFill es1' K1' (Call f es1) →
