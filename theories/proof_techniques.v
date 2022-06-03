@@ -196,6 +196,8 @@ Proof.
     apply: wp_mono; [done|]. etrans; [|done]. by econs.
 Qed.
 
+(* Print Assumptions wp_implies_refines. *)
+
 Lemma wp_complete {EV} (m1 m2 : mod_state EV):
   trefines m1 m2 →
   ∀ n, wp m1 m2 n m1.(ms_state) m2.(ms_state).
@@ -213,6 +215,8 @@ Proof.
   apply: thas_trace_mono; [done..|] => ? /= [[??]?].
   naive_solver.
 Qed.
+
+(* Print Assumptions wp_complete. *)
 
 
 (**  coinductive version of wp *)
@@ -259,19 +263,13 @@ Proof.
     eapply Hnex. exists x. intros n'. destruct (classic (P n' x)); first done.
     exfalso. eapply Hnp. exists n'. done. }
   (* choice *)
-  assert (∀ x, { n | ¬ P n x}) as Hnpx.
-  { intros n. eapply constructive_indefinite_description. done. }
-
-  (* we define the projection *)
-  pose (F x := proj1_sig (Hnpx x)).
-  assert (∀ x, ¬ P (F x) x) as Hnx.
-  { intros x. unfold F. destruct Hnpx; done. }
+  have [F Hnx]:= AxCHOICE _ _ _ Hnp.
 
   (* we take the supremum *)
   pose (n_sup := (tiChoice X (λ x, F x))).
 
   assert (∀ x, ¬ P n_sup x) as Hnsup.
-  { intros x Hp. eapply Hnx, Hdown; first done.
+  { intros x Hp. eapply Hnx. eapply Hdown; first done.
     eapply ti_le_choice_r. done. }
 
   destruct (HP n_sup) as [x_sup HPnx].
@@ -290,17 +288,17 @@ Lemma wp_sim_inner {EV} (m1 m2 : module EV) σi1 σs1:
   ∀ σs2, Pσ2 σs2 → ∃ σi2, Pσi2 σi2 ∧ (∀ n, wp m1 m2 n σi2 σs2)).
 Proof.
   intros Hwp Pσi2 κ Hstep.
+  (* destruct Hwp underneath the quantifier *)
   assert (∀ n, ∀ n', tiS n' ⊆ n →
        ∃ Pσ2, σs1 ~{ m2, option_trace κ }~>ₜ Pσ2 ∧
       (∀ σs2, Pσ2 σs2 → ∃ σi2, Pσi2 σi2 ∧ wp m1 m2 n' σi2 σs2)) as Hnext.
   { intros n. destruct (Hwp n) as [σi1 σs1 n Hwp']. intros ??. by unshelve eapply (Hwp' _ _ _ _ Hstep). }
+  (* instantiate n' *)
   clear Hwp. assert (∀ n, ∃ Pσ2, σs1 ~{ m2, option_trace κ }~>ₜ Pσ2 ∧
           (∀ σs2, Pσ2 σs2 → ∃ σi2, Pσi2 σi2 ∧ wp m1 m2 n σi2 σs2)) as Hwp.
   { intros n. eapply Hnext. reflexivity. }
   eapply existential_property in Hwp as [Pσ2 Hwp]; last first.
-  { intros n n' Pσs1' [Hstep' Hrest] Hsub. split; first done.
-    intros ??. edestruct Hrest as [σi2 [? Hwp']]; first done.
-    eexists. split; first done. by eapply wp_mono. }
+  { (* prove downwards closure *) naive_solver eauto using wp_mono. }
   eapply forall_and_distr in Hwp as [Hstep' Hwp].
   specialize (Hstep' tiO).
   eexists. split; first done.
@@ -310,7 +308,7 @@ Proof.
   pose proof (forall_forall _ Hwp') as Hwp. clear Hwp'.
   specialize (Hwp HPσs2); simpl in Hwp.
   eapply existential_property in Hwp as [σi2 Hwp]; last first.
-  { intros n n' x [HP Hrest] Hsub. split; first done. by eapply wp_mono. }
+  { (* prove downwards closure *) naive_solver eauto using wp_mono. }
   eapply forall_and_distr in Hwp as [HP Hwp].
   specialize (HP tiO).
   eexists. split; first done.
@@ -323,8 +321,7 @@ Proof.
   revert σi σs. cofix IH; intros σi σs Hwp.
   econstructor. intros Pσi2 κ Hstep.
   eapply wp_sim_inner in Hwp as [Pσ2 [Hstep' Hrest]]; last done.
-  split!; first done. intros ??. edestruct Hrest as (?&?&?); first done.
-  split!; first done. by eapply IH.
+  naive_solver.
 Qed.
 
 
@@ -339,6 +336,8 @@ Proof.
   rewrite -sim_wp_iff.
   split; eauto using wp_implies_refines, wp_complete.
 Qed.
+
+(* Print Assumptions sim_trefines. *)
 
 (** * tsim *)
 
