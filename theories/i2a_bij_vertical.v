@@ -17,21 +17,24 @@ Local Open Scope Z_scope.
 
 (** * imp_heap_bij_own.v *)
 Program Definition hb_share_big (s : gmap prov prov) (bij : heap_bij)
-        (H : ∀ p1 p2, s !! p2 = Some p1 → p1 ∉ dom (gset _) (hb_priv_i bij)) :=
+        (H1 : ∀ p1 p2, s !! p2 = Some p1 → p1 ∉ hb_provs_i bij)
+        (H2 : ∀ p1 p2 p2', s !! p2 = Some p1 → s !! p2' = Some p1 → p2 = p2') :=
   HeapBij ((HBShared <$> s) ∪ (hb_bij bij)) (hb_priv_i bij) _ _.
 Next Obligation.
-  move => ?? Hnotin ??.
-Admitted.
-(*   rewrite !lookup_insert_Some => ?. destruct_all?; simplify_eq/= => //; try naive_solver. *)
-(*   - apply eq_None_ne_Some => ??. naive_solver. *)
-(*   - by apply: hb_disj. *)
-(* Qed. *)
+  move => ?? Hnotin ???.
+  rewrite lookup_union_Some_raw lookup_fmap fmap_Some fmap_None => ?.
+  destruct_all?; simplify_eq/= => //; try naive_solver.
+  - setoid_rewrite elem_of_hb_provs_i in Hnotin. apply eq_None_not_Some. naive_solver.
+  - by apply: hb_disj.
+Qed.
 Next Obligation.
-Admitted.
-(*   move => ??? Hnotin ???. move: Hnotin. rewrite elem_of_hb_provs_i => ?. *)
-(*   rewrite !lookup_insert_Some => ??. destruct_all?; simplify_eq/= => //; try naive_solver. *)
-(*   by apply: hb_iff. *)
-(* Qed. *)
+  move => ?? Hnotin Hag ???.
+  rewrite !lookup_union_Some_raw !lookup_fmap !fmap_Some !fmap_None => ??.
+  destruct_all?; simplify_eq/= => //; try naive_solver.
+  - setoid_rewrite elem_of_hb_provs_i in Hnotin. naive_solver.
+  - setoid_rewrite elem_of_hb_provs_i in Hnotin. naive_solver.
+  - by apply: hb_iff.
+Qed.
 
 Program Definition hb_update_const_s_big (s : gmap prov (gmap Z val)) (bij : heap_bij) :=
   HeapBij ((HBConstant <$> s) ∪ (hb_bij bij)) (hb_priv_i bij) _ _.
@@ -51,10 +54,10 @@ Program Definition hb_delete_s_big (s : gmap prov (gmap Z val)) (bij : heap_bij)
 Next Obligation. move => ????. rewrite !lookup_difference_Some => -[??]. by apply: hb_disj. Qed.
 Next Obligation. move => ?????. rewrite !lookup_difference_Some => -[??] -[??]. by apply: hb_iff. Qed.
 
-Lemma heap_bij_alloc_shared_big s bij (H : ∀ p1 p2, s !! p2 = Some p1 → p1 ∉ dom _ (hb_priv_i bij)) :
+Lemma heap_bij_alloc_shared_big s bij H1 H2 :
   dom (gset _) s ## dom _ (hb_bij bij) →
   heap_bij_auth bij ==∗
-  heap_bij_auth (hb_share_big s bij H) ∗ [∗ map] p2↦p1∈s, heap_bij_shared p1 p2.
+  heap_bij_auth (hb_share_big s bij H1 H2) ∗ [∗ map] p2↦p1∈s, heap_bij_shared p1 p2.
 Proof.
 Admitted.
 
@@ -87,11 +90,20 @@ Lemma heap_bij_update_all bij' bij ho :
 Proof.
   iIntros (Hho1 Hho2 Hsub Hpi) "Ha #Hsh Hconst".
   iMod (heap_bij_free_const_s_big with "Ha Hconst") as "Ha".
-  have Hni : ∀ p1 p2, (hb_shared bij' ∖ hb_shared bij) !! p2 = Some p1 → p1 ∉ dom (gset prov) (hb_priv_i (hb_delete_s_big (hb_priv_s bij ∖ ho) bij)). {
-    move => /= p1 p2 /lookup_difference_Some[/hb_shared_lookup_Some??]. rewrite Hpi.
-    by eapply not_elem_of_dom, hb_disj.
+  have Hash1 : ∀ p1 p2, (hb_shared bij' ∖ hb_shared bij) !! p2 = Some p1 → p1 ∉ hb_provs_i (hb_delete_s_big (hb_priv_s bij ∖ ho) bij). {
+    move => /= p1 p2 /lookup_difference_Some[/hb_shared_lookup_Some? /hb_shared_lookup_None?].
+    rewrite elem_of_hb_provs_i /=. move => [[?]|[?]].
+    - rewrite Hpi. by eapply eq_None_ne_Some_1, hb_disj.
+    - move => /lookup_difference_Some[Hb]. move: (Hb).
+      rewrite -hb_shared_lookup_Some => /(lookup_weaken _ _ _ _)/(_ Hsub).
+      rewrite hb_shared_lookup_Some => ?. simplify_bij. naive_solver.
   }
-  unshelve iMod (heap_bij_alloc_shared_big (hb_shared bij' ∖ hb_shared bij) with "Ha") as "[Ha #Hsh2]"; [exact: Hni|..]. {
+  have Hash2 : ∀ p1 p2 p2', (hb_shared bij' ∖ hb_shared bij) !! p2 = Some p1 →
+                            (hb_shared bij' ∖ hb_shared bij) !! p2' = Some p1 → p2 = p2'. {
+    move => ???. rewrite !lookup_difference_Some !hb_shared_lookup_Some => -[??] [??].
+    by simplify_bij.
+  }
+  unshelve iMod (heap_bij_alloc_shared_big (hb_shared bij' ∖ hb_shared bij) with "Ha") as "[Ha #Hsh2]"; [exact: Hash1| exact: Hash2|..]. {
     apply elem_of_disjoint => ?.
     rewrite !elem_of_dom /is_Some /=.
     setoid_rewrite lookup_difference_Some.
@@ -122,7 +134,7 @@ Proof.
   }
   iModIntro. iSplit.
   - enough (hb_update_const_s_big (hb_priv_s bij' ∖ ho) (hb_share_big (hb_shared bij' ∖ hb_shared bij)
-              (hb_delete_s_big (hb_priv_s bij ∖ ho) bij) Hni) = bij') as -> by done.
+              (hb_delete_s_big (hb_priv_s bij ∖ ho) bij) Hash1 Hash2) = bij') as -> by done.
     (* apply heap_bij_eq. *)
     admit.
   - rewrite - {3}(map_difference_union (hb_shared bij) (hb_shared bij')); [|done].
