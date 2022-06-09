@@ -1474,9 +1474,9 @@ Proof.
   move => {}n _ /= Hloop [[σm1 [[σf σ1] [[pp []] r]]] σc1] [[σm2 σ2] σc2] ?.
   destruct_all?; simplify_eq/=.
   - tstep_i. apply steps_impl_step_end => ???. invert_all' @m_step; simplify_eq/=. split!.
-    tstep_s. eexists (Some (inr _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
+    tstep_s. eexists (Some (SMEEmit _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
     tstep_i. apply steps_impl_step_end => ???. invert_all @m_step. split!.
-    tstep_s. eexists (Some (inl _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
+    tstep_s. eexists (Some (SMEReturn _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
     tstep_i => ??; simplify_eq/=.
     tstep_i. eexists (ValNum <$> vs), initial_heap_state. split!.
     { apply: (satisfiable_init (_, _)). { split; by eapply (gmap_view_auth_dfrac_valid _ (DfracOwn 1)). }
@@ -1508,9 +1508,9 @@ Proof.
       iSatStop.
       split!; [done|].
       tstep_i. apply steps_impl_step_end => ???. invert_all @m_step. split!.
-      tstep_s. eexists (Some (inr _)). split!. apply: steps_spec_step_end; [econs|] => /=? ->.
+      tstep_s. eexists (Some (SMEEmit _)). split!. apply: steps_spec_step_end; [econs|] => /=? ->.
       tstep_i. apply steps_impl_step_end => ???. invert_all @m_step. split!.
-      tstep_s. eexists (Some (inl _)). split!. apply: steps_spec_step_end; [econs|] => /=? ->.
+      tstep_s. eexists (Some (SMEReturn _)). split!. apply: steps_spec_step_end; [econs|] => /=? ->.
       tstep_i => ? <-.
       tstep_i. eexists [ValNum _]. split!.
       { iSatMono. iIntros!. iFrame. iSplitR; [by iPureIntro|]. instantiate (1:=True%I). done. }
@@ -1525,7 +1525,7 @@ Proof.
       tend. split!.
       tstep_i. apply: steps_impl_step_end => ???. invert_all @m_step. split!.
       tstep_i. apply: steps_impl_step_end => ???. invert_all @m_step. split!.
-      tstep_s. eexists (Some (inr _)). split!.
+      tstep_s. eexists (Some (SMEEmit _)). split!.
       apply: steps_spec_step_end; [econs|]=> /=? ->.
       tstep_i. apply: steps_impl_step_end => ???. invert_all @m_step.
 Qed.

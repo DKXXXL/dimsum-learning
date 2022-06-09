@@ -216,25 +216,25 @@ Section prepost.
   .
 
   Inductive pp_filter_step i o :
-    (pp_state * S * uPred M) → option (EV1 + EV2) → ((pp_state * S * uPred M) → Prop) → Prop :=
+    (pp_state * S * uPred M) → option (sm_event EV1 EV2) → ((pp_state * S * uPred M) → Prop) → Prop :=
   | PPOutsideS s x e:
     (* TODO: Add a user-defined predicate here to rule out choosing
     non-sensical events? E.g. allow only Incoming events or prevent
     syscall events. *)
-    pp_filter_step i o (PPOutside, s, x) (Some (inr e)) (λ σ, σ = (PPRecv1 e, s, x))
+    pp_filter_step i o (PPOutside, s, x) (Some (SMEEmit e)) (λ σ, σ = (PPRecv1 e, s, x))
   | PPRecv1S s x e:
     pp_filter_step i o (PPRecv1 e, s, x) None (λ σ,
         pp_to_ex (i e s) (λ r y, ∃ x', satisfiable (x ∗ y ∗ x') ∧ σ = (PPRecv2 r.1, r.2, x')))
   | PPRecv2S s x e:
-    pp_filter_step i o (PPRecv2 e, s, x) (Some (inl e)) (λ σ, σ = (PPInside, s, x))
+    pp_filter_step i o (PPRecv2 e, s, x) (Some (SMEReturn (Some e))) (λ σ, σ = (PPInside, s, x))
   | PPInsideS s x e:
-    pp_filter_step i o (PPInside, s, x) (Some (inl e)) (λ σ, σ = (PPSend1 e, s, x))
+    pp_filter_step i o (PPInside, s, x) (Some (SMERecv e)) (λ σ, σ = (PPSend1 e, s, x))
   | PPSend1S s x e r y x':
     satisfiable (x' ∗ y ∗ x) →
     pp_to_ex (o e s) (λ r' y', r' = r ∧ y' = y) →
     pp_filter_step i o (PPSend1 e, s, x) None (λ σ, σ = (PPSend2 r.1, r.2, x'))
   | PPSend2S s x e:
-    pp_filter_step i o (PPSend2 e, s, x) (Some (inr e)) (λ σ, σ = (PPOutside, s, x))
+    pp_filter_step i o (PPSend2 e, s, x) (Some (SMEEmit e)) (λ σ, σ = (PPOutside, s, x))
   .
 
   Definition mod_prepost_filter i o :=
@@ -294,7 +294,7 @@ Section prepost.
     TStepS (mod_prepost i o m) (SMFilter, σ, (PPOutside, s, x)) (λ G,
         ∃ e, G (Some e) (λ G', G' (SMFilter, σ, (PPRecv1 e, s, x)))).
   Proof.
-    constructor => G /= [??]. split!; [done|] => /= ??. tstep_s. eexists (Some (inr _)). split!.
+    constructor => G /= [??]. split!; [done|] => /= ??. tstep_s. eexists (Some (SMEEmit _)). split!.
     apply: steps_spec_step_end; [by econs|]. naive_solver.
   Qed.
 
@@ -308,7 +308,7 @@ Section prepost.
     tstep_s. eexists None. split!.
     apply: steps_spec_step_end; [by econs|] => ? /=?.
     have [?[?[?[?[??]]]]]:= pp_to_all_ex _ _ _ ltac:(done) ltac:(done); subst.
-    tstep_s. eexists (Some (inl _)). split!.
+    tstep_s. eexists (Some (SMEReturn _)). split!.
     apply: steps_spec_step_end; [econs|]. naive_solver.
   Qed.
 
@@ -319,7 +319,7 @@ Section prepost.
   Proof.
     constructor => G /= /pp_to_ex_exists[?[?[[?[??]]?]]]. split!; [done|] => /= ??.
     apply steps_spec_step_trans. tstep_s. eexists (Some _). split!.
-    apply: steps_spec_step_end; [by econs|] => /= ? ->. tstep_s. eexists (Some (inr _)). split!.
+    apply: steps_spec_step_end; [by econs|] => /= ? ->. tstep_s. eexists (Some (SMEEmit _)). split!.
     apply: steps_spec_step; [by econs|] => /= ? ->.
     apply: steps_spec_step_end; [by econs|] => /= ? ->.
     naive_solver.

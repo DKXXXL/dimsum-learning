@@ -1621,32 +1621,32 @@ Inductive imp_closed_state :=
 | ICEnd.
 
 Inductive imp_closed_step :
-  imp_closed_state → option (imp_event + imp_closed_event) → (imp_closed_state → Prop) → Prop :=
+  imp_closed_state → option (sm_event imp_event imp_closed_event) → (imp_closed_state → Prop) → Prop :=
 | ICStartS f vs:
-  imp_closed_step ICStart (Some (inr (EICStart f vs))) (λ σ, σ = ICRecvStart f vs)
+  imp_closed_step ICStart (Some (SMEEmit (EICStart f vs))) (λ σ, σ = ICRecvStart f vs)
 | ICRecvStartS f vs:
   imp_closed_step (ICRecvStart f vs)
-                  (Some (inl (Incoming, EICall f (ValNum <$> vs) initial_heap_state))) (λ σ, σ = ICRunning)
+                  (Some (SMEReturn (Some (Incoming, EICall f (ValNum <$> vs) initial_heap_state)))) (λ σ, σ = ICRunning)
 | ICRunningS f vs h:
-  imp_closed_step ICRunning (Some (inl (Outgoing, EICall f vs h))) (λ σ, σ = ICRecvCall1 f vs h)
+  imp_closed_step ICRunning (Some (SMERecv (Outgoing, EICall f vs h))) (λ σ, σ = ICRecvCall1 f vs h)
 | ICRecvCall1S f vs h:
   imp_closed_step (ICRecvCall1 f vs h) None (λ σ,
          ∃ vs', vs = ValNum <$> vs' ∧ σ = ICRecvCall2 f vs' h)
 | ICRecvCall2S f vs rv h:
   imp_closed_step (ICRecvCall2 f vs h)
-                  (Some (inr (EICCall f vs rv))) (λ σ, σ = ICRecvRet rv h)
+                  (Some (SMEEmit (EICCall f vs rv))) (λ σ, σ = ICRecvRet rv h)
 | ICRecvRetS v h:
   imp_closed_step (ICRecvRet v h)
-                  (Some (inl (Incoming, EIReturn (ValNum v) h))) (λ σ, σ = ICRunning)
+                  (Some (SMEReturn (Some (Incoming, EIReturn (ValNum v) h)))) (λ σ, σ = ICRunning)
 | ICRunningEndS v h:
-  imp_closed_step ICRunning (Some (inl (Outgoing, EIReturn v h))) (λ σ, σ = ICRecvEnd1 v)
+  imp_closed_step ICRunning (Some (SMERecv (Outgoing, EIReturn v h))) (λ σ, σ = ICRecvEnd1 v)
 | ICRecvEnd1EndS v:
   imp_closed_step (ICRecvEnd1 v) None (λ σ, ∃ v', v = ValNum v' ∧ σ = ICRecvEnd2 v')
 | ICEndS v:
-  imp_closed_step (ICRecvEnd2 v) (Some (inr (EICEnd v))) (λ σ, σ = ICEnd)
+  imp_closed_step (ICRecvEnd2 v) (Some (SMEEmit (EICEnd v))) (λ σ, σ = ICEnd)
 .
 
-Definition imp_closed_filter_module : module (imp_event + imp_closed_event) :=
+Definition imp_closed_filter_module : module (sm_event imp_event imp_closed_event) :=
   Mod imp_closed_step.
 
 Global Instance imp_closed_filter_module_vis_no_all : VisNoAll imp_closed_filter_module.
