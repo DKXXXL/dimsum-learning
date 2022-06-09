@@ -218,7 +218,9 @@ Proof.
   tstep_i => *. case_match; destruct_all?; simplify_eq.
   go_s. eexists (_, _, _). go. go_s. split!. go.
   go_s => ?. go. go_s => ?. go. simplify_eq. rewrite bool_decide_true; [|compute_done].
-  tstep_i. split! => ???? Hf ?. unfold main_imp_prog in Hf. simplify_map_eq.
+  tstep_i. split! => ???? Hf ?. simplify_eq.
+  change (@nil expr) with (Val <$> []).
+  tstep_i. split!. move => ??. simplify_eq. unfold main_imp_prog in Hf. simplify_map_eq. split!.
   tstep_i => ???. destruct_all?; simplify_eq. split!. { repeat econs. }
   tstep_i. split. { apply heap_alive_alloc; [done|lia]. }
   tstep_i. change ([Val (ValLoc l)]) with (Val <$> [ValLoc l]).

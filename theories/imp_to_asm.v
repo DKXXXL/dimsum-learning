@@ -1532,8 +1532,7 @@ Proof.
   go_s. split!.
   go_s => -[] ? /=.
   - move => ??????? /elem_of_dom[??] ? /not_elem_of_dom ? ???.
-    go_s. split!.
-    repeat case_bool_decide (_ = _); try by tstep_s.
+    go_s. split!. tstep_s. left. split! => ?.
     (* This inner loop deals with calls inside of the module. We use
     Hf both for calls triggered from inside and outside the module. *)
     unshelve eapply tsim_remember. { exact (λ n '(AsmState i1 rs1 mem1 ins'1) '(σfs1, Imp e1 h1 fns'1, (t1, I2A cs1 lr1, r1)),
@@ -1606,7 +1605,7 @@ Proof.
         eapply Hret' => //.
         iSatMono. iIntros!. iFrame.
     + iSatClear. move => *.
-      apply: H16 => //.
+      apply: H15 => //.
       iSatMono. iIntros!. iFrame.
   - move => *.
     tstep_s. simplify_eq. destruct d; [exfalso; naive_solver|]. split!.
