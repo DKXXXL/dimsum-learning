@@ -668,6 +668,9 @@ Definition i2a_args (o : nat) (vs : list val) (rs : gmap string Z) : uPred imp_t
       ⌜rs !! r = Some av⌝ ∗
       i2a_val_rel v av).
 
+Definition i2a_args_pure (o : nat) (vs : list Z) (rs : gmap string Z) : Prop :=
+  ∀ i v, vs !! i = Some v → ∃ r, args_registers !! (o + i)%nat = Some r ∧ rs !! r = Some v.
+
 Lemma i2a_mem_uninit_split n a l :
   0 ≤ n ≤ l →
   i2a_mem_uninit a l ⊣⊢ i2a_mem_uninit a n ∗ i2a_mem_uninit (a + n) (l - n).
@@ -1086,17 +1089,22 @@ Qed.
 (*   - iExists _. by iFrame. *)
 (* Qed. *)
 
+
 Lemma i2a_args_nil o rs:
   i2a_args o [] rs ⊣⊢ True.
 Proof. done. Qed.
 
+Lemma i2a_args_cons1 o v vs rs:
+  i2a_args o (v::vs) rs ⊣⊢ (∃ av r, ⌜args_registers !! o = Some r⌝ ∗ ⌜rs !! r = Some av⌝ ∗ i2a_val_rel v av) ∗ i2a_args (S o) vs rs.
+Proof.
+  rewrite /i2a_args. setoid_rewrite Nat.add_succ_l. setoid_rewrite <-Nat.add_succ_r => /=.
+  f_equiv. setoid_rewrite Nat.add_0_r. iSplit; iIntros!; iSplit!.
+Qed.
+
 Lemma i2a_args_cons o v vs rs r:
   args_registers !! o = Some r →
   i2a_args o (v::vs) rs ⊣⊢ (∃ av, ⌜rs !! r = Some av⌝ ∗ i2a_val_rel v av) ∗ i2a_args (S o) vs rs.
-Proof.
-  move => ?. rewrite /i2a_args. setoid_rewrite Nat.add_succ_l. setoid_rewrite <-Nat.add_succ_r => /=.
-  f_equiv. setoid_rewrite Nat.add_0_r. iSplit; iIntros!; iSplit!.
-Qed.
+Proof. move => ?. rewrite i2a_args_cons1. iSplit; iIntros!; iSplit!. Qed.
 
 Lemma i2a_args_mono o vs rs rs':
   map_preserved (drop o args_registers) rs rs' →
@@ -1107,6 +1115,35 @@ Proof.
   iIntros "!>" (???) "[% [% [% [% ?]]]]". iExists _, _. iFrame. iSplit; [done|]. iPureIntro.
   etrans; [symmetry; apply: Hpre|done].
   apply elem_of_list_lookup. setoid_rewrite lookup_drop. naive_solver.
+Qed.
+
+Lemma i2a_args_intro o vs avs rs:
+  i2a_args_pure o avs rs →
+  ([∗ list] v;av∈vs;avs, i2a_val_rel v av) -∗
+  i2a_args o vs rs.
+Proof.
+  iIntros (Hpure) "Hvs".
+  iInduction vs as [|v vs] "IH" forall (avs o Hpure). { by rewrite i2a_args_nil. }
+  iDestruct (big_sepL2_cons_inv_l with "Hvs") as (???) "[??]". simplify_eq.
+  have [?[]]:= Hpure 0%nat _ ltac:(done). rewrite Nat.add_0_r => ??.
+  rewrite i2a_args_cons; [|done].
+  iDestruct ("IH" with "[%] [$]") as "$". 2: by iSplit!.
+  move => ???. rewrite Nat.add_succ_l -Nat.add_succ_r. by apply Hpure.
+Qed.
+
+Lemma i2a_args_elim o vs rs:
+  i2a_args o vs rs -∗
+  ∃ avs, ⌜i2a_args_pure o avs rs⌝ ∗ ([∗ list] v;av∈vs;avs, i2a_val_rel v av).
+Proof.
+  iIntros "Hvs".
+  iInduction vs as [|v vs] "IH" forall (o). { iExists []. by iSplit!. }
+  iDestruct (i2a_args_cons1 with "Hvs") as "[??]". iDestruct!.
+  iDestruct ("IH" with "[$]") as (? Hpure) "?".
+  iExists (_::_). iSplit!; [|done..].
+  move => i ? /lookup_cons_Some[[??]|[??]]; simplify_eq.
+  - rewrite Nat.add_0_r. split!.
+  - destruct i; [lia|]. rewrite Nat.add_succ_r -Nat.add_succ_l . apply Hpure.
+    simplify_eq/=. rewrite ->Nat.sub_0_r in *. done.
 Qed.
 
 (** ** prepost *)
@@ -1134,15 +1171,16 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
     pp_prop (i = Incoming) $
     pp_quant $ λ h,
     pp_quant $ λ gp,
-    pp_star (i2a_mem_inv (rs !!! "SP") gp mem ∗ i2a_heap_inv h) $
+    pp_quant $ λ vs,
+    pp_quant $ λ avs,
+    pp_star (i2a_mem_inv (rs !!! "SP") gp mem ∗ i2a_heap_inv h ∗ [∗ list] v;av∈vs;avs, i2a_val_rel v av) $
     if b then
       (* env chooses return address *)
       pp_quant $ λ ret,
       (* env chooses function name *)
       pp_quant $ λ f,
       (* env chooses arguments *)
-      pp_quant $ λ vs,
-      pp_star (i2a_args 0 vs rs) $
+      pp_prop (i2a_args_pure 0 avs rs) $
       (* env proves that function name is valid *)
       pp_prop  (f ∈ fns) $
       (* env proves it calls the right address *)
@@ -1157,7 +1195,7 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
       (* env chooses return value *)
       pp_quant $ λ v,
       pp_quant $ λ av,
-      pp_star (i2a_val_rel v av) $
+      pp_prop (vs = [v] ∧ avs = [av]) $
       (* env chooses old registers *)
       pp_quant $ λ rsold,
       (* env chooses rest of cs *)
@@ -1177,13 +1215,15 @@ Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string
   pp_quant $ λ rs,
   pp_quant $ λ mem,
   pp_quant $ λ gp,
-  pp_star (i2a_mem_inv (rs !!! "SP") gp mem ∗ i2a_heap_inv (heap_of_event e.2)) $
+  pp_quant $ λ avs,
+  pp_star (i2a_mem_inv (rs !!! "SP") gp mem ∗ i2a_heap_inv (heap_of_event e.2) ∗
+             [∗ list] v;av∈(vals_of_event e.2);avs, i2a_val_rel v av) $
   match e with
   | (i, EICall f vs h) =>
       (* program chooses return address *)
       pp_quant $ λ ret,
       (* program chooses new physical blocks *)
-      pp_star (i2a_args 0 vs rs) $
+      pp_prop (i2a_args_pure 0 avs rs) $
       (* program proves that this function is external *)
       pp_prop (f ∉ fns) $
       (* program proves that the address is correct *)
@@ -1197,9 +1237,6 @@ Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string
       (* track the registers and return address (true means ret belongs to program) *)
       pp_end ((Outgoing, EAJump pc rs mem), (I2A ((I2AI true ret gp rs)::s.(i2a_calls)) s.(i2a_last_regs)))
   | (i, EIReturn v h) =>
-      pp_quant $ λ av,
-      (* program chooses new physical blocks *)
-      pp_star (i2a_val_rel v av) $
       (* program chooses old registers *)
       pp_quant $ λ rsold,
       (* program chooses rest of cs *)
@@ -1207,7 +1244,7 @@ Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string
       (* get registers from stack (false means pc belongs to the env) *)
       pp_prop (s.(i2a_calls) = (I2AI false pc gp rsold)::cs') $
       (* prog proves that rs is updated correctly *)
-      pp_prop (i2a_regs_ret rs rsold av) $
+      pp_prop (i2a_regs_ret rs rsold (avs !!! 0%nat)) $
       (* program proves it only touched a specific set of registers *)
       pp_prop (map_scramble touched_registers s.(i2a_last_regs) rs) $
       pp_end ((Outgoing, EAJump pc rs mem), (I2A cs' s.(i2a_last_regs)))
@@ -1310,16 +1347,17 @@ Proof.
     destruct e as [pc rs mem| | |]; destruct_all?; simplify_eq/=.
     move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
-    + move => ret f vs Hin Hf2i /not_elem_of_union[??] ? ??.
+    + move => ret f Hargs Hin Hf2i /not_elem_of_union[??] ? ??.
       repeat case_bool_decide => //.
       move: Hin => /elem_of_union[?|/Hin2[?[??]]].
       2: { exfalso. move: Hf2i => /lookup_union_Some_raw. naive_solver. }
       split!.
+      1: done.
       1: move: Hf2i => /lookup_union_Some_raw; naive_solver.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
       1: by simpl_map_decide.
       1: by econs.
-    + move => *.
+    + move => *. destruct_all?; simplify_eq.
       repeat case_bool_decide => //.
       revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
       inversion Hstack; simplify_eq/= => //. 2: { exfalso. set_solver. }
@@ -1330,16 +1368,17 @@ Proof.
     destruct e as [pc rs mem| | |]; destruct_all?; simplify_eq/=.
     move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
-    + move => ret f vs Hin Hf2i /not_elem_of_union[??] ???.
+    + move => ret f Hargs Hin Hf2i /not_elem_of_union[??] ???.
       repeat case_bool_decide => //.
       move: Hin => /elem_of_union[/Hin1[?[??]]|?].
       1: { exfalso. move: Hf2i => /lookup_union_Some_raw. naive_solver. }
       split!.
+      1: done.
       1: move: Hf2i => /lookup_union_Some_raw; naive_solver.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
       1: by simpl_map_decide.
       1: by econs.
-    + move => *. repeat case_bool_decide => //.
+    + move => *. destruct_all?; simplify_eq. repeat case_bool_decide => //.
       revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
       inversion Hstack; simplify_eq/= => //.
       split!.
@@ -1348,6 +1387,7 @@ Proof.
     all: destruct_all?; simplify_eq/=.
     + repeat case_bool_decide => //. 2: { exfalso. set_solver. } eexists true => /=.
       split!.
+      1: done.
       1: naive_solver.
       1: set_solver.
       1: { iSatMono. iIntros!. iFrame. }
@@ -1356,11 +1396,12 @@ Proof.
       revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
       inversion Hstack; simplify_eq/= => //.
       split!.
-      1: { iSatMono. iIntros!. iFrame. }
+      1: { iSatMono. iIntros!. iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]". simplify_eq/=. iFrame. }
   - move => [? [f vs h|v h]] ? ? ? /= *.
     all: destruct_all?; simplify_eq/=.
     + repeat case_bool_decide => //. 1: { exfalso. set_solver. }
       split!.
+      1: done.
       1: set_solver.
       1: apply lookup_union_Some_raw; naive_solver.
       1: set_solver.
@@ -1375,6 +1416,7 @@ Proof.
     all: destruct_all?; simplify_eq/=.
     + repeat case_bool_decide => //. 2: { exfalso. set_solver. } eexists true.
       split!.
+      1: done.
       1: naive_solver.
       1: set_solver.
       1: { iSatMono. iIntros!. iFrame. }
@@ -1383,11 +1425,12 @@ Proof.
       revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
       inversion Hstack; simplify_eq/= => //. eexists false.
       split!.
-      1: { iSatMono. iIntros!. iFrame. }
+      1: { iSatMono. iIntros!. iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]". simplify_eq/=. iFrame. }
   - move => [? [f vs h|v h]] ? /= ? *.
     all: destruct_all?; simplify_eq/=.
     + repeat case_bool_decide => //. 1: { exfalso. set_solver. }
       split!.
+      1: done.
       1: set_solver.
       1: apply lookup_union_Some_raw; destruct (f2i1 !! f) eqn:?; naive_solver.
       1: set_solver.
@@ -1488,9 +1531,8 @@ Proof.
   tstep_i => ??????.
   go_s. split!.
   go_s => -[] ? /=.
-  - move => ????? /elem_of_dom[??] ? /not_elem_of_dom ? ???.
-    go_s. split!.
-    repeat case_bool_decide (_ = _); try by tstep_s.
+  - move => ??????? /elem_of_dom[??] ? /not_elem_of_dom ? ???.
+    go_s. split!. tstep_s. left. split! => ?.
     (* This inner loop deals with calls inside of the module. We use
     Hf both for calls triggered from inside and outside the module. *)
     unshelve eapply tsim_remember. { exact (λ n '(AsmState i1 rs1 mem1 ins'1) '(σfs1, Imp e1 h1 fns'1, (t1, I2A cs1 lr1, r1)),
@@ -1518,11 +1560,13 @@ Proof.
           map_scramble touched_registers lr' rs' →
           AsmState (ARunning []) rs' mem' ins ⪯{asm_module, imp_to_asm (dom _ ins) (dom _ fns) f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K' (Val v)) h' fns, (PPInside, I2A cs1 lr', rf'))) ). }
-    { eexists (ReturnExtCtx _:: _). split! => //. { iSatMono. iIntros!. iFrame. iAccu. }
+    { eexists (ReturnExtCtx _:: _). split! => //. {
+        iSatMono. iIntros!. iFrame.
+        iDestruct (i2a_args_intro with "[$]") as "$"; [done|]. iAccu. }
       iSatClear. move => *.
       tstep_s.
       tstep_i => ??. simplify_map_eq.
-      tstep_s. split!. { iSatMono. iIntros!. iFrame. iAccu. }
+      tstep_s. split!. { instantiate (1:=[_]). done. } { iSatMono. iIntros!. iFrame. iAccu. }
       apply Hstay; [done|]. by split!.
     }
     { move => ?? [????] [[?[???]][[?[??]]?]] ??. destruct_all?. split!; [done..|].
@@ -1546,7 +1590,10 @@ Proof.
       * have ?: fns !! f'' = None by naive_solver.
         tstep_i => ??. simplify_map_eq.
         tstep_s. right. split!.
-        tstep_s. split!. { by apply not_elem_of_dom. } { by apply elem_of_dom. }
+        tstep_s.
+        iSatStart. iIntros!.
+        iDestruct (i2a_args_elim with "[$]") as (??) "?". iSatStop.
+        split!. { done. } { by apply not_elem_of_dom. } { by apply elem_of_dom. }
         { iSatMono. iIntros!. iFrame. iAccu. }
         apply Hcall. { etrans; [|done]. apply ti_le_S. } { by split!. }
         iSatClear.
@@ -1558,13 +1605,13 @@ Proof.
         eapply Hret' => //.
         iSatMono. iIntros!. iFrame.
     + iSatClear. move => *.
-      apply: H16 => //.
+      apply: H15 => //.
       iSatMono. iIntros!. iFrame.
   - move => *.
     tstep_s. simplify_eq. destruct d; [exfalso; naive_solver|]. split!.
     apply Hret; [done..| |].
     + by split!.
-    + split!; [|done..].
+    + split!; [|done..]. destruct_all?; simplify_eq/=.
       iSatMono. iIntros!. iFrame.
 Qed.
 

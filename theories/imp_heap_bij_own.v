@@ -64,6 +64,14 @@ Ltac simplify_bij :=
              pose proof (hb_iff bij pi ps1 ps2 H1 H2); clear H2
          end); simplify_eq.
 
+Lemma heap_bij_eq bij1 bij2 :
+  bij1 = bij2 ↔ hb_bij bij1 = hb_bij bij2 ∧ hb_priv_i bij1 = hb_priv_i bij2.
+Proof.
+  split; [naive_solver|]. move => [??]. destruct bij1, bij2 => /=. simplify_eq/=. f_equal.
+  (* TODO: get rid of this *)
+  all: apply proof_irrelevance.
+Qed.
+
 Global Program Instance heap_bij_empty : Empty heap_bij := HeapBij ∅ ∅ _ _.
 Solve Obligations with set_solver.
 
@@ -151,7 +159,7 @@ Lemma elem_of_hb_provs_i bij pi :
 Proof. unfold hb_provs_i. rewrite elem_of_union elem_of_dom elem_of_hb_shared_i. naive_solver. Qed.
 
 (** heap_bij constructors *)
-Program Definition heap_bij_share (p1 p2 : prov) (bij : heap_bij)
+Program Definition hb_share (p1 p2 : prov) (bij : heap_bij)
         (H : p1 ∉ hb_provs_i bij) :=
   HeapBij (<[p2 := HBShared p1]> (hb_bij bij)) (hb_priv_i bij) _ _.
 Next Obligation.
@@ -166,7 +174,31 @@ Next Obligation.
   by apply: hb_iff.
 Qed.
 
-Program Definition heap_bij_update_const_s (p : prov) (h : gmap Z val) (bij : heap_bij) :=
+Program Definition hb_share_big (s : gmap prov prov) (bij : heap_bij)
+        (H1 : ∀ p1 p2, s !! p2 = Some p1 → p1 ∉ hb_provs_i bij)
+        (H2 : ∀ p1 p2 p2', s !! p2 = Some p1 → s !! p2' = Some p1 → p2 = p2') :=
+  HeapBij ((HBShared <$> s) ∪ (hb_bij bij)) (hb_priv_i bij) _ _.
+Next Obligation.
+  move => ?? Hnotin ???.
+  rewrite lookup_union_Some_raw lookup_fmap fmap_Some fmap_None => ?.
+  destruct_all?; simplify_eq/= => //; try naive_solver.
+  - setoid_rewrite elem_of_hb_provs_i in Hnotin. apply eq_None_not_Some. naive_solver.
+  - by apply: hb_disj.
+Qed.
+Next Obligation.
+  move => ?? Hnotin Hag ???.
+  rewrite !lookup_union_Some_raw !lookup_fmap !fmap_Some !fmap_None => ??.
+  destruct_all?; simplify_eq/= => //; try naive_solver.
+  - setoid_rewrite elem_of_hb_provs_i in Hnotin. naive_solver.
+  - setoid_rewrite elem_of_hb_provs_i in Hnotin. naive_solver.
+  - by apply: hb_iff.
+Qed.
+
+Lemma hb_share_big_empty bij H1 H2:
+  hb_share_big ∅ bij H1 H2 = bij.
+Proof. apply heap_bij_eq => /=. split; [|done]. by rewrite fmap_empty left_id_L. Qed.
+
+Program Definition hb_update_const_s (p : prov) (h : gmap Z val) (bij : heap_bij) :=
   HeapBij (<[p := HBConstant h]> (hb_bij bij)) (hb_priv_i bij) _ _.
 Next Obligation.
   move => ?????.
@@ -177,7 +209,28 @@ Next Obligation.
   rewrite !lookup_insert_Some => ??. destruct_all?; simplify_eq/= => //. by apply: hb_iff.
 Qed.
 
-Program Definition heap_bij_update_const_i (p : prov) (h : gmap Z val) (bij : heap_bij)
+Program Definition hb_update_const_s_big (s : gmap prov (gmap Z val)) (bij : heap_bij) :=
+  HeapBij ((HBConstant <$> s) ∪ (hb_bij bij)) (hb_priv_i bij) _ _.
+Next Obligation.
+  move => ????.
+  rewrite !lookup_union_Some_raw !lookup_fmap !fmap_Some fmap_None => ?.
+  destruct_all?; simplify_eq/= => //. by apply: hb_disj.
+Qed.
+Next Obligation.
+  move => ?????.
+  rewrite !lookup_union_Some_raw !lookup_fmap !fmap_Some !fmap_None => ??.
+  destruct_all?; simplify_eq/= => //. by apply: hb_iff.
+Qed.
+
+Lemma hb_update_const_s_big_empty bij:
+  hb_update_const_s_big ∅ bij = bij.
+Proof. apply heap_bij_eq => /=. split; [|done]. by rewrite fmap_empty left_id_L. Qed.
+
+Lemma hb_update_const_s_big_insert bij p2 h s:
+  hb_update_const_s_big (<[p2:=h]> s) bij = hb_update_const_s p2 h $ hb_update_const_s_big s bij.
+Proof. apply heap_bij_eq => /=. split; [|done]. by rewrite fmap_insert insert_union_l. Qed.
+
+Program Definition hb_update_const_i (p : prov) (h : gmap Z val) (bij : heap_bij)
   (H : p ∉ hb_shared_i bij) :=
   HeapBij (hb_bij bij) (<[p := h]> $ hb_priv_i bij) _ _.
 Next Obligation.
@@ -189,7 +242,7 @@ Next Obligation.
   move => ???????. by apply: hb_iff.
 Qed.
 
-Program Definition heap_bij_delete_s (p : prov) (bij : heap_bij) :=
+Program Definition hb_delete_s (p : prov) (bij : heap_bij) :=
   HeapBij (delete p (hb_bij bij)) (hb_priv_i bij) _ _.
 Next Obligation.
   move => ????.
@@ -200,8 +253,21 @@ Next Obligation.
   rewrite !lookup_delete_Some => ??. destruct_all?; simplify_eq/= => //. by apply: hb_iff.
 Qed.
 
+Program Definition hb_delete_s_big (s : gmap prov (gmap Z val)) (bij : heap_bij) :=
+  HeapBij (hb_bij bij ∖ (HBConstant <$> s)) (hb_priv_i bij) _ _.
+Next Obligation. move => ????. rewrite !lookup_difference_Some => -[??]. by apply: hb_disj. Qed.
+Next Obligation. move => ?????. rewrite !lookup_difference_Some => -[??] -[??]. by apply: hb_iff. Qed.
+
+Lemma hb_delete_s_big_empty bij:
+  hb_delete_s_big ∅ bij = bij.
+Proof. apply heap_bij_eq => /=. split; [|done]. by rewrite fmap_empty map_difference_empty. Qed.
+
+Lemma hb_delete_s_big_insert bij p2 h s:
+  hb_delete_s_big (<[p2:=h]> s) bij = hb_delete_s p2 $ hb_delete_s_big s bij.
+Proof. apply heap_bij_eq => /=. split; [|done]. by rewrite fmap_insert -delete_difference. Qed.
+
 Lemma hb_priv_s_share pi ps bij H:
-  hb_priv_s (heap_bij_share pi ps bij H) = delete ps (hb_priv_s bij).
+  hb_priv_s (hb_share pi ps bij H) = delete ps (hb_priv_s bij).
 Proof.
   apply map_eq => ?. apply option_eq => ?. rewrite !hb_priv_s_lookup_Some/=.
   rewrite lookup_delete_Some hb_priv_s_lookup_Some lookup_insert_Some.
@@ -209,28 +275,28 @@ Proof.
 Qed.
 
 Lemma hb_priv_s_update_const_s bij ps h :
-  hb_priv_s (heap_bij_update_const_s ps h bij) = <[ps := h]> (hb_priv_s bij).
+  hb_priv_s (hb_update_const_s ps h bij) = <[ps := h]> (hb_priv_s bij).
 Proof.
   apply map_eq => ?. apply option_eq => ?. rewrite !hb_priv_s_lookup_Some/=.
   rewrite !lookup_insert_Some hb_priv_s_lookup_Some/=. naive_solver.
 Qed.
 
 Lemma hb_provs_i_share p1 p2 bij H:
-  hb_provs_i (heap_bij_share p1 p2 bij H) ⊆ {[p1]} ∪ hb_provs_i bij.
+  hb_provs_i (hb_share p1 p2 bij H) ⊆ {[p1]} ∪ hb_provs_i bij.
 Proof.
   move => ?. rewrite elem_of_union !elem_of_hb_provs_i /=.
   setoid_rewrite lookup_insert_Some at 1. set_solver.
 Qed.
 
 Lemma hb_provs_i_update_const_s p h bij:
-  hb_provs_i (heap_bij_update_const_s p h bij) ⊆ hb_provs_i bij.
+  hb_provs_i (hb_update_const_s p h bij) ⊆ hb_provs_i bij.
 Proof.
   move => ?. rewrite !elem_of_hb_provs_i /=.
   setoid_rewrite lookup_insert_Some. naive_solver.
 Qed.
 
 Lemma hb_provs_i_update_const_i p h bij H:
-  hb_provs_i (heap_bij_update_const_i p h bij H) ⊆ {[p]} ∪ hb_provs_i bij.
+  hb_provs_i (hb_update_const_i p h bij H) ⊆ {[p]} ∪ hb_provs_i bij.
 Proof.
   move => ?. rewrite !elem_of_hb_provs_i /=.
   setoid_rewrite lookup_insert_Some => Hp.
@@ -238,7 +304,7 @@ Proof.
 Qed.
 
 Lemma hb_shared_share pi ps bij H:
-  hb_shared (heap_bij_share pi ps bij H) = <[ps := pi]> (hb_shared bij).
+  hb_shared (hb_share pi ps bij H) = <[ps := pi]> (hb_shared bij).
 Proof.
   apply map_eq => ?. apply option_eq => ?. rewrite !hb_shared_lookup_Some /=.
   rewrite !lookup_insert_Some !hb_shared_lookup_Some. naive_solver.
@@ -246,7 +312,7 @@ Qed.
 
 Lemma hb_shared_update_const_s p2 h bij:
   (∀ p1, hb_bij bij !! p2 ≠ Some (HBShared p1)) →
-  hb_shared (heap_bij_update_const_s p2 h bij) = hb_shared bij.
+  hb_shared (hb_update_const_s p2 h bij) = hb_shared bij.
 Proof.
   move => ?.
   apply map_eq => ?. apply option_eq => ?. rewrite !hb_shared_lookup_Some /=.
@@ -254,13 +320,17 @@ Proof.
 Qed.
 
 Lemma hb_shared_update_const_i p h bij H:
-  hb_shared (heap_bij_update_const_i p h bij H) = hb_shared bij.
+  hb_shared (hb_update_const_i p h bij H) = hb_shared bij.
 Proof. done. Qed.
 
 (** ghost theory *)
+Definition heap_bij_auth_bij (m : gmap prov heap_bij_elem) : uPred heap_bijUR :=
+  uPred_ownM (heap_bijUR_s_inj $ gmap_view_auth (DfracOwn 1) m).
+Definition heap_bij_auth_priv_i (m : gmap prov (gmap Z val)) : uPred heap_bijUR :=
+  uPred_ownM (heap_bijUR_i_inj $ gmap_view_auth (DfracOwn 1) (HBIConstant <$> m)).
+
 Definition heap_bij_auth (bij : heap_bij) : uPred heap_bijUR :=
-  uPred_ownM (heap_bijUR_s_inj $ gmap_view_auth (DfracOwn 1) (hb_bij bij)) ∗
-  uPred_ownM (heap_bijUR_i_inj $ gmap_view_auth (DfracOwn 1) (HBIConstant <$> hb_priv_i bij)).
+  heap_bij_auth_bij (hb_bij bij) ∗ heap_bij_auth_priv_i (hb_priv_i bij).
 
 Definition heap_bij_shared (p1 p2 : prov) : uPred (heap_bijUR) :=
   uPred_ownM (heap_bijUR_s_inj $ gmap_view_frag p2 DfracDiscarded (HBShared p1)).
@@ -271,13 +341,38 @@ Definition heap_bij_const_s (p : prov) (h : gmap Z val) : uPred (heap_bijUR) :=
 Definition heap_bij_const_i (p : prov) (h : gmap Z val) : uPred (heap_bijUR) :=
   uPred_ownM (heap_bijUR_i_inj $ gmap_view_frag p (DfracOwn 1) (HBIConstant h)).
 
-Lemma heap_bij_alloc_shared bij p1 p2 H:
-  p2 ∉ dom (gset _) (hb_bij bij) →
-  heap_bij_auth bij ==∗ heap_bij_auth (heap_bij_share p1 p2 bij H) ∗ heap_bij_shared p1 p2.
+Lemma heap_bij_alloc_shared1 m p1 p2:
+  p2 ∉ dom (gset _) m →
+  heap_bij_auth_bij m ==∗ heap_bij_auth_bij (<[p2:=HBShared p1]> m) ∗ heap_bij_shared p1 p2.
 Proof.
-  iIntros (?) "[? $]". iStopProof. rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
+  iIntros (?) "?". iStopProof. rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
   rewrite -pair_op_1. apply prod_update; [|done].
   apply gmap_view_alloc; [|done]. by apply not_elem_of_dom.
+Qed.
+
+Lemma heap_bij_alloc_shared bij p1 p2 H:
+  p2 ∉ dom (gset _) (hb_bij bij) →
+  heap_bij_auth bij ==∗ heap_bij_auth (hb_share p1 p2 bij H) ∗ heap_bij_shared p1 p2.
+Proof. iIntros (?) "[? $]". by iApply heap_bij_alloc_shared1. Qed.
+
+Lemma heap_bij_alloc_shared_big s bij H1 H2 :
+  dom (gset prov) s ## dom _ (hb_bij bij) →
+  heap_bij_auth bij ==∗
+  heap_bij_auth (hb_share_big s bij H1 H2) ∗ [∗ map] p2↦p1∈s, heap_bij_shared p1 p2.
+Proof.
+  iIntros (Hdisj) "[Ha $]" => /=. move: (hb_bij bij) Hdisj => m Hdisj. clear H1 H2.
+  iInduction s as [|p2 p1 s ?] "IH" using map_ind forall (m Hdisj).
+  { iModIntro. rewrite fmap_empty left_id_L big_sepM_empty. iFrame. }
+  rewrite big_sepM_insert //.
+  iMod ("IH" with "[%] Ha") as "[Ha $]". {
+    move => p /elem_of_dom[??]. apply: Hdisj. apply elem_of_dom.
+    eexists _. rewrite lookup_insert_Some. naive_solver.
+  }
+  iMod (heap_bij_alloc_shared1 with "Ha") as "[Ha $]".
+  { move => /elem_of_dom. move => [? /lookup_union_Some_raw[|[??]]].
+    - rewrite lookup_fmap fmap_Some. naive_solver.
+    - apply: Hdisj; apply elem_of_dom; [|done]. by rewrite lookup_insert. }
+  by rewrite insert_union_l fmap_insert.
 Qed.
 
 Lemma heap_bij_shared_lookup p1 p2 bij :
@@ -305,17 +400,37 @@ Qed.
 
 Lemma heap_bij_alloc_const_s bij p h:
   p ∉ dom (gset _) (hb_bij bij) →
-  heap_bij_auth bij ==∗ heap_bij_auth (heap_bij_update_const_s p h bij) ∗ heap_bij_const_s p h.
+  heap_bij_auth bij ==∗ heap_bij_auth (hb_update_const_s p h bij) ∗ heap_bij_const_s p h.
 Proof.
   iIntros (?) "[? $]". iStopProof. rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
   rewrite -pair_op_1. apply prod_update; [|done].
   apply gmap_view_alloc; [|done]. by apply not_elem_of_dom.
 Qed.
 
+Lemma heap_bij_alloc_const_s_big s bij :
+  dom (gset prov) s ## dom _ (hb_bij bij) →
+  heap_bij_auth bij ==∗
+  heap_bij_auth (hb_update_const_s_big s bij) ∗ ([∗ map] p↦h∈s, heap_bij_const_s p h).
+Proof.
+  iIntros (Hdisj) "Ha" => /=.
+  iInduction s as [|p2 p1 s ?] "IH" using map_ind forall (bij Hdisj).
+  { iModIntro. rewrite hb_update_const_s_big_empty big_sepM_empty. iFrame. }
+  rewrite big_sepM_insert //.
+  iMod ("IH" with "[%] Ha") as "[Ha $]". {
+    move => p /elem_of_dom[??]. apply: Hdisj. apply elem_of_dom.
+    eexists _. rewrite lookup_insert_Some. naive_solver.
+  }
+  iMod (heap_bij_alloc_const_s with "Ha") as "[Ha $]".
+  { move => /= /elem_of_dom. move => [? /lookup_union_Some_raw[|[??]]].
+    - rewrite lookup_fmap fmap_Some. naive_solver.
+    - apply: Hdisj; apply elem_of_dom; [|done]. by rewrite lookup_insert. }
+  by rewrite hb_update_const_s_big_insert.
+Qed.
+
 Lemma heap_bij_alloc_const_i bij p h
   (H : p ∉ hb_shared_i bij):
   p ∉ hb_provs_i bij →
-  heap_bij_auth bij ==∗ heap_bij_auth (heap_bij_update_const_i p h bij H) ∗ heap_bij_const_i p h.
+  heap_bij_auth bij ==∗ heap_bij_auth (hb_update_const_i p h bij H) ∗ heap_bij_const_i p h.
 Proof.
   iIntros (Hin) "[$ ?]". iStopProof. rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
   rewrite /= fmap_insert.
@@ -323,6 +438,28 @@ Proof.
   apply gmap_view_alloc; [|done].
   move: Hin => /elem_of_hb_provs_i Hin. rewrite lookup_fmap fmap_None. apply eq_None_not_Some => -[??].
   naive_solver.
+Qed.
+
+Lemma heap_bij_free_const_s bij p h:
+  heap_bij_auth bij ∗ heap_bij_const_s p h ==∗ heap_bij_auth (hb_delete_s p bij).
+Proof.
+  iIntros "[[? $] ?]". iStopProof. rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
+  rewrite -pair_op_1. apply prod_update; [|done].
+  by apply gmap_view_delete.
+Qed.
+
+Lemma heap_bij_free_const_s_big s bij :
+  heap_bij_auth bij -∗
+  ([∗ map] p↦h∈s, heap_bij_const_s p h) ==∗
+  heap_bij_auth (hb_delete_s_big s bij).
+Proof.
+  iIntros "Ha Hm" => /=.
+  iInduction s as [|p2 h s ?] "IH" using map_ind forall (bij).
+  { iModIntro. by rewrite hb_delete_s_big_empty. }
+  rewrite big_sepM_insert //. iDestruct "Hm" as "[Hp Hm]".
+  iMod ("IH" with "Ha Hm") as "Ha".
+  iMod (heap_bij_free_const_s with "[$Ha $Hp]") as "?".
+  iModIntro. by rewrite hb_delete_s_big_insert.
 Qed.
 
 Lemma heap_bij_const_s_lookup p f bij :
@@ -348,14 +485,95 @@ Proof.
   apply insert_subseteq_l; [|done]. by apply hb_priv_s_lookup_Some.
 Qed.
 
-Lemma heap_bij_frag_update_const_s bij p f h:
+Lemma heap_bij_update_const_s bij p f h:
   heap_bij_auth bij ∗ heap_bij_const_s p f ==∗
-  heap_bij_auth (heap_bij_update_const_s p h bij) ∗ heap_bij_const_s p h.
+  heap_bij_auth (hb_update_const_s p h bij) ∗ heap_bij_const_s p h.
 Proof.
   iIntros "[[? $] ?]". iStopProof.
   rewrite -!uPred.ownM_op. apply uPred.bupd_ownM_update.
   rewrite -!pair_op_1. apply prod_update; [|done].
   apply gmap_view_update.
+Qed.
+
+Lemma heap_bij_update_all bij' bij ho :
+  ho ⊆ hb_priv_s bij →
+  ho ⊆ hb_priv_s bij' →
+  hb_shared bij ⊆ hb_shared bij' →
+  hb_priv_i bij = hb_priv_i bij' →
+  heap_bij_auth bij -∗
+  ([∗ map] p2↦p1∈ hb_shared bij, heap_bij_shared p1 p2) -∗
+  ([∗ map] p↦h∈ hb_priv_s bij ∖ ho, heap_bij_const_s p h) ==∗
+  heap_bij_auth bij' ∗
+  ([∗ map] p2↦p1∈ hb_shared bij', heap_bij_shared p1 p2) ∗
+  ([∗ map] p↦h∈ hb_priv_s bij' ∖ ho, heap_bij_const_s p h)
+.
+Proof.
+  iIntros (Hho1 Hho2 Hsub Hpi) "Ha #Hsh Hconst".
+  have Hsub' : ∀ p1 p2, hb_bij bij !! p2 = Some (HBShared p1) → hb_bij bij' !! p2 = Some (HBShared p1). {
+    move => ??. rewrite -!hb_shared_lookup_Some => ?. by eapply lookup_weaken. }
+  have Hho1' : ∀ p h, ho !! p = Some h → hb_bij bij !! p = Some (HBConstant h). {
+    move => ??. rewrite -!hb_priv_s_lookup_Some => ?. by eapply lookup_weaken. }
+  have Hho2' : ∀ p h, ho !! p = Some h → hb_bij bij' !! p = Some (HBConstant h). {
+    move => ??. rewrite -!hb_priv_s_lookup_Some => ?. by eapply lookup_weaken. }
+  iMod (heap_bij_free_const_s_big with "Ha Hconst") as "Ha".
+  have Hash1 : ∀ p1 p2, (hb_shared bij' ∖ hb_shared bij) !! p2 = Some p1 → p1 ∉ hb_provs_i (hb_delete_s_big (hb_priv_s bij ∖ ho) bij). {
+    move => /= p1 p2 /lookup_difference_Some[/hb_shared_lookup_Some? /hb_shared_lookup_None?].
+    rewrite elem_of_hb_provs_i /=. move => [[?]|[?]].
+    - rewrite Hpi. by eapply eq_None_ne_Some_1, hb_disj.
+    - move => /lookup_difference_Some[Hb]. move: (Hb) => /Hsub' ?. simplify_bij. naive_solver.
+  }
+  have Hash2 : ∀ p1 p2 p2', (hb_shared bij' ∖ hb_shared bij) !! p2 = Some p1 →
+                            (hb_shared bij' ∖ hb_shared bij) !! p2' = Some p1 → p2 = p2'. {
+    move => ???. rewrite !lookup_difference_Some !hb_shared_lookup_Some => -[??] [??].
+    by simplify_bij.
+  }
+  unshelve iMod (heap_bij_alloc_shared_big (hb_shared bij' ∖ hb_shared bij) with "Ha") as "[Ha #Hsh2]"; [exact: Hash1| exact: Hash2|..]. {
+    apply elem_of_disjoint => ?.
+    rewrite !elem_of_dom /is_Some /=.
+    setoid_rewrite lookup_difference_Some.
+    setoid_rewrite lookup_fmap. setoid_rewrite fmap_None.
+    setoid_rewrite lookup_difference_None. rewrite /is_Some.
+    setoid_rewrite hb_shared_lookup_Some. setoid_rewrite hb_shared_lookup_None.
+    setoid_rewrite hb_priv_s_lookup_None.
+    move => ??. destruct_all?; simplify_eq.
+    - destruct x; naive_solver.
+    - naive_solver.
+  }
+  iMod (heap_bij_alloc_const_s_big with "Ha") as "[Ha $]". {
+    apply elem_of_disjoint => ?.
+    rewrite !elem_of_dom /is_Some /=.
+    setoid_rewrite lookup_union_Some_raw.
+    setoid_rewrite lookup_difference_Some.
+    setoid_rewrite lookup_fmap. setoid_rewrite fmap_Some. setoid_rewrite fmap_None.
+    setoid_rewrite lookup_difference_Some.
+    setoid_rewrite lookup_difference_None. rewrite /is_Some.
+    setoid_rewrite hb_shared_lookup_Some. setoid_rewrite hb_shared_lookup_None.
+    setoid_rewrite hb_priv_s_lookup_Some. setoid_rewrite hb_priv_s_lookup_None.
+    move => ??. destruct_all?; simplify_eq.
+    - destruct x; naive_solver.
+    - naive_solver.
+  }
+  iModIntro. iSplit.
+  - enough (hb_update_const_s_big (hb_priv_s bij' ∖ ho) (hb_share_big (hb_shared bij' ∖ hb_shared bij)
+              (hb_delete_s_big (hb_priv_s bij ∖ ho) bij) Hash1 Hash2) = bij') as -> by done.
+    apply heap_bij_eq => /=. split; [|done].
+    apply map_eq => p. apply option_eq => e.
+    rewrite !lookup_union_Some_raw !lookup_difference_Some !lookup_fmap !fmap_Some !fmap_None.
+    setoid_rewrite lookup_difference_Some.
+    setoid_rewrite lookup_difference_None. rewrite /is_Some.
+    setoid_rewrite hb_priv_s_lookup_Some.
+    setoid_rewrite hb_priv_s_lookup_None.
+    setoid_rewrite hb_shared_lookup_Some.
+    setoid_rewrite hb_shared_lookup_None.
+    split => ?.
+    + destruct_all?; simplify_eq/= => //; try destruct e; naive_solver.
+    + destruct e.
+      * split!; [naive_solver|].
+        destruct (hb_shared bij !! p) eqn: Heq;
+          rewrite ?hb_shared_lookup_Some ?hb_shared_lookup_None in Heq; naive_solver.
+      * destruct (ho !! p) eqn: ?; [|naive_solver]. split!; naive_solver.
+  - rewrite - {3}(map_difference_union (hb_shared bij) (hb_shared bij')); [|done].
+    iApply big_sepM_union; [by apply map_disjoint_difference_r|by iFrame "#"].
 Qed.
 
 (** ** val_in_bij *)
@@ -638,7 +856,7 @@ Lemma heap_in_bij_alloc l1 l2 hi hs n bij H:
   heap_is_fresh hi l1 →
   heap_is_fresh hs l2 →
   heap_in_bij bij hi hs -∗
-  heap_in_bij (heap_bij_share l1.1 l2.1 bij H) (heap_alloc hi l1 n) (heap_alloc hs l2 n).
+  heap_in_bij (hb_share l1.1 l2.1 bij H) (heap_alloc hi l1 n) (heap_alloc hs l2 n).
 Proof.
   iIntros ([Hi1 ?] [Hi2 ?]) "Hh". iIntros (p1 p2 o) => /=. iIntros ([[??]|[??]]%lookup_insert_Some); simplify_eq.
   - destruct l1 as [p1 ?], l2 as [p2 ?]; simplify_eq/=.
@@ -756,7 +974,7 @@ Lemma heap_bij_inv_update_s l v hi hs hs' :
 Proof.
   iIntros "[% [% [% [% [% [? [Ha Hbij]]]]]]] Hcont".
   iDestruct (heap_bij_const_s_lookup with "[$] [$]") as %?.
-  iMod (heap_bij_frag_update_const_s with "[$]") as "[? $]". iModIntro.
+  iMod (heap_bij_update_const_s with "[$]") as "[? $]". iModIntro.
   iExists _. iFrame. repeat iSplit; try iPureIntro.
   - rewrite dom_insert_L heap_update_provs. apply union_least; [|done]. etrans; [|done].
     apply singleton_subseteq_l. by apply elem_of_dom.
@@ -842,7 +1060,7 @@ Lemma heap_bij_inv_free_s ls hi hs hs':
 Proof.
   iIntros "[% [% [% [% [% [? [Ha Hbij]]]]]]] Hl".
   iDestruct (heap_bij_const_s_lookup with "[$] [$]") as %?.
-  iMod (heap_bij_frag_update_const_s with "[$]") as "[Ha ?]". iModIntro.
+  iMod (heap_bij_update_const_s with "[$]") as "[Ha ?]". iModIntro.
   iExists _. iFrame "Ha". iSplit!.
   - rewrite dom_insert_L heap_free_provs. apply union_least; [|done]. etrans; [|done].
     apply singleton_subseteq_l. by apply elem_of_dom.
@@ -1256,9 +1474,9 @@ Proof.
   move => {}n _ /= Hloop [[σm1 [[σf σ1] [[pp []] r]]] σc1] [[σm2 σ2] σc2] ?.
   destruct_all?; simplify_eq/=.
   - tstep_i. apply steps_impl_step_end => ???. invert_all' @m_step; simplify_eq/=. split!.
-    tstep_s. eexists (Some (inr _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
+    tstep_s. eexists (Some (SMEEmit _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
     tstep_i. apply steps_impl_step_end => ???. invert_all @m_step. split!.
-    tstep_s. eexists (Some (inl _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
+    tstep_s. eexists (Some (SMEReturn _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
     tstep_i => ??; simplify_eq/=.
     tstep_i. eexists (ValNum <$> vs), initial_heap_state. split!.
     { apply: (satisfiable_init (_, _)). { split; by eapply (gmap_view_auth_dfrac_valid _ (DfracOwn 1)). }
@@ -1290,9 +1508,9 @@ Proof.
       iSatStop.
       split!; [done|].
       tstep_i. apply steps_impl_step_end => ???. invert_all @m_step. split!.
-      tstep_s. eexists (Some (inr _)). split!. apply: steps_spec_step_end; [econs|] => /=? ->.
+      tstep_s. eexists (Some (SMEEmit _)). split!. apply: steps_spec_step_end; [econs|] => /=? ->.
       tstep_i. apply steps_impl_step_end => ???. invert_all @m_step. split!.
-      tstep_s. eexists (Some (inl _)). split!. apply: steps_spec_step_end; [econs|] => /=? ->.
+      tstep_s. eexists (Some (SMEReturn _)). split!. apply: steps_spec_step_end; [econs|] => /=? ->.
       tstep_i => ? <-.
       tstep_i. eexists [ValNum _]. split!.
       { iSatMono. iIntros!. iFrame. iSplitR; [by iPureIntro|]. instantiate (1:=True%I). done. }
@@ -1307,7 +1525,7 @@ Proof.
       tend. split!.
       tstep_i. apply: steps_impl_step_end => ???. invert_all @m_step. split!.
       tstep_i. apply: steps_impl_step_end => ???. invert_all @m_step. split!.
-      tstep_s. eexists (Some (inr _)). split!.
+      tstep_s. eexists (Some (SMEEmit _)). split!.
       apply: steps_spec_step_end; [econs|]=> /=? ->.
       tstep_i. apply: steps_impl_step_end => ???. invert_all @m_step.
 Qed.

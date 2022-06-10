@@ -196,6 +196,8 @@ Proof.
     apply: wp_mono; [done|]. etrans; [|done]. by econs.
 Qed.
 
+(* Print Assumptions wp_implies_refines. *)
+
 Lemma wp_complete {EV} (m1 m2 : mod_state EV):
   trefines m1 m2 →
   ∀ n, wp m1 m2 n m1.(ms_state) m2.(ms_state).
@@ -213,6 +215,129 @@ Proof.
   apply: thas_trace_mono; [done..|] => ? /= [[??]?].
   naive_solver.
 Qed.
+
+(* Print Assumptions wp_complete. *)
+
+
+(**  coinductive version of wp *)
+CoInductive sim {EV} (m1 m2 : module EV) σi1 σs1: Prop :=
+| sim_step  :
+    (∀ Pσi2 κ, m_step m1 σi1 κ Pσi2 ->
+     ∃ Pσ2, σs1 ~{ m2, option_trace κ }~>ₜ Pσ2 ∧
+      ∀ σs2, Pσ2 σs2 → ∃ σi2, Pσi2 σi2 ∧ sim m1 m2 σi2 σs2) ->
+    sim m1 m2 σi1 σs1.
+
+Lemma sim_wp {EV} (m1 m2 : module EV) σi σs :
+  sim m1 m2 σi σs → ∀ n, wp m1 m2 n σi σs.
+Proof.
+  intros Hsim n; induction n in σi, σs, Hsim |-*.
+  - constructor. intros ????. exfalso.
+    eapply ti_not_le_S. etrans; first done. eapply ti_le_O.
+  - constructor. intros Pσi' κ' n' Hle Hstep.
+    destruct Hsim as [Hsim]. destruct (Hsim _ _ Hstep) as (Pσs' & Hsteps & Hcont).
+    eexists _; split; first done.
+    intros σs2 [σi2 [HP Hsim']]%Hcont. eexists. split; first done.
+    eapply wp_mono; first by eauto.
+    inversion Hle; subst. done.
+  - constructor. intros Pσi' κ' n' Hle Hstep.
+    destruct Hsim as [Hsim]. destruct (Hsim _ _ Hstep) as (Pσs' & Hsteps & Hcont).
+    eexists _; split; first done.
+    intros σs2 [σi2 [HP Hsim']]%Hcont.
+    eexists. split; first done. eapply ti_le_choice_inv in Hle as [x Hle].
+    eapply wp_mono; first by eauto.
+    etrans; last done. eapply ti_le_S.
+Qed.
+
+Require Import Coq.Logic.Epsilon.
+Require Import Coq.Logic.Classical_Prop.
+
+Lemma existential_property {X} (P: trace_index → X → Prop):
+  (∀ n, ∃ x, P n x) →
+  (∀ n n' x, P n x → n' ⊆ n → P n' x) →
+  (∃ x, ∀ n, P n x).
+Proof.
+  intros HP Hdown. destruct (classic (∃ x, ∀ n, P n x)) as [|Hnex]; first done.
+  (* we commute the quantifiers inward*)
+  assert (∀ x, ∃ n, ¬ P n x) as Hnp.
+  { intros x. destruct (classic (∃ n, ¬ P n x)) as [|Hnp]; first done. exfalso.
+    eapply Hnex. exists x. intros n'. destruct (classic (P n' x)); first done.
+    exfalso. eapply Hnp. exists n'. done. }
+  (* choice *)
+  have [F Hnx]:= AxCHOICE _ _ _ Hnp.
+
+  (* we take the supremum *)
+  pose (n_sup := (tiChoice X (λ x, F x))).
+
+  assert (∀ x, ¬ P n_sup x) as Hnsup.
+  { intros x Hp. eapply Hnx. eapply Hdown; first done.
+    eapply ti_le_choice_r. done. }
+
+  destruct (HP n_sup) as [x_sup HPnx].
+  exfalso. by eapply Hnsup.
+Qed.
+
+
+Lemma forall_forall {X Y: Type} (P: X → Y → Prop):
+  (∀ x y, P x y) → (∀ y x, P x y).
+Proof. naive_solver. Qed.
+
+Lemma wp_sim_inner {EV} (m1 m2 : module EV) σi1 σs1:
+  (∀ n, wp m1 m2 n σi1 σs1) →
+  (∀ Pσi2 κ, m_step m1 σi1 κ Pσi2 ->
+  ∃ Pσ2, σs1 ~{ m2, option_trace κ }~>ₜ Pσ2 ∧
+  ∀ σs2, Pσ2 σs2 → ∃ σi2, Pσi2 σi2 ∧ (∀ n, wp m1 m2 n σi2 σs2)).
+Proof.
+  intros Hwp Pσi2 κ Hstep.
+  (* destruct Hwp underneath the quantifier *)
+  assert (∀ n, ∀ n', tiS n' ⊆ n →
+       ∃ Pσ2, σs1 ~{ m2, option_trace κ }~>ₜ Pσ2 ∧
+      (∀ σs2, Pσ2 σs2 → ∃ σi2, Pσi2 σi2 ∧ wp m1 m2 n' σi2 σs2)) as Hnext.
+  { intros n. destruct (Hwp n) as [σi1 σs1 n Hwp']. intros ??. by unshelve eapply (Hwp' _ _ _ _ Hstep). }
+  (* instantiate n' *)
+  clear Hwp. assert (∀ n, ∃ Pσ2, σs1 ~{ m2, option_trace κ }~>ₜ Pσ2 ∧
+          (∀ σs2, Pσ2 σs2 → ∃ σi2, Pσi2 σi2 ∧ wp m1 m2 n σi2 σs2)) as Hwp.
+  { intros n. eapply Hnext. reflexivity. }
+  eapply existential_property in Hwp as [Pσ2 Hwp]; last first.
+  { (* prove downwards closure *) naive_solver eauto using wp_mono. }
+  eapply forall_and_distr in Hwp as [Hstep' Hwp].
+  specialize (Hstep' tiO).
+  eexists. split; first done.
+  intros σs2 HPσs2.
+  pose proof (forall_forall _ Hwp) as Hwp'. clear Hwp.
+  specialize (Hwp' σs2).
+  pose proof (forall_forall _ Hwp') as Hwp. clear Hwp'.
+  specialize (Hwp HPσs2); simpl in Hwp.
+  eapply existential_property in Hwp as [σi2 Hwp]; last first.
+  { (* prove downwards closure *) naive_solver eauto using wp_mono. }
+  eapply forall_and_distr in Hwp as [HP Hwp].
+  specialize (HP tiO).
+  eexists. split; first done.
+  done.
+Qed.
+
+Lemma wp_sim {EV} (m1 m2 : module EV) σi σs :
+  (∀ n, wp m1 m2 n σi σs) → sim m1 m2 σi σs.
+Proof.
+  revert σi σs. cofix IH; intros σi σs Hwp.
+  econstructor. intros Pσi2 κ Hstep.
+  eapply wp_sim_inner in Hwp as [Pσ2 [Hstep' Hrest]]; last done.
+  naive_solver.
+Qed.
+
+
+
+Lemma sim_wp_iff {EV} (m1 m2 : module EV) σi σs:
+  (∀ n, wp m1 m2 n σi σs) ↔ sim m1 m2 σi σs.
+Proof. split; eauto using sim_wp, wp_sim. Qed.
+
+Lemma sim_trefines {EV} (m1 m2 : mod_state EV):
+  sim m1 m2 m1.(ms_state) m2.(ms_state) ↔ trefines m1 m2.
+Proof.
+  rewrite -sim_wp_iff.
+  split; eauto using wp_implies_refines, wp_complete.
+Qed.
+
+(* Print Assumptions sim_trefines. *)
 
 (** * tsim *)
 

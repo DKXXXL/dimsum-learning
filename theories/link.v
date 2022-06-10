@@ -13,6 +13,69 @@ Section mod_link.
   Implicit Types (R : seq_product_state → S → EV → seq_product_state → S → EV → Prop).
   Implicit Types (m : module (io_event EV)).
 
+(*
+  Inductive mod_link_state :=
+  | MLFLeft | MLFRight | MLFNone
+  | MLFEmit (e : io_event EV) (s : mod_link_state)
+  | MLFExpect (e : seq_product_event (io_event EV) (io_event EV)) (s : mod_link_state)
+  | MLFReturn (s : mod_link_state)
+  .
+  Fixpoint mod_link_state_to_product_state (s : mod_link_state) : seq_product_state :=
+    match s with
+    | MLFLeft => SPLeft
+    | MLFRight => SPRight
+    | MLFNone => SPNone
+    | MLFEmit e s => mod_link_state_to_product_state s
+    | MLFExpect e s => mod_link_state_to_product_state s
+    | MLFReturn s => mod_link_state_to_product_state s
+    end.
+
+  Definition mod_link_to_state (s : seq_product_state) (e : EV) : mod_link_state :=
+    match s with
+    | SPNone => MLFEmit (Outgoing, e) (MLFReturn MLFNone)
+    | SPLeft => MLFReturn (MLFExpect (SPELeft (Incoming, e) SPLeft) (MLFReturn MLFLeft))
+    | SPRight => MLFReturn (MLFExpect (SPERight (Incoming, e) SPRight) (MLFReturn MLFRight))
+    end.
+
+  Inductive mod_link_filter_step R :
+    (mod_link_state * S) → option (sm_event (seq_product_event (io_event EV) (io_event EV)) (io_event EV)) →
+    ((mod_link_state * S) → Prop) → Prop :=
+  | MLFLeftS s e p' s' e':
+    R SPLeft s e p' s' e' →
+    mod_link_filter_step R (MLFLeft, s) (Some (SMERecv (SPELeft (Outgoing, e) p')))
+      (λ σ, σ = (mod_link_to_state p' e', s'))
+  | MLFRightS s e p' s' e':
+    R SPRight s e p' s' e' →
+    mod_link_filter_step R (MLFRight, s) (Some (SMERecv (SPERight (Outgoing, e) p')))
+      (λ σ, σ = (mod_link_to_state p' e', s'))
+  | MLFNoneS s e p' s' e':
+    R SPNone s e p' s' e' →
+    mod_link_filter_step R (MLFNone, s) (Some (SMERecv (SPENone p')))
+      (λ σ, σ = (MLFEmit (Incoming, e') (mod_link_to_state p' e'), s'))
+  | MLFEmitS s' s e:
+    mod_link_filter_step R (MLFEmit e s', s) (Some (SMEEmit e))
+      (λ σ, σ = (s', s))
+  | MLFExpectS s' s e:
+    mod_link_filter_step R (MLFExpect e s', s) (Some (SMERecv e))
+      (λ σ, σ = (s', s))
+  | MLFReturnS s' s:
+    mod_link_filter_step R (MLFReturn s', s) (Some (SMEReturn None))
+      (λ σ, σ = (s', s))
+  .
+  Definition mod_link_filter R := Mod (mod_link_filter_step R).
+
+  Definition mod_link_trans R m1 m2 (σ :
+      mod_seq_map_state (seq_product_event (io_event EV) (io_event EV)) *
+      mod_link_state * S * m1.(m_state) * m2.(m_state)) :
+    mod_seq_map_state (seq_product_event (io_event EV) (io_event EV)) *
+           (seq_product_state * m_state m1 * m_state m2) * (mod_link_state * S) :=
+    (σ.1.1.1.1, (mod_link_state_to_product_state σ.1.1.1.2, σ.1.2, σ.2), (σ.1.1.1.2, σ.1.1.2)).
+  Arguments mod_link_trans _ _ _ _ /.
+
+  Definition mod_link R m1 m2 : module (io_event EV) :=
+    mod_state_transform (mod_seq_map (mod_seq_product m1 m2) (mod_link_filter R))
+                        (λ σ σ', σ' = mod_link_trans R m1 m2 σ).
+*)
   Inductive mod_link_state :=
   | MLFLeft | MLFRight | MLFNone
   | MLFRecvL (e : EV) | MLFRecvR (e : EV).

@@ -16,6 +16,7 @@ theories/satisfiable.v
 theories/module.v
 theories/example_modules.v
 theories/srefines.v
+theories/lrefines.v
 theories/filter.v
 theories/product.v
 theories/seq_product.v
@@ -39,6 +40,7 @@ theories/compiler/linear_imp.v
 theories/compiler/ssa.v
 theories/compiler/linearize.v
 theories/compiler/codegen.v
+theories/compiler/mem2reg.v
 theories/compiler/compiler.v
 theories/iris/wp.v
 theories/iris/mono_ord.v

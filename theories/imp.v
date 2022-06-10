@@ -362,6 +362,10 @@ Fixpoint is_static_expr (allow_loc : bool) (e : expr) : bool :=
   | Waiting can_return => false
   end.
 
+Lemma is_static_expr_forallb vs:
+  forallb (is_static_expr true) (Val <$> vs).
+Proof. by apply forallb_True, Forall_fmap, Forall_true. Qed.
+
 Lemma is_static_expr_subst x v e:
   is_static_expr true e →
   is_static_expr true (subst x v e).
@@ -775,12 +779,8 @@ Inductive head_step : imp_state → option imp_event → (imp_state → Prop) �
   head_step (Imp (ReturnExt b (Val v)) h fns) (Some (Outgoing, EIReturn v h)) (λ σ, σ = (Imp (Waiting b) h fns))
 | RecvCallS fns f fn vs b h h':
   fns !! f = Some fn →
-  (* TODO: reduce to Call f vs*)
   head_step (Imp (Waiting b) h fns) (Some (Incoming, EICall f vs h')) (λ σ,
-    σ = (Imp (if bool_decide (length vs = length fn.(fd_args)) then
-                ReturnExt b (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))
-              else
-                UbE) h' fns))
+    σ = (Imp (ReturnExt b (Call f (Val <$> vs))) h' fns))
 | RecvReturnS fns v h h':
   head_step (Imp (Waiting true) h fns) (Some (Incoming, EIReturn v h')) (λ σ, σ = (Imp (Val v) h' fns))
 .
@@ -1085,11 +1085,7 @@ Lemma imp_step_Waiting_i fns h K e b `{!ImpExprFill e K (Waiting b)}:
   TStepI imp_module (Imp e h fns) (λ G,
     (∀ f fn vs h', fns !! f = Some fn →
       G true (Some (Incoming, EICall f vs h')) (λ G',  G'
-          (Imp (expr_fill K (
-           if bool_decide (length vs = length (fd_args fn)) then
-             ReturnExt b (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))
-           else
-             UbE)) h' fns))) ∧
+          (Imp (expr_fill K (ReturnExt b (Call f (Val <$> vs)))) h' fns))) ∧
     ∀ v h', b → G true (Some (Incoming, EIReturn v h')) (λ G', G' (Imp (expr_fill K (Val v)) h' fns))
    ).
 Proof.
@@ -1106,10 +1102,7 @@ Lemma imp_step_Waiting_s fns h e K b `{!ImpExprFill e K (Waiting b)}:
   TStepS imp_module (Imp e h fns) (λ G,
     (∃ f fn vs h', fns !! f = Some fn ∧
       G (Some (Incoming, EICall f vs h')) (λ G', G'
-          (Imp (expr_fill K (if bool_decide (length vs = length (fd_args fn)) then
-                               ReturnExt b (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))
-                             else
-                               UbE)) h' fns))) ∨
+          (Imp (expr_fill K (ReturnExt b (Call f (Val <$> vs)))) h' fns))) ∨
     ∃ v h', b ∧ G (Some (Incoming, EIReturn v h')) (λ G', G' (Imp (expr_fill K (Val v)) h' fns))
    ).
 Proof.
@@ -1442,10 +1435,10 @@ Proof.
   2: { move => *. tstep_s. right. split!; [done|]. tend. apply: tsim_mono_b. naive_solver. }
   move => f fn1 vs h ?.
   have [fn2 ?] : is_Some (fns2 !! f). { apply not_eq_None_Some. naive_solver. }
-  tstep_s. left. split!; [done..|]. case_bool_decide. 2: by tstep_s. tend.
+  tstep_s. left. split!; [done..|]. tstep_s. left. split!. move => ?. tend.
   have ? : length (fd_args fn1) = length (fd_args fn2).
   { move: (Hc n0 [] [] f fn1 [] h). naive_solver. }
-  case_bool_decide. 2: congruence.
+  tstep_i. split!; [|naive_solver]. move => ??. simplify_eq/=. split; [congruence|].
   unshelve eapply tsim_remember. { simpl. exact (λ n' '(Imp e1 h1 fns1') '(Imp e2 h2 fns2'),
      ∃ K1 K2 f vs fn1 fn2,
        fns1' = fns1 ∧
@@ -1462,7 +1455,7 @@ Proof.
          Imp (expr_fill K2 (Val v')) h' fns2
 
   ). }
-  { eexists (ReturnExtCtx _ :: _), (ReturnExtCtx _ :: _). split!; [done..|].
+  { eexists (ReturnExtCtx _ :: _), (ReturnExtCtx _ :: _). split!; [try done; congruence..|].
     move => ??. tstep_both. tstep_s. split!; [done|]. tend.
     apply IH; [done|]. by split!. }
   { move => /= ?? [???] [???] *. destruct_all?. split!; [done..|].
@@ -1574,7 +1567,8 @@ Proof.
   - tstep_s. split!.
     tstep_s. apply: pp_to_all_mono. { by eapply (Hc n (ReturnExtCtx _ :: Ki) (ReturnExtCtx _ :: Ks)). }
     move => -[??] ? Hcall' ??. move: Hcall' => /(_ _ ltac:(done))[?[?[?[?[? Hcall']]]]]. simplify_eq/=.
-    tstep_s. left. split!. repeat case_bool_decide (_ = _); try by tstep_s. 2: naive_solver.
+    tstep_s. left. split!. tstep_s. left. split!. move => ?.
+    tstep_i. split; [|naive_solver]. move => ??. simplify_eq. split; [naive_solver|].
     have [//|? {}Hcall'] := Hcall'. apply: tsim_mono_b. apply: Hcall'.
     + move => n' f K1' K2' es1 es2 vs1' vs2' ???????? Hall1 Hall2 ?.
       have ?: es1 = Val <$> vs1'. { clear -Hall1. elim: Hall1; naive_solver. } subst.
@@ -1627,32 +1621,32 @@ Inductive imp_closed_state :=
 | ICEnd.
 
 Inductive imp_closed_step :
-  imp_closed_state → option (imp_event + imp_closed_event) → (imp_closed_state → Prop) → Prop :=
+  imp_closed_state → option (sm_event imp_event imp_closed_event) → (imp_closed_state → Prop) → Prop :=
 | ICStartS f vs:
-  imp_closed_step ICStart (Some (inr (EICStart f vs))) (λ σ, σ = ICRecvStart f vs)
+  imp_closed_step ICStart (Some (SMEEmit (EICStart f vs))) (λ σ, σ = ICRecvStart f vs)
 | ICRecvStartS f vs:
   imp_closed_step (ICRecvStart f vs)
-                  (Some (inl (Incoming, EICall f (ValNum <$> vs) initial_heap_state))) (λ σ, σ = ICRunning)
+                  (Some (SMEReturn (Some (Incoming, EICall f (ValNum <$> vs) initial_heap_state)))) (λ σ, σ = ICRunning)
 | ICRunningS f vs h:
-  imp_closed_step ICRunning (Some (inl (Outgoing, EICall f vs h))) (λ σ, σ = ICRecvCall1 f vs h)
+  imp_closed_step ICRunning (Some (SMERecv (Outgoing, EICall f vs h))) (λ σ, σ = ICRecvCall1 f vs h)
 | ICRecvCall1S f vs h:
   imp_closed_step (ICRecvCall1 f vs h) None (λ σ,
          ∃ vs', vs = ValNum <$> vs' ∧ σ = ICRecvCall2 f vs' h)
 | ICRecvCall2S f vs rv h:
   imp_closed_step (ICRecvCall2 f vs h)
-                  (Some (inr (EICCall f vs rv))) (λ σ, σ = ICRecvRet rv h)
+                  (Some (SMEEmit (EICCall f vs rv))) (λ σ, σ = ICRecvRet rv h)
 | ICRecvRetS v h:
   imp_closed_step (ICRecvRet v h)
-                  (Some (inl (Incoming, EIReturn (ValNum v) h))) (λ σ, σ = ICRunning)
+                  (Some (SMEReturn (Some (Incoming, EIReturn (ValNum v) h)))) (λ σ, σ = ICRunning)
 | ICRunningEndS v h:
-  imp_closed_step ICRunning (Some (inl (Outgoing, EIReturn v h))) (λ σ, σ = ICRecvEnd1 v)
+  imp_closed_step ICRunning (Some (SMERecv (Outgoing, EIReturn v h))) (λ σ, σ = ICRecvEnd1 v)
 | ICRecvEnd1EndS v:
   imp_closed_step (ICRecvEnd1 v) None (λ σ, ∃ v', v = ValNum v' ∧ σ = ICRecvEnd2 v')
 | ICEndS v:
-  imp_closed_step (ICRecvEnd2 v) (Some (inr (EICEnd v))) (λ σ, σ = ICEnd)
+  imp_closed_step (ICRecvEnd2 v) (Some (SMEEmit (EICEnd v))) (λ σ, σ = ICEnd)
 .
 
-Definition imp_closed_filter_module : module (imp_event + imp_closed_event) :=
+Definition imp_closed_filter_module : module (sm_event imp_event imp_closed_event) :=
   Mod imp_closed_step.
 
 Global Instance imp_closed_filter_module_vis_no_all : VisNoAll imp_closed_filter_module.
@@ -1814,9 +1808,8 @@ Proof.
         apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l.
         apply is_static_expr_mono. apply fd_static.
       * tstep_s. right. simpl_map_decide. split!.
-        tstep_s. left. split!. case_bool_decide.
-        2: { tstep_s. done. }
-        tend. split!. apply: Hloop. split!; [by econs|done..|].
+        tstep_s. left. split!. tstep_s. left. split! => ?. tend.
+        split!. apply: Hloop. split!; [by econs|done..|].
         apply is_static_expr_subst_l. apply is_static_expr_mono. apply fd_static.
     + revert select ((_ ∪ _) !! _ = None) => /lookup_union_None[??].
       tstep_s. right. simpl_map_decide. split!; [done|]. tend. split!.
@@ -1846,8 +1839,7 @@ Proof.
     + revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw[?|[??]].
       * have ? : fns2 !! f = None by apply: map_disjoint_Some_l.
         tstep_s. right. simpl_map_decide. split!.
-        tstep_s. left. split!. case_bool_decide.
-        2: { by tstep_s. }
+        tstep_s. left. split!. tstep_s. left. split! => ?.
         tend. split!. apply: Hloop. split!; [by econs|done..|].
         apply is_static_expr_subst_l. apply is_static_expr_mono. apply fd_static.
       * tstep_s. left. split! => /= ?. tend. split!.
@@ -1861,13 +1853,11 @@ Proof.
     + move => f fn vs h' /lookup_union_Some_raw[?|[??]].
       * have ?: fns2 !! f = None by apply: map_disjoint_Some_l.
         tstep_s. eexists (EICall _ _ _) => /=. simpl. simpl_map_decide. split!.
-        tstep_s. split!. case_bool_decide. 2: { tstep_s. naive_solver. }
-        apply Hloop. split!; [by econs|done..| ].
-        apply is_static_expr_subst_l. apply is_static_expr_mono. apply fd_static.
+        tstep_s. split!.
+        apply Hloop. split!; [by econs|done..| ]. apply is_static_expr_forallb.
       * tstep_s. eexists (EICall _ _ _) => /=. simpl. simpl_map_decide. split!.
-        tstep_s. split!. case_bool_decide. 2: { tstep_s. naive_solver. }
-        apply Hloop. split!; [by econs|done..| ].
-        apply is_static_expr_subst_l. apply is_static_expr_mono. apply fd_static.
+        tstep_s. split!.
+        apply Hloop. split!; [by econs|done..| ]. apply is_static_expr_forallb.
     + move => v h' ?.
       revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _ _) => HK.
       inversion HK; clear HK; simplify_eq/= => //.
@@ -1934,11 +1924,8 @@ Proof.
         apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l.
         apply is_static_expr_mono. apply fd_static.
       * move => *. destruct_all?; simplify_eq/=. repeat case_bool_decide => //.
-        -- have [??] : is_Some (fns2 !! f) by apply elem_of_dom.
-           tstep_s. left. split!; [apply lookup_union_Some; naive_solver|] => ?. tend. split!.
-           tstep_i. split => *; simplify_eq. case_bool_decide => //.
-           apply: Hloop; [done|]. split!; [by econs|done..|].
-           apply is_static_expr_subst_l. apply is_static_expr_mono. apply fd_static.
+        -- tend. split!. tstep_i. split => *; simplify_eq.
+           apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_forallb.
         -- tstep_s. right. split!; [apply lookup_union_None;split!;by apply not_elem_of_dom| done|].
            tend. split!. apply: Hloop; [done|]. split!; [by econs|done..].
   - destruct (to_val er') eqn:?.
@@ -1982,12 +1969,8 @@ Proof.
         apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l.
         apply is_static_expr_mono. apply fd_static.
       * move => *. destruct_all?; simplify_eq/=. repeat case_bool_decide => //.
-        -- have [??] : is_Some (fns1 !! f) by apply elem_of_dom.
-           tstep_s. left. split!; [apply lookup_union_Some; naive_solver|] => ?.
-           tend. split!.
-           tstep_i. split => *; invert_all imp_prod_filter. case_bool_decide => //.
-           apply: Hloop; [done|]. split!; [by econs|done..|].
-           apply is_static_expr_subst_l. apply is_static_expr_mono. apply fd_static.
+        -- tend. split!. tstep_i. split => *; simplify_eq.
+           apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_forallb.
         -- tstep_s. right. split!; [apply lookup_union_None;split!;by apply not_elem_of_dom|done|].
            tend. split!. apply: Hloop; [done|]. split!; [by econs|rewrite ?orb_true_r; done..].
   - tstep_i => *.
@@ -1995,14 +1978,10 @@ Proof.
     + tstep_s. left. repeat case_bool_decide => //.
       all: revert select (_ ∈ dom _ _) => /elem_of_dom[??]; split!;
                [rewrite lookup_union_Some //; naive_solver |].
-      * case_bool_decide. 2: { by tstep_s. }
-        tstep_i. split => *; destruct_all?; simplify_eq/=. case_bool_decide => //.
-        apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_subst_l.
-        apply is_static_expr_mono. apply fd_static.
-      * case_bool_decide. 2: { by tstep_s. }
-        tstep_i. split => *; destruct_all?; simplify_eq/=. case_bool_decide => //.
-        apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_subst_l.
-        apply is_static_expr_mono. apply fd_static.
+      * tstep_i. split => *; destruct_all?; simplify_eq/=.
+        apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_forallb.
+      * tstep_i. split => *; destruct_all?; simplify_eq/=.
+        apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_forallb.
     + tstep_s. right.
       revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _ _) => HK.
       inversion HK; clear HK; simplify_eq; rewrite ?orb_true_r.

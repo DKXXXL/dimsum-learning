@@ -119,13 +119,14 @@ Proof.
     go_s => ?. go.
     go_s. go_s => ?. go.
     iSatStart. iIntros!.
+    iDestruct (i2a_args_intro with "[$]") as "?"; [done|].
     rewrite i2a_args_cons ?i2a_args_nil; [|done]. iDestruct!.
     iDestruct (HP with "[$]") as "HP".
     iDestruct (big_sepM_lookup with "HP") as "#?"; [done|].
     iSatStop.
     tstep_i => ??. simplify_map_eq'.
     go_s. go_s. split!.
-    1: { unfold i2a_regs_ret; split!; simplify_map_eq'; split!.
+    1: { instantiate (1:=[_]). unfold i2a_regs_ret; split!; simplify_map_eq'; split!.
          - by apply map_list_included_insert.
          - apply map_preserved_insert_r_not_in; [|done]. compute_done.
     }
@@ -137,6 +138,7 @@ Proof.
     go_s => l. go.
     go_s => ?. go.
     iSatStart. iIntros!.
+    iDestruct (i2a_args_intro with "[$]") as "?"; [done|].
     rewrite i2a_args_cons ?i2a_args_nil; [|done]. iDestruct!.
     iDestruct (HP with "[$]") as "HP".
     iAssert ⌜z = default z (ps !! l.1)⌝%I as %Hz.
@@ -149,7 +151,7 @@ Proof.
     go_s. go_s. go_s.
     tstep_i => ??. simplify_map_eq'.
     go_s. split!.
-    1: { unfold i2a_regs_ret; split!; simplify_map_eq'; split!.
+    1: { instantiate (1:=[_]). unfold i2a_regs_ret; split!; simplify_map_eq'; split!.
          - by apply map_list_included_insert.
          - apply map_preserved_insert_r_not_in; [|done]. compute_done.
     }
@@ -216,7 +218,9 @@ Proof.
   tstep_i => *. case_match; destruct_all?; simplify_eq.
   go_s. eexists (_, _, _). go. go_s. split!. go.
   go_s => ?. go. go_s => ?. go. simplify_eq. rewrite bool_decide_true; [|compute_done].
-  tstep_i. split! => ???? Hf ?. unfold main_imp_prog in Hf. simplify_map_eq.
+  tstep_i. split! => ???? Hf ?. simplify_eq.
+  change (@nil expr) with (Val <$> []).
+  tstep_i. split!. move => ??. simplify_eq. unfold main_imp_prog in Hf. simplify_map_eq. split!.
   tstep_i => ???. destruct_all?; simplify_eq. split!. { repeat econs. }
   tstep_i. split. { apply heap_alive_alloc; [done|lia]. }
   tstep_i. change ([Val (ValLoc l)]) with (Val <$> [ValLoc l]).
@@ -407,14 +411,14 @@ Proof.
   go_s => ?. go. destruct_all?. simplify_eq/=.
   rewrite bool_decide_true; [|unfold main_asm_dom;unlock; compute_done].
   go_i => ??. simplify_eq.
-  go_i. eexists true => /=. split; [done|]. eexists initial_heap_state, _, (regs !!! "R30"), "main", [].
+  go_i. eexists true => /=. split; [done|]. eexists initial_heap_state, _, [], [], (regs !!! "R30"), "main".
   split!.
   { unfold i2a_regs_call. split!. apply lookup_lookup_total.
     apply: map_list_included_is_Some; [done|]. compute_done. }
   { apply: satisfiable_mono; [by eapply i2a_res_init|].
     iIntros!.
     iDestruct (i2a_mem_inv_init with "[$] [$]") as "$"; [done..|].
-    iFrame. rewrite /i2a_mem_map i2a_args_nil big_sepM_empty. iSplit; [done|]. iSplit; [done|]. iAccu. }
+    iFrame. rewrite /i2a_mem_map big_sepM_empty. iSplit; [done|]. iAccu. }
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
@@ -450,7 +454,8 @@ Proof.
   go_i => *. done.
   Unshelve.
   - done.
-  - iSatStart. iIntros!. rewrite i2a_args_cons; [|done]. iDestruct!. iSatStop. by simplify_map_eq'.
+  - iSatStart. iIntros!. iDestruct (i2a_args_intro with "[$]") as "?"; [done|].
+    rewrite i2a_args_cons; [|done]. iDestruct!. iSatStop. by simplify_map_eq'.
   - done.
 Qed.
 

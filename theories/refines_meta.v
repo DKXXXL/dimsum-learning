@@ -1,6 +1,7 @@
 Require Export refframe.module.
 Require Import refframe.srefines.
 Require Import refframe.trefines.
+Require Import refframe.lrefines.
 Require Import refframe.dem_module.
 Require Import refframe.example_modules.
 
@@ -319,3 +320,62 @@ Proof.
   move => /dem_has_trace_shas_trace?.
   apply/dem_has_trace_shas_trace. naive_solver.
 Qed.
+
+(*** Proof that trefines implies lrefines *)
+Fixpoint list_to_trace {EV} (κs : list EV) : trace EV :=
+  match κs with
+  | [] => tnil
+  | κ::κs => tcons κ (list_to_trace κs)
+  end.
+
+Lemma lhas_trace_thas_trace {EV} (m : module EV) σ κs Pσ:
+  σ ~{m, κs}~>ₗ Pσ ↔ ∃ κs', κs' ⊆ list_to_trace κs ∧ σ ~{m, κs'}~>ₜ Pσ.
+Proof.
+  split.
+  - move => Ht. split!; [done|]. elim: Ht. { tend. }
+    move => ??? κ ???? IH ?. subst. tstep; [done|done|destruct κ => /=; done].
+  - move => [κs' [Hsub Ht]]. elim: Ht κs Hsub.
+    + move => ???? Hs1 κs Hs2. pose proof (transitivity Hs1 Hs2) as Hs. destruct κs; [by econs|by inversion Hs].
+    + move => ??? κ ???? IH Hs1 κs Hs2. pose proof (transitivity Hs1 Hs2) as Hs.
+      destruct κ; simplify_eq/=.
+      * destruct κs; inversion Hs; simplify_eq/=. econs; [done| |done]. naive_solver.
+      * econs; naive_solver.
+    + move => ??????? Hs1 κs Hs2. pose proof (transitivity Hs1 Hs2) as Hs.
+      inversion Hs; simplify_K; try by destruct κs. naive_solver.
+Qed.
+
+Lemma trefines_lrefines {EV} (m1 m2 : mod_state EV):
+  trefines m1 m2 → lrefines m1 m2.
+Proof.
+  move => [?]. constructor => ? /lhas_trace_thas_trace[?[??]].
+  apply/lhas_trace_thas_trace. naive_solver.
+Qed.
+
+(* Print Assumptions trefines_lrefines. *)
+
+(*** Proof that srefines implies lrefines *)
+
+Lemma lhas_trace_shas_trace {EV} (m : module EV) σ κs Pσ:
+  σ ~{m, κs}~>ₗ Pσ ↔ ∃ Pκs' : _ → Prop, (∀ κs', Pκs' κs' → events_to_set (DVis <$> κs) κs') ∧ σ ~{m, Pκs'}~>ₛ Pσ.
+Proof.
+  split.
+  - move => Ht. split!; [done|]. elim: Ht. { econs; [done|]. split!. }
+    move => ??? κ κs' ??? IH ?. subst. apply: STraceStep; [done| |].
+    + move => ??. apply: shas_trace_mono; [naive_solver| |done]. move => ??. destruct κ => //=. naive_solver.
+    + destruct κ; csimpl; split!; apply events_to_set_nil.
+  - move => [Pκs' [Hsub Ht]]. elim: Ht κs Hsub.
+    + move => ???? Hs1 κs Hs2. destruct κs; [by econs|naive_solver].
+    + move => ???? κ ?? IH Hs1 κs Hs2.
+      destruct κ; simplify_eq/=.
+      * destruct κs; [naive_solver|]; simplify_eq/=. econs; [done| |simpl; naive_solver]. naive_solver.
+      * econs; naive_solver.
+Qed.
+
+Lemma srefines_lrefines {EV} (m1 m2 : mod_state EV):
+  srefines m1 m2 → lrefines m1 m2.
+Proof.
+  move => [?]. constructor => ? /lhas_trace_shas_trace[?[??]].
+  apply/lhas_trace_shas_trace. naive_solver.
+Qed.
+
+(* Print Assumptions srefines_lrefines. *)
