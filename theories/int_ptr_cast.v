@@ -109,11 +109,10 @@ Proof.
   tstep_s => *. case_match => /= *. 2: congruence.
   tstep_s. rewrite -/int_to_ptr_itree. go. go_s. eexists (_, _, _). go.
   go_s. split!. go. go_s.
-  revert select (_ ⊢ _) => HP.
-  revert select (i2a_regs_call _ _) => -[??].
+  revert select (_ ⊢ _) => HP. unfold i2a_regs_call in *.
   revert select (_ ∉ dom _ _) => /not_elem_of_dom?.
-  unfold int_to_ptr_asm in Hi. unfold int_to_ptr_f2i in *. (repeat case_bool_decide); simplify_map_eq.
-  - tstep_i. split; [by simplify_map_eq'|].
+  unfold int_to_ptr_asm in Hi. unfold int_to_ptr_f2i in *. (repeat case_bool_decide); simplify_map_eq'.
+  - tstep_i.
     go_s => ?. go.
     go_s => ?. go.
     go_s => ?. go.
@@ -127,14 +126,13 @@ Proof.
     tstep_i => ??. simplify_map_eq'.
     go_s. go_s. split!.
     1: { instantiate (1:=[_]). unfold i2a_regs_ret; split!; simplify_map_eq'; split!.
-         - by apply map_list_included_insert.
          - apply map_preserved_insert_r_not_in; [|done]. compute_done.
     }
     { apply map_scramble_insert_r_in; [compute_done|done]. }
     { iSatMono. simplify_map_eq'. iIntros!. iFrame. iSplitL; [iAccu|]. iSplit!; [|done]. lia. }
     apply Hloop; [done|].
     split!.
-  - tstep_i. split; [by simplify_map_eq'|].
+  - tstep_i.
     go_s => l. go.
     go_s => ?. go.
     iSatStart. iIntros!.
@@ -152,7 +150,6 @@ Proof.
     tstep_i => ??. simplify_map_eq'.
     go_s. split!.
     1: { instantiate (1:=[_]). unfold i2a_regs_ret; split!; simplify_map_eq'; split!.
-         - by apply map_list_included_insert.
          - apply map_preserved_insert_r_not_in; [|done]. compute_done.
     }
     { apply map_scramble_insert_r_in; [compute_done|done]. }
@@ -311,7 +308,6 @@ Definition exit_asm : gmap Z asm_instr :=
 Definition exit_itree : itree (moduleE asm_event unit) unit :=
   '(pc, rs, mem) ← TReceive (λ '(pc, rs, mem), (Incoming, EAJump pc rs mem));;;
   TAssume (pc = 100);;;;
-  TAssume (map_list_included syscall_arg_regs rs);;;;
   args ← TExist _;;;
   TAssert (length args = length syscall_arg_regs);;;;
   TAssert (args !! 0%nat = Some (rs !!! "R0"));;;;
@@ -337,10 +333,9 @@ Proof.
   go_s. split!. go.
   go_i => ??. simplify_map_eq.
   go_s => ?. go.
-  go_s => ?. go.
-  unfold exit_asm in Hi. simplify_map_eq.
-  go_i. split. { apply: map_list_included_is_Some; [done|]. compute_done. }
-  go_i. split. { by simplify_map_eq. }
+  unfold exit_asm in Hi. simplify_map_eq'.
+  go_i.
+  go_i.
   go_i => ??. simplify_map_eq'.
   go_i.
   go_s. eexists _. go.
@@ -351,14 +346,14 @@ Proof.
   go_i => ?.
   go_s. eexists _. go.
   go_s. split!. go.
-  go_i. split. { by simplify_map_eq. }
+  go_i.
   sort_map_insert. simplify_map_eq'.
   unshelve eapply tsim_remember. { exact (λ _ '(AsmState i rs _ ins) _,
       i = ARunning [] ∧ rs !! "PC" = Some 102 ∧ ins = exit_asm). }
   { split!. by simplify_map_eq. } { done. }
   move => ?? Hloop [????] ? ?. destruct_all?; simplify_eq.
-  go_i => ??. simplify_map_eq.
-  go_i. split. { by simplify_map_eq. }
+  go_i => ??. simplify_map_eq'.
+  go_i.
   apply Hloop; [done|]. split!. by simplify_map_eq'.
   Unshelve.
   - done.
@@ -371,7 +366,6 @@ Qed.
 Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   '(pc, rs, mem) ← TReceive (λ '(pc, rs, mem), (Incoming, EAJump pc rs mem));;;
   TAssume (pc = 200);;;;
-  TAssume (map_list_included touched_registers rs);;;;
   TAssume (rs !!! "R30" ∉ main_asm_dom ∪ dom (gset Z) int_to_ptr_asm);;;;
   TAssume (∃ gp, gp + GUARD_PAGE_SIZE ≤ rs !!! "SP" ∧
             (∀ a, gp ≤ a < gp + GUARD_PAGE_SIZE → mem !! a = Some None) ∧
@@ -407,14 +401,11 @@ Proof.
   go_s. split!. go.
   go_s => ?. go.
   go_s => ?. go.
-  go_s => ?. go.
-  go_s => ?. go. destruct_all?. simplify_eq/=.
+  go_s => ?. go. destruct_all?. simplify_map_eq'.
   rewrite bool_decide_true; [|unfold main_asm_dom;unlock; compute_done].
   go_i => ??. simplify_eq.
   go_i. eexists true => /=. split; [done|]. eexists initial_heap_state, _, [], [], (regs !!! "R30"), "main".
   split!.
-  { unfold i2a_regs_call. split!. apply lookup_lookup_total.
-    apply: map_list_included_is_Some; [done|]. compute_done. }
   { apply: satisfiable_mono; [by eapply i2a_res_init|].
     iIntros!.
     iDestruct (i2a_mem_inv_init with "[$] [$]") as "$"; [done..|].
@@ -425,17 +416,12 @@ Proof.
   go_i. split!. go.
   go_i => ?. go.
   go_i.
-  go_i. move => *. unfold main_f2i in *. destruct_all?; simplify_map_eq.
+  go_i. move => *. unfold main_f2i in *. destruct_all?; simplify_map_eq'.
   rewrite bool_decide_false; [|unfold main_asm_dom;unlock;compute_done].
   rewrite bool_decide_true; [|compute_done].
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
-  go_i. split!. {
-    revert select (i2a_regs_call _ _) => -[??].
-    apply: (map_list_included_mono touched_registers); [done|].
-    compute_done.
-  } go.
   go_i => ?. go.
   go_i => ?. go.
   go_i => ?. go.

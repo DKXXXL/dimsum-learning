@@ -364,10 +364,9 @@ Proof.
 Qed.
 
 Definition ci2a_regs_inv (s : state) (lr rs : gmap string Z) : uPred imp_to_asmUR :=
-  ⌜pf_rsold !! "SP" = Some pf_sp⌝ ∗
-  ⌜rs !! "SP" = Some (if s.(s_sp_above) then pf_sp else pf_sp - Z.of_N s.(s_stacksize))⌝ ∗
+  ⌜pf_rsold !!! "SP" = pf_sp⌝ ∗
+  ⌜rs !!! "SP" = (if s.(s_sp_above) then pf_sp else pf_sp - Z.of_N s.(s_stacksize))⌝ ∗
   ⌜map_scramble touched_registers lr rs⌝ ∗
-  ⌜map_list_included touched_registers rs⌝ ∗
   ⌜s.(s_f2i) = pf_f2i⌝.
 
 Definition ci2a_inv (s : state) (lr rs : gmap string Z) (mem : gmap Z (option Z)) (h : heap_state) : uPred _ :=
@@ -387,20 +386,18 @@ Lemma ci2a_regs_inv_mono_insert rs s r lr v :
   ci2a_regs_inv s lr rs -∗
   ci2a_regs_inv s lr (<[r := v]> rs).
 Proof.
-  iIntros ([??] (?&?&?&?&?)).
-  iPureIntro. simplify_map_eq. split!.
+  iIntros ([??] (?&?&?&?)).
+  iPureIntro. simplify_map_eq'. split!.
   - by apply map_scramble_insert_r_in.
-  - by apply map_list_included_insert.
 Qed.
 
 Lemma ci2a_regs_inv_mono_insert_l rs s r lr v :
   r ∈ touched_registers ∧ r ≠ "SP" →
-  map_list_included touched_registers rs →
   ci2a_regs_inv s lr (<[r := v]> rs) -∗
   ci2a_regs_inv s lr rs.
 Proof.
-  iIntros ([??] ? (?&?&?&?&?)).
-  iPureIntro. simplify_map_eq. split!.
+  iIntros ([??] (?&?&?&?)).
+  iPureIntro. simplify_map_eq'. split!.
   etrans; [done|]. by apply map_scramble_insert_l_in.
 Qed.
 
@@ -411,12 +408,12 @@ Definition ci2a_places_inv (ps : gmap string place) (sr : list (string*N)) (vs :
   ([∗ map] n↦p∈ps, ∃ av,
      (if vs !! n is Some v then i2a_val_rel v av else True) ∗
      match p with
-     | PReg r => ⌜r ∈ variable_registers⌝ ∗ ⌜rs !! r = Some av⌝ ∗ ⌜r ∈ sr.*1⌝
+     | PReg r => ⌜r ∈ variable_registers⌝ ∗ ⌜rs !!! r = av⌝ ∗ ⌜r ∈ sr.*1⌝
      | PStack slot => stack_slot slot av
      end) ∗
-   ([∗ list] r∈sr, ∃ v, ⌜pf_rsold !! r.1 = Some v⌝ ∗ stack_slot r.2 v) ∗
+   ([∗ list] r∈sr, stack_slot r.2 (pf_rsold !!! r.1)) ∗
    ⌜sr.*1 ⊆ "R30"::variable_registers⌝ ∗
-   ⌜Forall (λ v, v ∈ sr.*1 ∨ pf_rsold !! v = rs !! v) variable_registers⌝ ∗
+   ⌜Forall (λ v, v ∈ sr.*1 ∨ pf_rsold !!! v = rs !!! v) variable_registers⌝ ∗
    ⌜∀ v1 v2 r, ps !! v1 = Some (PReg r) → ps !! v2 = Some (PReg r) → v1 = v2⌝.
 
 Lemma ci2a_places_inv_mono_rs rs ps sr vs rs' :
@@ -468,20 +465,11 @@ Proof.
 Qed.
 
 Lemma sim_get_sp s p b n rs e h h':
-  (⌜rs !! "SP" = Some (if s.(s_sp_above) then pf_sp else pf_sp - Z.of_N s.(s_stacksize))⌝ -∗ sim n b p e s rs h h') -∗
+  (⌜rs !!! "SP" = (if s.(s_sp_above) then pf_sp else pf_sp - Z.of_N s.(s_stacksize))⌝ -∗ sim n b p e s rs h h') -∗
   sim n b p e s rs h h'.
 Proof.
   iIntros "Hcont" (????) "Hrf (?&?&(?&%&?))".
   iApply ("Hcont" with "[//] [//] Hrf").
-  by iFrame.
-Qed.
-
-Lemma sim_regs_included s p b n rs e h h':
-  (⌜map_list_included touched_registers rs⌝ -∗ sim n b p e s rs h h') -∗
-  sim n b p e s rs h h'.
-Proof.
-  iIntros "Hcont" (????) "Hrf (?&?&(?&?&%))".
-  iApply ("Hcont" with "[] [//] Hrf"); [naive_solver..|].
   by iFrame.
 Qed.
 
@@ -502,13 +490,12 @@ Lemma sim_Amov r o n b p' e rs s h h':
   sim n b (Amov r o :: p') e s rs h h'.
 Proof.
   iIntros ([?[??]]) "Hcont".
-  iApply sim_regs_included. iIntros (?).
   iIntros (??? Hins) "Hrf Hinv". iSatStop.
   tstep_i => ??. simplify_map_eq'.
   move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
   rewrite orb_true_r.
-  tstep_i. split!. { apply: map_list_included_is_Some; [done|]. naive_solver. }
-  tstep_i. simplify_map_eq'. split!.
+  tstep_i.
+  tstep_i. simplify_map_eq'.
   iSatStart. iApply ("Hcont" with "[] Hrf"). { by simplify_map_eq'. }
   iDestruct "Hinv" as "(?&?&?)". iFrame.
   iApply ci2a_regs_inv_mono_insert; [compute_done|].
@@ -521,27 +508,25 @@ Lemma sim_Aadd rd r1 o n b p' e rs s h h':
   sim n b (Aadd rd r1 o :: p') e s rs h h'.
 Proof.
   iIntros ([?[??]]) "Hcont".
-  iApply sim_regs_included. iIntros (?).
   iIntros (??? Hins) "Hrf Hinv". iSatStop.
   tstep_i => ??. simplify_map_eq'.
   move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
   rewrite orb_true_r.
-  tstep_i. split!. { apply: map_list_included_is_Some; [done|]. naive_solver. }
-  tstep_i. simplify_map_eq'. split!.
+  tstep_i.
+  tstep_i. simplify_map_eq'.
   iSatStart. iApply ("Hcont" with "[] Hrf"). { by simplify_map_eq'. }
   iDestruct "Hinv" as "(?&?&?)". iFrame.
   iApply ci2a_regs_inv_mono_insert; [compute_done|].
   by iApply ci2a_regs_inv_mono_insert.
 Qed.
 
-Lemma sim_Astore r r1 o n b p' e rs s h h' a v v':
-  rs !! r = Some v' →
-  rs !! r1 = Some (a - o) →
+Lemma sim_Astore r r1 o n b p' e rs s h h' a v:
+  rs !!! r1 = a - o →
   i2a_mem_constant a (Some v) -∗
-  (i2a_mem_constant a (Some v') -∗ sim n true p' e s (<["PC" := rs !!! "PC" + 1]> rs) h h') -∗
+  (i2a_mem_constant a (Some (rs !!! r)) -∗ sim n true p' e s (<["PC" := rs !!! "PC" + 1]> rs) h h') -∗
   sim n b (Astore r r1 o :: p') e s rs h h'.
 Proof.
-  iIntros (??) "Ha Hcont".
+  iIntros (?) "Ha Hcont".
   iIntros (??? Hins) "Hrf Hinv". iSatStop.
   tstep_i => ??. simplify_map_eq'.
   move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
@@ -550,8 +535,8 @@ Proof.
   iDestruct "Hinv" as "(?&?&?)".
   iDestruct (i2a_mem_lookup with "[$] [$]") as %?.
   iSatStop.
-  tstep_i. split!; rewrite Z.sub_simpl_r; [done|].
-  tstep_i. simplify_map_eq'. split!.
+  tstep_i. simplify_map_eq'. split!; rewrite Z.sub_simpl_r; [done|].
+  tstep_i.
   iSatStartBupd.
   iMod (i2a_mem_update with "[$] [$]") as "[? ?]". iModIntro.
   iApply ("Hcont" with "[$] [] Hrf"). { by simplify_map_eq'. }
@@ -580,17 +565,16 @@ Proof.
   tstep_i => ??. simplify_map_eq'.
   move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
   rewrite orb_true_r.
-  tstep_i. split!.
-  tstep_i. split!; simplify_map_eq'; [done|].
+  tstep_i.
+  tstep_i.
   iSatStart.
   iApply ("Hcont" with "[//] [] Hrf"). { by simplify_map_eq'. }
   iFrame.
-  iDestruct "Hregs" as %(?&?&?&?&?).
+  iDestruct "Hregs" as %(?&?&?&?).
   iApply ci2a_regs_inv_mono_insert; [compute_done|].
-  iPureIntro. simplify_map_eq. split!.
+  iPureIntro. simplify_map_eq'. split!.
   - by repeat case_match; f_equal; lia.
   - apply map_scramble_insert_r_in; [compute_done|done].
-  - by apply map_list_included_insert.
 Qed.
 
 Lemma alloc_stack_correct s s' p p' r n b e rs h h' sz:
@@ -605,7 +589,6 @@ Lemma alloc_stack_correct s s' p p' r n b e rs h h' sz:
 Proof.
   unfold alloc_stack. move => ??. simplify_crun_eq. iIntros "Hcont".
   iApply sim_get_sp. iIntros (?).
-  iApply sim_regs_included. iIntros (?).
   iIntros (??? Hins) "Hrf (Hmem&Hheap&Hregs)".
   iSatStop.
   tstep_i => ??. simplify_map_eq'.
@@ -614,7 +597,7 @@ Proof.
   iSatStart.
   iDestruct (i2a_mem_exists (Z.of_N sz) with "[$]") as %[??]; [lia|].
   iSatStop.
-  tstep_i. split!. { apply: map_list_included_is_Some; [done|compute_done]. }
+  tstep_i. simplify_map_eq'. split!.
   { case_match; [|done]. rewrite Z.add_opp_r Z.sub_add_distr. done. }
   case_match; [|done]. case_match; [|by tstep_i].
   tstep_i. simplify_map_eq'. split!.
@@ -626,7 +609,7 @@ Proof.
     iFrame.
     iApply (ci2a_regs_inv_mono_insert); [compute_done|].
     iApply (ci2a_regs_inv_mono_insert); [compute_done|].
-    iDestruct "Hregs" as %(?&?&?&?&?).
+    iDestruct "Hregs" as %(?&?&?&?).
     iPureIntro. split!. by case_match.
 Qed.
 
@@ -654,7 +637,6 @@ Proof.
   unfold read_stack, stack_offset.
   iIntros (?[?[??]]) "Hs Hcont". simplify_crun_eq.
   iApply sim_get_sp. iIntros (?).
-  iApply sim_regs_included. iIntros (?).
 
   iIntros (??? Hins) "Hrf (Hmem&Hheap&Hregs)". iSatStop.
   tstep_i => ??. simplify_map_eq'.
@@ -663,36 +645,35 @@ Proof.
   iSatStart.
   iDestruct (stack_slot_lookup with "[$] [$]") as %?.
   iSatStop.
-  tstep_i. split!. { apply: map_list_included_is_Some; [done|]. naive_solver. }
+  tstep_i. simplify_map_eq'. split!.
   { have -> : (if s_sp_above s then pf_sp else pf_sp - Z.of_N (s_stacksize s)) +
        ((if s_sp_above s then 0 else Z.of_N (s_stacksize s)) - Z.of_N slot - 1) = pf_sp - Z.of_N slot - 1 by case_match; lia.
     done. }
-  tstep_i. split!; simplify_map_eq'; [done|].
+  tstep_i. simplify_map_eq'.
   iSatStart.
   iApply ("Hcont" with "[//] [$] [%] Hrf"). { by simplify_map_eq'. } iFrame.
   iApply ci2a_regs_inv_mono_insert; [compute_done| ].
   by iApply ci2a_regs_inv_mono_insert.
 Qed.
 
-Lemma write_stack_correct s s' p p' r res b n slot rs v v' e h h':
+Lemma write_stack_correct s s' p p' r res b n slot rs v e h h':
   crun s (write_stack r slot) = CResult s' p (CSuccess res) →
-  rs !! r = Some v' →
   stack_slot slot v -∗
-  (⌜s' = s⌝ -∗ stack_slot slot v' -∗ sim n true p' e s' (<["PC" := rs !!! "PC" + length p]> rs) h h') -∗
+  (⌜s' = s⌝ -∗ stack_slot slot (rs !!! r) -∗ sim n true p' e s' (<["PC" := rs !!! "PC" + length p]> rs) h h') -∗
   sim n b (p ++ p') e s rs h h'.
 Proof.
   unfold write_stack, stack_offset.
-  iIntros (??) "[? Hs] Hcont". simplify_crun_eq.
+  iIntros (?) "[? Hs] Hcont". simplify_crun_eq.
   iApply sim_get_sp. iIntros (?).
-  iApply (sim_Astore with "[$]"); [done| |].
-  { simplify_map_eq. f_equal. case_match; lia. }
+  iApply (sim_Astore with "[$]").
+  { simplify_map_eq'. case_match; lia. }
   iIntros "Hs". iApply "Hcont"; [done|]. iFrame.
 Qed.
 
 Lemma clear_mem_correct_inv s s' p p' r res n rs e h h' sz a:
   crun s (cmap (E:=error) (seqZ 0 sz) 0 (λ _ o, cappend [Astore "R1" r o])) = CResult s' p (CSuccess res) →
-  rs !! r = Some a →
-  rs !! "R1" = Some 0 →
+  rs !!! r = a →
+  rs !!! "R1" = 0 →
   r ≠ "PC" ∧ r ≠ "R1" →
   i2a_mem_uninit a sz -∗
   (∀ rs',
@@ -707,16 +688,16 @@ Proof.
   { move => rs p res /= ????. iIntros "? Hcont". simplify_crun_eq. by iApply "Hcont". }
   move => a' al IH rs p res /= ??? [??].
   iIntros "[[%v ?] ?] Hcont". simplify_crun_eq.
-  iApply (sim_Astore with "[$]"); [done|simplify_map_eq;f_equal;lia|].
+  iApply (sim_Astore with "[$]"); [simplify_map_eq;f_equal;lia|].
   iIntros "Ha". rewrite -!app_assoc /=.
-  iApply (IH with "[$]"); [by rewrite cmap_S|by simplify_map_eq|by simplify_map_eq|done|].
-  iIntros (???) "?". iApply "Hcont"; [done| |by iFrame]. iPureIntro. etrans; [|done].
+  iApply (IH with "[$]"); [by rewrite cmap_S|by simplify_map_eq'|by simplify_map_eq'|done|].
+  iIntros (???) "?". iApply "Hcont"; [done| |simplify_map_eq'; by iFrame]. iPureIntro. etrans; [|done].
   apply map_scramble_insert_r_in; [|done]. compute_done.
 Qed.
 
 Lemma clear_mem_correct s s' p p' r res n rs e h h' sz a:
   crun s (clear_mem r sz) = CResult s' p (CSuccess res) →
-  rs !! r = Some a →
+  rs !!! r = a →
   r ≠ "PC" ∧ r ≠ "R1" →
   i2a_mem_uninit a sz -∗
   (∀ rs',
@@ -729,7 +710,7 @@ Proof.
   unfold clear_mem.
   iIntros (??[??]) "Ha Hcont". simplify_crun_eq.
   iApply sim_Amov; [compute_done|]. rewrite -!app_assoc/=.
-  iApply (clear_mem_correct_inv with "[$]"); [done|by simplify_map_eq|by simplify_map_eq|done|..].
+  iApply (clear_mem_correct_inv with "[$]"); [done|by simplify_map_eq'|by simplify_map_eq'|done|..].
   iIntros (???) "?". iApply "Hcont"; [done| |done]. iPureIntro.
   etrans. 2: { apply: map_scramble_mono; [done|compute_done]. }
   apply map_scramble_insert_r_in; [compute_done|].
@@ -781,7 +762,7 @@ Qed.
 
 Lemma write_var_correct v' s s' p p' r res b n rs v av e vs h h':
   crun s (write_var r v) = CResult s' p (CSuccess res) →
-  rs !! r = Some av →
+  rs !!! r = av →
   ci2a_places_inv s.(s_places) s.(s_saved_registers) vs rs -∗
   i2a_val_rel v' av -∗
   (∀ rs', ⌜s' = s⌝ -∗
@@ -810,13 +791,13 @@ Proof.
     iApply (ci2a_places_inv_mono_rs). { apply map_preserved_insert_r_not_in; [compute_done|]. done. }
     iFrame. rewrite (big_sepM_delete _ (s_places _)); [|done].
     iSplit; [iSplitR "Hp"|iSplit!]; simplify_map_eq.
-    + iExists _. by iFrame.
+    + iExists _. simplify_map_eq'. by iFrame.
     + iApply (big_sepM_impl with "Hp").
       iIntros "!>" (??[??]%lookup_delete_Some) "[%a [? Hx]]". simplify_map_eq. iExists _. iFrame.
       case_match => //. simplify_map_eq. iDestruct "Hx" as %(?&?&?). iPureIntro. split!.
-      rewrite lookup_insert_ne //. naive_solver.
+      rewrite lookup_total_insert_ne //. naive_solver.
     + apply Forall_forall => r' ?. destruct (decide (r0 = r')); [naive_solver|simplify_map_eq].
-      move: Ha => /Forall_forall. naive_solver.
+      move: Ha => /Forall_forall. simplify_map_eq'. naive_solver.
   - iApply (write_stack_correct with "[$]"); [done..|]. iIntros (?) "?".
     iApply ("Hcont" with "[//] [%]"). { by apply map_scramble_insert_r_in; [compute_done|]. }
     iApply (ci2a_places_inv_mono_rs rs). { apply map_preserved_insert_r_not_in; [compute_done|]. done. }
@@ -859,7 +840,6 @@ Lemma save_r30_correct s s' p p' r n b e rs h h':
   s.(s_places) = ∅ →
   s.(s_saved_registers) = [] →
   pf_rsold = rs →
-  is_Some (rs !! "R30") →
   (∀ pc' r17' slot,
      let rs' := (<["PC":=pc']> $ <["R17":=r17']>rs) in
      ⌜s' = s <| s_stacksize := (s_stacksize s + 1)%N |> <|s_saved_registers := [("R30", slot)] |>⌝ -∗
@@ -868,14 +848,14 @@ Lemma save_r30_correct s s' p p' r n b e rs h h':
   sim n b (p ++ p') e s rs h h'.
 Proof.
   unfold save_r30.
-  iIntros (? Hp Hs ? [??]) "Hcont". simplify_crun_eq. rewrite -!app_assoc/=.
+  iIntros (? Hp Hs ?) "Hcont". simplify_crun_eq. rewrite -!app_assoc/=.
   iApply alloc_stack_correct_slot; [done|]. iIntros (?????) "Hs". simplify_eq/=.
-  iApply (write_stack_correct with "[$]"); [done|by simplify_map_eq|]. iIntros (?) "Hs". simplify_map_eq'.
+  iApply (write_stack_correct with "[$]"); [done|]. iIntros (?) "Hs". simplify_map_eq'.
   iApply "Hcont"; [by rewrite Hs|] => /=.
   iApply ci2a_places_inv_mono_rs. { apply map_preserved_insert_r_not_in; [compute_done|]. done. }
   iSplit; [done|]. rewrite Hs. iSplit! => /=.
   - set_solver.
-  - apply Forall_forall => ??. right. rewrite lookup_insert_ne //. set_solver.
+  - apply Forall_forall => ??. right. rewrite lookup_total_insert_ne //. set_solver.
 Qed.
 
 Lemma allocate_places_correct s ns vars s' p p' r n e rs h h':
@@ -926,16 +906,10 @@ Proof.
         apply map_scramble_insert_r_in; [compute_done|].
         apply map_scramble_insert_r_in; [compute_done|]. done.
   - rewrite -!app_assoc.
-    iApply sim_regs_included. iIntros (?).
     iApply alloc_stack_correct_slot; [done|]. iIntros (?????) "Hs". simplify_eq/=.
     move: Hsub => /submseteq_cons_l [?[Hperm Hsub]].
     have ? : v ∈ variable_registers by rewrite Hperm; set_solver.
-    have [??]: is_Some (rs !! v). {
-      apply: map_list_included_is_Some.
-      { apply: (map_list_included_mono _ variable_registers); [done|compute_done]. }
-      done. }
-    iApply (write_stack_correct with "[$]"); [done| |].
-    { rewrite !lookup_insert_ne //; set_solver. }
+    iApply (write_stack_correct with "[$]"); [done|].
     iIntros (?) "Hs". simplify_eq.
     iApply sim_mono_s. iIntros (??) "Hinv".
     have ? : v ∉ vars. {
@@ -960,8 +934,11 @@ Proof.
         iApply (big_sepM_impl with "[$]"). iIntros "!>" (???) "[% [? Hp]]". iExists _. iFrame.
         case_match => //. iDestruct "Hp" as %(?&?&Hin). iPureIntro. csimpl. split!.
         clear -Hin. set_unfold. naive_solver.
-      * simpl. iFrame. iExists _. iFrame. iPureIntro.
-        move: Hv => /Forall_forall/(_ v)[| |->//]. { rewrite Hperm. set_solver. }  set_unfold. naive_solver.
+      * simpl. iFrame.
+        move: Hv => /Forall_forall/(_ v)[| |->//].
+        -- rewrite Hperm. set_solver.
+        -- set_unfold. naive_solver.
+        -- rewrite !lookup_total_insert_ne //; set_unfold; naive_solver.
       * iPureIntro. apply list_subseteq_cons_l; [|done]. rewrite Hperm. set_solver.
       * iPureIntro. apply: Forall_impl; [done|]. set_unfold. naive_solver.
       * iPureIntro. move => ??? /lookup_insert_Some[[??]|[??]] /lookup_insert_Some[[??]|[??]]; set_solver.
@@ -997,7 +974,7 @@ Proof.
     iIntros "_ Hp Hcont". iApply "Hcont"; [done..|]. by rewrite left_id_L.
   }
   move => ?? IH [//|??] ??????? /=[?] /NoDup_cons[??]. simplify_crun_eq.
-  rewrite i2a_args_cons; [|done]. iIntros "[[% [% ?]] Hl] Hp Hcont".
+  rewrite i2a_args_cons; [|done]. iIntros "[? Hl] Hp Hcont".
   rewrite -!app_assoc /=.
   iApply (write_var_correct with "[$] [$]"); [done..|].
   iIntros (?? Hrs) "Hp". simplify_eq.
@@ -1127,8 +1104,9 @@ Proof.
       have /NoDup_alt: NoDup args_registers by compute_done.
       move => /[apply]. naive_solver lia.
     }
-    rewrite i2a_args_cons; [|done]. iFrame. iSplit!; [|done].
-    etrans; [symmetry; apply: Hpre2; set_solver|]. rewrite lookup_insert_ne; [by simplify_map_eq|set_solver].
+    rewrite i2a_args_cons; [|done]. iFrame. simplify_map_eq'.
+    rewrite <-Hpre2; [|set_solver].
+    rewrite lookup_total_insert_ne; [by simplify_map_eq'|set_solver].
 Qed.
 
 Definition call_correct (n : trace_index) (s : state) (K : list expr_ectx) : Prop :=
@@ -1137,7 +1115,7 @@ Definition call_correct (n : trace_index) (s : state) (K : list expr_ectx) : Pro
   i2a_args 0 vs rs -∗
   ci2a_places_inv (s_places s) (s_saved_registers s) vm rs -∗
   (∀ rs' av v h',
-     ⌜rs' !! "R0" = Some av⌝ -∗
+     ⌜rs' !!! "R0" = av⌝ -∗
      i2a_val_rel v av -∗
      ci2a_places_inv (s_places s) (s_saved_registers s) vm rs' -∗
      sim n true p' (expr_fill (K' ++ K) (Val v)) s rs' h' h') -∗
@@ -1150,7 +1128,7 @@ Lemma translate_lexpr_op_correct s s' p p' n e e' rs vs res h K K'
   K `suffix_of` K' →
   ci2a_places_inv s.(s_places) s.(s_saved_registers) vs rs -∗
   (∀ rs' av v h',
-      ⌜rs' !! "R0" = Some av⌝ -∗
+      ⌜rs' !!! "R0" = av⌝ -∗
       ⌜s' = s⌝ -∗
       i2a_val_rel v av -∗
       ci2a_places_inv s.(s_places) s.(s_saved_registers) vs rs' -∗
@@ -1162,9 +1140,8 @@ Proof.
   destruct e; simplify_crun_eq.
   - iApply (read_var_val_correct with "Hp"); [typeclasses eauto with tstep|done|compute_done|].
     iIntros (????) "? Hp".
-    iApply ("Hcont" with "[] [//] [$] Hp"). by simplify_map_eq.
+    iApply ("Hcont" with "[] [//] [$] Hp"). by simplify_map_eq'.
   - rewrite -!app_assoc.
-    iApply sim_regs_included. iIntros (?).
     iApply (read_var_val_correct with "Hp"); [typeclasses eauto with tstep|done|compute_done|].
     iIntros (?? v1' ?) "? Hp". simplify_eq/=.
     iApply (read_var_val_correct with "Hp"); [typeclasses eauto with tstep|done|compute_done|].
@@ -1175,8 +1152,8 @@ Proof.
     all: iSatStart; iDestruct!; iSatStop.
     all: tstep_i => ??; simplify_map_eq'.
     all: move: Hins => /deep_to_asm_instrs_cons_inv[??]; simplify_map_eq.
-    all: tstep_i; simplify_map_eq'; split!; [apply: map_list_included_is_Some; [done|compute_done]|].
-    all: tstep_i; simplify_map_eq'; split!.
+    all: tstep_i; simplify_map_eq'.
+    all: tstep_i; simplify_map_eq'.
     all: iSatStart.
     all: try iDestruct select (i2a_heap_shared _ _) as "#Hs".
     all: iApply (to_sim with "[Hcont Hp] [] Hrf"); [|by simplify_map_eq'|
@@ -1186,7 +1163,7 @@ Proof.
     all: iApply "Hcont"; [by simplify_map_eq|done|simpl|
       iApply ci2a_places_inv_mono_rs; [|done];
       apply map_preserved_insert_r_not_in; [compute_done|];
-      by apply map_preserved_insert_r_not_in; [compute_done|]].
+      by apply map_preserved_insert_r_not_in; [compute_done|]]; simplify_map_eq'.
     + done.
     + iExists _ => /=. iFrame "#". iPureIntro. lia.
     + done.
@@ -1194,7 +1171,6 @@ Proof.
     + done.
     + done.
   - rewrite -!app_assoc.
-    iApply sim_regs_included. iIntros (?).
     iApply (read_var_val_correct with "Hp"); [typeclasses eauto with tstep|done|compute_done|].
     iIntros (?? v' ?) "Hv Hp". simplify_eq/=.
     iIntros (??? Hins) "Hrf Hinv". iSatStop.
@@ -1205,11 +1181,10 @@ Proof.
     iDestruct "Hinv" as "(?&?&?)".
     iDestruct (i2a_heap_lookup_shared with "[$] [$] [$]") as (? ?) "#?"; [done|].
     iSatStop.
-    tstep_i. split!; simplify_map_eq'; [done| |by rewrite Z.add_0_r|].
-    { apply: map_list_included_is_Some; [done|compute_done]. }
-    tstep_i; simplify_map_eq'. split!.
+    tstep_i. split!; simplify_map_eq'; [by rewrite Z.add_0_r|].
+    tstep_i; simplify_map_eq'.
     iSatStart.
-    iApply ("Hcont" with "[] [] [//] [Hp] [%] Hrf"); [by simplify_map_eq|done| | |].
+    iApply ("Hcont" with "[] [] [//] [Hp] [%] Hrf"); [by simplify_map_eq'|done| | |].
     + iApply ci2a_places_inv_mono_rs; [|done].
       apply map_preserved_insert_r_not_in; [compute_done|].
       by apply map_preserved_insert_r_not_in; [compute_done|].
@@ -1218,7 +1193,6 @@ Proof.
       iApply ci2a_regs_inv_mono_insert; [compute_done|].
       by iApply ci2a_regs_inv_mono_insert; [compute_done|].
   - rewrite -!app_assoc.
-    iApply sim_regs_included. iIntros (?).
     iApply (read_var_val_correct with "Hp"); [typeclasses eauto with tstep|done|compute_done|].
     iIntros (?? v1' ?) "Hv1 Hp". simplify_eq/=.
     iApply (read_var_val_correct with "Hp"); [typeclasses eauto with tstep|done|compute_done|].
@@ -1226,24 +1200,23 @@ Proof.
     iIntros (??? Hins) "Hrf Hinv". iSatStop.
     tstep_s => ?? Halive. subst. move: (Halive) => [??].
     tstep_i => ??. simplify_map_eq'.
-    move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
+    move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq'.
     iSatStart. iDestruct "Hv1" as (??) "Hv1". simplify_eq.
     iDestruct "Hinv" as "(?&?&?)".
     iDestruct (i2a_heap_lookup_shared with "[$] [$] [$]") as (? ?) "#_"; [done|].
     iSatStop.
-    tstep_i. split!; simplify_map_eq'; [done..|rewrite Z.add_0_r; done|].
-    tstep_i; simplify_map_eq'. split!. rewrite Z.add_0_r.
+    tstep_i. split!; simplify_map_eq'; [rewrite Z.add_0_r; done|].
+    tstep_i; simplify_map_eq'. rewrite Z.add_0_r.
     iSatStartBupd.
     iMod (i2a_heap_update_shared with "[$] [$] [$] [$]") as "[??]"; [done|]. iModIntro.
-    iApply ("Hcont" with "[] [] [//] [Hp] [%] Hrf"); [by simplify_map_eq|done| | |].
+    iApply ("Hcont" with "[] [] [//] [Hp] [%] Hrf"); [by simplify_map_eq'|done| | |].
     + iApply ci2a_places_inv_mono_rs; [|done].
       apply map_preserved_insert_r_not_in; [compute_done|].
       by apply map_preserved_insert_l_not_in; [compute_done|].
     + by simplify_map_eq'.
     + iFrame.
       iApply ci2a_regs_inv_mono_insert; [compute_done|].
-      iApply ci2a_regs_inv_mono_insert_l; [..|done]; [compute_done|].
-      by repeat apply map_list_included_insert.
+      iApply ci2a_regs_inv_mono_insert_l; [..|done]; compute_done.
   - rewrite -!app_assoc.
     iApply (translate_args_correct [] with "Hp"); [done|].
     iIntros (????) "Hvs Hp" => /=. subst.
@@ -1258,7 +1231,7 @@ Lemma translate_lexpr_correct s s' p p' n e e' rs vs res K h
   call_correct n s K →
   ci2a_places_inv s.(s_places) s.(s_saved_registers) vs rs -∗
   (∀ rs' vs' av v h',
-      ⌜rs' !! "R0" = Some av⌝ -∗
+      ⌜rs' !!! "R0" = av⌝ -∗
       ⌜s' = s⌝ -∗
       i2a_val_rel v av -∗
       ci2a_places_inv s.(s_places) s.(s_saved_registers) vs' rs' -∗
@@ -1284,7 +1257,7 @@ Proof.
     tstep_s => b ?. subst.
     tstep_i => ??. simplify_map_eq'.
     move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
-    tstep_i. split!. simplify_map_eq'.
+    tstep_i.
     iSatStart. iDestruct "Hv" as %?. subst.
     destruct b; simplify_eq/=.
     + iApply (to_sim with "[Hcont Hp] [] Hrf"). 2: { by simplify_map_eq'. }
@@ -1305,7 +1278,7 @@ Proof.
         apply: map_union_subseteq_r. apply lookup_map_seqZ_disjoint. rewrite fmap_length. lia. }
       2: { iDestruct "Hinv" as "($&$&?)". iApply ci2a_regs_inv_mono_insert; [compute_done|done]. }
 
-      iApply ("Hcont" with "[%] [//] [$]"); [by simplify_map_eq|].
+      iApply ("Hcont" with "[%] [//] [$]"); [by simplify_map_eq'|].
       iApply ci2a_places_inv_mono_rs; [|done].
       apply map_preserved_insert_r_not_in; [compute_done|done].
     + iApply (to_sim with "[Hcont Hp] [%] Hrf"). 2: {
@@ -1322,7 +1295,7 @@ Proof.
          apply map_preserved_insert_r_not_in; [compute_done|done].
       }
       iIntros (???????) "Hv Hp". subst.
-      iApply ("Hcont" with "[//] [//] [$] Hp").
+      by iApply ("Hcont" with "[] [//] [$] Hp").
   - iApply (translate_lexpr_op_correct with "Hp"); [typeclasses eauto with tstep|done..|eauto using suffix_app_r|].
     iIntros (??????) "? ?" => /=. iApply ("Hcont" with "[//] [//] [$] [$]").
 Qed.
@@ -1330,11 +1303,11 @@ Qed.
 Lemma restore_callee_save_registers_correct s s' p p' r n e rs h:
   crun s restore_callee_save_registers = CResult s' p (CSuccess r) →
   s.(s_saved_registers).*1 ⊆ "R30"::variable_registers →
-  ([∗ list] r ∈ s.(s_saved_registers), ∃ v : Z, ⌜pf_rsold !! r.1 = Some v⌝ ∗ stack_slot r.2 v) -∗
+  ([∗ list] r ∈ s.(s_saved_registers), stack_slot r.2 (pf_rsold !!! r.1)) -∗
   (∀ rs',
      ⌜s' = s⌝ -∗
      ⌜map_scramble ("PC"::s.(s_saved_registers).*1) rs rs'⌝ -∗
-     ⌜Forall (λ r, rs' !! r.1 = Some (pf_rsold !!! r.1)) s.(s_saved_registers)⌝ -∗
+     ⌜map_preserved s.(s_saved_registers).*1 pf_rsold rs'⌝ -∗
      stack_slot_uninit s.(s_saved_registers).*2 -∗
      sim n true p' e s' rs' h h) -∗
   sim n true (p ++ p') e s rs h h.
@@ -1345,9 +1318,10 @@ Proof.
   rewrite -!app_assoc/=.
   rename select (crun _ _ = _) into Hrun.
   match type of Hrun with | _ = CResult _ ?x (CSuccess ?r') => rename x into p; rename r' into res end.
-  iInduction (s_saved_registers s) as [|[r ?] ?] "IH" forall (rs p res n' Hrun); simplify_crun_eq. 1: by iApply "Hcont".
+  iInduction (s_saved_registers s) as [|[r ?] ?] "IH" forall (rs p res n' Hrun); simplify_crun_eq.
+  { iApply "Hcont" => //. iPureIntro. apply map_preserved_nil. }
   rewrite -!app_assoc/=.
-  iDestruct "Hsr" as "[[% [% Hs]] Hsr]".
+  iDestruct "Hsr" as "[Hs Hsr]".
   iApply (read_stack_correct with "Hs"); [done| |]. { set_unfold; naive_solver. }
   iIntros (?) "Hs". simplify_eq.
   iApply ("IH" with "[%] [//] Hsr"); [set_solver|].
@@ -1357,11 +1331,11 @@ Proof.
   - etrans. 2: { apply: map_scramble_mono; [done|]. set_solver. }
     apply map_scramble_insert_r_in; [set_solver|].
     apply map_scramble_insert_r_in; [set_solver|]. done.
-  - econs; [|done] => /=.
+  - apply map_preserved_cons; [|done] => /=.
     destruct (decide (r ∈ l.*1)) as [[?[??]]%elem_of_list_fmap|].
-    + move: Hall => /Forall_forall. naive_solver.
-    + simplify_map_eq'. etrans; [symmetry; apply: Hrs; set_solver|].
-      rewrite lookup_insert_ne; [| set_solver]. by simplify_map_eq.
+    + apply: Hall. set_solver.
+    + simplify_map_eq'. etrans; [|apply: Hrs; set_solver].
+      rewrite lookup_total_insert_ne; [| set_solver]. by simplify_map_eq'.
   - iFrame. iExists _. iFrame.
 Qed.
 
@@ -1399,14 +1373,13 @@ Proof.
   apply imp_to_asm_proof; [done|set_solver|].
   move => n i rs mem K f' fn' vs h cs pc ret gp rf rc lr Hpc Hins Hf ? Hsat Hargs Hlen Hlr Hcall Hret.
   move: Hf. rewrite {1}fmap_insert {1}fmap_empty lookup_insert_Some lookup_empty => ?.
-  destruct_all?; simplify_map_eq. move: Hargs => [??].
+   unfold i2a_regs_call in *. destruct_all?; simplify_map_eq'.
 
   apply: (sim_intro (initial_state f2i)).
   1: by simplify_map_eq'. 1: done. 1: set_solver. 1: done. {
     iSatMono. iIntros "(Hmem&Hheap&Hvals&?&?)". iFrame => /=. rewrite Z.sub_0_r. iFrame.
     iSplitR. 2: iAccu.
-    iPureIntro => /=. rewrite lookup_lookup_total; [done|].
-    apply: (map_list_included_is_Some touched_registers); [done|compute_done].
+    done.
   }
   iSatClear.
   iIntros "(Hvals&Hrc)".
@@ -1441,33 +1414,35 @@ Proof.
   iApply (translate_lexpr_correct with "[Hpl]"); [typeclasses eauto with tstep|done| | |]. {
     clear Hins.
     iIntros (?????????) "Hvs Hp Hcont".
-    iIntros (??? Hins) "Hrf (Hmem&Hh&(%Hsp1&%Hsp2&%&%&%))".
+    iIntros (??? Hins) "Hrf (Hmem&Hh&(%Hsp1&%Hsp2&%&%))".
     iSatStop.
     tstep_i => pc ?. simplify_map_eq.
     move: (Hins) => /deep_to_asm_instrs_subseteq_range?.
     move: Hins => /deep_to_asm_instrs_cons_inv[Hi ?]. simplify_map_eq'.
-    tstep_i. split!. { apply: map_list_included_is_Some; [done|compute_done]. }
-    tstep_i; simplify_map_eq'. split!.
+    tstep_i.
+    tstep_i; simplify_map_eq'.
     rewrite dom_fmap_L dom_insert_L dom_empty_L right_id_L (cons_middle (FreeACtx _)) (app_assoc K') expr_fill_app.
     eapply Hcall.
     - apply Forall2_fmap_l. apply: Forall_Forall2_diag. by apply Forall_true.
     - by simplify_map_eq.
-    - rewrite Hf2i; [|done]. rewrite lookup_fmap fmap_None lookup_insert_None. naive_solver.
-    - done.
+    - simplify_map_eq'. rewrite Hf2i; [|done]. rewrite fmap_None lookup_insert_None. naive_solver.
+    - simplify_map_eq'. done.
     - iSatMono. simplify_map_eq'. iFrame. iSplitL "Hvs"; [|iAccu].
       iApply (i2a_args_mono with "Hvs").
       apply map_preserved_insert_r_not_in; [compute_done|].
       apply map_preserved_insert_r_not_in; [compute_done|done].
-    - unfold i2a_regs_call. simplify_map_eq'. split; [done|].
-      by repeat apply map_list_included_insert.
+    - unfold i2a_regs_call. simplify_map_eq'. done. 
     - apply deep_to_asm_instrs_is_Some.
-      match goal with | |- context [length ?l] => destruct (decide (pc = a + length l - 1)); [|lia] end.
+ simplify_map_eq'.
+      set (pc1 := rs !!! "PC") in *.
+      set (pc2 := rs0 !!! "PC") in *. clearbody pc1 pc2.
+      match goal with | |- context [length ?l] => destruct (decide (pc2 = pc1 + length l - 1)); [|lia] end.
       subst. exfalso. move: Hi. clear. rewrite lookup_map_seqZ. case_option_guard => //.
       rewrite list_lookup_fmap. rewrite !lookup_app_r ?app_length /=; [|lia..].
       move => /fmap_Some[?[]]. rewrite lookup_cons_Some. naive_solver lia.
     - apply map_scramble_insert_r_in; [compute_done|].
       apply map_scramble_insert_r_in; [compute_done|done].
-    - iSatClear. move => ????????? [?[? Hpre]] ?. rewrite -expr_fill_app. subst.
+    - iSatClear. move => ????????? [? Hpre] ?. rewrite -expr_fill_app. subst.
       assert ({[f']} = dom (gset string) (lfndef_to_fndef <$> (<[f':=fn]> ∅ : gmap _ _))) as ->.
       { by rewrite dom_fmap_L dom_insert_L dom_empty_L right_id_L. }
       rewrite map_preserved_insert_l_not_in in Hpre; [|compute_done].
@@ -1476,14 +1451,13 @@ Proof.
       iSatStart.
       iIntros "(Hmem&Hh&Hv&Hrf&Hp&Hcont)".
       iApply ("Hcont" with "[%] Hv [Hp] [%] Hrf").
-      + apply lookup_lookup_total. apply: map_list_included_is_Some; [done|compute_done].
+      + done.
       + iApply ci2a_places_inv_mono_rs; [|done].
         apply: map_preserved_mono; [by etrans;[|done]|].
         set_solver-.
       + by simplify_map_eq'.
       + iFrame => /=. iSplitL.
-        * erewrite lookup_total_correct; [done|].
-          rewrite -Hsp2. symmetry. apply: Hpre. compute_done.
+        * rewrite -Hsp2. rewrite ->Hpre; [done|]. compute_done.
         * iPureIntro. split_and! => /=; [done| |done..].
           rewrite -Hsp2. symmetry. apply: Hpre. compute_done.
   }
@@ -1498,7 +1472,7 @@ Proof.
   iIntros (?? Hrs2 Hallsr) "Hsr".
 
   clear Hins.
-  iIntros (??? Hins) "? (Hmem&Hh&(%Hsp1&%Hsp2&%&%&%))".
+  iIntros (??? Hins) "? (Hmem&Hh&(%Hsp1&%Hsp2&%&%))".
   iSatStop.
   tstep_s => ? Hfree.
   iSatStartBupd.
@@ -1509,12 +1483,10 @@ Proof.
   iSatStop.
   tstep_i => ??. simplify_map_eq.
   move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq'.
-  tstep_i. split!.
+  tstep_i.
   rewrite dom_fmap_L dom_insert_L dom_empty_L right_id_L.
   eapply Hret.
-  - simplify_map_eq'. f_equal. eapply lookup_total_correct.
-    move: Hallsr => /Forall_forall/(_ ("R30", slot)) ->. 2: set_unfold; naive_solver.
-    by simplify_map_eq'.
+  - simplify_map_eq'. symmetry. apply: Hallsr. set_unfold; naive_solver.
   - iSatMonoBupd. simplify_map_eq'. iFrame.
     iAssert (stack_slot_uninit ((s_saved_registers s).*2 ++ s_stack_places s.(s_places)))
       with "[$Hsr Hpl]" as "Hslots". {
@@ -1545,20 +1517,17 @@ Proof.
         split!. by rewrite seqZ_length.
     + iFrame.
   - unfold i2a_regs_ret. simplify_map_eq'. split!.
-    + apply lookup_total_correct. etrans; [symmetry; apply: Hrs2; set_unfold; naive_solver |].
-      by simplify_map_eq.
-    + apply map_list_included_insert. apply: map_list_included_mono; [done|]. compute_done.
+    + etrans; [symmetry; apply: Hrs2; set_unfold; naive_solver |].
+      by simplify_map_eq'.
     + apply map_preserved_insert_r_not_in; [compute_done|].
       have ->: saved_registers = variable_registers ++ ["SP"] by compute_done.
       apply map_preserved_app. split. 2: { move => ?. set_unfold => ?. naive_solver congruence. }
       move => r Hr.
       destruct (decide (r ∈ (s_saved_registers s).*1)) as [[?[? Hin]]%elem_of_list_fmap|?].
-      * subst. move: Hallsr Hin => /Forall_forall/[apply]->.
-        apply lookup_lookup_total. apply: map_list_included_is_Some; [done|].
-        apply: list_elem_of_weaken; [done|]. clear. set_solver.
+      * subst. apply: Hallsr. set_solver +Hin.
       * move: Hall (Hr) => /Forall_forall/[apply] -[//| ->].
         etrans; [|apply: Hrs2; set_unfold; naive_solver].
-        rewrite !lookup_insert_ne //; set_unfold; naive_solver.
+        rewrite !lookup_total_insert_ne //; set_unfold; naive_solver.
   - by apply map_scramble_insert_r_in; [compute_done|].
 Qed.
 
