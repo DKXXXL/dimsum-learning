@@ -19,17 +19,12 @@
     - [ ] Define pure_i2a.imp_to_asm
     - [ ] Prove equivalence of pure_i2a.imp_to_asm and imp_to_asm
     - [ ] Prove equivalence of pure_bij.heap_bij and heap_bij
-- [ ] Verify optimization that turns local variables into let-bindings
-- [ ] Make accesses to unmapped memory emit events
-- [ ] Allow multiple stacks
-  - [ ] Allow i2a emit page faults for the stack page
-  - [ ] Adjust compiler to do probing (at the beginning before any
-        allocation by just overapproximating the stack size)
-- [ ] example for mmap
-  - [ ] Add mmap and munmap syscalls to asm
-  - [ ] Give spec for mmap at the C-level
-  - [ ] Verify an example using it
+- [ ] clean up mem2reg and integrate it into the compiler
 - [ ] green-threading example
+- [ ] new example from key idea section
+- [ ] make regs total by using !!! and get rid of pc in EJump
+- [ ] Make receiving calls for non-existent functions / instructions UB instead of NB
+  - Turn UbE into AssertE (P : bool) (e : expr)
 
 Optional:
 - [ ] Add ghost state for f2i and add values of f2i to initial ownership
@@ -44,10 +39,20 @@ Optional:
         there is no matching instructions.
       - When fetching a new instruction, do an angelic choice whether
         to emit an event or whether to fetch the next instruction.
+- [ ] example for mmap
+  - [ ] Add mmap and munmap syscalls to asm
+  - [ ] Give spec for mmap at the C-level
+  - [ ] Verify an example using it
 
 
 
 Done:
+- [X] Verify optimization that turns local variables into let-bindings
+- [X] Make accesses to unmapped memory emit events
+- [X] Allow multiple stacks
+  - [X] Allow i2a emit page faults for the stack page
+  - [X] Adjust compiler to do probing (at the beginning before any
+        allocation by just overapproximating the stack size)
 - [X] Make allocation in Imp like RefinedC allocation
 - [X] Add system calls to asm
 - [X] Generalize imp_prepost for arbitrary imp_event modules on both sides (without prepost)
