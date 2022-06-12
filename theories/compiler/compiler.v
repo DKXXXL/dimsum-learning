@@ -86,6 +86,12 @@ Proof.
   done.
 Qed.
 
+Ltac i2a_compile f2i f :=
+  (let e := eval vm_compute in
+      match compile f2i f with
+      | monad.CSuccess i => i | monad.CError _ => [] end
+   in exact e).
+
 Module ci2a_test.
 
 Definition test_fn_1 : fndef := {|

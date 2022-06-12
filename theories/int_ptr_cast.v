@@ -266,7 +266,7 @@ Qed.
 Definition main_f2i : gmap string Z := <["main" := 200]> $ <["exit" := 100]> int_to_ptr_f2i .
 
 Definition main_asm : gmap Z asm_instr :=
-  deep_to_asm_instrs 200 ltac:(let e := eval vm_compute in match compile main_f2i main_imp with | monad.CSuccess i => i | monad.CError _ => [] end in exact e).
+  deep_to_asm_instrs 200 ltac:(i2a_compile main_f2i main_imp).
 
 (* We need to lock this, otherwise simpl goes crazy. *)
 Definition main_asm_dom : gset Z := locked (dom _) main_asm.

@@ -478,6 +478,18 @@ Proof.
   naive_solver.
 Qed.
 
+Lemma i2a_heap_shared_ag_big ps p a :
+  ([∗ map] p↦z∈ps, i2a_heap_shared p z) -∗
+  i2a_heap_shared p a -∗
+  ⌜a = default a (ps !! p)⌝.
+Proof.
+  iIntros "Hps Hp".
+  destruct (ps !! p) as [z'|] eqn:Hp => //=.
+  iDestruct (big_sepM_lookup with "Hps") as "?"; [done|].
+  iAssert ⌜z' = a⌝%I as %?; [|done].
+  by iApply (i2a_heap_shared_ag with "[$]").
+Qed.
+
 Lemma i2a_mem_alloc' a v amem :
   amem !! a = None →
   i2a_mem_auth amem ==∗ i2a_mem_auth (<[a := v]> amem) ∗ i2a_mem_constant a v.

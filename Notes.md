@@ -1,34 +1,13 @@
 # TODOs
 
-- [ ] prove vertical compositionality
-  - Plan A: prove vertical compositionality directly on ownership based prepost
-    - [ ] Add [∗ map] ps\mapsto pi \in hb_shared bij, shared ps pi to
-          invariant of heap_bij. This ensures that all shared locations are shared persistently.
-    - [ ] Use invariant when proving vertical compositionality:
-          Additional locations we own in the spec + locations we own
-          in the target cover all private locations. This means that
-          we can replay all modifications that the env does in the
-          source in the target because we own all locations that the
-          env could modify in the source and vice versa. Might need
-          some additional trickery for i2a (maybe subtract all
-          addresses that correspond to shared locations?)
-  - [ ] Prove vertical compositionality of pure_i2a.imp_to_asm and
-        pure_bij.heap_bij
-    - Should be easier than vertical compositionality for heap_bij since
-      e.g. we don't need heap_in_bij for middle module to outside
-    - [ ] Define pure_i2a.imp_to_asm
-    - [ ] Prove equivalence of pure_i2a.imp_to_asm and imp_to_asm
-    - [ ] Prove equivalence of pure_bij.heap_bij and heap_bij
-- [ ] clean up mem2reg and integrate it into the compiler
 - [ ] green-threading example
 - [ ] new example from key idea section
-- [ ] make regs total by using !!! and get rid of pc in EJump
-- [ ] Make receiving calls for non-existent functions / instructions UB instead of NB
-  - Turn UbE into AssertE (P : bool) (e : expr)
 
 Optional:
-- [ ] Add ghost state for f2i and add values of f2i to initial ownership
+- [ ] Add ghost state for f2i and add values of f2i to initial ownership (one persistent map)
 - [ ] Add fnptrs to imp (should be easy when one has ghost state for f2i)
+- [ ] Make receiving calls for non-existent functions / instructions UB instead of NB
+  - Turn UbE into AssertE (P : bool) (e : expr)
 - [ ] Add global variables
 - [ ] Additional optimizations
 - [ ] Remove the disjointness condition on asm and imp linking to the
@@ -47,6 +26,27 @@ Optional:
 
 
 Done:
+- [X] clean up mem2reg and integrate it into the compiler
+- [X] make regs total by using !!! and get rid of pc in EJump
+- [X] prove vertical compositionality
+  - Plan A: prove vertical compositionality directly on ownership based prepost
+    - [ ] Add [∗ map] ps\mapsto pi \in hb_shared bij, shared ps pi to
+          invariant of heap_bij. This ensures that all shared locations are shared persistently.
+    - [ ] Use invariant when proving vertical compositionality:
+          Additional locations we own in the spec + locations we own
+          in the target cover all private locations. This means that
+          we can replay all modifications that the env does in the
+          source in the target because we own all locations that the
+          env could modify in the source and vice versa. Might need
+          some additional trickery for i2a (maybe subtract all
+          addresses that correspond to shared locations?)
+  - [ ] Prove vertical compositionality of pure_i2a.imp_to_asm and
+        pure_bij.heap_bij
+    - Should be easier than vertical compositionality for heap_bij since
+      e.g. we don't need heap_in_bij for middle module to outside
+    - [ ] Define pure_i2a.imp_to_asm
+    - [ ] Prove equivalence of pure_i2a.imp_to_asm and imp_to_asm
+    - [ ] Prove equivalence of pure_bij.heap_bij and heap_bij
 - [X] Verify optimization that turns local variables into let-bindings
 - [X] Make accesses to unmapped memory emit events
 - [X] Allow multiple stacks
