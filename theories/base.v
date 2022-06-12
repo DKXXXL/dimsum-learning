@@ -898,6 +898,27 @@ Section fmap.
   Qed.
 End fmap.
 
+Lemma list_fmap_delete {X Y: Type} i (f: X → Y) (L: list X):
+  f <$> (delete i L) = delete i (f <$> L).
+Proof.
+  induction L in i |-*; destruct i; simpl; eauto.
+  by erewrite IHL.
+Qed.
+
+Lemma NoDup_delete {X} p (L: list X):
+  NoDup L →
+  NoDup (delete p L).
+Proof.
+  intros Hnd. induction Hnd in p |-*; destruct p; simpl; eauto using NoDup_nil_2.
+  eapply NoDup_cons. split; last done.
+  intros [j Hlook]%elem_of_list_lookup_1.
+  destruct (decide (j < p)).
+  - rewrite lookup_delete_lt // in Hlook.
+    eapply elem_of_list_lookup_2 in Hlook. done.
+  - rewrite lookup_delete_ge // in Hlook; last lia.
+    eapply elem_of_list_lookup_2 in Hlook. done.
+Qed.
+
 
 Definition fresh_map `{Countable A} `{Countable B} `{Infinite B}
     (S : gset A) (X : gset B) : gmap A B :=
@@ -1060,6 +1081,30 @@ Implicit Types A : Type.
       iFrame.
 Qed.
 End sep_map.
+
+Section big_op.
+Context {PROP : bi}.
+Implicit Types P Q : PROP.
+Implicit Types Ps Qs : list PROP.
+Implicit Types A : Type.
+Section map2.
+  Context `{Countable K} {A B : Type}.
+  Implicit Types Φ Ψ : A → B → PROP.
+
+  Lemma big_sepM2_list_to_map_2 xs ys Φ :
+    BiAffine PROP →
+    xs.*1 = ys.*1 →
+    ([∗ list] x;y∈xs.*2;ys.*2, Φ x y) -∗
+    ([∗ map] x;y ∈ list_to_map (K:=K) xs;list_to_map ys, Φ x y).
+  Proof.
+    iIntros (? Heq) "Hxs".
+    iInduction xs as [|x xs] "IH" forall (ys Heq); destruct ys as [|y ys] => //; simplify_eq/=.
+    iDestruct "Hxs" as "[Hx Hxs]".
+    rewrite H1. iApply (big_sepM2_insert_2 with "[Hx]"); [done|].
+    by iApply "IH".
+  Qed.
+End map2.
+End big_op.
 
 Tactic Notation "iDestruct!" :=
   repeat (

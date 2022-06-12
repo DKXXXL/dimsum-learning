@@ -9,10 +9,12 @@ Require Import refframe.proof_techniques.
 Require Import refframe.imp.
 Require Import refframe.asm.
 Require Import refframe.imp_to_asm.
+Require Import refframe.i2a_bij_vertical.
 Require Import refframe.compiler.monad.
 Require Import refframe.compiler.linear_imp.
 Require Import refframe.compiler.ssa.
 Require Import refframe.compiler.linearize.
+Require Import refframe.compiler.mem2reg.
 Require Import refframe.compiler.codegen.
 
 Local Open Scope Z_scope.
@@ -40,9 +42,12 @@ Definition compile_linear (fn : fndef) : compiler_success compile_error lfndef :
   let ssa := compile_ssa fn in
   compiler_success_fmap_error LinearizeError (ci2a_linearize.pass_fn ssa).
 
+Definition compile_mem2reg (fn : fndef) : compiler_success compile_error lfndef :=
+  ci2a_mem2reg.pass_fn <$> (compile_linear fn).
+
 Definition compile (f2i : gmap string Z) (fn : fndef) : compiler_success compile_error (list deep_asm_instr) :=
-  linear ← compile_linear fn;
-  compiler_success_fmap_error CodegenError (ci2a_codegen.pass_fn f2i linear).
+  opt ← compile_mem2reg fn;
+  compiler_success_fmap_error CodegenError (ci2a_codegen.pass_fn f2i opt).
 
 Lemma compile_correct f2i f fn dins ins a:
   compile f2i fn = CSuccess dins →
@@ -54,13 +59,22 @@ Lemma compile_correct f2i f fn dins ins a:
                (initial_imp_to_asm_state ∅ imp_module (initial_imp_state (<[f := fn]> ∅)))).
 Proof.
   unfold compile.
-  move => /compiler_success_bind_success[?[/compiler_success_fmap_error_success ? /compiler_success_fmap_error_success?]].
+  move => /compiler_success_bind_success[?[/compiler_success_fmap_success[?[/compiler_success_fmap_error_success ??]] /compiler_success_fmap_error_success?]]. simplify_eq.
   move => ??.
   etrans. {
     apply: ci2a_codegen.pass_fn_correct; [done..| |done].
+    apply: ci2a_mem2reg.NoDup_pass_fn.
     erewrite ci2a_linearize.pass_fn_args; [|done].
     erewrite ci2a_linearize.pass_fn_vars; [|done]. apply ci2a_ssa.pass_fn_args_NoDup.
   }
+  etrans. {
+    apply: imp_to_asm_trefines.
+    apply ci2a_mem2reg.pass_fn_correct.
+    erewrite ci2a_linearize.pass_fn_args; [|done].
+    erewrite ci2a_linearize.pass_fn_vars; [|done].
+    apply ci2a_ssa.pass_fn_args_NoDup.
+  }
+  etrans. { apply: i2a_bij_vertical_N. }
   apply imp_to_asm_trefines; [apply _|].
   etrans. {
     apply: ci2a_linearize.pass_fn_correct; [done|..]; rewrite ci2a_ssa.pass_fn_vars.
@@ -83,6 +97,7 @@ Definition test_fn_1 : fndef := {|
 
 Compute compile_ssa test_fn_1.
 Compute compile_linear test_fn_1.
+Compute compile_mem2reg test_fn_1.
 Compute compile (<["f" := 100]> ∅) test_fn_1.
 
 Definition test_sum : fndef := {|

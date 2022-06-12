@@ -1065,3 +1065,11 @@ Proof.
 Qed.
 
 (* Print Assumptions i2a_bij_vertical. *)
+
+Lemma i2a_bij_vertical_N m σ moinit `{!VisNoAll m} ins fns f2i n:
+  trefines (MS (imp_to_asm ins fns f2i (imp_heap_bij_N n m))
+               (initial_imp_to_asm_state moinit (imp_heap_bij_N n m) (initial_imp_heap_bij_state_N n m σ)))
+           (MS (imp_to_asm ins fns f2i m)
+               (initial_imp_to_asm_state moinit m σ))
+.
+Proof. elim: n => //= ??. etrans; [by apply: i2a_bij_vertical|done]. Qed.

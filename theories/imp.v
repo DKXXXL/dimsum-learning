@@ -456,6 +456,31 @@ Qed.
 Definition zero_block (l: loc) (n: Z) : gmap Z val :=
   gmap_curry (list_to_map ((λ z : Z, (l +ₗ z, ValNum 0%Z)) <$> seqZ 0 n)) !!! l.1.
 
+Lemma zero_block_lookup_Some l k i x:
+  l.2 = 0%Z →
+  zero_block l k !! i = Some x ↔ x = ValNum 0 ∧ (0 ≤ i < k)%Z.
+Proof.
+  move => Hl. rewrite /zero_block lookup_total_gmap_curry -elem_of_list_to_map.
+  2: { eapply NoDup_fmap_fst; last first.
+       { eapply NoDup_fmap_2, NoDup_seqZ.
+         intros z1 z2; injection 1. lia. }
+       intros ? y1 y2 [? []]%elem_of_list_fmap_2 [? []]%elem_of_list_fmap_2.
+       by simplify_eq. }
+  rewrite elem_of_list_fmap. setoid_rewrite elem_of_seqZ.
+  destruct l; naive_solver lia.
+Qed.
+
+Lemma zero_block_insert_zero l (k: Z) i:
+  l.2 = 0%Z →
+  (0 ≤ i < k)%Z →
+  <[i:=ValNum 0%Z]> (zero_block l k) = zero_block l k.
+Proof.
+  move => ??. apply map_eq => j.
+  destruct (decide (i = j)); simplify_map_eq => //.
+  symmetry. by apply zero_block_lookup_Some.
+Qed.
+
+
 Definition heap_alive (h : heap_state) (l : loc) : Prop :=
   is_Some (h.(h_heap) !! l).
 
@@ -559,6 +584,17 @@ Lemma heap_alloc_list_length xs ls h h' :
   heap_alloc_list xs ls h h' →
   length xs = length ls.
 Proof. elim: xs ls h h'. { case; naive_solver. } move => /= ??? [|??] ??; naive_solver. Qed.
+
+Lemma heap_alloc_list_offset_zero vs ls h1 h2 i l:
+  heap_alloc_list vs ls h1 h2 →
+  ls !! i = Some l →
+  l.2 = 0%Z.
+Proof.
+  induction vs as [|v vs IHvs] in i, ls, h1, h2 |-*; destruct ls; simpl; try naive_solver.
+  intros (? & ? & ? & Hf & ?) Hlook. simplify_eq.
+  destruct i; last by eauto.
+  injection Hlook as ->. by destruct Hf.
+Qed.
 
 Lemma heap_fresh_is_fresh ps h:
   heap_is_fresh h (heap_fresh ps h).
