@@ -499,6 +499,8 @@ Proof.
   done.
 Qed.
 
+(* Print Assumptions complete_refinement. *)
+
 (* TODO: make asm_module a dem_module, have a dem_mod_itree (that
 makes non-trivial angelic choice UB) and show that the trefines implies
 dem_refines and then use this to prove trace properties about the
