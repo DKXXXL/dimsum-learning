@@ -786,7 +786,7 @@ Proof.
     - eexists ∅. move => ?? /map_filter_lookup_Some. naive_solver.
   }
   all: move => [csa lra] [] [cs lr] Pa Pb P [? e] ?/=; destruct_all?; simplify_eq.
-  - move: e => []//= pc regs mem b ? h ? vs avs.
+  - move: e => []//= regs mem b ? h ? vs avs.
     apply pp_to_all_forall => -[e' [??]] P'x Hx P' HP'. simplify_eq/=. setoid_subst. eexists b.
     rename select (satisfiable (Pa ∗ _)) into HPa.
     rename select (satisfiable (Pb ∗ _)) into HPb.
@@ -972,7 +972,7 @@ Proof.
     + rewrite Hihc. apply map_union_subseteq_r';
            [by apply i2a_combine_priv_shared_priv_s_disj|by apply map_subseteq_difference_l].
     + destruct b; simplify_eq/=; destruct_all?; simplify_eq/=; split!.
-  - move => vs hb' Pb' HPb' ? i rs' mem'' ? avs.
+  - move => vs hb' Pb' HPb' ? rs' mem'' ? avs.
     apply pp_to_all_forall => -[e' [??]] ? Hx Pa' HPa'. setoid_subst.
     rename select (satisfiable (P ∗ _)) into HP.
     rename select (i2a_ih_shared ih = _) into Hihs.
@@ -1018,7 +1018,7 @@ Proof.
 
     repeat i2a_mem_transfer HPa' HP.
 
-    split; [done|]. eexists _, _, _, _, avs.
+    split; [done|]. eexists  _, _, _, avs.
     apply pp_to_ex_exists. eexists (_, I2A _ _), True%I. split!. 2: {
       iSatMono HPa'. iIntros!.
       iDestruct (i2a_mem_lookup_big' with "[$] [$]") as %?.

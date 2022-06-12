@@ -125,8 +125,9 @@ Proof.
     iSatStop.
     tstep_i => ??. simplify_map_eq'.
     go_s. go_s. split!.
-    1: { instantiate (1:=[_]). unfold i2a_regs_ret; split!; simplify_map_eq'; split!.
-         - apply map_preserved_insert_r_not_in; [|done]. compute_done.
+    { by simplify_map_eq'. }
+    { instantiate (1:=[_]). unfold i2a_regs_ret; split!; simplify_map_eq'; split!.
+      - apply map_preserved_insert_r_not_in; [|done]. compute_done.
     }
     { apply map_scramble_insert_r_in; [compute_done|done]. }
     { iSatMono. simplify_map_eq'. iIntros!. iFrame. iSplitL; [iAccu|]. iSplit!; [|done]. lia. }
@@ -149,8 +150,9 @@ Proof.
     go_s. go_s. go_s.
     tstep_i => ??. simplify_map_eq'.
     go_s. split!.
-    1: { instantiate (1:=[_]). unfold i2a_regs_ret; split!; simplify_map_eq'; split!.
-         - apply map_preserved_insert_r_not_in; [|done]. compute_done.
+    { by simplify_map_eq'. }
+    { instantiate (1:=[_]). unfold i2a_regs_ret; split!; simplify_map_eq'; split!.
+      - apply map_preserved_insert_r_not_in; [|done]. compute_done.
     }
     { apply map_scramble_insert_r_in; [compute_done|done]. }
     { iSatMono. simplify_map_eq'. iFrame. iSplitL; [by iStopProof|].
@@ -306,8 +308,8 @@ Definition exit_asm : gmap Z asm_instr :=
     ] ]> $ ∅.
 
 Definition exit_itree : itree (moduleE asm_event unit) unit :=
-  '(pc, rs, mem) ← TReceive (λ '(pc, rs, mem), (Incoming, EAJump pc rs mem));;;
-  TAssume (pc = 100);;;;
+  '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
+  TAssume (rs !!! "PC" = 100);;;;
   args ← TExist _;;;
   TAssert (length args = length syscall_arg_regs);;;;
   TAssert (args !! 0%nat = Some (rs !!! "R0"));;;;
@@ -329,7 +331,7 @@ Lemma exit_asm_refines_itree :
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   go_i => ????? Hi.
-  go_s. eexists (_, _, _). go.
+  go_s. eexists (_, _). go.
   go_s. split!. go.
   go_i => ??. simplify_map_eq.
   go_s => ?. go.
@@ -349,8 +351,8 @@ Proof.
   go_i.
   sort_map_insert. simplify_map_eq'.
   unshelve eapply tsim_remember. { exact (λ _ '(AsmState i rs _ ins) _,
-      i = ARunning [] ∧ rs !! "PC" = Some 102 ∧ ins = exit_asm). }
-  { split!. by simplify_map_eq. } { done. }
+      i = ARunning [] ∧ rs !!! "PC" = 102 ∧ ins = exit_asm). }
+  { split!. by simplify_map_eq'. } { done. }
   move => ?? Hloop [????] ? ?. destruct_all?; simplify_eq.
   go_i => ??. simplify_map_eq'.
   go_i.
@@ -364,8 +366,8 @@ Qed.
 (* TODO: something even more high-level? Maybe stated as safety property on traces? *)
 
 Definition top_level_itree : itree (moduleE asm_event unit) unit :=
-  '(pc, rs, mem) ← TReceive (λ '(pc, rs, mem), (Incoming, EAJump pc rs mem));;;
-  TAssume (pc = 200);;;;
+  '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
+  TAssume (rs !!! "PC" = 200);;;;
   TAssume (rs !!! "R30" ∉ main_asm_dom ∪ dom (gset Z) int_to_ptr_asm);;;;
   TAssume (∃ gp, gp + GUARD_PAGE_SIZE ≤ rs !!! "SP" ∧
             (∀ a, gp ≤ a < gp + GUARD_PAGE_SIZE → mem !! a = Some None) ∧
@@ -397,7 +399,7 @@ Lemma top_level_refines_itree :
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   go_i => ?????. case_match; destruct_all?; simplify_eq.
-  go_s. eexists (_, _, _). go.
+  go_s. eexists (_, _). go.
   go_s. split!. go.
   go_s => ?. go.
   go_s => ?. go.
@@ -406,6 +408,7 @@ Proof.
   go_i => ??. simplify_eq.
   go_i. eexists true => /=. split; [done|]. eexists initial_heap_state, _, [], [], (regs !!! "R30"), "main".
   split!.
+  { by simplify_map_eq'. }
   { apply: satisfiable_mono; [by eapply i2a_res_init|].
     iIntros!.
     iDestruct (i2a_mem_inv_init with "[$] [$]") as "$"; [done..|].
@@ -419,7 +422,7 @@ Proof.
   go_i. move => *. unfold main_f2i in *. destruct_all?; simplify_map_eq'.
   rewrite bool_decide_false; [|unfold main_asm_dom;unlock;compute_done].
   rewrite bool_decide_true; [|compute_done].
-  go_i => -[[??]?]. go.
+  go_i => -[??]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
   go_i => ?. go.

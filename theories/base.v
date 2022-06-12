@@ -371,6 +371,18 @@ Proof. move => ?. by setoid_rewrite <-partial_alter_commute at 1. Qed.
 
 End theorems.
 
+Section curry_uncurry.
+  Context `{Countable K1, Countable K2} {A : Type}.
+
+Lemma lookup_total_gmap_curry (m : gmap (K1 * K2) A) (i : K1) (j : K2):
+  ((gmap_curry m !!! i): gmap K2 A) !! j = m !! (i, j).
+Proof.
+  rewrite -lookup_gmap_curry lookup_total_alt.
+  destruct (gmap_curry m !! i); simpl; first done.
+  by eapply lookup_empty.
+Qed.
+End curry_uncurry.
+
 Section dom.
 Context `{FinMapDom K M D}.
 Lemma map_difference_eq_dom {A} (m m1 m2 : M A) :

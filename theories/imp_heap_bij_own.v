@@ -1149,7 +1149,7 @@ Lemma imp_heap_bij_trefines m m' σ σ' `{!VisNoAll m}:
            (MS (imp_heap_bij m') (initial_imp_heap_bij_state m' σ')).
 Proof. move => ?. by apply: mod_prepost_trefines. Qed.
 
-Definition imp_heap_bij_proof_call (n : trace_index) (fns1 fns2 : gmap string fndef) :=
+Definition imp_heap_bij_call (n : trace_index) (fns1 fns2 : gmap string fndef) :=
   (∀ n' f es1' es2' K1' K2' es1 es2 vs1' vs2' h1' h2' b r rf',
       ImpExprFill es1' K1' (Call f es1) →
       ImpExprFill es2' K2' (Call f es2) →
@@ -1166,6 +1166,32 @@ Definition imp_heap_bij_proof_call (n : trace_index) (fns1 fns2 : gmap string fn
           ⪯{imp_module, imp_heap_bij imp_module, n', b}
       (SMProg, Imp es2' h2' fns2, (PPInside, tt, rf'))).
 
+Definition imp_heap_bij_return n fns1 fns2 Ki Ks r :=
+  (∀ n' v1 v2 h1' h2' rf' b,
+      n' ⊆ n →
+      satisfiable (heap_bij_inv h1' h2' ∗ val_in_bij v1 v2 ∗ r ∗ rf') →
+      Imp (expr_fill Ki (Val v1)) h1' fns1
+        ⪯{imp_module, imp_heap_bij imp_module, n', b}
+      (SMProg, Imp (expr_fill Ks (Val v2)) h2' fns2, (PPInside, (), rf'))).
+
+Lemma imp_heap_bij_call_mono n n' fns1 fns2:
+  imp_heap_bij_call n fns1 fns2 →
+  n' ⊆ n →
+  imp_heap_bij_call n' fns1 fns2.
+Proof.
+  intros Hprf ???????????????????????.
+  eapply Hprf; eauto. by etrans.
+Qed.
+
+Lemma imp_heap_bij_return_mono n n' fns1 fns2 K1 K2 r:
+  imp_heap_bij_return n fns1 fns2 K1 K2 r →
+  n' ⊆ n →
+  imp_heap_bij_return n' fns1 fns2 K1 K2 r.
+Proof.
+  intros Hprf ??????????.
+  eapply Hprf; eauto. by etrans.
+Qed.
+
 Lemma imp_heap_bij_proof fns1 fns2 :
   dom (gset _) fns1 = dom _ fns2 →
   (∀ f fn1, fns1 !! f = Some fn1 → ∃ fn2, fns2 !! f = Some fn2
@@ -1177,14 +1203,8 @@ Lemma imp_heap_bij_proof fns1 fns2 :
       length vs2 = length (fd_args fn2) →
       satisfiable (heap_bij_inv h1 h2 ∗ ([∗ list] v1;v2∈vs1;vs2, val_in_bij v1 v2) ∗ r ∗ rf) →
 
-      imp_heap_bij_proof_call n fns1 fns2 →
-      (* Return *)
-      (∀ n' v1 v2 h1' h2' rf' b,
-        n' ⊆ n →
-        satisfiable (heap_bij_inv h1' h2' ∗ val_in_bij v1 v2 ∗ r ∗ rf') →
-        Imp (expr_fill K1 (Val v1)) h1' fns1
-            ⪯{imp_module, imp_heap_bij imp_module, n', b}
-        (SMProg, Imp (expr_fill K2 (Val v2)) h2' fns2, (PPInside, tt, rf'))) →
+      imp_heap_bij_call n fns1 fns2 →
+      imp_heap_bij_return n fns1 fns2 K1 K2 r →
 
       Imp (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs1 (fd_body fn1))) h1 fns1
           ⪯{imp_module, imp_heap_bij imp_module, n, false}
@@ -1218,20 +1238,16 @@ Proof.
        σfs = SMProg ∧
        t1 = PPInside ∧
        satisfiable (heap_bij_inv h1 h2 ∗ ([∗ list] v1;v2∈vs1;vs2, val_in_bij v1 v2) ∗ r ∗ rf') ∧
-       ∀ v1' v2' h1' h2' rf'',
-         satisfiable (heap_bij_inv h1' h2' ∗ val_in_bij v1' v2' ∗ r ∗ rf'') →
-         Imp (expr_fill K1 (Val v1')) h1' fns1
-             ⪯{imp_module, (imp_heap_bij imp_module), n', false}
-         (SMProg, Imp (expr_fill K2 (Val v2')) h2' fns2, (PPInside, tt, rf''))). }
+       imp_heap_bij_return n' fns1 fns2 K1 K2 r). }
   { move => /=. split! => //; [lia|..]. { iSatMono. iFrame. iAccu. } iSatClear.
-    move => ??????. apply: Hret; [done|]. eexists [_]. split!; [done|].
+    move => ?????????. apply: Hret; [done|]. eexists [_]. split!; [done|].
     iSatMono. iIntros!. iFrame. }
   { iSatClear. move => n' n'' [e1 {}h1 ?] [[σfs [e2 {}h2 ?]] [[??]?]] ??. destruct_all?. split! => //.
-    move => *. apply: tsim_mono; [naive_solver|done]. }
+    by apply: imp_heap_bij_return_mono. }
   iSatClear. move => n' /= ? IH [e1 {}h1 ?] [[σfs [e2 {}h2 ?]] [[?[]]?]] ?. destruct_all?. simplify_eq/=.
   have [?[??]]:= (Hlen _ _ ltac:(done)).
   iSatStart. iIntros!. iDestruct (big_sepL2_length with "[$]") as %?. iSatStop.
-  apply: Hf => //; [lia|..]. { iSatMono. iFrame. iAccu. }
+  apply: Hf => //; [lia|..]. { iSatMono. iFrame. }
   - iSatClear. move => ? f1 es1 es2 ?? es1' es2' vs1' vs2' ????? [?] [?] ? Hall1 Hall2 ? Hret'.
     have ?: es1' = Val <$> vs1'. { clear -Hall1. elim: Hall1; naive_solver. } subst.
     have ?: es2' = Val <$> vs2'. { clear -Hall2. elim: Hall2; naive_solver. } subst.
@@ -1242,7 +1258,7 @@ Proof.
       split; [lia|]. rewrite orb_true_r.
       apply: IH; [done|]. move => ??.
       split! => //; [lia|..]. { iSatMono. iFrame. iAccu. }
-      move => *. apply: tsim_mono_to_true; [|done]. naive_solver.
+      move => *. apply: tsim_mono_to_true; [naive_solver|]. etrans; [|done]. by econs.
     + apply: Hcall; [by etrans|done|..].
       { apply not_elem_of_dom. unlock in Hdom. rewrite -Hdom. by apply not_elem_of_dom. }
       1,2: by apply Forall2_fmap_l, Forall_Forall2_diag, Forall_true.
@@ -1250,7 +1266,6 @@ Proof.
       iSatClear. move => *. setoid_subst. split!.
       apply: tsim_mono_b. apply: Hret'. iSatMono. iIntros!. iFrame.
       iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]". by simplify_eq.
-  - iSatClear. move => *. apply: tsim_mono_b_false. apply: tsim_mono; [by apply: H11|done].
 Qed.
 
 

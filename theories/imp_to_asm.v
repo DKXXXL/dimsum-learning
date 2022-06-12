@@ -1162,7 +1162,7 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
  (e : asm_event) (s : imp_to_asm_state) :
  prepost (imp_event * imp_to_asm_state) imp_to_asmUR :=
   match e with
-  | (i, EAJump pc rs mem) =>
+  | (i, EAJump rs mem) =>
     (* env chooses if this is a function call or return *)
     pp_quant $ λ b : bool,
     pp_prop (i = Incoming) $
@@ -1181,7 +1181,7 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
       (* env proves that function name is valid *)
       pp_prop  (f ∈ fns) $
       (* env proves it calls the right address *)
-      pp_prop (f2i !! f = Some pc) $
+      pp_prop (f2i !! f = Some (rs !!! "PC")) $
       (* env proves that ret is not in ins *)
       pp_prop (ret ∉ ins) $
       (* env proves that rs corresponds to vs and ret *)
@@ -1198,7 +1198,7 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
       (* env chooses rest of cs *)
       pp_quant $ λ cs',
       (* get registers from stack (true means pc belongs to the program) *)
-      pp_prop (s.(i2a_calls) = (I2AI true pc gp rsold)::cs') $
+      pp_prop (s.(i2a_calls) = (I2AI true (rs !!! "PC") gp rsold)::cs') $
       (* env proves that rs is updated correctly *)
       pp_prop (i2a_regs_ret rs rsold av) $
       pp_end ((i, EIReturn v h), I2A cs' rs)
@@ -1208,7 +1208,6 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
 Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string Z)
            (e : imp_event) (s : imp_to_asm_state) : prepost (asm_event * imp_to_asm_state) imp_to_asmUR :=
   pp_prop (e.1 = Outgoing) $
-  pp_quant $ λ pc,
   pp_quant $ λ rs,
   pp_quant $ λ mem,
   pp_quant $ λ gp,
@@ -1224,7 +1223,7 @@ Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string
       (* program proves that this function is external *)
       pp_prop (f ∉ fns) $
       (* program proves that the address is correct *)
-      pp_prop (f2i !! f = Some pc) $
+      pp_prop (f2i !! f = Some (rs !!! "PC")) $
       (* program proves that ret is in ins *)
       pp_prop (ret ∈ ins) $
       (* program proves that rs corresponds to vs and ret  *)
@@ -1232,19 +1231,19 @@ Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string
       (* program proves it only touched a specific set of registers *)
       pp_prop (map_scramble touched_registers s.(i2a_last_regs) rs) $
       (* track the registers and return address (true means ret belongs to program) *)
-      pp_end ((Outgoing, EAJump pc rs mem), (I2A ((I2AI true ret gp rs)::s.(i2a_calls)) s.(i2a_last_regs)))
+      pp_end ((Outgoing, EAJump rs mem), (I2A ((I2AI true ret gp rs)::s.(i2a_calls)) s.(i2a_last_regs)))
   | (i, EIReturn v h) =>
       (* program chooses old registers *)
       pp_quant $ λ rsold,
       (* program chooses rest of cs *)
       pp_quant $ λ cs',
       (* get registers from stack (false means pc belongs to the env) *)
-      pp_prop (s.(i2a_calls) = (I2AI false pc gp rsold)::cs') $
+      pp_prop (s.(i2a_calls) = (I2AI false (rs !!! "PC") gp rsold)::cs') $
       (* prog proves that rs is updated correctly *)
       pp_prop (i2a_regs_ret rs rsold (avs !!! 0%nat)) $
       (* program proves it only touched a specific set of registers *)
       pp_prop (map_scramble touched_registers s.(i2a_last_regs) rs) $
-      pp_end ((Outgoing, EAJump pc rs mem), (I2A cs' s.(i2a_last_regs)))
+      pp_end ((Outgoing, EAJump rs mem), (I2A cs' s.(i2a_last_regs)))
   end.
 
 Definition imp_to_asm (ins : gset Z) (fns : gset string) (f2i : gmap string Z)
@@ -1341,7 +1340,7 @@ Proof.
   all: move => [cs1 lr1] [cs2 lr2] [cs lr] x1 x2 x ? ics.
   - move => e ? e' /= ? ?.
     destruct_all?; simplify_eq.
-    destruct e as [pc rs mem| | |]; destruct_all?; simplify_eq/=.
+    destruct e as [rs mem| | |]; destruct_all?; simplify_eq/=.
     move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
     + move => ret f Hargs Hin Hf2i /not_elem_of_union[??] ? ??.
@@ -1362,7 +1361,7 @@ Proof.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
   - move => e ? e' /= ? ?.
     destruct_all?; simplify_eq.
-    destruct e as [pc rs mem| | |]; destruct_all?; simplify_eq/=.
+    destruct e as [rs mem| | |]; destruct_all?; simplify_eq/=.
     move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
     + move => ret f Hargs Hin Hf2i /not_elem_of_union[??] ???.
