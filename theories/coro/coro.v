@@ -297,7 +297,7 @@ Section coro.
   (** we anyway cannot use the mod_link combinator here **)
   Fail Program Definition coro_prod {E} (md0 md1: module (coro_event + E)): module E :=
     mod_link _ md0 md1.
-  Program Definition coro_prod {E} (md0 md1: module (coro_event + E)): module E. admit "". Defined.
+  (* Program Definition coro_prod {E} (md0 md1: module (coro_event + E)): module E. admit "". Defined. *)
 
   Program Definition coro_interp {E} (md: module (coro_event + E)): module E. admit "". Defined.
 
@@ -320,6 +320,37 @@ Section coro.
 
 End coro.
 
+Definition coro_prod_filter (fns1 fns2 : gset string) : seq_product_state → list seq_product_state → imp_ev → seq_product_state → list seq_product_state → imp_ev → Prop :=
+  λ p cs e p' cs' e',
+    match e with
+    | EICall f vs h =>
+        (* TODO: Some things here should probably be UB, e.g. if the
+        environment calls yield. For this, one needs to extend
+        mod_link to allow the linking operator to be UB. *)
+        if bool_decide (f = "yield") then
+          e' = EIReturn (vs !!! 0%nat) h ∧
+          p' = (if p is SPLeft then SPRight else SPLeft)
+        else
+          p' = (if bool_decide (f ∈ fns1) then SPLeft else if bool_decide (f ∈ fns2) then SPRight else SPNone) ∧
+          (cs' = p::cs) ∧
+          p ≠ p' ∧
+          e' = e
+    | EIReturn v h =>
+        cs = p'::cs' ∧
+        p ≠ p'
+    end.
+Arguments coro_prod_filter _ _ _ _ _ _ _ _ /.
+
+Definition coro_prod (fns1 fns2 : gset string) (m1 m2 : module imp_event) : module imp_event :=
+  mod_link (coro_prod_filter fns1 fns2) m1 m2.
+
+Lemma coro_prod_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
+  trefines (MS m1 σ1) (MS m1' σ1') →
+  trefines (MS m2 σ2) (MS m2' σ2') →
+  trefines (MS (coro_prod ins1 ins2 m1 m2) (σ, σ1, σ2))
+           (MS (coro_prod ins1 ins2 m1' m2') (σ, σ1', σ2')).
+Proof. move => ??. by apply mod_link_trefines. Qed.
+
 Definition gtyield_asm_dom : gset Z := locked (dom _) gtyield_asm.
 Definition gtgo_asm_dom : gset Z := locked (dom _) gtgo_asm.
 
@@ -338,7 +369,8 @@ Theorem coro_spec
            (imp_to_asm ins fns f2i (imp_prod fns1 fns2 md0 md1))
         )
         init)
-    (MS (imp_to_asm ins fns f2i (coro_prod (coro_hijack md0) (coro_hijack md1))) init2)
+    (* (MS (imp_to_asm ins fns f2i (coro_prod (coro_hijack md0) (coro_hijack md1))) init2) *)
+    (MS (imp_to_asm ins fns f2i (coro_prod fns1 fns2 md0 md1)) init2)
 .
 Proof.
 Abort.
