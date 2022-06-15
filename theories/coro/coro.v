@@ -299,9 +299,7 @@ Section coro.
     mod_link _ md0 md1.
   Program Definition coro_prod {E} (md0 md1: module (coro_event + E)): module E. admit "". Defined.
 
-  (* Program Definition coro_interp {E} (md: module (coro_event + E)): module E := *)
-  (*   mod_link _ md0 md1. *)
-  (* state_transform.mod_state_transform (mod_map (mod_seq_product m1 m2) (mod_link_filter R)) *)
+  Program Definition coro_interp {E} (md: module (coro_event + E)): module E. admit "". Defined.
 
   (* Context `{E: Type}. *)
   (* Variable md: module (coro_event + E). *)
@@ -343,8 +341,25 @@ Theorem coro_spec
     (MS (imp_to_asm ins fns f2i (coro_prod (coro_hijack md0) (coro_hijack md1))) init2)
 .
 Proof.
-  ss.
-Qed.
+Abort.
+
+Theorem coro_spec
+        (md: module imp_event)
+        (** clean it later **)
+        ins fns
+        f2i init init2
+  :
+  trefines
+    (MS (asm_prod
+           (gtyield_asm_dom ∪ gtgo_asm_dom) ins
+           (asm_module)
+           (imp_to_asm ins fns f2i md)
+        )
+        init)
+    (MS (imp_to_asm ins fns f2i (coro_interp (coro_hijack md))) init2)
+.
+Proof.
+Abort.
 
 
 
@@ -355,11 +370,11 @@ Qed.
 
 
 
-i2a_mem_constant is pointsto
+(* i2a_mem_constant is pointsto *)
 
-(* compile *)
-(* compile_correct *)
-Print Instances Empty.
-Goal forall tmp, ((asm_regs (initial_asm_state tmp)) !! "SP") = None.
-  intros. cbn. reflexivity.
-Qed.
+(* (* compile *) *)
+(* (* compile_correct *) *)
+(* Print Instances Empty. *)
+(* Goal forall tmp, ((asm_regs (initial_asm_state tmp)) !! "SP") = None. *)
+(*   intros. cbn. reflexivity. *)
+(* Qed. *)
