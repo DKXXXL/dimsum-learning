@@ -115,12 +115,10 @@ Definition touched_registers : list string :=
   tmp_registers ++ saved_registers.
 
 Definition i2a_regs_call (ret : Z) (rs : gmap string Z) : Prop :=
-  rs !! "R30" = Some ret ∧
-  map_list_included touched_registers rs.
+  rs !!! "R30" = ret.
 
 Definition i2a_regs_ret (rs rsold : gmap string Z) (av : Z) : Prop :=
   rs !!! "R0" = av ∧
-  map_list_included touched_registers rs ∧
   map_preserved saved_registers rsold rs.
 
 (** ** mapping of provenances *)
@@ -480,6 +478,18 @@ Proof.
   naive_solver.
 Qed.
 
+Lemma i2a_heap_shared_ag_big ps p a :
+  ([∗ map] p↦z∈ps, i2a_heap_shared p z) -∗
+  i2a_heap_shared p a -∗
+  ⌜a = default a (ps !! p)⌝.
+Proof.
+  iIntros "Hps Hp".
+  destruct (ps !! p) as [z'|] eqn:Hp => //=.
+  iDestruct (big_sepM_lookup with "Hps") as "?"; [done|].
+  iAssert ⌜z' = a⌝%I as %?; [|done].
+  by iApply (i2a_heap_shared_ag with "[$]").
+Qed.
+
 Lemma i2a_mem_alloc' a v amem :
   amem !! a = None →
   i2a_mem_auth amem ==∗ i2a_mem_auth (<[a := v]> amem) ∗ i2a_mem_constant a v.
@@ -663,13 +673,12 @@ Definition i2a_heap_inv (h : heap_state) : uPred imp_to_asmUR :=
          i2a_heap_shared_agree (h_heap h) ih ∗ i2a_heap_auth ih.
 
 Definition i2a_args (o : nat) (vs : list val) (rs : gmap string Z) : uPred imp_to_asmUR :=
-  ([∗ list] i↦v∈vs, ∃ r av,
+  ([∗ list] i↦v∈vs, ∃ r,
       ⌜args_registers !! (o + i)%nat = Some r⌝ ∗
-      ⌜rs !! r = Some av⌝ ∗
-      i2a_val_rel v av).
+      i2a_val_rel v (rs !!! r)).
 
 Definition i2a_args_pure (o : nat) (vs : list Z) (rs : gmap string Z) : Prop :=
-  ∀ i v, vs !! i = Some v → ∃ r, args_registers !! (o + i)%nat = Some r ∧ rs !! r = Some v.
+  ∀ i v, vs !! i = Some v → ∃ r, args_registers !! (o + i)%nat = Some r ∧ rs !!! r = v.
 
 Lemma i2a_mem_uninit_split n a l :
   0 ≤ n ≤ l →
@@ -1095,7 +1104,7 @@ Lemma i2a_args_nil o rs:
 Proof. done. Qed.
 
 Lemma i2a_args_cons1 o v vs rs:
-  i2a_args o (v::vs) rs ⊣⊢ (∃ av r, ⌜args_registers !! o = Some r⌝ ∗ ⌜rs !! r = Some av⌝ ∗ i2a_val_rel v av) ∗ i2a_args (S o) vs rs.
+  i2a_args o (v::vs) rs ⊣⊢ (∃ r, ⌜args_registers !! o = Some r⌝ ∗ i2a_val_rel v (rs !!! r)) ∗ i2a_args (S o) vs rs.
 Proof.
   rewrite /i2a_args. setoid_rewrite Nat.add_succ_l. setoid_rewrite <-Nat.add_succ_r => /=.
   f_equiv. setoid_rewrite Nat.add_0_r. iSplit; iIntros!; iSplit!.
@@ -1103,7 +1112,7 @@ Qed.
 
 Lemma i2a_args_cons o v vs rs r:
   args_registers !! o = Some r →
-  i2a_args o (v::vs) rs ⊣⊢ (∃ av, ⌜rs !! r = Some av⌝ ∗ i2a_val_rel v av) ∗ i2a_args (S o) vs rs.
+  i2a_args o (v::vs) rs ⊣⊢ i2a_val_rel v (rs !!! r) ∗ i2a_args (S o) vs rs.
 Proof. move => ?. rewrite i2a_args_cons1. iSplit; iIntros!; iSplit!. Qed.
 
 Lemma i2a_args_mono o vs rs rs':
@@ -1112,8 +1121,8 @@ Lemma i2a_args_mono o vs rs rs':
   i2a_args o vs rs'.
 Proof.
   iIntros (Hpre) "Hargs". iApply (big_sepL_impl with "Hargs").
-  iIntros "!>" (???) "[% [% [% [% ?]]]]". iExists _, _. iFrame. iSplit; [done|]. iPureIntro.
-  etrans; [symmetry; apply: Hpre|done].
+  iIntros "!>" (???) "[% [% ?]]". iExists _. iFrame. iSplit; [done|].
+  rewrite ->Hpre; [done|].
   apply elem_of_list_lookup. setoid_rewrite lookup_drop. naive_solver.
 Qed.
 
@@ -1125,7 +1134,7 @@ Proof.
   iIntros (Hpure) "Hvs".
   iInduction vs as [|v vs] "IH" forall (avs o Hpure). { by rewrite i2a_args_nil. }
   iDestruct (big_sepL2_cons_inv_l with "Hvs") as (???) "[??]". simplify_eq.
-  have [?[]]:= Hpure 0%nat _ ltac:(done). rewrite Nat.add_0_r => ??.
+  have [?[]]:= Hpure 0%nat _ ltac:(done). rewrite Nat.add_0_r => ??. simplify_eq.
   rewrite i2a_args_cons; [|done].
   iDestruct ("IH" with "[%] [$]") as "$". 2: by iSplit!.
   move => ???. rewrite Nat.add_succ_l -Nat.add_succ_r. by apply Hpure.
@@ -1165,7 +1174,7 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
  (e : asm_event) (s : imp_to_asm_state) :
  prepost (imp_event * imp_to_asm_state) imp_to_asmUR :=
   match e with
-  | (i, EAJump pc rs mem) =>
+  | (i, EAJump rs mem) =>
     (* env chooses if this is a function call or return *)
     pp_quant $ λ b : bool,
     pp_prop (i = Incoming) $
@@ -1184,7 +1193,7 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
       (* env proves that function name is valid *)
       pp_prop  (f ∈ fns) $
       (* env proves it calls the right address *)
-      pp_prop (f2i !! f = Some pc) $
+      pp_prop (f2i !! f = Some (rs !!! "PC")) $
       (* env proves that ret is not in ins *)
       pp_prop (ret ∉ ins) $
       (* env proves that rs corresponds to vs and ret *)
@@ -1201,7 +1210,7 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
       (* env chooses rest of cs *)
       pp_quant $ λ cs',
       (* get registers from stack (true means pc belongs to the program) *)
-      pp_prop (s.(i2a_calls) = (I2AI true pc gp rsold)::cs') $
+      pp_prop (s.(i2a_calls) = (I2AI true (rs !!! "PC") gp rsold)::cs') $
       (* env proves that rs is updated correctly *)
       pp_prop (i2a_regs_ret rs rsold av) $
       pp_end ((i, EIReturn v h), I2A cs' rs)
@@ -1211,7 +1220,6 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
 Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string Z)
            (e : imp_event) (s : imp_to_asm_state) : prepost (asm_event * imp_to_asm_state) imp_to_asmUR :=
   pp_prop (e.1 = Outgoing) $
-  pp_quant $ λ pc,
   pp_quant $ λ rs,
   pp_quant $ λ mem,
   pp_quant $ λ gp,
@@ -1227,7 +1235,7 @@ Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string
       (* program proves that this function is external *)
       pp_prop (f ∉ fns) $
       (* program proves that the address is correct *)
-      pp_prop (f2i !! f = Some pc) $
+      pp_prop (f2i !! f = Some (rs !!! "PC")) $
       (* program proves that ret is in ins *)
       pp_prop (ret ∈ ins) $
       (* program proves that rs corresponds to vs and ret  *)
@@ -1235,19 +1243,19 @@ Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string
       (* program proves it only touched a specific set of registers *)
       pp_prop (map_scramble touched_registers s.(i2a_last_regs) rs) $
       (* track the registers and return address (true means ret belongs to program) *)
-      pp_end ((Outgoing, EAJump pc rs mem), (I2A ((I2AI true ret gp rs)::s.(i2a_calls)) s.(i2a_last_regs)))
+      pp_end ((Outgoing, EAJump rs mem), (I2A ((I2AI true ret gp rs)::s.(i2a_calls)) s.(i2a_last_regs)))
   | (i, EIReturn v h) =>
       (* program chooses old registers *)
       pp_quant $ λ rsold,
       (* program chooses rest of cs *)
       pp_quant $ λ cs',
       (* get registers from stack (false means pc belongs to the env) *)
-      pp_prop (s.(i2a_calls) = (I2AI false pc gp rsold)::cs') $
+      pp_prop (s.(i2a_calls) = (I2AI false (rs !!! "PC") gp rsold)::cs') $
       (* prog proves that rs is updated correctly *)
       pp_prop (i2a_regs_ret rs rsold (avs !!! 0%nat)) $
       (* program proves it only touched a specific set of registers *)
       pp_prop (map_scramble touched_registers s.(i2a_last_regs) rs) $
-      pp_end ((Outgoing, EAJump pc rs mem), (I2A cs' s.(i2a_last_regs)))
+      pp_end ((Outgoing, EAJump rs mem), (I2A cs' s.(i2a_last_regs)))
   end.
 
 Definition imp_to_asm (ins : gset Z) (fns : gset string) (f2i : gmap string Z)
@@ -1344,7 +1352,7 @@ Proof.
   all: move => [cs1 lr1] [cs2 lr2] [cs lr] x1 x2 x ? ics.
   - move => e ? e' /= ? ?.
     destruct_all?; simplify_eq.
-    destruct e as [pc rs mem| | |]; destruct_all?; simplify_eq/=.
+    destruct e as [rs mem| | |]; destruct_all?; simplify_eq/=.
     move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
     + move => ret f Hargs Hin Hf2i /not_elem_of_union[??] ? ??.
@@ -1365,7 +1373,7 @@ Proof.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
   - move => e ? e' /= ? ?.
     destruct_all?; simplify_eq.
-    destruct e as [pc rs mem| | |]; destruct_all?; simplify_eq/=.
+    destruct e as [rs mem| | |]; destruct_all?; simplify_eq/=.
     move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
     + move => ret f Hargs Hin Hf2i /not_elem_of_union[??] ???.
@@ -1448,7 +1456,7 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
   ins_dom = dom _ ins →
   fns_dom = dom _ fns →
   (∀ n i rs mem K f fn vs h cs pc ret gp rf rc lr,
-      rs !! "PC" = Some pc →
+      rs !!! "PC" = pc →
       ins !! pc = Some i →
       fns !! f = Some fn →
       f2i !! f = Some pc →
@@ -1459,7 +1467,7 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
       (* Call *)
       (∀ K' rs' mem' f' es vs pc' ret' gp' h' lr' rf' r',
           Forall2 (λ e v, e = Val v) es vs →
-          rs' !! "PC" = Some pc' →
+          rs' !!! "PC" = pc' →
           (ins !! pc' = None ↔ fns !! f' = None) →
           f2i !! f' = Some pc' →
           satisfiable (i2a_mem_inv (rs' !!! "SP") gp' mem' ∗ i2a_heap_inv h' ∗
@@ -1468,7 +1476,7 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
           is_Some (ins !! ret') →
           map_scramble touched_registers lr' rs' →
           (∀ rs'' mem'' av v h'' rf'' lr'',
-              rs'' !! "PC" = Some ret' →
+              rs'' !!! "PC" = ret' →
               satisfiable (i2a_mem_inv (rs'' !!! "SP") gp' mem'' ∗ i2a_heap_inv h'' ∗
                            i2a_val_rel v av ∗ rf'' ∗ r') →
               i2a_regs_ret rs'' rs' av →
@@ -1479,7 +1487,7 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
                (SMProg, Imp (expr_fill K (expr_fill K' (imp.Call f' es))) h' fns, (PPInside, I2A cs lr', rf'))) →
       (* Return *)
       (∀ rs' mem' av v h' lr' rf',
-          rs' !! "PC" = Some ret →
+          rs' !!! "PC" = ret →
           satisfiable (i2a_mem_inv (rs' !!! "SP") gp mem' ∗ i2a_heap_inv h' ∗
                       i2a_val_rel v av ∗ rf' ∗ rc) →
           i2a_regs_ret rs' rs av →
@@ -1510,7 +1518,7 @@ Proof.
   { simpl. exact (λ  '(AsmState i1 rs1 mem1 ins'1) '(σfs1, Imp e1 h1 fns'1, (t1, I2A cs1 lr1, r1))
                      '(AsmState i2 rs2 mem2 ins'2) '(σfs2, Imp e2 h2 fns'2, (t2, I2A cs2 lr2, r2)),
     ∃ i K av v pc lr' gp,
-      rs2 !! "PC" = Some pc ∧
+      rs2 !!! "PC" = pc ∧
       ins !! pc = Some i ∧
       satisfiable (i2a_mem_inv (rs2 !!! "SP") gp mem2 ∗ i2a_heap_inv h2 ∗ i2a_val_rel v av ∗ r1 ∗ r2) ∧
       i2a_regs_ret rs2 lr' av ∧
@@ -1537,7 +1545,7 @@ Proof.
     Hf both for calls triggered from inside and outside the module. *)
     unshelve eapply tsim_remember. { exact (λ n '(AsmState i1 rs1 mem1 ins'1) '(σfs1, Imp e1 h1 fns'1, (t1, I2A cs1 lr1, r1)),
        ∃ K' pc i ret f fn vs r' gp,
-         rs1 !! "PC" = Some pc ∧
+         rs1 !!! "PC" = pc ∧
          ins !! pc = Some i ∧
          fns !! f = Some fn ∧
          f2i !! f = Some pc ∧
@@ -1553,7 +1561,7 @@ Proof.
          t1 = PPInside ∧
          σfs1 = SMProg ∧
          (∀ rs' mem' av v h' lr' rf',
-          rs' !! "PC" = Some ret →
+          rs' !!! "PC" = ret →
           satisfiable (i2a_mem_inv (rs' !!! "SP") gp mem' ∗ i2a_heap_inv h' ∗
                       i2a_val_rel v av ∗ r' ∗ rf') →
           i2a_regs_ret rs' rs1 av  →
@@ -1569,16 +1577,16 @@ Proof.
       tstep_s. split!. { instantiate (1:=[_]). done. } { iSatMono. iIntros!. iFrame. iAccu. }
       apply Hstay; [done|]. by split!.
     }
-    { move => ?? [????] [[?[???]][[?[??]]?]] ??. destruct_all?. split!; [done..|].
+    { move => ?? [????] [[?[???]][[?[??]]?]] ??. destruct_all?. simplify_eq. split!; [done..|].
       move => *. apply: tsim_mono; [naive_solver|]. etrans; [|done]. apply ti_le_S. }
     iSatClear.
     move => n' /= Hn' IH [i' rs' mem' ins'] [[?[???]][[?[??]]?]] ?. destruct_all?; simplify_eq.
-    apply: Hf; [try eassumption..| |].
+    apply: Hf; [try done..| |].
     { iSatMono. iIntros!. iFrame. iAccu. }
     + iSatClear.
       move => K'' rs'' mem'' f'' es vs'' pc'' ret'' gp'' h'' lr rf'' r'' Hall ??????? Hret'.
       have ?: es = Val <$> vs''. { clear -Hall. elim: Hall; naive_solver. } subst.
-      destruct (ins !! pc'') eqn:Hi.
+      destruct (ins !! (rs'' !!! "PC")) eqn:Hi.
       * have [??] : is_Some (fns !! f''). { apply not_eq_None_Some. naive_solver. }
         tstep_s. left. split! => ?/=.
         apply IH; [done|]. split! => //.

@@ -362,11 +362,11 @@ Lemma trefines_implies_tsim {EV} (mi ms : module EV) σi σs n b:
   σi ⪯{mi, ms, n, b} σs.
 Proof. move => [Hr] ??? /=?. apply Hr. by apply: thas_trace_n_2. Qed.
 
-Lemma tsim_mono_to_true {EV} {mi ms : module EV} σi σs n n' κs:
+Lemma tsim_mono_to_true {EV} {mi ms : module EV} σi σs n n' κs b:
   σi ⪯{mi, ms, n', true, κs} σs →
   tiS n ⊆ n' →
-  σi ⪯{mi, ms, n, false, κs} σs.
-Proof. move => Hsim Hn ???. apply: Hsim. etrans; [|done]. by econs. Qed.
+  σi ⪯{mi, ms, n, b, κs} σs.
+Proof. move => Hsim Hn ???. apply: Hsim. etrans; [|done]. econs. etrans; [|done]. apply ti_le_S_maybe. Qed.
 
 Lemma tsim_mono {EV} {mi ms : module EV} σi σs b n n' κs:
   σi ⪯{mi, ms, n', b, κs} σs →

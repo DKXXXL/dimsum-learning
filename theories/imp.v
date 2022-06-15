@@ -453,6 +453,34 @@ Proof.
   destruct (gmap_curry (h_heap h) !! p); naive_solver.
 Qed.
 
+Definition zero_block (l: loc) (n: Z) : gmap Z val :=
+  gmap_curry (list_to_map ((λ z : Z, (l +ₗ z, ValNum 0%Z)) <$> seqZ 0 n)) !!! l.1.
+
+Lemma zero_block_lookup_Some l k i x:
+  l.2 = 0%Z →
+  zero_block l k !! i = Some x ↔ x = ValNum 0 ∧ (0 ≤ i < k)%Z.
+Proof.
+  move => Hl. rewrite /zero_block lookup_total_gmap_curry -elem_of_list_to_map.
+  2: { eapply NoDup_fmap_fst; last first.
+       { eapply NoDup_fmap_2, NoDup_seqZ.
+         intros z1 z2; injection 1. lia. }
+       intros ? y1 y2 [? []]%elem_of_list_fmap_2 [? []]%elem_of_list_fmap_2.
+       by simplify_eq. }
+  rewrite elem_of_list_fmap. setoid_rewrite elem_of_seqZ.
+  destruct l; naive_solver lia.
+Qed.
+
+Lemma zero_block_insert_zero l (k: Z) i:
+  l.2 = 0%Z →
+  (0 ≤ i < k)%Z →
+  <[i:=ValNum 0%Z]> (zero_block l k) = zero_block l k.
+Proof.
+  move => ??. apply map_eq => j.
+  destruct (decide (i = j)); simplify_map_eq => //.
+  symmetry. by apply zero_block_lookup_Some.
+Qed.
+
+
 Definition heap_alive (h : heap_state) (l : loc) : Prop :=
   is_Some (h.(h_heap) !! l).
 
@@ -557,6 +585,17 @@ Lemma heap_alloc_list_length xs ls h h' :
   length xs = length ls.
 Proof. elim: xs ls h h'. { case; naive_solver. } move => /= ??? [|??] ??; naive_solver. Qed.
 
+Lemma heap_alloc_list_offset_zero vs ls h1 h2 i l:
+  heap_alloc_list vs ls h1 h2 →
+  ls !! i = Some l →
+  l.2 = 0%Z.
+Proof.
+  induction vs as [|v vs IHvs] in i, ls, h1, h2 |-*; destruct ls; simpl; try naive_solver.
+  intros (? & ? & ? & Hf & ?) Hlook. simplify_eq.
+  destruct i; last by eauto.
+  injection Hlook as ->. by destruct Hf.
+Qed.
+
 Lemma heap_fresh_is_fresh ps h:
   heap_is_fresh h (heap_fresh ps h).
 Proof.
@@ -620,6 +659,34 @@ Proof.
   2: { move => [??] ? /(mk_is_Some _ _) /heap_wf/=Hwf ?. subst. naive_solver. }
   rewrite map_filter_empty_iff_2 ?left_id_L //.
   move => ?? /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap[?[??]]. simplify_eq/=. by apply.
+Qed.
+
+Lemma h_block_heap_alloc h l n:
+  heap_is_fresh h l →
+  (h_block (heap_alloc h l n) l.1) = zero_block l n.
+Proof.
+  intros Hfresh.
+  rewrite /h_block /heap_alloc /zero_block /=.
+  eapply map_leibniz, map_equiv_iff; intros i.
+  rewrite !lookup_total_gmap_curry.
+  assert (h_heap h !! (l.1, i) = None) as Hlook.
+  { rewrite /heap_is_fresh in Hfresh.
+    destruct lookup eqn: Hlook; last done.
+    destruct l; simpl in *.
+    exfalso. eapply Hfresh, (heap_wf _ (p, i)); eauto.
+  }
+  rewrite lookup_union; rewrite Hlook; clear Hlook.
+  destruct lookup; done.
+Qed.
+
+Lemma h_block_heap_update hs l v:
+  h_block (heap_update hs l v) l.1 = alter (λ _, v) l.2 (h_block hs l.1).
+Proof.
+  rewrite /h_block/=. apply map_eq => i.
+  rewrite !lookup_total_gmap_curry.
+  destruct (decide (i = l.2)); simplify_map_eq.
+  - rewrite lookup_total_gmap_curry -?surjective_pairing. by simplify_map_eq.
+  - rewrite !lookup_alter_ne ?lookup_total_gmap_curry //. destruct l. naive_solver.
 Qed.
 
 (** *** heap_preserved *)

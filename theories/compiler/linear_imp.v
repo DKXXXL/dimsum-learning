@@ -13,6 +13,28 @@ Definition var_val_to_expr (v : var_val) : expr :=
   | VVal v => Val (static_val_to_val v)
   end.
 
+Definition lookup_var_val (vs : gmap string val) (v : var_val) : option val :=
+  match v with
+  | VVal v => Some (static_val_to_val v)
+  | VVar v => vs !! v
+  end.
+
+Lemma lookup_var_val_to_expr vs v v' :
+  lookup_var_val vs v = Some v' →
+  subst_map vs (var_val_to_expr v) = Val v'.
+Proof. by destruct v => //= ?; simplify_option_eq. Qed.
+
+Lemma lookup_var_val_to_expr_fmap vs v v' :
+  Forall2 (λ v v', lookup_var_val vs v = Some v') v v' →
+  subst_map vs <$> (var_val_to_expr <$> v) = Val <$> v'.
+Proof. elim => //; csimpl => ???? /lookup_var_val_to_expr -> ? ->. done. Qed.
+
+Lemma lookup_var_val_mono vs vs' v v':
+  lookup_var_val vs v = Some v' →
+  vs ⊆ vs' →
+  lookup_var_val vs' v = Some v'.
+Proof. destruct v => //. simplify_eq/=. apply lookup_weaken. Qed.
+
 Inductive lexpr_op :=
 | LVarVal (v : var_val)
 | LBinOp (v1 : var_val) (o : binop) (v2 : var_val)

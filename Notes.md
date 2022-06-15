@@ -1,6 +1,34 @@
 # TODOs
 
-- [ ] prove vertical compositionality
+- [ ] green-threading example
+- [ ] new example from key idea section
+
+Optional:
+- [ ] Add ghost state for f2i and add values of f2i to initial ownership (one persistent map)
+- [ ] Add fnptrs to imp (should be easy when one has ghost state for f2i)
+- [ ] Make receiving calls for non-existent functions / instructions UB instead of NB
+  - Turn UbE into AssertE (P : bool) (e : expr)
+- [ ] Add global variables
+- [ ] Additional optimizations
+- [ ] Remove the disjointness condition on asm and imp linking to the
+      condition that the instructions agree on overlapping
+      instructions and replace the choice of the side by an angelic
+      choice. This should work with the following changes:
+      - Allow asm modules to receive all jump events but raise UB if
+        there is no matching instructions.
+      - When fetching a new instruction, do an angelic choice whether
+        to emit an event or whether to fetch the next instruction.
+- [ ] example for mmap
+  - [ ] Add mmap and munmap syscalls to asm
+  - [ ] Give spec for mmap at the C-level
+  - [ ] Verify an example using it
+
+
+
+Done:
+- [X] clean up mem2reg and integrate it into the compiler
+- [X] make regs total by using !!! and get rid of pc in EJump
+- [X] prove vertical compositionality
   - Plan A: prove vertical compositionality directly on ownership based prepost
     - [ ] Add [∗ map] ps\mapsto pi \in hb_shared bij, shared ps pi to
           invariant of heap_bij. This ensures that all shared locations are shared persistently.
@@ -19,35 +47,12 @@
     - [ ] Define pure_i2a.imp_to_asm
     - [ ] Prove equivalence of pure_i2a.imp_to_asm and imp_to_asm
     - [ ] Prove equivalence of pure_bij.heap_bij and heap_bij
-- [ ] Verify optimization that turns local variables into let-bindings
-- [ ] Make accesses to unmapped memory emit events
-- [ ] Allow multiple stacks
-  - [ ] Allow i2a emit page faults for the stack page
-  - [ ] Adjust compiler to do probing (at the beginning before any
+- [X] Verify optimization that turns local variables into let-bindings
+- [X] Make accesses to unmapped memory emit events
+- [X] Allow multiple stacks
+  - [X] Allow i2a emit page faults for the stack page
+  - [X] Adjust compiler to do probing (at the beginning before any
         allocation by just overapproximating the stack size)
-- [ ] example for mmap
-  - [ ] Add mmap and munmap syscalls to asm
-  - [ ] Give spec for mmap at the C-level
-  - [ ] Verify an example using it
-- [ ] green-threading example
-
-Optional:
-- [ ] Add ghost state for f2i and add values of f2i to initial ownership
-- [ ] Add fnptrs to imp (should be easy when one has ghost state for f2i)
-- [ ] Add global variables
-- [ ] Additional optimizations
-- [ ] Remove the disjointness condition on asm and imp linking to the
-      condition that the instructions agree on overlapping
-      instructions and replace the choice of the side by an angelic
-      choice. This should work with the following changes:
-      - Allow asm modules to receive all jump events but raise UB if
-        there is no matching instructions.
-      - When fetching a new instruction, do an angelic choice whether
-        to emit an event or whether to fetch the next instruction.
-
-
-
-Done:
 - [X] Make allocation in Imp like RefinedC allocation
 - [X] Add system calls to asm
 - [X] Generalize imp_prepost for arbitrary imp_event modules on both sides (without prepost)

@@ -138,20 +138,19 @@ Proof.
   move => n i rs mem K f fn vs h cs pc ret gp rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
   unfold imp_add_prog in Hf. unfold asm_add in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
-  destruct vs as [|v1 [|v2 []]] => //=.
-  move: Hargs => -[??].
+  destruct vs as [|v1 [|v2 []]] => //=. unfold i2a_regs_call in *.
   iSatStart. iIntros!. rewrite i2a_args_cons ?i2a_args_cons; [|done..].
   iDestruct!. iSatStop.
-  tstep_i => ??. simplify_map_eq.
-  tstep_i. split; [simplify_map_eq'|].
-  tstep_i; simplify_map_eq'. split; [done|].
   tstep_i => ??. simplify_map_eq'.
-  tstep_i; simplify_map_eq'. split!.
+  tstep_i.
+  tstep_i; simplify_map_eq'.
+  tstep_i => ??. simplify_map_eq'.
+  tstep_i; simplify_map_eq'.
   go_s. split! => ?.
   go_s => n1 n2 ??; subst.
   go_s => ??; subst.
   iSatStart. simpl. iDestruct!. iSatStop.
-  apply: Hret. 1: by simplify_map_eq.
+  apply: Hret. 1: by simplify_map_eq'.
   1: { simplify_map_eq'. iSatMono. iFrame. done. }
   1: { unfold i2a_regs_ret; split!; simplify_map_eq' => //. }
   1: by simplify_map_eq'.
@@ -167,25 +166,24 @@ Proof.
   move => n i rs mem K f fn vs h cs pc ret gp rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
   unfold imp_add_client_prog in Hf. unfold asm_add_client in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
-  destruct vs as [|] => //=.
-  move: Hargs => -[??].
+  destruct vs as [|] => //=. unfold i2a_regs_call in *.
   iSatStart. iIntros!. iSatStop.
-  tstep_i => ??. simplify_map_eq.
-  tstep_i. split; [simplify_map_eq'|].
-  tstep_i; simplify_map_eq'. split; [done|].
   tstep_i => ??. simplify_map_eq'.
-  tstep_i; simplify_map_eq'. split; [simplify_map_eq'|].
-  tstep_i; simplify_map_eq'. split; [done|].
+  tstep_i.
+  tstep_i; simplify_map_eq'.
   tstep_i => ??. simplify_map_eq'.
-  tstep_i; simplify_map_eq'. split; [simplify_map_eq'|].
+  tstep_i; simplify_map_eq'.
+  tstep_i; simplify_map_eq'.
+  tstep_i => ??. simplify_map_eq'.
+  tstep_i; simplify_map_eq'.
   iSatStart.
   iDestruct (i2a_mem_exists 1 with "[$]") as %[??]; [done|].
   iSatStop.
   tstep_i; simplify_map_eq'. split!. case_match; [|by tstep_i].
-  tstep_i; simplify_map_eq'. split!; [done..|].
+  tstep_i; simplify_map_eq'.
   tstep_i => ??. simplify_map_eq'.
-  tstep_i; simplify_map_eq'. split; [done|].
-  tstep_i; simplify_map_eq'. split; [done|].
+  tstep_i; simplify_map_eq'.
+  tstep_i; simplify_map_eq'.
   sort_map_insert. simplify_map_eq'.
   tstep_s. split!; [apply (heap_fresh_is_fresh ∅)|]. move => *; simplify_eq.
   tstep_s => *; simplify_eq.
@@ -193,7 +191,7 @@ Proof.
   tstep_s => *; simplify_map_eq.
   tstep_s.
   change (FreeA [(heap_fresh ∅ h, 1)] (imp.Call "add" [Val 1; Val 1])) with (expr_fill [FreeACtx [(heap_fresh ∅ h, 1)]] (imp.Call "add" [Val 1; Val 1])).
-  apply: Hcall. { repeat econs. } { by simplify_map_eq. } { set_solver. } { by simplify_map_eq. }
+  apply: Hcall. { repeat econs. } { by simplify_map_eq. } { simplify_map_eq'. set_solver. } { by simplify_map_eq'. }
   { iSatMonoBupd.
     iMod (i2a_mem_alloc with "[$]") as (?) "[? Hp]"; [done|done|].
     iDestruct "Hp" as "[[% ?] _]" => /=. rewrite Z.add_0_l.
@@ -202,25 +200,25 @@ Proof.
     iMod (i2a_heap_update with "[$] [$]") as "[? ?]".
     iModIntro. iFrame. iSplit; [|iAccu].
     rewrite !i2a_args_cons ?i2a_args_nil; [|done..].
-    iSplit!; by simplify_map_eq.
+    iSplit!; by simplify_map_eq'.
   }
   { unfold i2a_regs_call. split!; by simplify_map_eq'. }
-  { by simplify_map_eq. } { by simplify_map_eq'. }
+  { by simplify_map_eq'. } { by simplify_map_eq'. }
   iSatClear.
   move => rs'' mem'' av v h'' rf'' lr'' Hpc'' Hsat'' Hr ?.
-  move: Hr => [?[? Hm]]; simplify_map_eq'.
-  tstep_i => ??. simplify_map_eq.
+  move: Hr => [? Hm]; simplify_map_eq'.
+  tstep_i => ??. simplify_map_eq'.
   iSatStart. iIntros!.
   iDestruct select (i2a_mem_constant _ _) as "Hret".
   iDestruct (i2a_mem_lookup with "[$] [$]") as %?.
   iSatStop.
-  tstep_i; simplify_map_eq'. split!; [by simplify_map_eq'..|].
-  tstep_i; simplify_map_eq'. split!; [done..|].
-  tstep_i; simplify_map_eq'. split!; [done..|].
+  tstep_i; simplify_map_eq'. split!.
+  tstep_i; simplify_map_eq'.
+  tstep_i; simplify_map_eq'.
   tstep_i => ??. simplify_map_eq'.
   tstep_s => [?[??]]. simplify_eq.
   have ->: rs !!! "SP" - 1 + 1 = rs !!! "SP" by lia.
-  tstep_i; simplify_map_eq'. split; [done|].
+  tstep_i; simplify_map_eq'.
   apply: Hret.
   1: { by simplify_map_eq'. }
   1: { iSatMonoBupd.
@@ -230,7 +228,7 @@ Proof.
        iModIntro. iFrame. simplify_map_eq'.
        by rewrite Z.sub_add.
   }
-  1: { unfold i2a_regs_ret; split!; simplify_map_eq'; split!. apply lookup_lookup_total; simplify_map_eq'. }
+  1: { unfold i2a_regs_ret; split!; simplify_map_eq'; split!. }
   1: { by simplify_map_eq'. }
 Qed.
 
