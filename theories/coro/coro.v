@@ -11,6 +11,7 @@ Require Import refframe.asm.
 Require Import refframe.itree.
 Require Import refframe.imp_to_asm.
 Require Import refframe.compiler.compiler.
+Require Import refframe.coro.sflib.
 
 Local Open Scope Z_scope.
 
@@ -61,7 +62,9 @@ Coercion RegisterOp: string >-> asm_operand.
 (* tmp_registers = ... + ["R9"; "R10"; "R11"; "R12"; "R13"; "R14"; "R15"; "R16"; "R17"; "R30"; "PC"] *)
 (* saved_registers = ["R19"; "R20"; "R21"; "R22"; "R23"; "R24"; "R25"; "R26"; "R27"; "R28"; "R29"; "SP"] *)
 
-Definition gtyield_deep: list deep_asm_instr :=
+Definition gtyield_addr: Z := 100.
+
+Definition gtyield_asm: gmap Z asm_instr := deep_to_asm_instrs gtyield_addr
   [Amov "R9" 0;
    (*** basic setup ***)
    (* R17 := gtcur *)
@@ -135,7 +138,9 @@ gtgo(void *f)
 
 (*** simply set p->rsp to be stack, p->pc to be the function ***)
 
-Definition gtgo_deep: list deep_asm_instr :=
+Definition gtgo_addr: Z := 200.
+
+Definition gtgo_asm: gmap Z asm_instr := deep_to_asm_instrs gtgo_addr
   [
     Amov "R9" 0;
     (*** rsp ***)
@@ -148,12 +153,123 @@ Definition gtgo_deep: list deep_asm_instr :=
   ]
 .
 
-(* compile *)
-(* compile_correct *)
-Print Instances Empty.
-Goal forall tmp, ((asm_regs (initial_asm_state tmp)) !! "SP") = None.
-  intros. cbn. reflexivity.
+
+
+(***
+void stream_inner(int n) {
+  gtyield_with_val(n);
+  stream_inner(n+1);
+}
+
+void stream()
+{
+  stream_inner(0);
+}
+
+int main(void)
+{
+  gtgo(stream);
+  for(int i=0; i<5; i++) {
+    int v = gtyield_with_val(-1);
+    printf("v is : %d\n", v);
+  }
+}
+***)
+
+Definition stream_inner_addr: Z := 300.
+Definition stream_addr: Z := 400.
+Definition main_addr: Z := 500.
+Definition print_addr: Z := 600.
+
+Definition stream_inner_imp: fndef := {|
+  fd_args := [("n")];
+  fd_vars := [];
+  fd_body := LetE "_" (imp.Call "gtyield" [Var "n"]) $
+             LetE "_" (imp.Call "stream_inner" [(BinOp (Var "n") AddOp (Val $ ValNum 1))]) $
+             (Val $ ValNum (-1));
+  fd_static := I
+|}.
+
+Definition stream_imp: fndef := {|
+  fd_args := [];
+  fd_vars := [];
+  fd_body := LetE "_" (imp.Call "stream_inner" [(Val $ ValNum 0)]) $
+             (Val $ ValNum (-1));
+  fd_static := I
+|}.
+
+Definition main_imp: fndef := {|
+  fd_args := [];
+  fd_vars := [("x", -1); ("y", -1)];
+  fd_body := LetE "_" (imp.Call "gtgo" [(Val $ ValNum stream_addr)]) $
+             LetE "x" (imp.Call "gtyield" [Val $ ValNum (-1)]) $
+             LetE "_" (imp.Call "print" [(Var "x")]) $
+             LetE "y" (imp.Call "gtyield" [Val $ ValNum (-1)]) $
+             LetE "_" (imp.Call "print" [(Var "y")]) $
+             (Val $ ValNum (-1));
+  fd_static := I
+|}.
+
+Definition all_f2i : gmap string Z :=
+  <["gtyield"      := gtyield_addr]> $
+  <["gtgo"         := gtgo_addr]> $
+  <["stream_inner" := stream_inner_addr]> $
+  <["stream"       := stream_addr]> $
+  <["main"         := main_addr]> $
+  <["print"        := print_addr]> $
+  ∅.
+
+Definition stream_inner_asm : gmap Z asm_instr :=
+  deep_to_asm_instrs stream_inner_addr ltac:(i2a_compile all_f2i stream_inner_imp).
+
+Definition stream_asm : gmap Z asm_instr :=
+  deep_to_asm_instrs stream_addr ltac:(i2a_compile all_f2i stream_imp).
+
+Definition main_asm : gmap Z asm_instr :=
+  deep_to_asm_instrs main_addr ltac:(i2a_compile all_f2i main_imp).
+
+Lemma stream_inner_asm_refines_imp :
+  trefines (MS asm_module (initial_asm_state stream_inner_asm))
+           (MS (imp_to_asm (dom _ stream_inner_asm) {["stream_inner"]} all_f2i imp_module)
+               (initial_imp_to_asm_state ∅ imp_module (initial_imp_state (<["stream_inner" := stream_inner_imp]> ∅)))).
+Proof.
+  apply: compile_correct; [|done|..].
+  - by vm_compute.
+  - by vm_compute.
+  - move => ??. rewrite /all_f2i !lookup_insert_Some !lookup_empty.
+    move => ?. destruct_all?; simplify_eq; compute_done.
 Qed.
+
+Lemma stream_asm_refines_imp :
+  trefines (MS asm_module (initial_asm_state stream_asm))
+           (MS (imp_to_asm (dom _ stream_asm) {["stream"]} all_f2i imp_module)
+               (initial_imp_to_asm_state ∅ imp_module (initial_imp_state (<["stream" := stream_imp]> ∅)))).
+Proof.
+  apply: compile_correct; [|done|..].
+  - by vm_compute.
+  - by vm_compute.
+  - move => ??. rewrite /all_f2i !lookup_insert_Some !lookup_empty.
+    move => ?. destruct_all?; simplify_eq; compute_done.
+Qed.
+
+Lemma main_asm_refines_imp :
+  trefines (MS asm_module (initial_asm_state main_asm))
+           (MS (imp_to_asm (dom _ main_asm) {["main"]} all_f2i imp_module)
+               (initial_imp_to_asm_state ∅ imp_module (initial_imp_state (<["main" := main_imp]> ∅)))).
+Proof.
+  apply: compile_correct; [|done|..].
+  - by vm_compute.
+  - by vm_compute.
+  - move => ??. rewrite /all_f2i !lookup_insert_Some !lookup_empty.
+    move => ?. destruct_all?; simplify_eq; compute_done.
+Qed.
+
+
+
+
+
+
+
 (***
 One possible way to give spec to the coroutine library would be by defining an event and its semantic linking. That is, we may able to say sth like:
 `coro.asm +asm (imp_to_asm client.imp) <= imp_to_asm (link_yield_event (yield_call_to_yield_event (client.imp)))`
@@ -161,18 +277,89 @@ where `yield_call_to_yield_event: module imp_event -> module (imp_event + yield_
 `link_yield_event: module (A + yield_event) -> module A`. Does this make sense to you?
 ***)
 
-
 Section coro.
   Inductive coro_event: Type :=
-  | ECYield (v: val)
-  | ECSpawn (f: string)
+  | ECYield (v: val) (h: heap_state)
+  | ECSpawn (fptr: Z)
   .
 
-  Definition hijack_coro_event (md: module imp_event): module (coro_event + imp_event).
-    admit.
-  Admitted.
+  Definition coro_hijack (md: module imp_event): module (coro_event + imp_event) :=
+    mod_filter md (fun e e' =>
+                     match e with
+                     | (Outgoing, EICall "gtyield" vs h) =>
+                         exists v, vs = [v] /\ e' = Some (inl (ECYield v h))
+                     | (Outgoing, EICall "gtgo" vs _) =>
+                         exists fptr, vs = [ValNum fptr] /\ e' = Some (inl (ECSpawn fptr))
+                     | _ => e' = Some (inr e)
+                     end
+                  ).
 
-  Definition interp_coro_event {E} (md: module (coro_event + E)): module E.
+  (** we anyway cannot use the mod_link combinator here **)
+  Fail Program Definition coro_prod {E} (md0 md1: module (coro_event + E)): module E :=
+    mod_link _ md0 md1.
+  Program Definition coro_prod {E} (md0 md1: module (coro_event + E)): module E. admit "". Defined.
+
+  (* Program Definition coro_interp {E} (md: module (coro_event + E)): module E := *)
+  (*   mod_link _ md0 md1. *)
+  (* state_transform.mod_state_transform (mod_map (mod_seq_product m1 m2) (mod_link_filter R)) *)
+
+  (* Context `{E: Type}. *)
+  (* Variable md: module (coro_event + E). *)
+  (* Record interp_coro_state := Coro { *)
+  (*   cst_expr: list expr; *)
+  (*   cst_heap: heap_state; *)
+  (*   cst_fns: gmap string fndef; *)
+  (* }. *)
+
+  (* Definition interp_coro_step: (interp_coro_state → option E → (interp_coro_state → Prop) → Prop). *)
+  (*   intros. *)
+  (*   set (x:=md.(m_step)). *)
+  (* Admitted. *)
+
+  (* Program Definition interp_coro: module E := *)
+  (*   Mod interp_coro_step. *)
+
 
 End coro.
+
+Definition gtyield_asm_dom : gset Z := locked (dom _) gtyield_asm.
+Definition gtgo_asm_dom : gset Z := locked (dom _) gtgo_asm.
+
+
+Theorem coro_spec
+        (md0 md1: module imp_event)
+        (** clean it later **)
+        ins fns1 fns2
+        f2i init init2
+  :
+  let fns := fns1 ∪ fns2 in
+  trefines
+    (MS (asm_prod
+           (gtyield_asm_dom ∪ gtgo_asm_dom) ins
+           (asm_module)
+           (imp_to_asm ins fns f2i (imp_prod fns1 fns2 md0 md1))
+        )
+        init)
+    (MS (imp_to_asm ins fns f2i (coro_prod (coro_hijack md0) (coro_hijack md1))) init2)
+.
+Proof.
+  ss.
+Qed.
+
+
+
+
+
+
+
+
+
+
 i2a_mem_constant is pointsto
+
+(* compile *)
+(* compile_correct *)
+Print Instances Empty.
+Goal forall tmp, ((asm_regs (initial_asm_state tmp)) !! "SP") = None.
+  intros. cbn. reflexivity.
+Qed.
