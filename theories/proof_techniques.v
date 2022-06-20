@@ -368,6 +368,11 @@ Lemma tsim_mono_to_true {EV} {mi ms : module EV} σi σs n n' κs b:
   σi ⪯{mi, ms, n, b, κs} σs.
 Proof. move => Hsim Hn ???. apply: Hsim. etrans; [|done]. econs. etrans; [|done]. apply ti_le_S_maybe. Qed.
 
+Lemma tsim_mono_to_tiS {EV} {mi ms : module EV} σi σs n κs:
+  (∀ n', tiS n' ⊆ n → σi ⪯{mi, ms, n', false, κs} σs) →
+  σi ⪯{mi, ms, n, true, κs} σs.
+Proof. move => Hsim ??/=?. by apply: Hsim. Qed.
+
 Lemma tsim_mono {EV} {mi ms : module EV} σi σs b n n' κs:
   σi ⪯{mi, ms, n', b, κs} σs →
   n ⊆ n' →

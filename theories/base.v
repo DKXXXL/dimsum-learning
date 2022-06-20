@@ -793,6 +793,15 @@ Section map_seqZ.
     split => Hi; [|lia].
     have ?:= (Hi (start1)%Z). have ?:= (Hi (start2)%Z). lia.
   Qed.
+
+  Lemma map_seqZ_app start xs1 xs2 :
+    map_seqZ start (xs1 ++ xs2)
+    =@{M A} map_seqZ start xs1 ∪ map_seqZ (start + length xs1) xs2.
+  Proof.
+    revert start. induction xs1 as [|x1 xs1 IH]; intros start; simpl.
+    - by rewrite ->(left_id_L _ _), Z.add_0_r.
+    - by rewrite IH /= Nat2Z.inj_succ Z.add_succ_r Z.add_succ_l !insert_union_singleton_l (assoc_L _).
+  Qed.
 End map_seqZ.
 
 Definition map_Exists `{Lookup K A M} (P : K → A → Prop) : M → Prop :=

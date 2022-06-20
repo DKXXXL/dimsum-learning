@@ -73,6 +73,21 @@ Lemma shift_loc_0 l :
   l +ₗ 0 = l.
 Proof. rewrite /shift_loc. destruct l => /=. f_equal. lia. Qed.
 
+Global Instance shift_loc_inj_r l : Inj eq eq (λ i, l +ₗ i).
+Proof. move => ??. rewrite /shift_loc /= => ?. simplify_eq. lia. Qed.
+
+Global Instance shift_loc_inj_r2 l i : Inj eq eq (λ j, l +ₗ i +ₗ j).
+Proof. move => ??. rewrite /shift_loc /= => ?. simplify_eq. lia. Qed.
+
+Lemma shift_loc_S l i :
+  l +ₗ S i = l +ₗ 1 +ₗ i.
+Proof. rewrite /shift_loc /=. f_equal. lia. Qed.
+
+Lemma shift_loc_add_sub l i j:
+  i = - j →
+  l +ₗ i +ₗ j = l.
+Proof. destruct l. rewrite /shift_loc /= => ?. f_equal. lia. Qed.
+
 Inductive binop : Set :=
 | AddOp | ShiftOp | EqOp | LeOp | LtOp.
 
@@ -503,6 +518,38 @@ Qed.
 Lemma heap_update_provs h l v :
   h_provs (heap_update h l v) = h_provs h.
 Proof. done. Qed.
+
+Program Definition heap_update_big (h : heap_state) (m : gmap loc val) : heap_state :=
+  Heap (map_imap (λ l v, Some (default v (m !! l))) h.(h_heap)) (h.(h_provs')) _.
+Next Obligation.
+  move => ??. apply bool_decide_spec. move => ? /elem_of_map[l[?/elem_of_dom]]. subst => /=.
+  rewrite map_lookup_imap. move => [? /bind_Some[?[??]]].
+  by apply heap_wf.
+Qed.
+
+Lemma heap_update_big_empty h :
+  heap_update_big h ∅ = h.
+Proof.
+  apply heap_state_eq => /=. split!. etrans; [|apply map_imap_Some].
+  apply map_imap_ext => ? /=. by rewrite lookup_empty.
+Qed.
+
+Lemma heap_update_big_update h l v m:
+  heap_update_big (heap_update h l v) m = heap_update_big h (m ∪ (<[l := v]> $ ∅)).
+Proof.
+  apply heap_state_eq => /=. split!. apply map_eq => i. apply option_eq => v'. rewrite !map_lookup_imap.
+  rewrite !bind_Some. setoid_rewrite lookup_alter_Some.
+  split => ?; destruct_all?; simplify_eq.
+  - split!. destruct (m !! i) eqn:?.
+    + by erewrite lookup_union_Some_l.
+    + rewrite lookup_union_r //=. by simplify_map_eq.
+  - split!. rewrite lookup_union_l' //. by simplify_map_eq.
+  - destruct (decide (l = i)); subst; split!.
+    + destruct (m !! i) eqn:?.
+      * by erewrite lookup_union_Some_l.
+      * rewrite lookup_union_r //=. by simplify_map_eq.
+    + rewrite lookup_union_l' //. by simplify_map_eq.
+Qed.
 
 Program Definition heap_alloc (h : heap_state) (l : loc) (n : Z) : heap_state :=
   Heap (list_to_map ((λ z, (l +ₗ z, ValNum 0)) <$> seqZ 0 n) ∪ h.(h_heap)) (gset_to_gmap tt ({[l.1]} ∪ h_provs h)) _.
@@ -1066,6 +1113,27 @@ Lemma static_fndef_to_fndef_to_static_fndef fn :
 Proof. apply fndef_eq. split_and!; [done..|] => /=. apply static_expr_to_expr_to_static_expr. apply fd_static. Qed.
 
 (** * tstep *)
+Class AsVals (es : list expr) (vs : list val) := {
+  as_vals : es = Val <$> vs
+}.
+Global Hint Mode AsVals ! - : tstep.
+
+Lemma as_vals_nil :
+  AsVals [] [].
+Proof. done. Qed.
+Global Hint Resolve as_vals_nil : tstep.
+
+Lemma as_vals_cons v es vs :
+  AsVals es vs → AsVals (Val v :: es) (v :: vs).
+Proof. move => [->]. done. Qed.
+Global Hint Resolve as_vals_cons : tstep.
+
+Lemma as_vals_fmap vs :
+  AsVals (Val <$> vs) vs.
+Proof. done. Qed.
+Global Hint Resolve as_vals_fmap : tstep.
+
+
 (** ** ImpExprFill *)
 Class ImpExprFill (e : expr) (K : list expr_ectx) (e' : expr) := {
     imp_expr_fill_proof : e = expr_fill K e'
@@ -1202,14 +1270,14 @@ Proof.
 Qed.
 Global Hint Resolve imp_step_ReturnExt_s : tstep.
 
-Lemma imp_step_Call_i fns h e K f vs `{!ImpExprFill e K (imp.Call f (Val <$> vs))}:
+Lemma imp_step_Call_i fns h e K f vs es `{!ImpExprFill e K (imp.Call f es)} `{!AsVals es vs}:
   TStepI imp_module (Imp e h fns) (λ G,
     (∀ fn, fns !! f = Some fn → G true None (λ G', length vs = length fn.(fd_args) ∧
          G' (Imp (expr_fill K (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))) h fns))) ∧
     (fns !! f = None → G true (Some (Outgoing, EICall f vs h)) (λ G',
            G' (Imp (expr_fill K (Waiting true)) h fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct AsVals0, ImpExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]]. {
     apply sub_redexes_are_values_item; case; try naive_solver.
     move => /= ??? e' [_ Heq]. by apply: list_expr_val_inv.
@@ -1220,14 +1288,14 @@ Proof.
 Qed.
 Global Hint Resolve imp_step_Call_i : tstep.
 
-Lemma imp_step_Call_s fns h e K f vs `{!ImpExprFill e K (imp.Call f (Val <$> vs))}:
+Lemma imp_step_Call_s fns h e K f vs `{!ImpExprFill e K (imp.Call f es)} `{!AsVals es vs}:
   TStepS imp_module (Imp e h fns) (λ G,
     (∃ fn, fns !! f = Some fn ∧ G None (λ G', length vs = length fn.(fd_args) → G'
              (Imp (expr_fill K (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))) h fns))) ∨
     (fns !! f = None ∧ G (Some (Outgoing, EICall f vs h)) (λ G',
            G' (Imp (expr_fill K (Waiting true)) h fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct AsVals0, ImpExprFill0; subst.
   constructor => ? HG. destruct_all?; (split!; [done|]); move => /= ??.
   all: apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   all: destruct_all?; simplify_eq; naive_solver.
@@ -1748,6 +1816,10 @@ Arguments imp_prod_filter _ _ _ _ _ _ _ _ /.
 Definition imp_prod (fns1 fns2 : gset string) (m1 m2 : module imp_event) : module imp_event :=
   mod_link (imp_prod_filter fns1 fns2) m1 m2.
 
+(* TODO: use this more *)
+Definition initial_imp_prod_state (m1 m2 : module imp_event) (σ1 : m1.(m_state)) (σ2 : m2.(m_state)) :=
+  (@MLFNone imp_ev, @nil seq_product_state, σ1, σ2).
+
 Lemma imp_prod_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
   trefines (MS m1 σ1) (MS m1' σ1') →
   trefines (MS m2 σ2) (MS m2' σ2') →
@@ -1814,7 +1886,7 @@ Lemma imp_link_refines_prod fns1 fns2:
   fns1 ##ₘ fns2 →
   trefines (MS imp_module (initial_imp_state (imp_link fns1 fns2)))
            (MS (imp_prod (dom _ fns1) (dom _ fns2) imp_module imp_module)
-               (MLFNone, [], initial_imp_state fns1, initial_imp_state fns2)).
+               (initial_imp_prod_state imp_module imp_module (initial_imp_state fns1) (initial_imp_state fns2))).
 Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
@@ -1941,7 +2013,7 @@ Qed.
 Lemma imp_prod_refines_link fns1 fns2:
   fns1 ##ₘ fns2 →
   trefines (MS (imp_prod (dom _ fns1) (dom _ fns2) imp_module imp_module)
-               (MLFNone, [], initial_imp_state fns1, initial_imp_state fns2))
+               (initial_imp_prod_state imp_module imp_module (initial_imp_state fns1) (initial_imp_state fns2)))
            (MS imp_module (initial_imp_state (imp_link fns1 fns2))).
 Proof.
   move => Hdisj.
