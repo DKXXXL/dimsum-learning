@@ -471,8 +471,8 @@ Definition memmove_itree : itree (moduleE imp_event unit) unit :=
 
 Lemma memmove_refines_itree :
   trefines (MS (imp_prod {["memmove"; "memcpy"]} {["locle"]} imp_module (mod_itree _ _))
-              initial_imp_prod_state imp_module (mod_itree _ _)
-              (initial_imp_state (memmove_prog ∪ memcpy_prog)) (locle_itree, tt))
+              (initial_imp_prod_state imp_module (mod_itree _ _)
+              (initial_imp_state (memmove_prog ∪ memcpy_prog)) (locle_itree, tt)))
            (MS (mod_itree _ _) (memmove_itree, tt)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
