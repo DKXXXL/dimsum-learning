@@ -320,8 +320,8 @@ Section coro.
 
 End coro.
 
-Definition coro_prod_filter (fns1 fns2 : gset string) : seq_product_state → list seq_product_state → imp_ev → seq_product_state → list seq_product_state → imp_ev → Prop :=
-  λ p cs e p' cs' e',
+Definition coro_prod_filter (fns1 fns2 : gset string) : seq_product_state → list seq_product_state → imp_ev → seq_product_state → list seq_product_state → imp_ev → bool → Prop :=
+  λ p cs e p' cs' e' ok,
     match e with
     | EICall f vs h =>
         (* TODO: Some things here should probably be UB, e.g. if the

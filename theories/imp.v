@@ -1799,9 +1799,10 @@ Definition imp_ctx_refines (fnsi fnss : gmap string fndef) :=
                 (MS (imp_closed imp_module) (SMFilter, initial_imp_state (imp_link fnss C), ICStart)).
 
 (** * semantic linking *)
-Definition imp_prod_filter (fns1 fns2 : gset string) : seq_product_state → list seq_product_state → imp_ev → seq_product_state → list seq_product_state → imp_ev → Prop :=
-  λ p cs e p' cs' e',
+Definition imp_prod_filter (fns1 fns2 : gset string) : seq_product_state → list seq_product_state → imp_ev → seq_product_state → list seq_product_state → imp_ev → bool → Prop :=
+  λ p cs e p' cs' e' ok,
     e' = e ∧
+    ok = true ∧
     match e with
     | EICall f vs h =>
         p' = (if bool_decide (f ∈ fns1) then SPLeft else if bool_decide (f ∈ fns2) then SPRight else SPNone) ∧

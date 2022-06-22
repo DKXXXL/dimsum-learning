@@ -398,7 +398,7 @@ Lemma top_level_refines_itree :
            (MS (mod_itree _ _) (top_level_itree, tt)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
-  go_i => ?????. case_match; destruct_all?; simplify_eq.
+  go_i => ??????. case_match; destruct_all?; simplify_eq.
   go_s. eexists (_, _). go.
   go_s. split!. go.
   go_s => ?. go.

@@ -370,9 +370,10 @@ Definition asm_ctx_refines (instrsi instrss : gmap Z asm_instr) :=
 (* State s says whether we are currently in the environment and
 expecting a syscall return. Some SPNone means that the program
 executed a page fault and is not waiting for any return. *)
-Definition asm_prod_filter (ins1 ins2 : gset Z) : seq_product_state → option seq_product_state → asm_ev → seq_product_state → option seq_product_state → asm_ev → Prop :=
-  λ p s e p' s' e',
+Definition asm_prod_filter (ins1 ins2 : gset Z) : seq_product_state → option seq_product_state → asm_ev → seq_product_state → option seq_product_state → asm_ev → bool → Prop :=
+  λ p s e p' s' e' ok,
     e' = e ∧
+    ok = true ∧
     match e with
     | EAJump rs mem =>
         s = None ∧
@@ -400,6 +401,10 @@ Arguments asm_prod_filter _ _ _ _ _ _ _ _ /.
 Definition asm_prod (ins1 ins2 : gset Z) (m1 m2 : module asm_event) : module asm_event :=
   mod_link (asm_prod_filter ins1 ins2) m1 m2.
 
+(* TODO: use this more *)
+Definition initial_asm_prod_state (m1 m2 : module asm_event) (σ1 : m1.(m_state)) (σ2 : m2.(m_state)) :=
+  (@MLFNone asm_ev, @None seq_product_state, σ1, σ2).
+
 Lemma asm_prod_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
   trefines (MS m1 σ1) (MS m1' σ1') →
   trefines (MS m2 σ2) (MS m2' σ2') →
@@ -424,7 +429,8 @@ Definition asm_link_prod_inv (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_module.(m
 Lemma asm_link_refines_prod ins1 ins2:
   ins1 ##ₘ ins2 →
   trefines (MS asm_module (initial_asm_state (asm_link ins1 ins2)))
-           (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) (MLFNone, None, initial_asm_state ins1, initial_asm_state ins2)).
+           (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module)
+               (initial_asm_prod_state asm_module asm_module (initial_asm_state ins1) (initial_asm_state ins2))).
 Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
@@ -478,7 +484,8 @@ Qed.
 
 Lemma asm_prod_refines_link ins1 ins2:
   ins1 ##ₘ ins2 →
-  trefines (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module) (MLFNone, None, initial_asm_state ins1, initial_asm_state ins2))
+  trefines (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module)
+               (initial_asm_prod_state asm_module asm_module (initial_asm_state ins1) (initial_asm_state ins2)))
            (MS asm_module (initial_asm_state (asm_link ins1 ins2))).
 Proof.
   move => Hdisj.
@@ -923,7 +930,7 @@ Module asm_examples.
     tstep_i; simplify_map_eq'.
     tstep_i; simplify_map_eq'.
     tstep_i => ??; simplify_map_eq'.
-    tstep_i; simplify_map_eq'. 
+    tstep_i; simplify_map_eq'.
     tstep_i; simplify_map_eq'.
     sort_map_insert; simplify_map_eq'.
     go_s. eexists (rs !!! "R30"); go.

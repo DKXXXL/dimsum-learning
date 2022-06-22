@@ -1350,10 +1350,10 @@ Proof.
   { move => ?? [] /=*; naive_solver. }
   { split!. econs. by rewrite /i2a_mem_map big_sepM_union. }
   all: move => [cs1 lr1] [cs2 lr2] [cs lr] x1 x2 x ? ics.
-  - move => e ? e' /= ? ?.
+  - move => e ? e' /= ? ??.
     destruct_all?; simplify_eq.
     destruct e as [rs mem| | |]; destruct_all?; simplify_eq/=.
-    move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b.
+    move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. split; [done|]. eexists b.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
     + move => ret f Hargs Hin Hf2i /not_elem_of_union[??] ? ??.
       repeat case_bool_decide => //.
@@ -1371,10 +1371,10 @@ Proof.
       inversion Hstack; simplify_eq/= => //. 2: { exfalso. set_solver. }
       split!.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
-  - move => e ? e' /= ? ?.
+  - move => e ? e' /= ? ??.
     destruct_all?; simplify_eq.
     destruct e as [rs mem| | |]; destruct_all?; simplify_eq/=.
-    move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. eexists b.
+    move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. split; [done|]. eexists b.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
     + move => ret f Hargs Hin Hf2i /not_elem_of_union[??] ???.
       repeat case_bool_decide => //.
@@ -1392,7 +1392,7 @@ Proof.
       split!.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
   - move => [? [f vs h|v h]] ? /= *.
-    all: destruct_all?; simplify_eq/=.
+    all: destruct_all?; simplify_eq/=; split; [done|].
     + repeat case_bool_decide => //. 2: { exfalso. set_solver. } eexists true => /=.
       split!.
       1: done.
@@ -1421,7 +1421,7 @@ Proof.
       split!.
       1: { iSatMono. iIntros!. iFrame. }
   - move => [? [f vs h|v h]] ? /= *.
-    all: destruct_all?; simplify_eq/=.
+    all: destruct_all?; simplify_eq/=; split; [done|].
     + repeat case_bool_decide => //. 2: { exfalso. set_solver. } eexists true.
       split!.
       1: done.

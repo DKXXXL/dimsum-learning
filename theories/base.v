@@ -100,6 +100,7 @@ Ltac split_step :=
   | |- ∃ x, _ => eexists _
   | |- _ ∧ _ => split
   | |- _ ∨ _ => simpl_or
+  | |- True → _ => intros _
   | |- ?e1 = ?e2 => is_evar e1; reflexivity
   | |- ?e1 = ?e2 => is_evar e2; reflexivity
   | |- ?G => assert_fails (has_evar G); done

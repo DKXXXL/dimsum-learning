@@ -628,12 +628,14 @@ Qed.
 
 (*** [mod_map] *)
 Definition mod_map_fn EV1 EV2 S :=
-  S → EV1 → option EV2 → S → Prop.
+  S → EV1 → option EV2 → S → bool → Prop.
 Inductive mod_map_mod_step {EV1 EV2 S} (f : mod_map_fn EV1 EV2 S) :
-  S → option (EV1 * option EV2) → (S → Prop) → Prop :=
-| MapS σ e1 e2 σ':
-  f σ e1 e2 σ' →
-  mod_map_mod_step f σ (Some (e1, e2)) (λ σ'', σ'' = σ').
+  (S * bool) → option (EV1 * option EV2) → ((S * bool) → Prop) → Prop :=
+| MapS σ e1 e2 σ' ok:
+  f σ e1 e2 σ' ok →
+  mod_map_mod_step f (σ, true) (Some (e1, e2)) (λ σ'', σ'' = (σ', ok))
+| MapUbS σ:
+  mod_map_mod_step f (σ, false) None (λ _, False).
 Definition mod_map_mod {EV1 EV2 S} (f : mod_map_fn EV1 EV2 S) : module (EV1 * option EV2) :=
   Mod (mod_map_mod_step f).
 
@@ -660,12 +662,12 @@ Proof.
 Qed.
 
 Lemma mod_map_step_i {EV1 EV2 S} m (f : mod_map_fn EV1 EV2 S) σ σf P `{!TStepI m σ P} :
-  TStepI (mod_map m f) (σ, σf) (λ G, P (λ b κ P',
-   ∀ κ' σf', (if κ is Some e then f σf e κ' σf' else κ' = None ∧ σf' = σf) →
-               G b κ' (λ G', P' (λ x, G' (x, σf'))))).
+  TStepI (mod_map m f) (σ, (σf, true)) (λ G, P (λ b κ P',
+   ∀ κ' σf' ok, (if κ is Some e then f σf e κ' σf' ok else κ' = None ∧ σf' = σf ∧ ok = true) →
+               G b κ' (λ G', P' (λ x, G' (x, (σf', ok)))))).
 Proof.
   constructor => G /tstepi_proof HP.
-  apply: (steps_impl_submodule _ (mod_map _ _) (λ x, (x, σf))); [done| |].
+  apply: (steps_impl_submodule _ (mod_map _ _) (λ x, (x, (σf, true)))); [done| |].
   - move => ?? /= [?[?[HG [? HG']]]]. eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
   - move => ????. invert_all' @m_step; simplify_eq/=; eexists _, _.
     all: split_and!; [done| |repeat case_match => //;naive_solver].
@@ -676,11 +678,11 @@ Qed.
 Global Hint Resolve mod_map_step_i : tstep.
 
 Lemma mod_map_step_s {EV1 EV2 S} m (f : mod_map_fn EV1 EV2 S) σ σf P `{!TStepS m σ P} :
-  TStepS (mod_map m f) (σ, σf) (λ G, P (λ κ P',
-   ∃ κ' σf', (if κ is Some e then f σf e κ' σf' else κ' = None ∧ σf' = σf) ∧
-               G κ' (λ G', P' (λ x, G' (x, σf'))))).
+  TStepS (mod_map m f) (σ, (σf, true)) (λ G, P (λ κ P',
+   ∃ κ' σf' ok, (if κ is Some e then f σf e κ' σf' ok else κ' = None ∧ σf' = σf ∧ ok = true) ∧
+               G κ' (λ G', P' (λ x, G' (x, (σf', ok)))))).
 Proof.
-  constructor => G /tsteps_proof [κ [? [[? [κ'[??]]] HG']]]. eexists _, _. split; [done|].
+  constructor => G /tsteps_proof [κ [? [[? [κ' [?[??]]]] HG']]]. eexists _, _. split; [done|].
   move => ? /HG'. move => /steps_spec_has_trace_1 Ht. apply steps_spec_has_trace_elim.
   apply: mod_map_nil; [done|] => ?/=?. tend. destruct κ; destruct_all?; simplify_eq/=.
   - apply: steps_spec_step_end. { econs. { apply: ProductStepBoth; [done|]. by econs. } done. }
@@ -688,3 +690,13 @@ Proof.
   - by apply steps_spec_end.
 Qed.
 Global Hint Resolve mod_map_step_s : tstep.
+
+Lemma mod_map_ub_s {EV1 EV2 S} m (f : mod_map_fn EV1 EV2 S) σ σf:
+  TStepS (mod_map m f) (σ, (σf, false)) (λ G, G None (λ G', True)).
+Proof.
+  constructor => G ?. split!; [done|].
+  move => *.
+  apply: steps_spec_step_end. { econs. { by apply: ProductStepR; econs. } done. }
+  move => [??]. naive_solver.
+Qed.
+Global Hint Resolve mod_map_ub_s : tstep.

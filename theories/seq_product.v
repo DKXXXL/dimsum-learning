@@ -365,25 +365,25 @@ Inductive sm_event {EV1 EV2 : Type} :=
 Arguments sm_event _ _ : clear implicits.
 
 Inductive mod_seq_map_filter {EV1 EV2} :
-  mod_seq_map_state EV1 → (seq_product_event EV1 (sm_event EV1 EV2)) → option EV2 → mod_seq_map_state EV1 → Prop :=
+  mod_seq_map_state EV1 → (seq_product_event EV1 (sm_event EV1 EV2)) → option EV2 → mod_seq_map_state EV1 → bool → Prop :=
 | SeqMapToFilter e:
-  mod_seq_map_filter SMProg (SPELeft e SPRight) None (SMFilterRecv e)
+  mod_seq_map_filter SMProg (SPELeft e SPRight) None (SMFilterRecv e) true
 | SeqMapFilterRecv e:
-  mod_seq_map_filter (SMFilterRecv e) (SPERight (SMERecv e) SPRight) None SMFilter
+  mod_seq_map_filter (SMFilterRecv e) (SPERight (SMERecv e) SPRight) None SMFilter true
 | SeqMapFilterOut e:
-  mod_seq_map_filter SMFilter (SPERight (SMEEmit e) SPRight) (Some e) SMFilter
+  mod_seq_map_filter SMFilter (SPERight (SMEEmit e) SPRight) (Some e) SMFilter true
 | SeqMapFilterToProg e:
   mod_seq_map_filter SMFilter (SPERight (SMEReturn e) SPLeft) None
-    (if e is Some e' then SMProgRecv e' else SMProg)
+    (if e is Some e' then SMProgRecv e' else SMProg) true
 | SeqMapProgRecv e:
-  mod_seq_map_filter (SMProgRecv e) (SPELeft e SPLeft) None SMProg
+  mod_seq_map_filter (SMProgRecv e) (SPELeft e SPLeft) None SMProg true
 .
 
 Definition mod_seq_map_trans {EV1 EV2} (m : module EV1) (f : module (sm_event EV1 EV2)) (σ : mod_seq_map_state EV1 * m.(m_state) * f.(m_state)) :=
   (match σ.1.1 with
         | SMProg | SMProgRecv _ => SPLeft
         | SMFilter | SMFilterRecv _ => SPRight
-        end, σ.1.2, σ.2, σ.1.1).
+        end, σ.1.2, σ.2, (σ.1.1, true)).
 Arguments mod_seq_map_trans _ _ _ /.
 Global Instance mod_seq_map_trans_inj {EV1 EV2} (m : module EV1) (f : module (sm_event EV1 EV2)) :
   Inj (=) (=) (mod_seq_map_trans m f).
@@ -397,7 +397,7 @@ Global Instance mod_seq_map_vis_no_all {EV1 EV2} (m : module EV1) (f : module (s
   VisNoAll (mod_seq_map m f).
 Proof.
   apply: mod_state_transform_vis_no_all.
-  move => ??? [[[sp σ1]σf]σ] ??. eexists (σ, σ1, σf) => -[[??]?].
+  move => ??? [[[sp σ1]σf][σ ?]] ??. eexists (σ, σ1, σf) => -[[??]?].
   invert_all @m_step; invert_all @mod_seq_map_filter; destruct_all?; simplify_eq.
   all: repeat case_match => //; simplify_eq/=.
   naive_solver.
@@ -528,11 +528,11 @@ Lemma mod_seq_map_step_filter_s {EV1 EV2} m (f : module (sm_event EV1 EV2)) σ �
 Proof.
   constructor => G /tsteps_proof [κ [? [? HG']]]. clear TStepS0.
   destruct κ as [[e|e|e]|]. 1: done. all: eexists _, _; split; [done|] => G' /= /HG'?; tstep_s.
-  - eexists (Some (SMEEmit e)), _. split; [done|]. eexists _, _ => /=. split_and!; [econs|done|].
+  - eexists (Some (SMEEmit e)), _. split; [done|]. eexists _,_, _ => /=. split_and!; [econs|done|].
     apply: steps_spec_mono; [done|] => /= ? ? [[[|||]]]/=; naive_solver.
-  - eexists (Some (SMEReturn e)), _. split; [done|]. eexists _, _ => /=. split_and!; [econs|done|].
+  - eexists (Some (SMEReturn e)), _. split; [done|]. eexists _,_, _ => /=. split_and!; [econs|done|].
     apply: steps_spec_mono; [done|] => /= ? ? [[[|||]]]/=; destruct e; naive_solver.
-  - eexists None, _. split; [done|]. eexists _, _ => /=. split_and!; [done..|].
+  - eexists None, _. split; [done|]. eexists _, _,_ => /=. split_and!; [done..|].
     apply: steps_spec_mono; [done|] => /= ? ? [[[|||]]]/=; naive_solver.
 Qed.
 Global Hint Resolve mod_seq_map_step_filter_s | 4 : tstep.
@@ -544,7 +544,7 @@ Lemma mod_seq_map_step_filter_recv_s {EV1 EV2} m (f : module (sm_event EV1 EV2))
 Proof.
   constructor => G /tsteps_proof [κ [? [? HG']]]. eexists _, _. split; [done|].
   move => ? /=?. clear TStepS0. tstep_s. eexists κ, _. split; [by case_match|].
-  case_match; destruct_all?; simplify_eq; eexists _, _ => /=.
+  case_match; destruct_all?; simplify_eq; eexists _, _, _ => /=.
   - split_and!; [econs|done|].
     apply: steps_spec_mono; [naive_solver|] => /= ? ? [[[|||]]]/=; naive_solver.
   - split_and!; [done..|].
@@ -559,7 +559,7 @@ Lemma mod_seq_map_step_prog_s {EV1 EV2} m (f : module (sm_event EV1 EV2)) σ σf
 Proof.
   constructor => G /tsteps_proof [κ [? [? HG']]]. eexists _, _. split; [done|].
   move => ? /=?. clear TStepS0. tstep_s.
-  eexists κ; case_match; eexists _; (split; [done|]); eexists _, _ => /=.
+  eexists κ; case_match; eexists _; (split; [done|]); eexists _, _, _ => /=.
   - split_and!; [econs|done|].
     apply: steps_spec_mono; [naive_solver|] => /= ? ? [[[|||]]]/=; naive_solver.
   - split_and!; [done..|].
@@ -574,7 +574,7 @@ Lemma mod_seq_map_step_prog_recv_s {EV1 EV2} m (f : module (sm_event EV1 EV2)) �
 Proof.
   constructor => G /tsteps_proof [κ [? [? HG']]]. eexists _, _. split; [done|].
   move => ? /=?. clear TStepS0. tstep_s. eexists κ, _. split; [by case_match|].
-  case_match; destruct_all?; simplify_eq; eexists _, _ => /=.
+  case_match; destruct_all?; simplify_eq; eexists _, _, _ => /=.
   - split_and!; [econs|done|].
     apply: steps_spec_mono; [naive_solver|] => /= ? ? [[[|||]]]/=; naive_solver.
   - split_and!; [done..|].
