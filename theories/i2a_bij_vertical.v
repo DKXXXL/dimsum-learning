@@ -793,7 +793,7 @@ Proof.
     rename select (heap_preserved (i2a_ih_constant iha) hprev) into Hpreva.
     rename select (heap_preserved (hb_priv_i bijb) hprev) into Hprevb.
     iSatStart HP'. iIntros!.
-    iDestruct select (i2a_mem_inv _ _ _) as (?) "(Hgp&Hsp&Hmauth)".
+    iDestruct select (i2a_mem_inv _ _ _) as "((%&Hgp&Hsp)&Hmauth)".
     iDestruct (i2a_mem_lookup_big' mo with "[$] [$]") as %?.
     iDestruct (i2a_mem_uninit_alt1 with "[$]") as (? Hvslen) "Hsp"; [lia|].
     iDestruct select (i2a_heap_inv _) as (ih ??) "[Hsh [Hhag Hh]]".
@@ -989,7 +989,7 @@ Proof.
     iSatStart HPa'. iIntros!.
     rewrite heap_of_event_event_set_vals_heap vals_of_event_event_set_vals_heap.
     2: { destruct e; simplify_eq/=; destruct_all?; simplify_eq/=; solve_length. }
-    iDestruct select (i2a_mem_inv _ _ _) as (?) "(Hgp&Hsp&Hmauth)".
+    iDestruct select (i2a_mem_inv _ _ _) as "((%&Hgp&Hsp)&Hmauth)".
     iDestruct (i2a_mem_lookup_big' moa with "[$] [$]") as %?.
     iDestruct (i2a_mem_uninit_alt1 with "[$]") as (? Hvslen) "Hsp"; [lia|].
     iDestruct select (i2a_heap_inv _) as (iha' ??) "[Hsh [Hhag Hh]]".

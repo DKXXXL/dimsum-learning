@@ -436,16 +436,6 @@ Definition initial_asm_prod_state (m1 m2 : module asm_event) (σ1 : m1.(m_state)
   (* | _ => False *)
   (* end. *)
 
-Lemma i2a_mem_lookup_big sp gp m mem :
-  i2a_mem_inv sp gp mem -∗
-  i2a_mem_map m -∗
-  ⌜m ⊆ mem⌝.
-Proof.
-  iDestruct 1 as (Hsp) "(?&?&Hauth)".
-  iIntros "Hconst".
-  by iDestruct (i2a_mem_lookup_big' with "Hauth Hconst") as %?.
-Qed.
-
 
 (* We cannot use this lemma with imp_to_asm_combine since yield is not
 part of fns but parts of ins, but maybe we don't care? *)
