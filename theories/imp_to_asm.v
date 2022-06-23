@@ -843,7 +843,7 @@ Qed.
 
 Lemma i2a_mem_delete_big adrs mem sp sp' gp:
   sp ≤ sp' →
-  Forall (λ a, gp ≤ a < sp') adrs →
+  Forall (λ a, sp ≤ a < sp') adrs →
   length adrs = Z.to_nat (sp' - sp) →
   i2a_mem_inv sp gp mem -∗
   ([∗ list] a∈adrs, ∃ v, i2a_mem_constant a (Some v)) ==∗
@@ -1188,7 +1188,6 @@ Qed.
 Record imp_to_asm_stack_item := I2AI {
   i2as_extern : bool;
   i2as_ret : Z;
-  i2as_gp : Z;
   i2as_regs : gmap string Z;
 }.
 Add Printing Constructor imp_to_asm_stack_item.
@@ -1228,7 +1227,7 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
       (* env proves that rs corresponds to vs and ret *)
       pp_prop (i2a_regs_call ret rs) $
       (* track the registers and return address (false means ret belongs to env) *)
-      pp_end ((i, EICall f vs h), I2A ((I2AI false ret gp rs)::s.(i2a_calls)) rs)
+      pp_end ((i, EICall f vs h), I2A ((I2AI false ret rs)::s.(i2a_calls)) rs)
     else
       (* env chooses return value *)
       pp_quant $ λ v,
@@ -1239,7 +1238,7 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
       (* env chooses rest of cs *)
       pp_quant $ λ cs',
       (* get registers from stack (true means pc belongs to the program) *)
-      pp_prop (s.(i2a_calls) = (I2AI true (rs !!! "PC") gp rsold)::cs') $
+      pp_prop (s.(i2a_calls) = (I2AI true (rs !!! "PC") rsold)::cs') $
       (* env proves that rs is updated correctly *)
       pp_prop (i2a_regs_ret rs rsold av) $
       pp_end ((i, EIReturn v h), I2A cs' rs)
@@ -1272,14 +1271,14 @@ Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string
       (* program proves it only touched a specific set of registers *)
       pp_prop (map_scramble touched_registers s.(i2a_last_regs) rs) $
       (* track the registers and return address (true means ret belongs to program) *)
-      pp_end ((Outgoing, EAJump rs mem), (I2A ((I2AI true ret gp rs)::s.(i2a_calls)) s.(i2a_last_regs)))
+      pp_end ((Outgoing, EAJump rs mem), (I2A ((I2AI true ret rs)::s.(i2a_calls)) s.(i2a_last_regs)))
   | (i, EIReturn v h) =>
       (* program chooses old registers *)
       pp_quant $ λ rsold,
       (* program chooses rest of cs *)
       pp_quant $ λ cs',
       (* get registers from stack (false means pc belongs to the env) *)
-      pp_prop (s.(i2a_calls) = (I2AI false (rs !!! "PC") gp rsold)::cs') $
+      pp_prop (s.(i2a_calls) = (I2AI false (rs !!! "PC") rsold)::cs') $
       (* prog proves that rs is updated correctly *)
       pp_prop (i2a_regs_ret rs rsold (avs !!! 0%nat)) $
       (* program proves it only touched a specific set of registers *)
@@ -1307,32 +1306,32 @@ Inductive imp_to_asm_combine_stacks (ins1 ins2 : gset Z) :
  Prop :=
 | IAC_nil :
   imp_to_asm_combine_stacks ins1 ins2 SPNone [] [] [] []
-| IAC_NoneLeft ret gp rs ics cs cs1 cs2:
+| IAC_NoneLeft ret rs ics cs cs1 cs2:
   ret ∉ ins1 →
   ret ∉ ins2 →
   imp_to_asm_combine_stacks ins1 ins2 SPNone ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 SPLeft (SPNone :: ics) ((I2AI false ret gp rs) :: cs) ((I2AI false ret gp rs) :: cs1) cs2
-| IAC_NoneRight ret rs gp ics cs cs1 cs2:
+  imp_to_asm_combine_stacks ins1 ins2 SPLeft (SPNone :: ics) ((I2AI false ret rs) :: cs) ((I2AI false ret rs) :: cs1) cs2
+| IAC_NoneRight ret rs ics cs cs1 cs2:
   ret ∉ ins1 →
   ret ∉ ins2 →
   imp_to_asm_combine_stacks ins1 ins2 SPNone ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 SPRight (SPNone :: ics) ((I2AI false ret gp rs) :: cs) cs1 ((I2AI false ret gp rs) :: cs2)
-| IAC_LeftRight ret rs gp ics cs cs1 cs2:
+  imp_to_asm_combine_stacks ins1 ins2 SPRight (SPNone :: ics) ((I2AI false ret rs) :: cs) cs1 ((I2AI false ret rs) :: cs2)
+| IAC_LeftRight ret rs ics cs cs1 cs2:
   ret ∈ ins1 →
   imp_to_asm_combine_stacks ins1 ins2 SPLeft ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 SPRight (SPLeft :: ics) cs ((I2AI true ret gp rs) :: cs1) ((I2AI false ret gp rs) :: cs2)
-| IAC_LeftNone ret gp rs ics cs cs1 cs2:
+  imp_to_asm_combine_stacks ins1 ins2 SPRight (SPLeft :: ics) cs ((I2AI true ret rs) :: cs1) ((I2AI false ret rs) :: cs2)
+| IAC_LeftNone ret rs ics cs cs1 cs2:
   ret ∈ ins1 →
   imp_to_asm_combine_stacks ins1 ins2 SPLeft ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 SPNone (SPLeft :: ics) ((I2AI true ret gp rs) :: cs) ((I2AI true ret gp rs) :: cs1) cs2
-| IAC_RightLeft ret gp rs ics cs cs1 cs2:
+  imp_to_asm_combine_stacks ins1 ins2 SPNone (SPLeft :: ics) ((I2AI true ret rs) :: cs) ((I2AI true ret rs) :: cs1) cs2
+| IAC_RightLeft ret rs ics cs cs1 cs2:
   ret ∈ ins2 →
   imp_to_asm_combine_stacks ins1 ins2 SPRight ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 SPLeft (SPRight :: ics) cs ((I2AI false ret gp rs) :: cs1) ((I2AI true ret gp rs) :: cs2)
-| IAC_RightNone ret gp rs ics cs cs1 cs2:
+  imp_to_asm_combine_stacks ins1 ins2 SPLeft (SPRight :: ics) cs ((I2AI false ret rs) :: cs1) ((I2AI true ret rs) :: cs2)
+| IAC_RightNone ret rs ics cs cs1 cs2:
   ret ∈ ins2 →
   imp_to_asm_combine_stacks ins1 ins2 SPRight ics cs cs1 cs2 →
-  imp_to_asm_combine_stacks ins1 ins2 SPNone (SPRight :: ics) ((I2AI true ret gp rs) :: cs) cs1 ((I2AI true ret gp rs) :: cs2)
+  imp_to_asm_combine_stacks ins1 ins2 SPNone (SPRight :: ics) ((I2AI true ret rs) :: cs) cs1 ((I2AI true ret rs) :: cs2)
 .
 
 Local Ltac go := repeat match goal with | x : asm_ev |- _ => destruct x end;
@@ -1504,9 +1503,9 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
           i2a_regs_call ret' rs' →
           is_Some (ins !! ret') →
           map_scramble touched_registers lr' rs' →
-          (∀ rs'' mem'' av v h'' rf'' lr'',
+          (∀ rs'' gp'' mem'' av v h'' rf'' lr'',
               rs'' !!! "PC" = ret' →
-              satisfiable (i2a_mem_inv (rs'' !!! "SP") gp' mem'' ∗ i2a_heap_inv h'' ∗
+              satisfiable (i2a_mem_inv (rs'' !!! "SP") gp'' mem'' ∗ i2a_heap_inv h'' ∗
                            i2a_val_rel v av ∗ rf'' ∗ r') →
               i2a_regs_ret rs'' rs' av →
               map_scramble touched_registers lr'' rs'' →
@@ -1515,9 +1514,9 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
           AsmState (ARunning []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K (expr_fill K' (imp.Call f' es))) h' fns, (PPInside, I2A cs lr', rf'))) →
       (* Return *)
-      (∀ rs' mem' av v h' lr' rf',
+      (∀ rs' mem' gp' av v h' lr' rf',
           rs' !!! "PC" = ret →
-          satisfiable (i2a_mem_inv (rs' !!! "SP") gp mem' ∗ i2a_heap_inv h' ∗
+          satisfiable (i2a_mem_inv (rs' !!! "SP") gp' mem' ∗ i2a_heap_inv h' ∗
                       i2a_val_rel v av ∗ rf' ∗ rc) →
           i2a_regs_ret rs' rs av →
           map_scramble touched_registers lr' rs' →
@@ -1558,7 +1557,7 @@ Proof.
       e2 = expr_fill K (Val v) ∧
       fns'1 = fns'2 ∧
       t2 = PPInside ∧
-      cs1 = I2AI true pc gp lr' :: cs2 ∧
+      cs1 = I2AI true pc lr' :: cs2 ∧
       lr2 = rs2
 ). }
   { move => ??? *. destruct_all?. repeat case_match; naive_solver. }
@@ -1589,9 +1588,9 @@ Proof.
          length vs = length (fd_args fn) ∧
          t1 = PPInside ∧
          σfs1 = SMProg ∧
-         (∀ rs' mem' av v h' lr' rf',
+         (∀ rs' mem' gp' av v h' lr' rf',
           rs' !!! "PC" = ret →
-          satisfiable (i2a_mem_inv (rs' !!! "SP") gp mem' ∗ i2a_heap_inv h' ∗
+          satisfiable (i2a_mem_inv (rs' !!! "SP") gp' mem' ∗ i2a_heap_inv h' ∗
                       i2a_val_rel v av ∗ r' ∗ rf') →
           i2a_regs_ret rs' rs1 av  →
           map_scramble touched_registers lr' rs' →

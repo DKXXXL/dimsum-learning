@@ -205,7 +205,7 @@ Proof.
   { unfold i2a_regs_call. split!; by simplify_map_eq'. }
   { by simplify_map_eq'. } { by simplify_map_eq'. }
   iSatClear.
-  move => rs'' mem'' av v h'' rf'' lr'' Hpc'' Hsat'' Hr ?.
+  move => rs'' gp'' mem'' av v h'' rf'' lr'' Hpc'' Hsat'' Hr ?.
   move: Hr => [? Hm]; simplify_map_eq'.
   tstep_i => ??. simplify_map_eq'.
   iSatStart. iIntros!.
