@@ -115,18 +115,18 @@ Definition coro_saved_regs : list string := "PC"::saved_registers.
 Opaque coro_saved_regs.
 
 Definition yield_swap_reg (r : string) (o : Z) : list deep_asm_instr := [
-    Aload "R17" "R18" o;
-    Astore r "R18" o;
-    Amov r "R17"
+    Aload "R16" "R17" o;
+    Astore r "R17" o;
+    Amov r "R16"
   ].
 
 
 Definition yield_asm: gmap Z asm_instr := deep_to_asm_instrs yield_addr (
-  [Amov "R18" coro_state_addr] ++
+  [Amov "R17" coro_state_addr] ++
   mjoin (imap (λ i r, yield_swap_reg r (Z.of_nat i)) (locked saved_registers)) ++ [
-  Aload "R17" "R18" (Z.of_nat $ length saved_registers);
-  Astore "R30" "R18" (Z.of_nat $ length saved_registers);
-  Abranch true "R17"]).
+  Aload "R16" "R17" (Z.of_nat $ length saved_registers);
+  Astore "R30" "R17" (Z.of_nat $ length saved_registers);
+  Abranch true "R16"]).
 
 Definition coro_get_regs (regs : gmap string Z) : list Z :=
   ((regs !!!.) <$> coro_saved_regs).
@@ -160,10 +160,10 @@ Definition yield_itree : itree (moduleE asm_event (gmap string Z)) unit :=
   TAssume (coro_regs_mem rsold ⊆ mem);;;;
   let rs' := (<["PC" := rs !!! "R30"]> rs) in
   TPut rs';;;;
+  r16 ← TExist Z;;;
   r17 ← TExist Z;;;
-  r18 ← TExist Z;;;
   TVis (Outgoing, EAJump
-                    (<["R17" := r17]> $ <["R18" := r18]> $ (coro_regs_regs rsold ∪ rs))
+                    (<["R16" := r16]> $ <["R17" := r17]> $ (coro_regs_regs rsold ∪ rs))
                     (coro_regs_mem rs' ∪ mem))).
 
 Local Ltac go :=
@@ -371,11 +371,14 @@ Definition coro_prod_filter (fns1 fns2 : gset string) : seq_product_state → co
               ok = bool_decide (length vs = 1%nat)
             else
               e' = e ∧
-              p' = SPNone ∧
+              p' = (if bool_decide (f ∈ fns1) then SPLeft else SPNone) ∧
               s' = s ∧
               ok = bool_decide (f ∉ fns1)
         | EIReturn v h =>
-            ok = false
+            ok = false ∧
+            e' = e ∧
+            p' = SPRight ∧
+            s' = s
         end
     | CPFExited, _ =>
         ok = false
@@ -505,7 +508,7 @@ Proof.
   rewrite bool_decide_true; [|set_solver].
   tstep_i => *. simplify_eq.
   tstep_i. eexists true. split; [done|]. eexists h, gp, vs, avs, ret, f.
-  split!. { admit. (* naive_solver. *) } { set_solver. }
+  split!. {  admit. (* naive_solver. *) } { set_solver. }
   { iSatMono. iIntros!. rewrite /i2a_mem_map/mo big_sepM_empty big_sepM_union //. iDestruct!. iFrame.
     iDestruct (i2a_mem_stack_init with "[$]") as "?"; [done|]. iAccu. }
   tsim_mirror m1 σ1. move => ??? Hcont.
@@ -536,23 +539,34 @@ Proof.
            σsm1 = SMProg ∧
            pp1 = PPInside ∧
            cs1 = csc ∧
-           lrc = lr1 ∧
-           (x1 ⊣⊢ i2a_mem_stack (yregs !!! "SP") gp ∗ i2a_mem_map (coro_regs_mem yregs) ∗ xc)%I ∧
+           map_scramble touched_registers lrc lr1 ∧
+           (x1 ⊣⊢ i2a_mem_stack (yregs !!! "SP") gp ∗ i2a_mem_map (coro_regs_mem yregs) ∗ x2 ∗ xc)%I ∧
            σsm2 = SMFilter ∧
            pp2 = PPOutside ∧
            (if finit is Some f then
               cs2 = [] else
               ∃ regs1 ret2 regs2,
-                cs2 = [I2AI true (yregs !!! "PC") regs1; I2AI true ret2 regs2]) ∧
-           lr2 = ∅ ∧
-           (x2 ⊣⊢ emp)%I ∧
+                cs2 = [I2AI true (yregs !!! "PC") regs1; I2AI false ret2 regs2] ∧
+                map_preserved saved_registers regs1 yregs) ∧
            σlc = MLFLeft ∧
            (if finit is Some f then f2i2 !! f = Some (yregs !!! "PC") ∧ f ∈ fns2 else True)
        (* Right side *)
-       | CPFRight => False
+       | CPFRight =>
+           ∃ gp ret2 regs1 regs2,
+           σpc1 = MLFRight ∧
+           σsm1 = SMFilter ∧
+           pp1 = PPOutside ∧
+           cs1 = [I2AI true (yregs !!! "PC") regs1; I2AI false cret cregs] ∧
+           map_preserved saved_registers regs1 yregs ∧
+           map_scramble touched_registers lrc lr2 ∧
+           (x2 ⊣⊢ i2a_mem_stack (yregs !!! "SP") gp ∗ i2a_mem_map (coro_regs_mem yregs) ∗ x1 ∗ xc)%I ∧
+           σsm2 = SMProg ∧
+           pp2 = PPInside ∧
+           cs2 = [I2AI false ret2 regs2] ∧
+           σlc = MLFRight
        | _ => False
        end). }
-  { split!. { iSplit; iIntros!; iFrame. } apply big_sepM_empty. } { done. }
+  { split!. { iSplit; iIntros!; iFrame. by iApply big_sepM_empty. } } { done. }
   clear -Hyf Hidisj Hfdisj Hydisj Hy1 Hy2 Hi1 Hi2 Hag Hf1 Hf2 VisNoAll0 VisNoAll1.
   move => n ? Hloop [[[σpy1 σpy2][yt yregs]][[[σpc1 σpc2][[σsm1 σ1][[pp1 [cs1 lr1]]x1]]][[σsm2 σ2][[pp2 [cs2 lr2]]x2]]]].
   move => [[σsm' [[[σlc σc] σ1'] σ2']][[ppc [csc lrc]] xc]] [state ?]. destruct_all?; simplify_eq.
@@ -598,14 +612,81 @@ Proof.
       tstep_i.
       destruct finit; destruct_all?; simplify_eq.
       * eexists true. split!.
-        { admit. } { done. }
+        Set Nested Proofs Allowed.
+Lemma i2a_args_pure_mono o avs rs rs':
+  map_preserved args_registers rs rs' →
+  i2a_args_pure o avs rs →
+  i2a_args_pure o avs rs'.
+Proof.
+  move => Hrs Ha ???. have [?[??]]:= Ha _ _ ltac:(done). split!.
+  etrans; [|done].
+  symmetry. apply: Hrs. by apply: elem_of_list_lookup_2.
+Qed.
+Lemma coro_regs_regs_args_preserved rs rs':
+ map_preserved args_registers rs (coro_regs_regs rs' ∪ rs).
+Proof.
+  rewrite /coro_regs_regs/=.
+  Transparent coro_saved_regs.
+  cbn.
+  rewrite -!insert_union_l left_id_L.
+  repeat (apply map_preserved_insert_r_not_in; [compute_done|]).
+  Opaque coro_saved_regs.
+  done.
+Qed.
+Lemma coro_regs_regs_touched_scramble rs rs' rs'':
+  map_scramble touched_registers rs rs' →
+  map_scramble touched_registers rs (coro_regs_regs rs'' ∪ rs').
+Proof.
+  move => ?.
+  rewrite /coro_regs_regs/=.
+  Transparent coro_saved_regs.
+  cbn.
+  rewrite -!insert_union_l left_id_L.
+  repeat (apply map_scramble_insert_r_in; [compute_done|]).
+  Opaque coro_saved_regs.
+  done.
+Qed.
+Lemma map_preserved_nil' {K A} `{Countable K} `{!Inhabited A} (m m' : gmap K A) ns:
+  ns = [] →
+  map_preserved ns m m'.
+Proof. move => -> ??. set_solver. Qed.
+
+Lemma coro_regs_regs_saved_preserved rs rs' rs'':
+  map_preserved saved_registers rs rs'' →
+  map_preserved saved_registers rs (coro_regs_regs rs'' ∪ rs').
+Proof.
+  move => Hp.
+  rewrite /coro_regs_regs/=.
+  Transparent coro_saved_regs.
+  cbn.
+  rewrite -!insert_union_l left_id_L.
+  apply map_preserved_insert_r_not_in; [compute_done|].
+  repeat (apply map_preserved_insert_r_in; [compute_done|]; split; [apply: Hp; compute_done|]).
+  apply map_preserved_nil'. compute_done.
+  Opaque coro_saved_regs.
+Qed.
+
+Lemma coro_regs_mem_dom rs rs':
+  dom (gset Z) (coro_regs_mem rs) = dom (gset Z) (coro_regs_mem rs').
+Proof.
+  rewrite /coro_regs_mem/coro_get_regs.
+  Transparent coro_saved_regs.
+  cbn. rewrite !dom_insert_L. done.
+  Opaque coro_saved_regs.
+Qed.
+
+
+        { apply: i2a_args_pure_mono; [|done].
+          apply map_preserved_insert_r_not_in; [compute_done|].
+          apply map_preserved_insert_r_not_in; [compute_done|].
+          apply coro_regs_regs_args_preserved. } { done. }
         { simplify_map_eq'. rewrite (coro_regs_regs_lookup_in "PC"); [|compute_done]. done. }
-        { admit. }
-        { rewrite /i2a_regs_call. simplify_map_eq'. apply (coro_regs_regs_lookup_not_in "R30"). compute_done. }
-        { iSatMonoBupd. setoid_subst. iFrame. simplify_map_eq'.
+        2: { rewrite /i2a_regs_call. simplify_map_eq'. apply (coro_regs_regs_lookup_not_in "R30"). compute_done. }
+        { unfold i2a_regs_call in *. simplify_map_eq'. set_unfold. naive_solver. }
+        { iSatMonoBupd. iFrame. simplify_map_eq'.
           rewrite (coro_regs_regs_lookup_in "SP"); [|compute_done].
           iDestruct (i2a_mem_swap_stack with "Hm [$]") as "[Hm ?]".
-          iMod (i2a_mem_update_big with "Hm [$]") as "[? $]". admit.
+          iMod (i2a_mem_update_big with "Hm [$]") as "[? $]"; [apply coro_regs_mem_dom|].
           iModIntro. iAccu. }
         tsim_mirror m2 σ2. move => ??? Hcont.
         tstep_both. apply Hcont => κ ?? Hs. destruct κ.
@@ -613,18 +694,27 @@ Proof.
         clear Hs Hcont. move => ?. subst.
         tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
         apply: Hloop. { etrans; [|done]. etrans; [|done]. apply ti_le_S. }
-        split!. admit.
+        split!.
+        { simplify_map_eq'. revert select (i2a_regs_call _ _) => ->. done. }
+        { apply map_preserved_insert_r_not_in; [compute_done|]. done. }
+        { etrans; [done|]. etrans; [done|].
+          apply map_scramble_insert_r_in; [compute_done|].
+          apply map_scramble_insert_r_in; [compute_done|].
+          by apply coro_regs_regs_touched_scramble. }
+        { simplify_map_eq'. iSplit; iIntros!; iFrame. }
       * destruct args as [|? [|]] => //.
         eexists false. split!.
         { simplify_map_eq'. rewrite (coro_regs_regs_lookup_in "PC"); [|compute_done]. done. }
         { split. { simplify_map_eq'. rewrite (coro_regs_regs_lookup_not_in "R0"); [|compute_done]. done. }
-          admit. }
+          apply map_preserved_insert_r_not_in; [compute_done|].
+          apply map_preserved_insert_r_not_in; [compute_done|].
+          by apply coro_regs_regs_saved_preserved. }
         { iSatMonoBupd.
           iDestruct (i2a_args_intro with "[$]") as "?"; [done|].
-          rewrite i2a_args_cons; [|done]. setoid_subst. iDestruct!. iFrame. simplify_map_eq'.
+          rewrite i2a_args_cons; [|done]. rewrite i2a_args_nil. iDestruct!. iFrame. simplify_map_eq'.
           rewrite (coro_regs_regs_lookup_in "SP"); [|compute_done].
           iDestruct (i2a_mem_swap_stack with "Hm [$]") as "[Hm ?]".
-          iMod (i2a_mem_update_big with "Hm [$]") as "[? $]". admit.
+          iMod (i2a_mem_update_big with "Hm [$]") as "[? $]"; [apply coro_regs_mem_dom|].
           iModIntro. iAccu. }
         tsim_mirror m2 σ2. move => ??? Hcont.
         tstep_both. apply Hcont => κ ?? Hs. destruct κ.
@@ -632,7 +722,14 @@ Proof.
         clear Hs Hcont. move => ?. subst.
         tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
         apply: Hloop. { etrans; [|done]. etrans; [|done]. apply ti_le_S. }
-        split!. admit.
+        split!.
+        { simplify_map_eq'. revert select (i2a_regs_call _ _) => ->. done. }
+        { apply map_preserved_insert_r_not_in; [compute_done|]. done. }
+        { etrans; [done|]. etrans; [done|].
+          apply map_scramble_insert_r_in; [compute_done|].
+          apply map_scramble_insert_r_in; [compute_done|].
+          by apply coro_regs_regs_touched_scramble. }
+        { simplify_map_eq'. iSplit; iIntros!; iFrame. }
     + (* left call to outside *)
       case_bool_decide; [by tstep_s|].
       rewrite bool_decide_true //=.
@@ -643,6 +740,7 @@ Proof.
       rewrite bool_decide_false. 2: admit.
       rewrite bool_decide_false. 2: admit.
       tstep_s. split!. done. set_solver. admit. 2: done. set_solver.
+      { by etrans. }
       { iSatMono. setoid_subst. iIntros!. iFrame. iAccu. }
       iSatClear.
 
@@ -673,10 +771,112 @@ Proof.
       rewrite bool_decide_false. 2: set_solver.
       rewrite bool_decide_false. 2: set_solver.
       tstep_s. split!. done.
+      { by etrans. }
       { iSatMono. setoid_subst. iIntros!. iFrame. iAccu. }
       iSatClear.
 
       (* going back inside leads to UB *)
       tstep_i => e *. tstep_s. split!.  destruct_all?; simplify_eq/=.
       destruct e; destruct_all?; simplify_eq. tstep_s => -[] /= *; tstep_s; split!; by tstep_s.
+  - tsim_mirror m2 σ2. move => ??? Hcont.
+    tstep_both. apply Hcont => κ ? Hstep Hs. destruct κ as [[? e]|].
+    2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+    clear Hcont Hs.
+    tend. have [σ' Hσ'] := vis_no_all _ _ _ Hstep. eexists σ'. split; [naive_solver|].
+    destruct i; [by tstep_i|].
+    tstep_s. eexists (Some (Outgoing, e)).
+    destruct e => /=; [case_bool_decide|]; split!.
+    all: apply: steps_spec_step_end; [done|] => σ'' ?; assert (σ'' = σ') by naive_solver.
+    + (* right to left *)
+      tstep_s => ?.
+      tstep_i => *. destruct_all?; simplify_map_eq'.
+      rewrite bool_decide_false. 2: admit.
+      rewrite bool_decide_false. 2: admit. (* 2: set_solver. *)
+      move => /= *. destruct_all?; simplify_map_eq'.
+      rewrite bool_decide_true. 2: rewrite /yield_asm_dom; unlock; admit.
+      tstep_i. rewrite -/yield_itree. go.
+      go_i => -[??]. go.
+      go_i => ?. simplify_eq. go.
+      go_i. split; [done|]. go.
+      go_i.
+      iSatStart. iIntros!. revert select (x2 ⊣⊢ _) => ->. iDestruct!.
+      iDestruct select (i2a_mem_inv _ _ _) as "Hm".
+      iDestruct (i2a_mem_lookup_big with "Hm [$]") as %?.
+      iSatStop.
+      go_i. split!. go.
+      go_i.
+      go_i => ?. go.
+      go_i => ?. go.
+      go_i => *. destruct_all?. simplify_map_eq'. go.
+      rewrite (coro_regs_regs_lookup_in "PC"); [|compute_done].
+      rewrite bool_decide_false. 2: admit.
+      rewrite bool_decide_true. 2: admit.
+      tstep_i => *. destruct_all?; simplify_eq/=. destruct_all?; simplify_map_eq'.
+      rewrite (coro_regs_regs_lookup_in "PC"); [|compute_done].
+      rewrite bool_decide_true. 2: admit.
+      tstep_i => *. simplify_eq.
+      tstep_i.
+      destruct args as [|? [|]] => //.
+      eexists false. split!.
+      { simplify_map_eq'. rewrite (coro_regs_regs_lookup_in "PC"); [|compute_done]. done. }
+      { split. { simplify_map_eq'. rewrite (coro_regs_regs_lookup_not_in "R0"); [|compute_done]. done. }
+        apply map_preserved_insert_r_not_in; [compute_done|].
+        apply map_preserved_insert_r_not_in; [compute_done|].
+        by apply coro_regs_regs_saved_preserved. }
+      { iSatMonoBupd.
+        iDestruct (i2a_args_intro with "[$]") as "?"; [done|].
+        rewrite i2a_args_cons; [|done]. rewrite i2a_args_nil. iDestruct!. iFrame. simplify_map_eq'.
+        rewrite (coro_regs_regs_lookup_in "SP"); [|compute_done].
+        iDestruct (i2a_mem_swap_stack with "Hm [$]") as "[Hm ?]".
+        iMod (i2a_mem_update_big with "Hm [$]") as "[? $]"; [apply coro_regs_mem_dom|].
+        iModIntro. iAccu. }
+      tsim_mirror m1 σ1. move => ??? Hcont.
+      tstep_both. apply Hcont => κ ?? Hs. destruct κ.
+      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+      clear Hs Hcont. move => ?. subst.
+      tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop. { etrans; [|done]. etrans; [|done]. apply ti_le_S. }
+      split!.
+      { etrans; [done|]. etrans; [done|].
+        apply map_scramble_insert_r_in; [compute_done|].
+        apply map_scramble_insert_r_in; [compute_done|].
+        by apply coro_regs_regs_touched_scramble. }
+      { simplify_map_eq'. iSplit; iIntros!; iFrame. }
+      { simplify_map_eq'. revert select (i2a_regs_call _ _) => ->. done. }
+      { apply map_preserved_insert_r_not_in; [compute_done|]. done. }
+    + (* right call to outside *)
+      case_bool_decide; [by tstep_s|].
+      rewrite bool_decide_true //=.
+      tstep_i => *. destruct_all?; simplify_eq.
+      rewrite bool_decide_false. 2: admit.
+      rewrite bool_decide_false. 2: admit.
+      move => /= *. destruct_all?; simplify_eq/=.
+      rewrite bool_decide_false. 2: admit.
+      rewrite bool_decide_false. 2: admit.
+      tstep_s. split!. done. set_solver. admit. 2: done. set_solver.
+      { by etrans. }
+      { iSatMono. setoid_subst. iIntros!. iFrame. iAccu. }
+      iSatClear.
+
+      (* go back inside *)
+      tstep_i => e *. destruct e; destruct_all?; simplify_eq.
+      tstep_s. split!.
+      tstep_s => -[] /= *. { tstep_s. split!. by tstep_s. }
+      tstep_s. split!. destruct_all?; simplify_eq.
+      rewrite bool_decide_false. 2: admit.
+      rewrite bool_decide_true. 2: set_solver.
+      tstep_i => /= *. destruct_all?; simplify_eq/=. destruct_all?; simplify_eq/=.
+      rewrite bool_decide_false. 2: set_solver.
+      rewrite bool_decide_true; [|done].
+      tstep_i => *. simplify_eq.
+      tstep_i => *. eexists false. split!. done.
+      { iSatMono. iIntros!. iFrame. iAccu. }
+      tsim_mirror m2 σ' => ??? Hcont.
+      tstep_both. apply Hcont => -[?|] ?? Hs *. simplify_eq.
+      2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+      tstep_s. eexists (Some (Incoming, _)). split!.
+      apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+      apply: Hloop. { etrans; [|done]. etrans; [|done]. apply ti_le_S. }
+      split!. iSplit; iIntros!; iFrame.
+    + (* right return to outside *) by tstep_s.
 Abort.
