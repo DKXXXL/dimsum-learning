@@ -306,6 +306,15 @@ Section mod_link.
   Lemma mod_link_step_ub_s R m1 m2 s σ1 σ2 sp :
     TStepS (mod_link R m1 m2) (MLFUb sp, s, σ1, σ2) (λ G, G None (λ G', True)).
   Proof. constructor => G ?. split!; [done|] => /=??. by tstep_s. Qed.
+
+  Lemma mod_link_step_mod_link_to_state_s R m1 m2 s σ1 σ2 sp P `{!Decision P} e :
+    TStepS (mod_link R m1 m2) (mod_link_to_state (bool_decide P) sp e, s, σ1, σ2) (λ G, G None
+         (λ G', P → G' (mod_link_to_state true sp e, s, σ1, σ2) )).
+  Proof.
+    constructor => G ?.
+    split!; [done|] => /=??. case_bool_decide; [|by tstep_s].
+    apply steps_spec_end. naive_solver.
+ Qed.
 End mod_link.
 Arguments mod_link_trans _ _ _ _ _ /.
 Arguments mod_link_state : clear implicits.
@@ -323,3 +332,6 @@ Global Hint Resolve
        mod_link_step_none_s
        mod_link_step_ub_s
 | 2 : tstep.
+Global Hint Resolve
+  mod_link_step_mod_link_to_state_s
+| 3 : tstep.

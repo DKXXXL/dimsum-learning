@@ -36,6 +36,7 @@ theories/i2a_bij_vertical.v
 theories/imp_to_asm_examples.v
 theories/int_ptr_cast.v
 theories/memmove.v
+theories/coroutine.v
 theories/compiler/monad.v
 theories/compiler/linear_imp.v
 theories/compiler/ssa.v

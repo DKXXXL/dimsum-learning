@@ -2147,3 +2147,74 @@ Proof.
   - apply: Href.
   - erewrite map_difference_eq_dom_L => //. apply _.
 Qed.
+
+(*
+(* TODO: track a stack of this and compute every thing from it (also keep an optional event) *)
+Inductive imp_prod_assoc_state :=
+| IPA1 | IPA2 | IPA3 | IPANone.
+
+(* Inductive imp_prod_assoc_stack (m1 m2 m3 : module imp_event) : *)
+(*   mod_link_state imp_ev → list seq_product_state → mod_link_state imp_ev → list seq_product_state → *)
+(*   mod_link_state imp_ev → list seq_product_state → mod_link_state imp_ev → list seq_product_state → Prop := *)
+(* | IPASNil : *)
+(*   imp_prod_assoc_stack m1 m2 m3 MLFNone [] MLFNone [] MLFNone [] MLFNone [] *)
+(* | IPASNil : *)
+(*   imp_prod_assoc_stack m1 m2 m3 MLFNone [] MLFNone [] MLFNone [] MLFNone [] *)
+(* . *)
+
+Definition imp_prod_assoc_inv (fns1 fns2 fns3 : gset string) (m1 m2 m3 : module imp_event)
+  (σ1 : mod_link_state imp_ev * list seq_product_state * m1.(m_state) *
+          (mod_link_state imp_ev * list seq_product_state * m2.(m_state) * m3.(m_state)))
+  (σ2 : mod_link_state imp_ev * list seq_product_state * (mod_link_state imp_ev * list seq_product_state * m1.(m_state) * m2.(m_state)) * m3.(m_state)) : Prop :=
+  let '(σfi1, csi1, σi1, (σfi2, csi2, σi2, σi3)) := σ1 in
+  let '(σfs1, css1, (σfs2, css2, σs1, σs2), σs3) := σ2 in
+  ∃ ipacur,
+  σi1 = σs1 ∧
+  σi2 = σs2 ∧
+  σi3 = σs3 ∧
+  match ipacur with
+  | IPA1 => False
+  | IPA2 => False
+  | IPA3 => False
+  | IPANone => σfi1 = MLFNone ∧ σfi2 = MLFNone ∧ σfs1 = MLFNone ∧ σfs2 = MLFNone
+  end.
+  (* imp_prod_assoc_stack m1 m2 m3 σfi1 csi1 σfi2 csi2 σfs1 css1 σfs2 css2. *)
+
+
+Lemma imp_prod_assoc1 fns1 fns2 fns3 m1 m2 m3 σ1 σ2 σ3:
+  fns1 ## fns2 →
+  trefines (MS (imp_prod fns1 (fns2 ∪ fns3) m1 (imp_prod fns2 fns3 m2 m3))
+              (initial_imp_prod_state m1 (imp_prod _ _ m2 m3) σ1
+                  (initial_imp_prod_state m2 m3 σ2 σ3)))
+           (MS (imp_prod (fns1 ∪ fns2) fns3 (imp_prod fns1 fns2 m1 m2) m3)
+               (initial_imp_prod_state (imp_prod _ _ m1 m2) m3
+                  (initial_imp_prod_state m1 m2 σ1 σ2) σ3)
+           ).
+Proof.
+  move => Hdisj12.
+  apply tsim_implies_trefines => n /=.
+  unshelve apply: tsim_remember. { exact: (λ _, imp_prod_assoc_inv fns1 fns2 fns3 m1 m2 m3). }
+  { eexists IPANone. split!. } { done. }
+  move => ?? IH [[[??]?][[[??]?]?]] [[[??][[[??]?]?]]?] /= ?. destruct_all?; simplify_eq.
+  (* revert select (imp_prod_assoc_stack _ _ _ _ _ _ _ _ _ _ _) => Hstack. inversion Hstack; simplify_eq. *)
+  case_match; destruct_all?; simplify_eq.
+  tstep_i => *. case_match; destruct_all?; simplify_eq.
+  tstep_s. split!; [repeat case_bool_decide; set_solver|].
+  case_bool_decide => /=.
+  - rewrite bool_decide_true; [|set_solver].
+    tstep_s. split!; [repeat case_bool_decide; set_solver|].
+    rewrite bool_decide_true /=; [|set_solver].
+    apply IH; [done|]. split!.
+  repeat case_bool_decide => /=.
+  admit.
+  set_unfold; naive_solver.
+  set_unfold; naive_solver.
+  admit.
+  admit.
+
+set_unfold; naive_solver.
+try by exfalso; set_unfold; naive_solver.
+  - tstep_s. split!; [repeat case_bool_decide; set_solver|].
+    apply IH; [done|]. split!.
+  tstep_i.
+*)

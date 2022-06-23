@@ -532,6 +532,50 @@ Proof.
     naive_solver.
 Qed.
 
+Lemma tsim_mirror {EV1 EV2} (m : module EV1) (σ : m.(m_state)) (fm1 : module EV1 → module EV2) fm2 fσ1 fσ2 n b  :
+  (∀ σ n',
+      tiS?b n' ⊆ n →
+      (∀ (P : _ → _ → _ → Prop),
+          (∀ κ Pσ, m_step m σ κ Pσ → (∀ σ', fσ1 σ' ⪯{fm1 m, fm2 m, n', true} fσ2 σ') → P true κ Pσ) →
+            σ -{ m }-> P) →
+      fσ1 σ ⪯{fm1 m, fm2 m, n', false} fσ2 σ) →
+
+  fσ1 σ ⪯{fm1 m, fm2 m, n, b} fσ2 σ.
+Proof.
+  move => Hσ.
+  unshelve apply: tsim_remember. { exact: (λ _ σ1 σ2, ∃ σ', σ1 = fσ1 σ' ∧ σ2 = fσ2 σ'). }
+  { by split!. } { done. }
+  move => n1 /= ? IH ???. destruct_all?; simplify_eq.
+  apply Hσ; [done|].
+  move => P Hcont.
+  apply steps_impl_step_end => κ Pσ2 ?.
+  naive_solver.
+Qed.
+
+Ltac tsim_mirror m σ :=
+  lazymatch goal with
+  | |- ?σ1 ⪯{?m1, ?m2, _, _} ?σ2 =>
+      lazymatch m1 with
+      | context C [m] =>
+      let x := fresh "x" in
+      let fm1 := constr:(λ x, ltac:(let y := context C [x] in exact y)) in
+      lazymatch m2 with
+      | context C [m] =>
+      let fm2 := constr:(λ x, ltac:(let y := context C [x] in exact y)) in
+      lazymatch σ1 with
+      | context C [σ] =>
+      let fσ1 := constr:(λ x, ltac:(let y := context C [x] in exact y)) in
+      lazymatch σ2 with
+      | context C [σ] =>
+      let fσ2 := constr:(λ x, ltac:(let y := context C [x] in exact y)) in
+      (* idtac fm1 fm2 fσ1 fσ2 *)
+      apply (tsim_mirror m σ fm1 fm2 fσ1 fσ2)
+      end
+      end
+      end
+      end
+  end.
+
 Lemma tsim_step_l {EV} {mi ms : module EV} σi σs n b :
   (∀ κ Pσi,
       mi.(m_step) σi κ Pσi →

@@ -554,14 +554,13 @@ Section prepost.
           split!; [done..|] => /=.
           destruct ok2; [|by tstep_s].
           apply: Hloop; [done|]. split!; eauto.
-      - tstep_both.
-        apply steps_impl_step_end => κ Pσ2 ?. case_match; intros; simplify_eq.
-        + tstep_s. eexists (Some (Incoming, _)). split!.
-          apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-          apply: Hloop; [done|]. by split!.
-        + tstep_s. eexists None.
-          apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-          apply: Hloop; [done|]. by split!.
+      - tsim_mirror m1 σ1'. (* TODO: use tsim_mirror more *)
+        move => ??? Hs. tstep_both. apply Hs => ????.
+        case_match.
+        2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
+        move => ?. subst. tstep_s. eexists (Some (Incoming, _)). split!.
+        apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
+        apply: Hloop; [done|]. by split!.
       - tstep_both.
         apply steps_impl_step_end => κ Pσ2 ? *. destruct κ as [e|]. 2: {
           tstep_s. eexists None. split!.
