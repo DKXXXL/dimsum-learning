@@ -1384,11 +1384,11 @@ Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 mo1 mo2 m1 m2 σ1 σ2 `{!
   ins1 ## ins2 →
   fns1 ## fns2 →
   mo1 ##ₘ mo2 →
-  (∀ f, f ∈ fns1 → ∃ i, i ∈ ins1 ∧ f2i1 !! f = Some i) →
-  (∀ f, f ∈ fns2 → ∃ i, i ∈ ins2 ∧ f2i2 !! f = Some i) →
-  (∀ f i1 i2, f2i1 !! f = Some i1 → f2i2 !! f = Some i2 → i1 = i2) →
-  (∀ f i, f2i1 !! f = Some i → i ∈ ins2 → f ∈ fns2) →
-  (∀ f i, f2i2 !! f = Some i → i ∈ ins1 → f ∈ fns1) →
+  set_Forall (λ f, Is_true (if f2i1 !! f is Some i then bool_decide (i ∈ ins1) else false)) fns1 →
+  set_Forall (λ f, Is_true (if f2i2 !! f is Some i then bool_decide (i ∈ ins2) else false)) fns2 →
+  map_Forall (λ f i1, Is_true (if f2i2 !! f is Some i2 then bool_decide (i1 = i2) else true)) f2i1 →
+  map_Forall (λ f i, f ∈ fns2 ∨ i ∉ ins2) f2i1 →
+  map_Forall (λ f i, f ∈ fns1 ∨ i ∉ ins1) f2i2 →
   trefines (MS (asm_prod ins1 ins2 (imp_to_asm ins1 fns1 f2i1 m1) (imp_to_asm ins2 fns2 f2i2 m2))
                (MLFNone, None, initial_imp_to_asm_state mo1 m1 σ1,
                  initial_imp_to_asm_state mo2 m2 σ2))
@@ -1398,6 +1398,22 @@ Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 mo1 mo2 m1 m2 σ1 σ2 `{!
 ).
 Proof.
   move => Hdisji Hdisjf Hdisjm Hin1 Hin2 Hagree Ho1 Ho2.
+  have {}Hin1 : (∀ f, f ∈ fns1 → ∃ i, i ∈ ins1 ∧ f2i1 !! f = Some i). {
+    move => ? /Hin1. case_match => // /bool_decide_unpack. naive_solver.
+  }
+  have {}Hin2 : (∀ f, f ∈ fns2 → ∃ i, i ∈ ins2 ∧ f2i2 !! f = Some i). {
+    move => ? /Hin2. case_match => // /bool_decide_unpack. naive_solver.
+  }
+  have {}Hagree : (∀ f i1 i2, f2i1 !! f = Some i1 → f2i2 !! f = Some i2 → i1 = i2). {
+    move => ??? /Hagree Hs?. simplify_map_eq. rewrite bool_decide_spec in Hs. done.
+  }
+  have {}Ho1 : (∀ f i, f2i1 !! f = Some i → i ∈ ins2 → f ∈ fns2). {
+    move => ?? /Ho1. naive_solver.
+  }
+  have {}Ho2 : (∀ f i, f2i2 !! f = Some i → i ∈ ins1 → f ∈ fns1). {
+    move => ?? /Ho2. naive_solver.
+  }
+
   unshelve apply: mod_prepost_link. { exact (λ ips '(I2A cs1 lr1) '(I2A cs2 lr2) '(I2A cs lr) x1 x2 x s ics,
   imp_to_asm_combine_stacks ins1 ins2 ips ics cs cs1 cs2 ∧ s = None ∧
   ((ips = SPNone ∧ (x ⊣⊢ x1 ∗ x2)) ∨

@@ -283,17 +283,7 @@ Proof.
     - apply asm_add_client_refines_imp_add_client.
   }
   etrans. {
-    apply imp_to_asm_combine.
-    - apply _.
-    - apply _.
-    - set_solver.
-    - set_solver.
-    - done.
-    - move => f ?. have ->: f = "add" by set_solver. eexists 100; simplify_map_eq. set_solver.
-    - move => f ?. have ->: f = "add_client" by set_solver. eexists 200; simplify_map_eq. set_solver.
-    - move => f ??. rewrite !lookup_insert_Some => ??. naive_solver.
-    - move => f ?. rewrite !lookup_insert_Some => ?. naive_solver.
-    - move => f ?. rewrite !lookup_insert_Some => ?. naive_solver.
+    apply: imp_to_asm_combine; compute_done.
   }
   etrans. {
     apply: imp_to_asm_trefines.

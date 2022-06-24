@@ -472,17 +472,7 @@ Proof.
         - apply int_to_ptr_asm_refines_itree.
       }
       etrans. {
-        apply: imp_to_asm_combine.
-        - compute_done.
-        - compute_done.
-        - done.
-        - move => ??. eexists 200. split; [compute_done|]. set_solver.
-        - move => ?. set_solver.
-        - move => ???. rewrite /main_f2i /int_to_ptr_f2i !lookup_insert_Some.
-          naive_solver.
-        - move => ??. rewrite /main_f2i !lookup_insert_Some. naive_solver.
-        - move => ??. rewrite /int_to_ptr_f2i !lookup_insert_Some.
-          move => ?. destruct_all?; simplify_eq; compute_done.
+        apply: imp_to_asm_combine; compute_done.
       }
       etrans. {
         apply: imp_to_asm_trefines.

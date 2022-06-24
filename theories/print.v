@@ -16,6 +16,11 @@ Local Open Scope Z_scope.
 Definition __NR_PRINT : Z := 42.
 Definition print_addr : Z := 500.
 
+Definition print_args (z : Z) (args : list Z) : Prop :=
+  length args = length syscall_arg_regs ∧
+  args !! 0%nat = Some z ∧
+  args !! 8%nat = Some __NR_PRINT.
+
 Definition print_asm : gmap Z asm_instr :=
   deep_to_asm_instrs print_addr [
       Amov "R8" (ImmediateOp __NR_PRINT);
@@ -29,9 +34,7 @@ Definition print_itree : itree (moduleE asm_event unit) unit :=
     TAssume (rs !!! "PC" = print_addr);;;;
     TAssume (print_asm !! (rs !!! "R30") = None);;;;
     args ← TExist _;;;
-    TAssert (length args = length syscall_arg_regs);;;;
-    TAssert (args !! 0%nat = Some (rs !!! "R0"));;;;
-    TAssert (args !! 8%nat = Some __NR_PRINT);;;;
+    TAssert (print_args (rs !!! "R0") args);;;;
     TVis (Outgoing, EASyscallCall args);;;;
     ret ← TReceive (λ ret, (Incoming, EASyscallRet ret));;;
     TVis (Outgoing, EAJump (<["PC" := rs !!! "R30"]> $
@@ -69,8 +72,6 @@ Proof.
   tstep_i.
   go_s. eexists _. go.
   go_s. split; [shelve|]. go.
-  go_s. split; [shelve|]. go.
-  go_s. split; [shelve|]. go.
   go_s. split!. go.
   tstep_i => ?.
   go_s. eexists _. go.
@@ -82,7 +83,5 @@ Proof.
   go_s. sort_map_insert. simplify_map_eq'. split!. go.
   by apply: Hloop.
   Unshelve.
-  - done.
-  - by simplify_map_eq'.
-  - by simplify_map_eq'.
+  - split; [done|by simplify_map_eq'].
 Qed.

@@ -519,15 +519,11 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   TAssume (rs !!! "R30" ∉ main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom _ locle_asm);;;;
   TAssume (∃ gp, gp + GUARD_PAGE_SIZE ≤ rs !!! "SP" ∧ i2a_mem_stack_mem (rs !!! "SP") gp ⊆ mem);;;;
   args ← TExist _;;;
-  TAssert (length args = length syscall_arg_regs);;;;
-  TAssert (args !! 0%nat = Some 1);;;;
-  TAssert (args !! 8%nat = Some __NR_PRINT);;;;
+  TAssert (print_args 1 args);;;;
   TVis (Outgoing, EASyscallCall args);;;;
   ret ← TReceive (λ ret, (Incoming, EASyscallRet ret));;;
   args ← TExist _;;;
-  TAssert (length args = length syscall_arg_regs);;;;
-  TAssert (args !! 0%nat = Some 2);;;;
-  TAssert (args !! 8%nat = Some __NR_PRINT);;;;
+  TAssert (print_args 2 args);;;;
   TVis (Outgoing, EASyscallCall args);;;;
   ret ← TReceive (λ ret, (Incoming, EASyscallRet ret));;;
   TUb.
@@ -579,13 +575,9 @@ Proof.
   go_i. split. admit. go.
   go_i => ?. go.
   go_i => ?. go.
-  go_i => ?. go.
-  go_i => ?. go.
   go_i => *. go. destruct_all?; simplify_eq.
 
-  go_s. eexists _. go.
-  go_s. split; [done|]. go. simplify_map_eq'.
-  go_s. split; [done|]. go.
+  go_s. eexists _. go. simplify_map_eq'.
   go_s. split; [done|]. go.
   go_s. split; [done|]. go.
 
@@ -653,47 +645,19 @@ Proof.
       apply: asm_prod_trefines; [done|].
       apply: asm_prod_trefines; [|done].
       rewrite /memmove_asm_dom /memcpy_asm_dom. unlock.
-      apply: imp_to_asm_combine.
-      - compute_done.
-      - compute_done.
-      - compute_done.
-      - move => *. eexists 200. split; [compute_done|]. set_solver.
-      - move => *. eexists 300. split; [compute_done|]. set_solver.
-      - move => ???. rewrite /main_f2i /locle_f2i !lookup_insert_Some.
-        naive_solver.
-      - move => ??. admit.
-      - move => ??. admit.
+      apply: imp_to_asm_combine; compute_done.
     }
     rewrite idemp.
     etrans. {
       apply: asm_prod_trefines; [|done].
       apply: asm_prod_trefines; [done|].
-      apply: imp_to_asm_combine.
-      - compute_done.
-      - compute_done.
-      - compute_done.
-      - move => *. admit.
-      - move => *. admit.
-      - move => ???. rewrite /main_f2i /locle_f2i !lookup_insert_Some.
-        naive_solver.
-      - move => ??. admit.
-      - move => ??. admit.
+      apply: imp_to_asm_combine; compute_done.
     }
     rewrite idemp -dom_union_L.
     etrans. {
       apply: asm_prod_trefines; [|done].
       rewrite /main_asm_dom. unlock.
-      apply: imp_to_asm_combine.
-      - compute_done.
-      - compute_done.
-      - compute_done.
-      - move => *. admit.
-      - move => *. admit.
-      - enough (map_Forall (λ f1 i1, map_Forall (λ f2 i2, f1 ≠ f2 ∨ i1 = i2) (main_f2i ∪ locle_f2i)) main_f2i).
-        { admit. }
-        compute_done.
-      - move => ??. admit.
-      - move => ??. admit.
+      apply: imp_to_asm_combine; compute_done.
     }
     done.
   }
@@ -725,9 +689,9 @@ Proof.
     etrans; [|apply top_level_refines_itree].
     rewrite /main_asm_dom/memmove_asm_dom/memcpy_asm_dom/locle_fns. unlock.
     rewrite -4!dom_union_L 5!assoc_L idemp_L.
-    have -> : (main_f2i ∪ locle_f2i) = main_f2i. by admit.
+    have -> : (main_f2i ∪ locle_f2i) = main_f2i by compute_done.
     assert ((∅ ∪ (∅ ∪ ∅)) = ∅) as ->. by rewrite !left_id_L.
     done.
   }
   done.
-Admitted.
+Qed.
