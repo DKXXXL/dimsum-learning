@@ -152,6 +152,7 @@ Proof.
   rewrite /yield_asm deep_to_asm_instrs_cons in Hi. simplify_map_eq.
   tstep_i.
   tstep_i. simplify_map_eq'.
+  (* TOOD: finish this proof *)
 Admitted.
 
 Inductive coro_prod_filter_state :=
