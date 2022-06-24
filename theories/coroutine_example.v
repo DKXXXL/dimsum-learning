@@ -274,7 +274,7 @@ Proof.
   { iSatMono. simplify_map_eq'. iFrame. iSplit; [done|]. iAccu. }
   iSatClear.
 
-  (* TOOD: finish this proof *)
+  (* TODO: finish this proof *)
 Admitted.
 
 Lemma complete_refinement :

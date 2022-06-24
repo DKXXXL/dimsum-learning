@@ -498,7 +498,7 @@ Proof.
   tstep_i => *. destruct_all?; simplify_eq/=. split; [by econs|].
   tstep_i.
   tstep_i.
-  (* TOOD: finish this proof *)
+  (* TODO: finish this proof *)
 Admitted.
 
 Definition top_level_itree : itree (moduleE asm_event unit) unit :=
@@ -586,7 +586,7 @@ Proof.
   { iSatMono. simplify_map_eq'. iFrame. iSplit; [done|]. iAccu. }
   iSatClear.
 
-  (* TOOD: finish this proof *)
+  (* TODO: finish this proof *)
 Admitted.
 
 Lemma complete_refinement :
