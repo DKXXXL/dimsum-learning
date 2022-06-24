@@ -43,36 +43,6 @@ Proof.
   - move => ??? [??] [??]. by split; etrans.
 Qed.
 
-(*
-Inductive ti_lt_alt : trace_index → trace_index → Prop :=
-| ti_lt_O_S n : ti_lt_alt tiO (tiS n)
-| ti_lt_S_S n1 n2 : ti_lt_alt n1 n2 → ti_lt_alt (tiS n1) (tiS n2)
-| ti_lt_choice_l T f n : (∀ x, ti_lt_alt (f x) n) → ti_lt_alt (tiChoice T f) n
-| ti_lt_choice_r T f n x : ti_lt_alt n (f x) → ti_lt_alt n (tiChoice T f)
-.
-
-Lemma ti_lt_alt_equiv n1 n2:
-  n1 ⊂ n2 ↔ ti_lt_alt n1 n2.
-Proof.
-  split.
-  - move => [Hle Hnle]. elim: Hle Hnle.
-    + elim.
-      * done.
-      * econs.
-      * move => ?? IH Hnle. admit.
-    + move => ??? IH Hnle. econstructor. apply: IH. contradict Hnle. by constructor.
-    + move => ???? IH Hnle. econs => ?. apply: IH. contradict Hnle. by econs.
-    + move => ????? IH Hnle.
-      (* TODO: the negation causes problems *)
-  (* econs. apply: IH. contradict Hnle. econs. *)
-      admit.
-  - elim.
-    + move => ?. split; [by econs| ] => Ht. inversion Ht.
-    + move => ??? [IHle IHnle]. split; [by econs|] => Hs. inversion Hs; simplify_eq. naive_solver.
-    + move => ???? IH. split. { econs. admit. } move => ?. admit.
-    +
-Admitted.
-*)
 Lemma tiChoice_mono T f1 f2:
   (∀ x, f1 x ⊆ f2 x) →
   tiChoice T f1 ⊆ tiChoice T f2.
@@ -287,49 +257,6 @@ Lemma ti_lt_S n:
   n ⊂ tiS n.
 Proof. split; [apply: ti_le_S | apply: ti_not_le_S]. Qed.
 
-(*
-Lemma ti_le_lt_S n1 n2:
-  n1 ⊂ tiS n2 →
-  n1 ⊆ n2.
-Proof.
-  elim: n1 n2.
-  - move => ??. econs.
-  - move => ? IH ? [Hle ?]. inversion Hle; simplify_eq. admit.
-  - move => ?? IH ? [Hle Hnle]. inversion Hle; simplify_K. constructor => ?.
-    apply: IH. split; [naive_solver|]. move => ?. apply: Hnle. by econs.
-Admitted.
-
-Lemma ti_le_lt_S' n1 n2:
-  ti_lt_alt n1 n2 →
-  tiS n1 ⊆ n2.
-Proof.
-  elim.
-  - move => ?. econs. econs.
-  - move => ????. by econs.
-  - move => ?? n _. elim: n.
-    (* This is not provable! *)
-Admitted.
- *)
-(*
-Lemma ti_lt_le (n1 n2 n3 : trace_index):
-  n1 ⊂ n2 → n2 ⊆ n3 → n1 ⊂ n3.
-Proof. move => [Hle1 Hnle] Hle. split; [by etrans|]. move => ?. apply: Hnle. by etrans. Qed.
- *)
-(*
-Lemma ti_lt_wf : wf (⊂@{trace_index}).
-Proof.
-  have H : forall n a : trace_index, a ⊂ n -> Acc (⊂) a; last first.
-  { move => n. apply: (H (tiS n)). apply ti_lt_S. }
-  elim.
-  - move => a [? Hnot]. contradict Hnot. econs.
-  - move => n IH a Hs. constructor => ??. apply: IH. apply: ti_lt_le; [done|]. by apply ti_le_lt_S.
-  - move => T f IH a [Hle Hnle].
-    (* inversion Hle; simplify_K. *)
-    (* + admit. *)
-    (* + admit. *)
-    (* + apply: IH. split; [done|]. contradict Hnle. constructor => ?. *)
-Admitted.
-*)
 Lemma ti_lt_ind (P : trace_index → Prop):
   (∀ x : trace_index, (∀ y : trace_index, tiS y ⊆ x → P y) → P x) → ∀ a, P a.
 Proof.
