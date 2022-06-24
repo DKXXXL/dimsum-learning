@@ -11,6 +11,7 @@ Require Import refframe.asm.
 Require Import refframe.itree.
 Require Import refframe.imp_to_asm.
 Require Import refframe.compiler.compiler.
+Require Import refframe.print.
 
 Local Open Scope Z_scope.
 
@@ -185,74 +186,6 @@ Proof.
 Qed.
 
 
-Definition __NR_PRINT : Z := 42.
-Definition print_addr : Z := 500.
-
-Definition print_asm : gmap Z asm_instr :=
-  deep_to_asm_instrs print_addr [
-      Amov "R8" (ImmediateOp __NR_PRINT);
-      ASyscall;
-      Aret
-    ].
-
-Definition print_itree : itree (moduleE asm_event unit) unit :=
-  ITree.forever (
-    '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
-    TAssume (rs !!! "PC" = print_addr);;;;
-    TAssume (print_asm !! (rs !!! "R30") = None);;;;
-    args ← TExist _;;;
-    TAssert (length args = length syscall_arg_regs);;;;
-    TAssert (args !! 0%nat = Some (rs !!! "R0"));;;;
-    TAssert (args !! 8%nat = Some __NR_PRINT);;;;
-    TVis (Outgoing, EASyscallCall args);;;;
-    ret ← TReceive (λ ret, (Incoming, EASyscallRet ret));;;
-    TVis (Outgoing, EAJump (<["PC" := rs !!! "R30"]> $
-                            <["R0" := ret]> $
-                            <["R8" := __NR_PRINT]> $
-                            rs) mem)).
-
-Lemma print_asm_refines_itree :
-  trefines (MS asm_module (initial_asm_state print_asm))
-           (MS (mod_itree _ _) (print_itree, tt)).
-Proof.
-  apply: tsim_implies_trefines => n0 /=.
-  unshelve eapply tsim_remember. { simpl. exact (λ _ σa '(t, _),
-    t ≈ print_itree ∧
-    σa.(asm_cur_instr) = AWaiting ∧
-    σa.(asm_instrs) = print_asm). }
-  { split!. } { done. }
-  move => n _ Hloop [????] [??] ?. destruct_all?; simplify_eq/=.
-  tstep_i => ????? Hi. tstep_s. rewrite -/print_itree. go.
-  go_s. eexists (_, _). go.
-  go_s. split!. go.
-  go_s => ?. go.
-  go_s => ?. go.
-  tstep_i => ??. simplify_map_eq'.
-  tstep_i.
-  tstep_i.
-  tstep_i => ??. simplify_map_eq'.
-  tstep_i.
-  go_s. eexists _. go.
-  go_s. split; [shelve|]. go.
-  go_s. split; [shelve|]. go.
-  go_s. split; [shelve|]. go.
-  go_s. split!. go.
-  tstep_i => ?.
-  go_s. eexists _. go.
-  go_s. split!. go.
-  tstep_i.
-  tstep_i => ??. simplify_map_eq'.
-  tstep_i. simplify_map_eq'.
-  tstep_i => ??. simplify_map_eq'.
-  go_s. sort_map_insert. simplify_map_eq'. split!. go.
-  by apply: Hloop.
-  Unshelve.
-  - done.
-  - by simplify_map_eq'.
-  - by simplify_map_eq'.
-Qed.
-
-
 Definition memmove_imp : fndef := {|
   fd_args := ["d"; "s"; "n"];
   fd_vars := [];
@@ -282,6 +215,8 @@ Definition memcpy_imp : fndef := {|
 Definition memcpy_prog : gmap string fndef :=
   <["memcpy" := memcpy_imp]> $ ∅.
 
+Definition main_addr : Z := 50.
+
 Definition main_imp : fndef := {|
   fd_args := [];
   fd_vars := [("x", 3)];
@@ -299,14 +234,14 @@ Definition main_prog : gmap string fndef :=
   <["main" := main_imp]> $ ∅.
 
 Definition main_f2i : gmap string Z :=
-  <["main" := 50]> $
+  <["main" := main_addr]> $
   <["memmove" := 200]> $
   <["memcpy"  := 300]> $
   <["print"  := print_addr]> $
   locle_f2i.
 
 Definition main_asm : gmap Z asm_instr :=
-  deep_to_asm_instrs 50 ltac:(i2a_compile main_f2i main_imp).
+  deep_to_asm_instrs main_addr ltac:(i2a_compile main_f2i main_imp).
 
 Definition memmove_asm : gmap Z asm_instr :=
   deep_to_asm_instrs 200 ltac:(i2a_compile main_f2i memmove_imp).
@@ -314,14 +249,16 @@ Definition memmove_asm : gmap Z asm_instr :=
 Definition memcpy_asm : gmap Z asm_instr :=
   deep_to_asm_instrs 300 ltac:(i2a_compile main_f2i memcpy_imp).
 
-(* (* We need to lock this, otherwise simpl goes crazy. *) *)
-(* Definition main_asm_dom : gset Z := locked (dom _) main_asm. *)
+Definition main_asm_dom : gset Z := locked (dom _) main_asm.
+Definition memmove_asm_dom : gset Z := locked (dom _) memmove_asm.
+Definition memcpy_asm_dom : gset Z := locked (dom _) memcpy_asm.
 
 Lemma main_asm_refines_imp :
   trefines (MS asm_module (initial_asm_state main_asm))
-           (MS (imp_to_asm (dom _ main_asm) {["main"]} main_f2i imp_module)
+           (MS (imp_to_asm main_asm_dom {["main"]} main_f2i imp_module)
                (initial_imp_to_asm_state ∅ imp_module (initial_imp_state main_prog))).
 Proof.
+  unfold main_asm_dom; unlock.
   apply: compile_correct; [|done|..].
   - by vm_compute.
   - by vm_compute.
@@ -331,9 +268,10 @@ Qed.
 
 Lemma memmove_asm_refines_imp :
   trefines (MS asm_module (initial_asm_state memmove_asm))
-           (MS (imp_to_asm (dom _ memmove_asm) {["memmove"]} main_f2i imp_module)
+           (MS (imp_to_asm memmove_asm_dom {["memmove"]} main_f2i imp_module)
                (initial_imp_to_asm_state ∅ imp_module (initial_imp_state memmove_prog))).
 Proof.
+  unfold memmove_asm_dom; unlock.
   apply: compile_correct; [|done|..].
   - by vm_compute.
   - by vm_compute.
@@ -343,9 +281,10 @@ Qed.
 
 Lemma memcpy_asm_refines_imp :
   trefines (MS asm_module (initial_asm_state memcpy_asm))
-           (MS (imp_to_asm (dom _ memcpy_asm) {["memcpy"]} main_f2i imp_module)
+           (MS (imp_to_asm memcpy_asm_dom {["memcpy"]} main_f2i imp_module)
                (initial_imp_to_asm_state ∅ imp_module (initial_imp_state memcpy_prog))).
 Proof.
+  unfold memcpy_asm_dom; unlock.
   apply: compile_correct; [|done|..].
   - by vm_compute.
   - by vm_compute.
@@ -537,3 +476,258 @@ Proof.
     go_s. split!. rewrite bind_ret_l. go.
     eapply IH; [done|]. split!.
 Qed.
+
+Definition main_itree : itree (moduleE imp_event unit) unit :=
+  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, EICall f vs h));;;
+  TAssume (f = "main");;;;
+  TAssume (vs = []);;;;
+  h' ← TExist _;;;
+  TVis (Outgoing, EICall "print" [ValNum 1] h');;;;
+  e ← TExist _;;;
+  TVis (Incoming, e);;;;
+  TAssume (if e is EIReturn _ _ then true else false);;;;
+  h' ← TExist _;;;
+  TVis (Outgoing, EICall "print" [ValNum 2] h');;;;
+  e ← TExist _;;;
+  TVis (Incoming, e);;;;
+  TAssume (if e is EIReturn _ _ then true else false);;;;
+  TUb.
+
+Lemma main_refines_itree :
+  trefines (MS (imp_prod {["main"]} {["memmove"; "memcpy"; "locle"]} imp_module (mod_itree _ _))
+              (initial_imp_prod_state imp_module (mod_itree _ _)
+              (initial_imp_state main_prog) (memmove_itree, tt)))
+           (MS (mod_itree _ _) (main_itree, tt)).
+Proof.
+  apply: tsim_implies_trefines => n0 /=.
+  tstep_i => *. case_match; destruct_all?; simplify_eq/=.
+  go_s. eexists (_, _, _). rewrite -/main_itree. go.
+  go_s. split!. go.
+  go_s => ?. go. simplify_eq. rewrite bool_decide_true; [|done].
+  go_s => ?. go.
+  tstep_i. split! => ???? Hf ?. unfold main_prog in Hf. simplify_map_eq.
+  tstep_i. split! => ? Hf. unfold main_prog in Hf. simplify_map_eq. split!.
+  tstep_i => *. destruct_all?; simplify_eq/=. split; [by econs|].
+  tstep_i.
+  tstep_i.
+  (* TOOD: finish this proof *)
+Admitted.
+
+Definition top_level_itree : itree (moduleE asm_event unit) unit :=
+  '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
+  TAssume (rs !!! "PC" = main_addr);;;;
+  TAssume (rs !!! "R30" ∉ main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom _ locle_asm);;;;
+  TAssume (∃ gp, gp + GUARD_PAGE_SIZE ≤ rs !!! "SP" ∧ i2a_mem_stack_mem (rs !!! "SP") gp ⊆ mem);;;;
+  args ← TExist _;;;
+  TAssert (length args = length syscall_arg_regs);;;;
+  TAssert (args !! 0%nat = Some 1);;;;
+  TAssert (args !! 8%nat = Some __NR_PRINT);;;;
+  TVis (Outgoing, EASyscallCall args);;;;
+  ret ← TReceive (λ ret, (Incoming, EASyscallRet ret));;;
+  args ← TExist _;;;
+  TAssert (length args = length syscall_arg_regs);;;;
+  TAssert (args !! 0%nat = Some 2);;;;
+  TAssert (args !! 8%nat = Some __NR_PRINT);;;;
+  TVis (Outgoing, EASyscallCall args);;;;
+  ret ← TReceive (λ ret, (Incoming, EASyscallRet ret));;;
+  TUb.
+
+Lemma top_level_refines_itree :
+  trefines (MS (asm_prod (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom _ locle_asm)
+                         (dom _ print_asm)
+                         (imp_to_asm (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom _ locle_asm)
+                                     {["main"; "memmove"; "memcpy"; "locle"]}
+                                     main_f2i
+                                     (mod_itree _ _)) (mod_itree _ _))
+              (initial_asm_prod_state (imp_to_asm _ _ _ _) (mod_itree _ _)
+                 (initial_imp_to_asm_state ∅ (mod_itree _ _) (main_itree, tt)) (print_itree, tt)))
+           (MS (mod_itree _ _) (top_level_itree, tt)).
+Proof.
+  apply: tsim_implies_trefines => n0 /=.
+  tstep_i => *. case_match; destruct_all?; simplify_eq/=.
+  go_s. eexists (_, _). go.
+  go_s. split!. go.
+  go_s => ?. go. simplify_map_eq'.
+  go_s => ?. go.
+  go_s => -[?[??]]. go.
+  rewrite bool_decide_true. 2: unfold main_asm_dom, memmove_asm_dom, memcpy_asm_dom; unlock; by vm_compute.
+  tstep_i => ??. simplify_eq.
+  tstep_i. eexists true. split; [done|] => /=. eexists initial_heap_state, _, [], [], _, "main". split!.
+  { simplify_map_eq'. done. } 2: done. done.
+  { apply: satisfiable_mono; [by eapply i2a_res_init|].
+    iIntros!. iDestruct select (i2a_mem_auth _) as "$". rewrite /i2a_mem_map big_sepM_empty. iFrame.
+    iSplitL; [|iAccu]. iApply i2a_mem_stack_init; [done|]. by iApply big_sepM_subseteq. }
+
+  go_i => -[[??]?]. go.
+  go_i => ?. go. simplify_eq.
+  go_i. split!. go.
+  go_i. split!. go.
+  go_i => ?. go.
+  go_i.
+  go_i => *. destruct_all?; simplify_eq.
+  iSatStart. iIntros!.
+  iDestruct (i2a_args_intro with "[$]") as "?"; [done|]. rewrite i2a_args_cons ?i2a_args_nil; [|done].
+  iDestruct!. iSatStop.
+
+  rename select (main_f2i !! _ = Some _) into Hf2i. unfold main_f2i in Hf2i. simplify_map_eq'.
+  rewrite bool_decide_false. 2: unfold main_asm_dom, memmove_asm_dom, memcpy_asm_dom; unlock; by vm_compute.
+  rewrite bool_decide_true. 2: compute_done.
+  go_i.
+  go_i => -[??]. go.
+  go_i => ?. go. simplify_eq.
+  go_i. split!. go.
+  go_i. split. admit. go.
+  go_i => ?. go.
+  go_i => ?. go.
+  go_i => ?. go.
+  go_i => ?. go.
+  go_i => *. go. destruct_all?; simplify_eq.
+
+  go_s. eexists _. go.
+  go_s. split; [done|]. go. simplify_map_eq'.
+  go_s. split; [done|]. go.
+  go_s. split; [done|]. go.
+  go_s. split; [done|]. go.
+
+  go_i => *. unfold i2a_regs_call in *. case_match; destruct_all?; simplify_eq.
+  go_s. eexists _. go.
+  go_s. split!. go.
+
+  go_i => ?. go.
+  go_i => ?. go. simplify_eq.
+  go_i => *. go. destruct_all?; simplify_map_eq'. rewrite bool_decide_true; [|done].
+  go_i => ??. simplify_eq.
+  go_i. eexists false. split; [done|]. eexists _, _, [ValNum _]. split!. { by simplify_map_eq'. }
+  { split. { by simplify_map_eq'. }
+    apply map_preserved_insert_r_not_in; [compute_done|].
+    apply map_preserved_insert_r_not_in; [compute_done|].
+    apply map_preserved_insert_r_not_in; [compute_done|].
+    done. }
+  { iSatMono. simplify_map_eq'. iFrame. iSplit; [done|]. iAccu. }
+  iSatClear.
+
+  (* TOOD: finish this proof *)
+Admitted.
+
+Lemma complete_refinement :
+  trefines (MS asm_module (initial_asm_state (main_asm ∪ memmove_asm ∪ memcpy_asm ∪ locle_asm ∪ print_asm)))
+           (MS (mod_itree _ _) (top_level_itree, tt)).
+Proof.
+  etrans. {
+    have -> : (main_asm ∪ memmove_asm ∪ memcpy_asm ∪ locle_asm ∪ print_asm) =
+             (main_asm ∪ (memmove_asm ∪ memcpy_asm ∪ locle_asm) ∪ print_asm) by rewrite 2!assoc_L.
+    etrans. {
+      apply asm_link_refines_prod. compute_done.
+    }
+    etrans. {
+      apply: asm_prod_trefines; [|done].
+      apply asm_link_refines_prod. compute_done.
+    }
+    etrans. {
+      apply: asm_prod_trefines; [|done].
+      apply: asm_prod_trefines; [done|].
+      apply asm_link_refines_prod. compute_done.
+    }
+    etrans. {
+      apply: asm_prod_trefines; [|done].
+      apply: asm_prod_trefines; [done|].
+      apply: asm_prod_trefines; [|done].
+      apply asm_link_refines_prod. compute_done.
+    }
+    done.
+  }
+  etrans. {
+    apply: asm_prod_trefines; [|done].
+    apply: asm_prod_trefines; [apply main_asm_refines_imp|].
+    apply: asm_prod_trefines; [|done].
+    apply: asm_prod_trefines; [apply memmove_asm_refines_imp|apply memcpy_asm_refines_imp].
+  }
+  etrans. {
+    apply: asm_prod_trefines; [|apply print_asm_refines_itree].
+    apply: asm_prod_trefines; [done|].
+    apply: asm_prod_trefines; [done|apply locle_asm_refines_itree].
+  }
+  etrans. {
+    etrans. {
+      apply: asm_prod_trefines; [|done].
+      apply: asm_prod_trefines; [done|].
+      apply: asm_prod_trefines; [|done].
+      rewrite /memmove_asm_dom /memcpy_asm_dom. unlock.
+      apply: imp_to_asm_combine.
+      - compute_done.
+      - compute_done.
+      - compute_done.
+      - move => *. eexists 200. split; [compute_done|]. set_solver.
+      - move => *. eexists 300. split; [compute_done|]. set_solver.
+      - move => ???. rewrite /main_f2i /locle_f2i !lookup_insert_Some.
+        naive_solver.
+      - move => ??. admit.
+      - move => ??. admit.
+    }
+    rewrite idemp.
+    etrans. {
+      apply: asm_prod_trefines; [|done].
+      apply: asm_prod_trefines; [done|].
+      apply: imp_to_asm_combine.
+      - compute_done.
+      - compute_done.
+      - compute_done.
+      - move => *. admit.
+      - move => *. admit.
+      - move => ???. rewrite /main_f2i /locle_f2i !lookup_insert_Some.
+        naive_solver.
+      - move => ??. admit.
+      - move => ??. admit.
+    }
+    rewrite idemp -dom_union_L.
+    etrans. {
+      apply: asm_prod_trefines; [|done].
+      rewrite /main_asm_dom. unlock.
+      apply: imp_to_asm_combine.
+      - compute_done.
+      - compute_done.
+      - compute_done.
+      - move => *. admit.
+      - move => *. admit.
+      - enough (map_Forall (λ f1 i1, map_Forall (λ f2 i2, f1 ≠ f2 ∨ i1 = i2) (main_f2i ∪ locle_f2i)) main_f2i).
+        { admit. }
+        compute_done.
+      - move => ??. admit.
+      - move => ??. admit.
+    }
+    done.
+  }
+  etrans. {
+    etrans. {
+      apply: asm_prod_trefines; [|done].
+      apply: imp_to_asm_trefines.
+      apply: imp_prod_trefines; [done|].
+      apply: imp_prod_trefines; [|done].
+      have -> : {["memmove"]} = dom (gset _) memmove_prog by compute_done.
+      have -> : {["memcpy"]} = dom (gset _) memcpy_prog by compute_done.
+      apply: imp_prod_refines_link.
+      compute_done.
+    }
+    etrans. {
+      apply: asm_prod_trefines; [|done].
+      apply: imp_to_asm_trefines.
+      apply: imp_prod_trefines; [done|].
+      apply memmove_refines_itree.
+    }
+    done.
+  }
+  etrans. {
+    apply: asm_prod_trefines; [|done].
+    apply: imp_to_asm_trefines.
+    apply main_refines_itree.
+  }
+  etrans. {
+    etrans; [|apply top_level_refines_itree].
+    rewrite /main_asm_dom/memmove_asm_dom/memcpy_asm_dom/locle_fns. unlock.
+    rewrite -4!dom_union_L 5!assoc_L idemp_L.
+    have -> : (main_f2i ∪ locle_f2i) = main_f2i. by admit.
+    assert ((∅ ∪ (∅ ∪ ∅)) = ∅) as ->. by rewrite !left_id_L.
+    done.
+  }
+  done.
+Admitted.

@@ -804,6 +804,8 @@ Inductive imp_ev : Type :=
 | EICall (fn : string) (args: list val) (h : heap_state)
 | EIReturn (ret: val) (h : heap_state).
 
+Global Instance imp_ev_inhabited : Inhabited imp_ev := populate (EIReturn inhabitant initial_heap_state).
+
 Definition imp_event := io_event imp_ev.
 
 Definition vals_of_event (e : imp_ev) : list val :=

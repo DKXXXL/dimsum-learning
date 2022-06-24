@@ -722,6 +722,10 @@ Proof. unfold map_preserved. set_solver. Qed.
 Lemma map_preserved_nil {K A} `{Countable K} `{!Inhabited A} (m m' : gmap K A) :
   map_preserved [] m m'.
 Proof. move => ??. set_solver. Qed.
+Lemma map_preserved_nil' {K A} `{Countable K} `{!Inhabited A} (m m' : gmap K A) ns:
+  ns = [] →
+  map_preserved ns m m'.
+Proof. move => -> ??. set_solver. Qed.
 
 Lemma map_preserved_cons {K A} `{Countable K} `{!Inhabited A} n ns (m m' : gmap K A) :
   m !!! n = m' !!! n →

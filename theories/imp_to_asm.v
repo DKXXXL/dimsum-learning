@@ -826,6 +826,20 @@ Proof.
   by iFrame.
 Qed.
 
+Lemma i2a_mem_update_big sp gp mem mo mo' :
+  dom (gset _) mo = dom _ mo' →
+  i2a_mem_inv sp gp mem -∗
+  i2a_mem_map mo ==∗
+  i2a_mem_map mo' ∗ i2a_mem_inv sp gp (mo' ∪ mem).
+Proof.
+  iIntros (Hdom) "[$ Hmem] Hconst".
+  iMod (i2a_mem_delete_big' with "[$] [$]").
+  iMod (i2a_mem_alloc_big' with "[$]") as "[? $]".
+  { apply map_disjoint_spec => ???. rewrite !lookup_difference_Some -not_elem_of_dom Hdom not_elem_of_dom.  naive_solver. }
+  iModIntro.
+  by rewrite (map_difference_eq_dom_L _ mo mo') // -map_difference_union_r.
+Qed.
+
 Lemma i2a_mem_delete n mem sp gp:
   0 ≤ n →
   i2a_mem_inv sp gp mem -∗
@@ -869,6 +883,12 @@ Proof.
   { eexists (Z.to_nat (sp' - sp)). lia. }
   iApply (i2a_mem_delete with "[$] [$]"). lia.
 Qed.
+
+Lemma i2a_mem_swap_stack sp1 gp1 sp2 gp2 mem:
+  i2a_mem_inv sp1 gp1 mem -∗
+  i2a_mem_stack sp2 gp2 -∗
+  i2a_mem_inv sp2 gp2 mem ∗ i2a_mem_stack sp1 gp1.
+Proof. iIntros "[??] ?". iFrame. Qed.
 
 Lemma i2a_heap_alloc h l n:
   heap_is_fresh h l →
@@ -1143,6 +1163,16 @@ Lemma i2a_args_cons o v vs rs r:
   args_registers !! o = Some r →
   i2a_args o (v::vs) rs ⊣⊢ i2a_val_rel v (rs !!! r) ∗ i2a_args (S o) vs rs.
 Proof. move => ?. rewrite i2a_args_cons1. iSplit; iIntros!; iSplit!. Qed.
+
+Lemma i2a_args_pure_mono o avs rs rs':
+  map_preserved args_registers rs rs' →
+  i2a_args_pure o avs rs →
+  i2a_args_pure o avs rs'.
+Proof.
+  move => Hrs Ha ???. have [?[??]]:= Ha _ _ ltac:(done). split!.
+  etrans; [|done].
+  symmetry. apply: Hrs. by apply: elem_of_list_lookup_2.
+Qed.
 
 Lemma i2a_args_mono o vs rs rs':
   map_preserved (drop o args_registers) rs rs' →

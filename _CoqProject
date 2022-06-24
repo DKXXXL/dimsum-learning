@@ -33,10 +33,12 @@ theories/imp_heap_bij.v
 theories/imp_heap_bij_own.v
 theories/imp_to_asm.v
 theories/i2a_bij_vertical.v
+theories/coroutine.v
 theories/imp_to_asm_examples.v
 theories/int_ptr_cast.v
+theories/print.v
 theories/memmove.v
-theories/coroutine.v
+theories/coroutine_example.v
 theories/compiler/monad.v
 theories/compiler/linear_imp.v
 theories/compiler/ssa.v

@@ -8,6 +8,11 @@ Require Import refframe.state_transform.
 (*** [seq_product] *)
 Inductive seq_product_state :=
 | SPLeft | SPRight | SPNone.
+
+Global Instance seq_product_state_inhabited : Inhabited seq_product_state := populate SPNone.
+Global Instance seq_product_eq_dec : EqDecision seq_product_state.
+Proof. solve_decision. Qed.
+
 Inductive seq_product_event (EV1 EV2 : Type) :=
 | SPELeft (e : EV1) (s : seq_product_state)
 | SPERight (e : EV2) (s : seq_product_state)
