@@ -259,11 +259,7 @@ Lemma main_asm_refines_imp :
                (initial_imp_to_asm_state ∅ imp_module (initial_imp_state main_prog))).
 Proof.
   unfold main_asm_dom; unlock.
-  apply: compile_correct; [|done|..].
-  - by vm_compute.
-  - by vm_compute.
-  - move => ??. rewrite /main_f2i/locle_f2i !lookup_insert_Some !lookup_empty.
-    move => ?. destruct_all?; simplify_eq; compute_done.
+  apply: compile_correct; [|done|..]; compute_done.
 Qed.
 
 Lemma memmove_asm_refines_imp :
@@ -272,11 +268,7 @@ Lemma memmove_asm_refines_imp :
                (initial_imp_to_asm_state ∅ imp_module (initial_imp_state memmove_prog))).
 Proof.
   unfold memmove_asm_dom; unlock.
-  apply: compile_correct; [|done|..].
-  - by vm_compute.
-  - by vm_compute.
-  - move => ??. rewrite /main_f2i/locle_f2i !lookup_insert_Some !lookup_empty.
-    move => ?. destruct_all?; simplify_eq; compute_done.
+  apply: compile_correct; [|done|..]; compute_done.
 Qed.
 
 Lemma memcpy_asm_refines_imp :
@@ -285,11 +277,7 @@ Lemma memcpy_asm_refines_imp :
                (initial_imp_to_asm_state ∅ imp_module (initial_imp_state memcpy_prog))).
 Proof.
   unfold memcpy_asm_dom; unlock.
-  apply: compile_correct; [|done|..].
-  - by vm_compute.
-  - by vm_compute.
-  - move => ??. rewrite /main_f2i/locle_f2i !lookup_insert_Some !lookup_empty.
-    move => ?. destruct_all?; simplify_eq; compute_done.
+  apply: compile_correct; [|done|..]; compute_done.
 Qed.
 
 Lemma memcpy_spec n0 d s d' s' n o K e h m σ1 σ2 b cs hvs `{!ImpExprFill e K

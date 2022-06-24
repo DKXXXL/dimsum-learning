@@ -281,13 +281,7 @@ Lemma main_asm_refines_imp :
   trefines (MS asm_module (initial_asm_state main_asm))
            (MS (imp_to_asm (dom _ main_asm) {["main"]} main_f2i imp_module)
                (initial_imp_to_asm_state ∅ imp_module (initial_imp_state main_imp_prog))).
-Proof.
-  apply: compile_correct; [|done|..].
-  - by vm_compute.
-  - by vm_compute.
-  - move => ??. rewrite /main_f2i/int_to_ptr_f2i !lookup_insert_Some !lookup_empty.
-    move => ?. destruct_all?; simplify_eq; compute_done.
-Qed.
+Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
 
 (* https://thog.github.io/syscalls-table-aarch64/latest.html *)
 Definition __NR_EXIT : Z := 93.

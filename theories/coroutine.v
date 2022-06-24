@@ -239,7 +239,7 @@ Proof. move => ??. by apply mod_link_trefines. Qed.
 
 Ltac fast_set_solver := set_unfold; naive_solver.
 
-Theorem coro_spec m1 m2 σ1 σ2 ins1 ins2 fns1 fns2 f2i1 f2i2 finit regs_init gp_init
+Theorem coro_spec finit regs_init gp_init m1 m2 σ1 σ2 ins1 ins2 fns1 fns2 f2i1 f2i2
   `{!VisNoAll m1} `{!VisNoAll m2}:
   let fns := {["yield"]} ∪ fns1 ∪ fns2 in
   let ins := yield_asm_dom ∪ ins1 ∪ ins2 in
@@ -253,12 +253,12 @@ Theorem coro_spec m1 m2 σ1 σ2 ins1 ins2 fns1 fns2 f2i1 f2i2 finit regs_init gp
   yield_asm_dom ## ins1 ∪ ins2 →
   f2i1 !! "yield" = Some yield_addr →
   f2i2 !! "yield" = Some yield_addr →
-  (∀ f, f ∈ fns1 → ∃ i, i ∈ ins1 ∧ f2i1 !! f = Some i) →
-  (∀ f, f ∈ fns2 → ∃ i, i ∈ ins2 ∧ f2i2 !! f = Some i) →
-  (∀ f i1 i2, f2i1 !! f = Some i1 → f2i2 !! f = Some i2 → i1 = i2) →
-  (∀ f i, f2i !! f = Some i → i ∈ ins2 → f ∈ fns2) →
-  (∀ f i, f2i !! f = Some i → i ∈ ins1 → f ∈ fns1) →
-  (∀ f i, f2i !! f = Some i → i ∈ yield_asm_dom → f = "yield") →
+  set_Forall (λ f, Is_true (if f2i1 !! f is Some i then bool_decide (i ∈ ins1) else false)) fns1 →
+  set_Forall (λ f, Is_true (if f2i2 !! f is Some i then bool_decide (i ∈ ins2) else false)) fns2 →
+  map_Forall (λ f i1, Is_true (if f2i2 !! f is Some i2 then bool_decide (i1 = i2) else true)) f2i1 →
+  map_Forall (λ f i, f ∈ fns2 ∨ i ∉ ins2) f2i →
+  map_Forall (λ f i, f ∈ fns1 ∨ i ∉ ins1) f2i →
+  map_Forall (λ f i, f = "yield" ∨ i ∉ yield_asm_dom) f2i →
   i2a_mem_stack_mem (regs_init !!! "SP") gp_init ##ₘ coro_regs_mem regs_init →
   gp_init + GUARD_PAGE_SIZE ≤ regs_init !!! "SP" →
   trefines
@@ -275,6 +275,24 @@ Theorem coro_spec m1 m2 σ1 σ2 ins1 ins2 fns1 fns2 f2i1 f2i2 finit regs_init gp
 .
 Proof.
   move => fns ins f2i mo Hinit Hfinit Hyf Hidisj Hfdisj Hydisj Hy1 Hy2 Hi1 Hi2 Hag Hf1 Hf2 Hfy Hmo Hgp.
+  have {}Hi1 : (∀ f, f ∈ fns1 → ∃ i, i ∈ ins1 ∧ f2i1 !! f = Some i). {
+    move => ? /Hi1. case_match => // /bool_decide_unpack. naive_solver.
+  }
+  have {}Hi2 : (∀ f, f ∈ fns2 → ∃ i, i ∈ ins2 ∧ f2i2 !! f = Some i). {
+    move => ? /Hi2. case_match => // /bool_decide_unpack. naive_solver.
+  }
+  have {}Hag : (∀ f i1 i2, f2i1 !! f = Some i1 → f2i2 !! f = Some i2 → i1 = i2). {
+    move => ??? /Hag Hs?. simplify_map_eq. rewrite bool_decide_spec in Hs. done.
+  }
+  have {}Hf1 : (∀ f i, f2i !! f = Some i → i ∈ ins2 → f ∈ fns2). {
+    move => ?? /Hf1. naive_solver.
+  }
+  have {}Hf2 : (∀ f i, f2i !! f = Some i → i ∈ ins1 → f ∈ fns1). {
+    move => ?? /Hf2. naive_solver.
+  }
+  have {}Hfy : (∀ f i, f2i !! f = Some i → i ∈ yield_asm_dom → f = "yield"). {
+    move => ?? /Hfy. naive_solver.
+  }
   have ? : ∀ f i1 i2, f2i1 !! f  = Some i1 → f2i !! f = Some i2 → i1 = i2.
   { move => ???. rewrite /f2i lookup_union_Some_raw. naive_solver. }
   etrans. { apply: asm_prod_trefines; [|done]. apply (yield_asm_refines_itree regs_init). }
