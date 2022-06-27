@@ -219,14 +219,17 @@ Definition main_addr : Z := 50.
 
 Definition main_imp : fndef := {|
   fd_args := [];
+  (* fd_vars := [("x", 3); ("tmp0", 3); ("tmp1", 3)]; *)
   fd_vars := [("x", 3)];
   fd_body := LetE "_" (Store (BinOp (Var "x") ShiftOp (Val $ ValNum 0)) (Val $ ValNum 1)) $
              LetE "_" (Store (BinOp (Var "x") ShiftOp (Val $ ValNum 1)) (Val $ ValNum 2)) $
-             LetE "_" (imp.Call "memmove" [BinOp (Var "x") ShiftOp (Val $ ValNum 0);
-                                           BinOp (Var "x") ShiftOp (Val $ ValNum 1);
-                                           (Val $ ValNum 2)]) $
-             LetE "_" (imp.Call "print" [Load (BinOp (Var "x") ShiftOp (Val $ ValNum 1))]) $
-             LetE "_" (imp.Call "print" [Load (BinOp (Var "x") ShiftOp (Val $ ValNum 2))]) $
+             LetE "tmp0" (BinOp (Var "x") ShiftOp (Val $ ValNum 0)) $
+             LetE "tmp1" (BinOp (Var "x") ShiftOp (Val $ ValNum 1)) $
+             LetE "_" (imp.Call "memmove" [(Var "tmp0"); (Var "tmp1"); (Val $ ValNum 2)]) $
+             LetE "tmp0" (Load (BinOp (Var "x") ShiftOp (Val $ ValNum 1))) $
+             LetE "_" (imp.Call "print" [Var "tmp0"]) $
+             LetE "tmp0" (Load (BinOp (Var "x") ShiftOp (Val $ ValNum 2))) $
+             LetE "_" (imp.Call "print" [Var "tmp0"]) $
              (Val $ ValNum 0);
   fd_static := I
 |}.
@@ -481,6 +484,16 @@ Definition main_itree : itree (moduleE imp_event unit) unit :=
   TAssume (if e is EIReturn _ _ then true else false);;;;
   TUb.
 
+Lemma heap_alive_alloc2 h l l' n :
+  heap_alive h l ->
+  heap_alive (heap_alloc h l' n) l.
+Proof.
+  destruct l as [p o], l' as [p' o'].
+  simplify_eq/=. rewrite /heap_alive/=/shift_loc/=.
+  intros.
+  apply lookup_union_is_Some. right. eauto.
+Qed.
+
 Lemma main_refines_itree :
   trefines (MS (imp_prod {["main"]} {["memmove"; "memcpy"; "locle"]} imp_module (mod_itree _ _))
               (initial_imp_prod_state imp_module (mod_itree _ _)
@@ -495,9 +508,67 @@ Proof.
   go_s => ?. go.
   tstep_i. split! => ???? Hf ?. unfold main_prog in Hf. simplify_map_eq.
   tstep_i. split! => ? Hf. unfold main_prog in Hf. simplify_map_eq. split!.
-  tstep_i => *. destruct_all?; simplify_eq/=. split; [by econs|].
+  tstep_i => *. destruct_all?; simplify_eq/=. split; [by repeat econs|].
   tstep_i.
   tstep_i.
+  split.
+  (* { rewrite shift_loc_0. do 2 eapply heap_alive_alloc2. eapply heap_alive_alloc; eauto; try lia. } *)
+  { rewrite shift_loc_0. eapply heap_alive_alloc; eauto; try lia. }
+  repeat tstep_i.
+  split.
+  { rewrite shift_loc_0. eapply heap_alive_update. eapply heap_alive_alloc; eauto; try lia. simpl. lia. }
+  (* { rewrite shift_loc_0. eapply heap_alive_update. do 2 eapply heap_alive_alloc2; eauto. *)
+  (*   eapply heap_alive_alloc; eauto; try lia. simpl. lia. } *)
+  tstep_i.
+  tstep_i.
+  tstep_i.
+  tstep_i.
+  tstep_i.
+  tstep_i.
+  split.
+  { intros. destruct_all?; simplify_eq/=. }
+  intros.
+  destruct_all?. subst. simpl in *. simplify_eq.
+  rewrite bool_decide_false; cycle 1.
+  { move => *; simplify_map_eq. }
+  rewrite bool_decide_true; cycle 1.
+  { move => *; simplify_map_eq. eauto. }
+
+  rewrite shift_loc_0. cbn.
+
+  tstep_i. rewrite -/memmove_itree. go.
+  go_i => -[[??]?]. go.
+  go_i => ?. go. simplify_eq/=.
+  go_i. split!. go.
+  go_i. eexists (_, _, _). go.
+  go_i. split!. go.
+  go_i. eexists ([ValNum 2; ValNum 2]). go.
+  go_i. split!. go.
+  go_i. split!.
+  { intros.
+    destruct i; simpl in *; destruct_all?; simplify_eq.
+    - rewrite ! shift_loc_0. erewrite ! Z.add_0_r.
+      rewrite lookup_alter; try lia.
+      unfold fmap. unfold option_fmap. unfold option_map.
+      rewrite lookup_alter_ne; simpl; try lia; cycle 1.
+      { admit. }
+      admit.
+    - destruct i; simpl in *; destruct_all?; simplify_eq.
+      rewrite ! shift_loc_0. erewrite ! Z.add_0_r.
+      admit.
+  }
+  go.
+
+  go_i. split!.
+  { intros. admit. }
+  go.
+
+  go_i => ??????. destruct_all?; simplify_eq. go.
+  go_i. split!.
+  intros. destruct_all?; simplify_eq.
+  tstep_i.
+  tstep_i.
+  admit.
   (* TODO: finish this proof *)
 Admitted.
 
