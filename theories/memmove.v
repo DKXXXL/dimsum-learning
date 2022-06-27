@@ -476,12 +476,12 @@ Definition main_itree : itree (moduleE imp_event unit) unit :=
   TVis (Outgoing, EICall "print" [ValNum 1] h');;;;
   e ← TExist _;;;
   TVis (Incoming, e);;;;
-  TAssume (if e is EIReturn _ _ then true else false);;;;
+  TAssume (if e is EIReturn _ h'' then h' = h'' else false);;;;
   h' ← TExist _;;;
   TVis (Outgoing, EICall "print" [ValNum 2] h');;;;
   e ← TExist _;;;
   TVis (Incoming, e);;;;
-  TAssume (if e is EIReturn _ _ then true else false);;;;
+  TAssume (if e is EIReturn _ h'' then h' = h'' else false);;;;
   TUb.
 
 Lemma heap_alive_alloc2 h l l' n :
@@ -542,7 +542,7 @@ Proof.
   go_i. split!. go.
   go_i. eexists (_, _, _). go.
   go_i. split!. go.
-  go_i. eexists ([ValNum 2; ValNum 2]). go.
+  go_i. eexists ([ValNum 2; ValNum 0]). go.
   go_i. split!. go.
   go_i. split!.
   { intros.
@@ -551,11 +551,31 @@ Proof.
       rewrite lookup_alter; try lia.
       unfold fmap. unfold option_fmap. unfold option_map.
       rewrite lookup_alter_ne; simpl; try lia; cycle 1.
-      { admit. }
-      admit.
+      { destruct l. rewrite /shift_loc /=. naive_solver lia. }
+      rewrite lookup_merge.
+      replace (h_heap h !! (l +ₗ 1)) with (@None val); cycle 1.
+      { admit. (* fresh *) }
+      simpl. unfold diag_None. cbn.
+      rewrite lookup_insert_ne; cycle 1.
+      { destruct l. rewrite /shift_loc /=. naive_solver lia. }
+      rewrite lookup_insert. simpl. reflexivity.
     - destruct i; simpl in *; destruct_all?; simplify_eq.
       rewrite ! shift_loc_0. erewrite ! Z.add_0_r.
-      admit.
+      rewrite lookup_alter_ne; simpl; try lia; cycle 1.
+      { destruct l. rewrite /shift_loc /=. naive_solver lia. }
+      rewrite lookup_alter_ne; simpl; try lia; cycle 1.
+      { destruct l. rewrite /shift_loc /=. naive_solver lia. }
+      rewrite lookup_merge.
+      replace (h_heap h !! (l +ₗ 1 +ₗ 1)) with (@None val); cycle 1.
+      { admit. (* fresh *) }
+      simpl. unfold diag_None. cbn.
+      rewrite lookup_insert_ne; cycle 1.
+      { destruct l. rewrite /shift_loc /=. naive_solver lia. }
+      rewrite lookup_insert_ne; cycle 1.
+      { destruct l. rewrite /shift_loc /=. naive_solver lia. }
+      rewrite /shift_loc. cbn. rewrite <- Z.add_assoc. replace (1 + 1%nat) with 2 by lia.
+      rewrite lookup_insert. cbn.
+      { destruct l. rewrite /shift_loc /=. naive_solver lia. }
   }
   go.
 
@@ -568,7 +588,61 @@ Proof.
   intros. destruct_all?; simplify_eq.
   tstep_i.
   tstep_i.
-  admit.
+  tstep_i.
+  exists (ValNum 1). split; [admit|].
+  tstep_i.
+  tstep_i.
+  split.
+  { intros. destruct_all?; simplify_eq. }
+  intros. destruct_all?. subst.
+  rewrite bool_decide_false; cycle 1.
+  { move => *; simplify_map_eq. } cbn.
+  rewrite ! heap_update_big_update.
+  go_s. split!. go.
+  go_s. split!; eauto. go.
+  tstep_i. intros. destruct_all?; simplify_eq.
+
+  (* not sure what is the right case here *)
+  destruct e; destruct_all?; simplify_eq.
+  { cbn.
+    go_s. split!. go.
+    go_s. split!. go.
+    go_s. split!.
+  }
+  cbn.
+  go_s. split!. go.
+  go_s. split!. go.
+  tstep_i.
+  split!. intros. simplify_eq.
+  tstep_i.
+  tstep_i.
+  go_s. intros. subst. go.
+  tstep_i. split!.
+  { admit. }
+  tstep_i.
+  tstep_i.
+  split!; [intros; simplify_eq|].
+  intros. destruct_all?; simplify_eq.
+  rewrite bool_decide_false; cycle 1.
+  { move => *; simplify_map_eq. }
+  cbn.
+  go_s. split!. go.
+  go_s. split!. go.
+  tstep_i. intros. destruct_all?; simplify_eq.
+  destruct e; destruct_all?; simplify_eq.
+  { cbn.
+    go_s. split!. go.
+    go_s. split!. go.
+    go_s. split!.
+  }
+  cbn.
+  go_s. split!. go.
+  go_s. split!. go.
+  tstep_i.
+  split!. intros. simplify_eq.
+  tstep_i.
+  go_s. intros. subst. go.
+  go_s. eauto.
   (* TODO: finish this proof *)
 Admitted.
 
