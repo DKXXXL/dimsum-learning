@@ -308,9 +308,9 @@ Definition exit_itree : itree (moduleE asm_event unit) unit :=
   TAssert (length args = length syscall_arg_regs);;;;
   TAssert (args !! 0%nat = Some (rs !!! "R0"));;;;
   TAssert (args !! 8%nat = Some __NR_EXIT);;;;
-  TVis (Outgoing, EASyscallCall args);;;;
+  TVis (Outgoing, EASyscallCall args mem);;;;
   (* TUb. *)
-  TReceive (λ ret, (Incoming, EASyscallRet ret));;;;
+  TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));;;;
   TNb.
 
 (*
@@ -339,8 +339,8 @@ Proof.
   go_s. split; [shelve|]. go.
   go_s. split; [shelve|]. go.
   go_s. split!. go.
-  go_i => ?.
-  go_s. eexists _. go.
+  go_i => ? ?.
+  go_s. eexists (_, _). go.
   go_s. split!. go.
   go_i.
   sort_map_insert. simplify_map_eq'.
@@ -367,11 +367,12 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
             (∀ a, gp ≤ a < gp + GUARD_PAGE_SIZE → mem !! a = Some None) ∧
             (∀ a, gp + GUARD_PAGE_SIZE ≤ a < rs !!! "SP" → ∃ v, mem !! a = Some (Some v)));;;;
   args ← TExist _;;;
+  mem ← TExist _;;;
   TAssert (length args = length syscall_arg_regs);;;;
   TAssert (args !! 0%nat = Some 1);;;;
   TAssert (args !! 8%nat = Some __NR_EXIT);;;;
-  TVis (Outgoing, EASyscallCall args);;;;
-  TReceive (λ ret, (Incoming, EASyscallRet ret));;;;
+  TVis (Outgoing, EASyscallCall args mem);;;;
+  TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));;;;
   TNb.
 
 (*
@@ -425,14 +426,15 @@ Proof.
   go_i => ?. go.
   go_i => *. destruct_all?; simplify_eq. go.
   go_s. eexists _. go.
+  go_s. eexists _. go.
   go_s. split; [shelve|]. go.
   go_s. split; [shelve|]. go.
   go_s. split; [shelve|]. go.
   go_s. split!. go.
   go_i => *. case_match; destruct_all?; simplify_eq.
-  go_s. eexists _. go.
+  go_s. eexists (_, _). go.
   go_s. split!. go.
-  go_i => *. go.
+  go_i => -[??]. go.
   go_i => *. go.
   go_i => *. done.
   Unshelve.

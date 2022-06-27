@@ -50,8 +50,8 @@ Definition initial_asm_state (instrs : gmap Z asm_instr) := AsmState AWaiting �
 
 Inductive asm_ev :=
 | EAJump (regs : gmap string Z) (mem : gmap Z (option Z))
-| EASyscallCall (args : list Z)
-| EASyscallRet (ret : Z)
+| EASyscallCall (args : list Z) (mem : gmap Z (option Z))
+| EASyscallRet (ret : Z) (mem : gmap Z (option Z))
 | EAPagefault (a : Z)
 .
 
@@ -81,12 +81,12 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
                 AsmState AHalted regs mem instrs)
 | SSyscallCall regs instrs es mem:
   asm_step (AsmState (ARunning (Syscall :: es)) regs mem instrs)
-           (Some (Outgoing, EASyscallCall (extract_syscall_args regs)))
+           (Some (Outgoing, EASyscallCall (extract_syscall_args regs) mem))
            (λ σ', σ' = AsmState (AWaitingSyscall es) regs mem instrs)
-| SSyscallRet regs instrs es mem ret:
+| SSyscallRet regs instrs es mem mem' ret:
   asm_step (AsmState (AWaitingSyscall es) regs mem instrs)
-           (Some (Incoming, EASyscallRet ret))
-           (λ σ', σ' = AsmState (ARunning es) (<["R0" := ret]>regs) mem instrs)
+           (Some (Incoming, EASyscallRet ret mem'))
+           (λ σ', σ' = AsmState (ARunning es) (<["R0" := ret]>regs) mem' instrs)
 | SJumpInternal regs instrs pc es mem:
   regs !!! "PC" = pc →
   instrs !! pc = Some es →
@@ -197,7 +197,7 @@ Global Hint Resolve asm_step_WriteMem_s : tstep.
 
 Lemma asm_step_Syscall_call_i es rs ins mem:
   TStepI asm_module (AsmState (ARunning (Syscall::es)) rs mem ins)
-            (λ G, G true (Some (Outgoing, EASyscallCall (extract_syscall_args rs)))
+            (λ G, G true (Some (Outgoing, EASyscallCall (extract_syscall_args rs) mem))
                     (λ G', G' (AsmState (AWaitingSyscall es) rs mem ins))).
 Proof.
   constructor => ? ?. apply steps_impl_step_end => ???.
@@ -208,7 +208,7 @@ Global Hint Resolve asm_step_Syscall_call_i : tstep.
 
 Lemma asm_step_Syscall_call_s es rs ins mem:
   TStepS asm_module (AsmState (ARunning (Syscall :: es)) rs mem ins)
-            (λ G, G (Some (Outgoing, EASyscallCall (extract_syscall_args rs)))
+            (λ G, G (Some (Outgoing, EASyscallCall (extract_syscall_args rs) mem))
                     (λ G', G' (AsmState (AWaitingSyscall es) rs mem ins))).
 Proof.
   constructor => ??. eexists _, _. split; [done|] => ? /= ?.
@@ -218,8 +218,8 @@ Global Hint Resolve asm_step_Syscall_call_s : tstep.
 
 Lemma asm_step_Syscall_ret_i es rs ins mem:
   TStepI asm_module (AsmState (AWaitingSyscall es) rs mem ins)
-            (λ G, ∀ ret, G true (Some (Incoming, EASyscallRet ret))
-                    (λ G', G' (AsmState (ARunning es) (<["R0" := ret]> rs) mem ins))).
+            (λ G, ∀ ret mem', G true (Some (Incoming, EASyscallRet ret mem'))
+                    (λ G', G' (AsmState (ARunning es) (<["R0" := ret]> rs) mem' ins))).
 Proof.
   constructor => ? ?. apply steps_impl_step_end => ???.
   invert_all @m_step. eexists _, _. split_and!; [naive_solver|done|].
@@ -229,10 +229,10 @@ Global Hint Resolve asm_step_Syscall_ret_i : tstep.
 
 Lemma asm_step_Syscall_ret_s es rs ins mem:
   TStepS asm_module (AsmState (AWaitingSyscall es) rs mem ins)
-            (λ G, ∃ ret, G (Some (Incoming, EASyscallRet ret))
-                    (λ G', G' (AsmState (ARunning es) (<["R0":=ret]> rs) mem ins))).
+            (λ G, ∃ ret mem', G (Some (Incoming, EASyscallRet ret mem'))
+                    (λ G', G' (AsmState (ARunning es) (<["R0":=ret]> rs) mem' ins))).
 Proof.
-  constructor => ? [??]. eexists _, _. split; [done|] => ? /= ?.
+  constructor => ? [?[??]]. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { econs. } naive_solver.
 Qed.
 Global Hint Resolve asm_step_Syscall_ret_s : tstep.
@@ -319,8 +319,8 @@ Global Hint Resolve asm_step_AHalted_i : tstep.
 (** * closing *)
 Inductive asm_closed_event : Type :=
 | EACStart (rs : gmap string Z) (mem : gmap Z (option Z))
-| EACSyscallCall (args : list Z)
-| EACSyscallRet (ret : Z)
+| EACSyscallCall (args : list Z) (mem : gmap Z (option Z))
+| EACSyscallRet (ret : Z) (mem : gmap Z (option Z))
 | EACPagefault (a : Z)
 .
 
@@ -329,7 +329,7 @@ Definition asm_closed_pre (e : asm_closed_event) (s : bool) :
  prepost (asm_event * bool) unitUR :=
   if s then
     match e with
-    | EACSyscallRet ret => pp_end ((Incoming, EASyscallRet ret), true)
+    | EACSyscallRet ret mem => pp_end ((Incoming, EASyscallRet ret mem), true)
     | _ => pp_prop False (pp_quant $ λ e', pp_end e')
     end
   else
@@ -343,7 +343,7 @@ Definition asm_closed_pre (e : asm_closed_event) (s : bool) :
 Definition asm_closed_post (e : asm_event) (s : bool) :
   prepost (asm_closed_event * bool) unitUR :=
   match e with
-  | (Outgoing, EASyscallCall args) => pp_end (EACSyscallCall args, s)
+  | (Outgoing, EASyscallCall args mem) => pp_end (EACSyscallCall args mem, s)
   | (Outgoing, EAPagefault a) => pp_end (EACPagefault a, s)
   | _ => pp_prop False (pp_quant $ λ e', pp_end e')
   end.
@@ -380,12 +380,12 @@ Definition asm_prod_filter (ins1 ins2 : gset Z) : seq_product_state → option s
         s' = None ∧
         p' = (if bool_decide (rs !!! "PC" ∈ ins1) then SPLeft else if bool_decide (rs !!! "PC" ∈ ins2) then SPRight else SPNone) ∧
         p ≠ p'
-    | EASyscallCall _ =>
+    | EASyscallCall _ _ =>
         s = None ∧
         s' = Some p ∧
         p' = SPNone ∧
         p ≠ SPNone
-    | EASyscallRet _ =>
+    | EASyscallRet _ _ =>
         s = Some p' ∧
         s' = None ∧
         p' ≠ SPNone ∧

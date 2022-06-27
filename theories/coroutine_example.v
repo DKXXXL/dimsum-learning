@@ -187,13 +187,17 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
     i2a_mem_stack_mem (rs !!! "SP") gp ∪
     (i2a_mem_stack_mem (stream_regs_init !!! "SP") stream_gp ∪ coro_regs_mem stream_regs_init) ⊆ mem);;;;
   args ← TExist _;;;
+  mem ← TExist _;;;
   TAssert (print_args 1 args);;;;
-  TVis (Outgoing, EASyscallCall args);;;;
-  ret ← TReceive (λ ret, (Incoming, EASyscallRet ret));;;
+  TVis (Outgoing, EASyscallCall args mem);;;;
+  '(ret, mem') ← TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));;;
+  TAssume (mem' = mem);;;;
   args ← TExist _;;;
+  mem ← TExist _;;;
   TAssert (print_args 2 args);;;;
-  TVis (Outgoing, EASyscallCall args);;;;
-  ret ← TReceive (λ ret, (Incoming, EASyscallRet ret));;;
+  TVis (Outgoing, EASyscallCall args mem);;;;
+  '(ret, mem') ← TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));;;
+  TAssume (mem' = mem);;;;
   rs' ← TExist _;;;
   mem' ← TExist _;;;
   TVis (Outgoing, EAJump rs' mem');;;;
@@ -246,7 +250,8 @@ Proof.
   rewrite bool_decide_true. 2: compute_done.
   go_i.
   go_i => -[??]. go.
-  go_i => ?. go. simplify_eq.
+  go_i => *. go. simplify_eq.
+
   go_i. split!. go.
   go_i. split. admit. go.
   go_i => ?. go.
@@ -254,14 +259,16 @@ Proof.
   go_i => *. go. destruct_all?; simplify_eq.
 
   go_s. eexists _. go. simplify_map_eq'.
+  go_s. eexists _. go.
   go_s. split; [done|]. go.
   go_s. split; [done|]. go.
 
   go_i => *. unfold i2a_regs_call in *. case_match; destruct_all?; simplify_eq.
-  go_s. eexists _. go.
+  go_s. eexists (_, _). go.
   go_s. split!. go.
+  go_s => ?. go.
 
-  go_i => ?. go.
+  go_i => -[??]. go.
   go_i => ?. go. simplify_eq.
   go_i => *. go. destruct_all?; simplify_map_eq'. rewrite bool_decide_true; [|done].
   go_i => ??. simplify_eq.

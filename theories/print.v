@@ -35,8 +35,8 @@ Definition print_itree : itree (moduleE asm_event unit) unit :=
     TAssume (print_asm !! (rs !!! "R30") = None);;;;
     args ← TExist _;;;
     TAssert (print_args (rs !!! "R0") args);;;;
-    TVis (Outgoing, EASyscallCall args);;;;
-    ret ← TReceive (λ ret, (Incoming, EASyscallRet ret));;;
+    TVis (Outgoing, EASyscallCall args mem);;;;
+    '(ret, mem) ← TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));;;
     TVis (Outgoing, EAJump (<["PC" := rs !!! "R30"]> $
                             <["R0" := ret]> $
                             <["R8" := __NR_PRINT]> $
@@ -73,8 +73,8 @@ Proof.
   go_s. eexists _. go.
   go_s. split; [shelve|]. go.
   go_s. split!. go.
-  tstep_i => ?.
-  go_s. eexists _. go.
+  tstep_i => ? ?.
+  go_s. eexists (_, _). go.
   go_s. split!. go.
   tstep_i.
   tstep_i => ??. simplify_map_eq'.
