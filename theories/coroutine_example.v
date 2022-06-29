@@ -53,11 +53,11 @@ Definition stream_prog : gmap string fndef :=
 Definition main_imp: fndef := {|
   fd_args := [];
   fd_vars := [];
-  fd_body := LetE "x" (imp.Call "yield" [Val $ ValNum 1]) $
+  fd_body := LetE "x" (imp.Call "yield" [Val $ ValNum 0]) $
              LetE "_" (imp.Call "print" [(Var "x")]) $
              LetE "y" (imp.Call "yield" [Val $ ValNum 0]) $
              LetE "_" (imp.Call "print" [(Var "y")]) $
-             (Val $ ValNum 0);
+             (imp.Call "yield" [Val $ ValNum 0]);
   fd_static := I
 |}.
 Definition main_prog : gmap string fndef :=
@@ -95,15 +95,15 @@ Definition main_itree : itree (moduleE imp_event unit) unit :=
   '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, EICall f vs h));;;
   TAssume (f = "main");;;;
   TAssume (vs = []);;;;
-  TVis (Outgoing, EICall "print" [ValNum 1] h);;;;
+  TVis (Outgoing, EICall "print" [ValNum 0] h);;;;
   e ← TExist _;;;
   TVis (Incoming, e);;;;
   TAssume (if e is EIReturn _ _ then true else false);;;;
-  TVis (Outgoing, EICall "print" [ValNum 2] (heap_of_event e));;;;
+  TVis (Outgoing, EICall "print" [ValNum 1] (heap_of_event e));;;;
   e ← TExist _;;;
   TVis (Incoming, e);;;;
   TAssume (if e is EIReturn _ _ then true else false);;;;
-  TVis (Outgoing, EIReturn (ValNum 0) (heap_of_event e));;;;
+  TVis (Outgoing, EIReturn (ValNum 2) (heap_of_event e));;;;
   TUb.
 Local Ltac go :=
   clear_itree.
@@ -166,6 +166,15 @@ Proof.
   tstep_i.
   tstep_i. split! => *. destruct_all?; simplify_eq.
   tstep_i. split! => *. destruct_all?; simplify_eq.
+  tstep_i.
+  tstep_i.
+  tstep_i.
+  tstep_i. split! => *. simplify_map_eq. split!.
+  tstep_i => *. destruct_all?; simplify_eq/=. split; [by econs|].
+  tstep_i. split! => *. destruct_all?; simplify_eq/=.
+  tstep_i. split! => *. destruct_all?; simplify_eq/=.
+  tstep_i. split!.
+  tstep_i. split! => *. destruct_all?; simplify_eq.
   go_s. split!. go.
   go_s. done.
 Qed.
@@ -188,21 +197,21 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
     (i2a_mem_stack_mem (stream_regs_init !!! "SP") stream_gp ∪ coro_regs_mem stream_regs_init) ⊆ mem);;;;
   args ← TExist _;;;
   mem ← TExist _;;;
-  TAssert (print_args 1 args);;;;
+  TAssert (print_args 0 args);;;;
   TVis (Outgoing, EASyscallCall args mem);;;;
   '(ret, mem') ← TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));;;
   TAssume (mem' = mem);;;;
   args ← TExist _;;;
   mem ← TExist _;;;
-  TAssert (print_args 2 args);;;;
+  TAssert (print_args 1 args);;;;
   TVis (Outgoing, EASyscallCall args mem);;;;
   '(ret, mem') ← TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));;;
   TAssume (mem' = mem);;;;
   rs' ← TExist _;;;
   mem' ← TExist _;;;
-  TVis (Outgoing, EAJump rs' mem');;;;
   TAssert (rs' !!! "PC" = rs !!! "R30");;;;
-  TAssert (rs' !!! "R0" = 0);;;;
+  TAssert (rs' !!! "R0" = 2);;;;
+  TVis (Outgoing, EAJump rs' mem');;;;
   TUb.
 
 Lemma top_level_refines_itree :
