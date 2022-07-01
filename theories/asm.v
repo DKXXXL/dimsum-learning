@@ -10,8 +10,9 @@ Require Import refframe.proof_techniques.
 Local Open Scope Z_scope.
 
 (** * Assembly language *)
-(* see https://modexp.wordpress.com/2018/10/30/arm64-assembly/ or
-https://stackoverflow.com/questions/68711164/syscall-invoke-in-aarch64-assembly *)
+(* see man 2 syscall (https://man7.org/linux/man-pages/man2/syscall.2.html),
+  https://modexp.wordpress.com/2018/10/30/arm64-assembly/ or
+  https://stackoverflow.com/questions/68711164/syscall-invoke-in-aarch64-assembly *)
 Definition syscall_arg_regs : list string :=
   ["R0"; "R1"; "R2"; "R3"; "R4"; "R5"; "R6"; "R7"; "R8"].
 

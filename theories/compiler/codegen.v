@@ -56,13 +56,9 @@ Module ci2a_codegen.
 
 (** * initial definitions *)
 Inductive error :=
-| UnsupportedExpr (e : expr)
-| UnknownOperand (e : expr)
 | UnknownFunction (f : string)
 | UnboundVariable (v : string)
 | AllocationTooLarge (n : N)
-| LocInCode
-| NotImplemented (s : string)
 | AssertionFailed (s : string)
 | TooManyArgs
 .
