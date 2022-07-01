@@ -752,16 +752,9 @@ Proof.
     }
     etrans. {
       apply: asm_prod_trefines; [|done].
-      apply asm_link_refines_prod. compute_done.
-    }
-    etrans. {
-      apply: asm_prod_trefines; [|done].
+      etrans. { apply asm_link_refines_prod. compute_done. }
       apply: asm_prod_trefines; [done|].
-      apply asm_link_refines_prod. compute_done.
-    }
-    etrans. {
-      apply: asm_prod_trefines; [|done].
-      apply: asm_prod_trefines; [done|].
+      etrans. { apply asm_link_refines_prod. compute_done. }
       apply: asm_prod_trefines; [|done].
       apply asm_link_refines_prod. compute_done.
     }
