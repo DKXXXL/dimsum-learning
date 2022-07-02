@@ -73,6 +73,10 @@ Lemma shift_loc_0 l :
   l +ₗ 0 = l.
 Proof. rewrite /shift_loc. destruct l => /=. f_equal. lia. Qed.
 
+Lemma shift_loc_assoc l n1 n2 :
+  l +ₗ n1 +ₗ n2 = l +ₗ (n1 + n2).
+Proof. rewrite /shift_loc. destruct l => /=. f_equal. lia. Qed.
+
 Global Instance shift_loc_inj_r l : Inj eq eq (λ i, l +ₗ i).
 Proof. move => ??. rewrite /shift_loc /= => ?. simplify_eq. lia. Qed.
 
@@ -520,7 +524,7 @@ Lemma heap_update_provs h l v :
 Proof. done. Qed.
 
 Program Definition heap_update_big (h : heap_state) (m : gmap loc val) : heap_state :=
-  Heap (map_imap (λ l v, Some (default v (m !! l))) h.(h_heap)) (h.(h_provs')) _.
+  Heap (map_union_weak m h.(h_heap)) (h.(h_provs')) _.
 Next Obligation.
   move => ??. apply bool_decide_spec. move => ? /elem_of_map[l[?/elem_of_dom]]. subst => /=.
   rewrite map_lookup_imap. move => [? /bind_Some[?[??]]].
@@ -551,8 +555,28 @@ Proof.
     + rewrite lookup_union_l' //. by simplify_map_eq.
 Qed.
 
+
+Definition heap_alloc_h (h : gmap loc val) (l : loc) (n : Z) : gmap loc val :=
+  (list_to_map ((λ z, (l +ₗ z, ValNum 0)) <$> seqZ 0 n) ∪ h).
+
+Lemma heap_alloc_h_lookup h n (l l' : loc):
+  l.1 = l'.1 →
+  l.2 ≤ l'.2 < l.2 + n →
+  heap_alloc_h h l n !! l' = Some (ValNum 0).
+Proof.
+  destruct l as [p o], l' as [p' o'] => /=??; subst. apply lookup_union_Some_l.
+  apply elem_of_list_to_map_1.
+  { rewrite -list_fmap_compose. apply NoDup_fmap; [|apply NoDup_seqZ].
+    move => ??/=. rewrite /shift_loc/= => ?. naive_solver lia. }
+  apply elem_of_list_fmap. eexists (o' - o). rewrite elem_of_seqZ /shift_loc /=.
+  split; [do 2 f_equal; lia | naive_solver lia].
+Qed.
+(* must be Opaque, otherwise simpl takes ages to figure out that it cannot reduce heap_alloc_h. *)
+Global Opaque heap_alloc_h.
+
+
 Program Definition heap_alloc (h : heap_state) (l : loc) (n : Z) : heap_state :=
-  Heap (list_to_map ((λ z, (l +ₗ z, ValNum 0)) <$> seqZ 0 n) ∪ h.(h_heap)) (gset_to_gmap tt ({[l.1]} ∪ h_provs h)) _.
+  Heap (heap_alloc_h h.(h_heap) l n) (gset_to_gmap tt ({[l.1]} ∪ h_provs h)) _.
 Next Obligation.
   move => ???. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]]. subst.
   rewrite dom_gset_to_gmap. move => [? /lookup_union_Some_raw[Hl|[? Hh]]]; apply elem_of_union; [left|right; by apply heap_wf].
@@ -658,6 +682,7 @@ Proof.
   match goal with | |- context [fresh ?X] => pose proof (is_fresh X) as H; revert H; move: {1 3}(X) => l Hl end.
   set_solver.
 Qed.
+Opaque heap_fresh.
 
 Lemma heap_alloc_list_fresh xs ps h:
   ∃ h', heap_alloc_list xs (heap_fresh_list xs ps h) h h'.
@@ -667,17 +692,19 @@ Proof.
   split!; [|done]. by apply heap_fresh_is_fresh.
 Qed.
 
+Global Transparent heap_alloc_h. (* TODO: remove this *)
 Lemma heap_alive_alloc h l l' n :
   l.1 = l'.1 →
   l'.2 ≤ l.2 < l'.2 + n →
   heap_alive (heap_alloc h l' n) l.
 Proof.
   destruct l as [p o], l' as [p' o'].
-  move => ??. simplify_eq/=. rewrite /heap_alive/=/shift_loc/=.
+  move => ??. simplify_eq/=. rewrite /heap_alive/=/heap_alloc_h/shift_loc/=.
   apply lookup_union_is_Some. left. apply list_to_map_lookup_is_Some.
   eexists 0. apply elem_of_list_fmap. eexists (o - o').
   split; [do 2 f_equal; lia|]. apply elem_of_seqZ. lia.
 Qed.
+Global Opaque heap_alloc_h.
 
 Lemma heap_alive_update h l l' v :
   heap_alive h l →

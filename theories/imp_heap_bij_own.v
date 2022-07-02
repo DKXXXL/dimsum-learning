@@ -1681,7 +1681,8 @@ Proof.
   iSatStop.
   tstep_i. tstep_i. split!.
   tstep_s.
-  tstep_s => ???. simplify_eq. rewrite Hl h_block_lookup => ?. simplify_map_eq.
+  tstep_s => ???. simplify_eq. rewrite Hl h_block_lookup /=. simplify_map_eq.
+  rewrite heap_alloc_h_lookup /=; [|done|lia] => ?. simplify_eq.
   tstep_s => ?[??]. simplify_eq.
   apply Hret; [done|].
   iSatMonoBupd.

@@ -253,7 +253,7 @@ Proof.
   go_i => *. go. destruct_all?; simplify_eq.
   go_i. split!. move => *. simplify_eq.
   go_i.
-  go_i. eexists _. split. { rewrite shift_loc_0. by simplify_map_eq. }
+  go_i. eexists _. simplify_map_eq. rewrite heap_alloc_h_lookup; [|lia..]. split. { by simplify_map_eq. }
   go_i. change ([Val 1]) with (Val <$> [ValNum 1]).
   go_i. split. { move => *; simplify_map_eq. }
   move => ????. rewrite bool_decide_false; [|compute_done].

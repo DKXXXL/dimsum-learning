@@ -223,9 +223,9 @@ Definition main_imp : fndef := {|
   fd_vars := [("x", 3)];
   fd_body := LetE "_" (Store (BinOp (Var "x") ShiftOp (Val $ ValNum 0)) (Val $ ValNum 1)) $
              LetE "_" (Store (BinOp (Var "x") ShiftOp (Val $ ValNum 1)) (Val $ ValNum 2)) $
-             LetE "tmp0" (BinOp (Var "x") ShiftOp (Val $ ValNum 0)) $
-             LetE "tmp1" (BinOp (Var "x") ShiftOp (Val $ ValNum 1)) $
-             LetE "_" (imp.Call "memmove" [(Var "tmp0"); (Var "tmp1"); (Val $ ValNum 2)]) $
+             LetE "d" (BinOp (Var "x") ShiftOp (Val $ ValNum 1)) $
+             LetE "s" (BinOp (Var "x") ShiftOp (Val $ ValNum 0)) $
+             LetE "_" (imp.Call "memmove" [(Var "d"); (Var "s"); (Val $ ValNum 2)]) $
              LetE "tmp0" (Load (BinOp (Var "x") ShiftOp (Val $ ValNum 1))) $
              LetE "_" (imp.Call "print" [Var "tmp0"]) $
              LetE "tmp0" (Load (BinOp (Var "x") ShiftOp (Val $ ValNum 2))) $
@@ -484,16 +484,6 @@ Definition main_itree : itree (moduleE imp_event unit) unit :=
   TAssume (if e is EIReturn _ h'' then h' = h'' else false);;;;
   TUb.
 
-Lemma heap_alive_alloc2 h l l' n :
-  heap_alive h l ->
-  heap_alive (heap_alloc h l' n) l.
-Proof.
-  destruct l as [p o], l' as [p' o'].
-  simplify_eq/=. rewrite /heap_alive/=/shift_loc/=.
-  intros.
-  apply lookup_union_is_Some. right. eauto.
-Qed.
-
 Lemma main_refines_itree :
   trefines (MS (imp_prod {["main"]} {["memmove"; "memcpy"; "locle"]} imp_module (mod_itree _ _))
               (initial_imp_prod_state imp_module (mod_itree _ _)
@@ -509,32 +499,25 @@ Proof.
   tstep_i. split! => ???? Hf ?. unfold main_prog in Hf. simplify_map_eq.
   tstep_i. split! => ? Hf. unfold main_prog in Hf. simplify_map_eq. split!.
   tstep_i => *. destruct_all?; simplify_eq/=. split; [by repeat econs|].
-  tstep_i.
+  tstep_i. rewrite shift_loc_0.
   tstep_i.
   split.
-  (* { rewrite shift_loc_0. do 2 eapply heap_alive_alloc2. eapply heap_alive_alloc; eauto; try lia. } *)
-  { rewrite shift_loc_0. eapply heap_alive_alloc; eauto; try lia. }
-  repeat tstep_i.
-  split.
-  { rewrite shift_loc_0. eapply heap_alive_update. eapply heap_alive_alloc; eauto; try lia. simpl. lia. }
-  (* { rewrite shift_loc_0. eapply heap_alive_update. do 2 eapply heap_alive_alloc2; eauto. *)
-  (*   eapply heap_alive_alloc; eauto; try lia. simpl. lia. } *)
-  tstep_i.
-  tstep_i.
-  tstep_i.
+  { eapply heap_alive_alloc; lia. }
   tstep_i.
   tstep_i.
   tstep_i.
   split.
-  { intros. destruct_all?; simplify_eq/=. }
-  intros.
-  destruct_all?. subst. simpl in *. simplify_eq.
-  rewrite bool_decide_false; cycle 1.
-  { move => *; simplify_map_eq. }
-  rewrite bool_decide_true; cycle 1.
-  { move => *; simplify_map_eq. eauto. }
-
-  rewrite shift_loc_0. cbn.
+  { eapply heap_alive_update. eapply heap_alive_alloc; simpl; lia. }
+  tstep_i.
+  tstep_i.
+  tstep_i.
+  tstep_i.
+  tstep_i.
+  tstep_i.
+  split! => *. destruct_all?. subst. simplify_eq/=.
+  rewrite bool_decide_false; [|compute_done].
+  rewrite bool_decide_true; [|compute_done].
+  rewrite shift_loc_0 /=.
 
   tstep_i. rewrite -/memmove_itree. go.
   go_i => -[[??]?]. go.
@@ -542,109 +525,90 @@ Proof.
   go_i. split!. go.
   go_i. eexists (_, _, _). go.
   go_i. split!. go.
-  go_i. eexists ([ValNum 2; ValNum 0]). go.
+  go_i. eexists ([ValNum 1; ValNum 2]). go.
   go_i. split!. go.
   go_i. split!.
-  { intros.
-    destruct i; simpl in *; destruct_all?; simplify_eq.
-    - rewrite ! shift_loc_0. erewrite ! Z.add_0_r.
-      rewrite lookup_alter; try lia.
-      unfold fmap. unfold option_fmap. unfold option_map.
-      rewrite lookup_alter_ne; simpl; try lia; cycle 1.
-      { destruct l. rewrite /shift_loc /=. naive_solver lia. }
-      rewrite lookup_merge.
-      replace (h_heap h !! (l +ₗ 1)) with (@None val); cycle 1.
-      { admit. (* fresh *) }
-      simpl. unfold diag_None. cbn.
-      rewrite lookup_insert_ne; cycle 1.
-      { destruct l. rewrite /shift_loc /=. naive_solver lia. }
-      rewrite lookup_insert. simpl. reflexivity.
-    - destruct i; simpl in *; destruct_all?; simplify_eq.
-      rewrite ! shift_loc_0. erewrite ! Z.add_0_r.
-      rewrite lookup_alter_ne; simpl; try lia; cycle 1.
-      { destruct l. rewrite /shift_loc /=. naive_solver lia. }
-      rewrite lookup_alter_ne; simpl; try lia; cycle 1.
-      { destruct l. rewrite /shift_loc /=. naive_solver lia. }
-      rewrite lookup_merge.
-      replace (h_heap h !! (l +ₗ 1 +ₗ 1)) with (@None val); cycle 1.
-      { admit. (* fresh *) }
-      simpl. unfold diag_None. cbn.
-      rewrite lookup_insert_ne; cycle 1.
-      { destruct l. rewrite /shift_loc /=. naive_solver lia. }
-      rewrite lookup_insert_ne; cycle 1.
-      { destruct l. rewrite /shift_loc /=. naive_solver lia. }
-      rewrite /shift_loc. cbn. rewrite <- Z.add_assoc. replace (1 + 1%nat) with 2 by lia.
-      rewrite lookup_insert. cbn.
-      { destruct l. rewrite /shift_loc /=. naive_solver lia. }
+  { move => -[|[|//]] /= ??; simplify_eq; rewrite ?shift_loc_0.
+    - rewrite lookup_alter_ne.
+      2: { destruct l. rewrite /shift_loc /=. naive_solver lia. }
+      by rewrite lookup_alter heap_alloc_h_lookup/=; [|lia..].
+    - rewrite lookup_alter lookup_alter_ne.
+      2: { destruct l. rewrite /shift_loc /=. naive_solver lia. }
+      by rewrite heap_alloc_h_lookup/=; [|lia..].
   }
   go.
 
-  go_i. split!.
-  { intros. admit. }
+  go_i. split!. {
+    move => i ??. do 2 apply heap_alive_update.
+    apply heap_alive_alloc => //=. destruct i as [|[|]] => //; lia.
+  }
   go.
 
   go_i => ??????. destruct_all?; simplify_eq. go.
-  go_i. split!.
-  intros. destruct_all?; simplify_eq.
+  go_i. split! => *. destruct_all?; simplify_eq.
+  rewrite !kmap_insert kmap_empty.
   tstep_i.
   tstep_i.
   tstep_i.
-  exists (ValNum 1). split; [admit|].
+  exists (ValNum 1). split. {
+    rewrite !map_union_weak_insert map_union_weak_empty.
+    rewrite shift_loc_0 lookup_alter lookup_alter_ne.
+    2: { destruct l. rewrite /shift_loc /=. naive_solver lia. }
+    rewrite lookup_alter lookup_alter_ne.
+    2: { destruct l. rewrite /shift_loc /=. naive_solver lia. }
+    by rewrite heap_alloc_h_lookup/=; [|lia..].
+  }
   tstep_i.
   tstep_i.
-  split.
-  { intros. destruct_all?; simplify_eq. }
-  intros. destruct_all?. subst.
-  rewrite bool_decide_false; cycle 1.
-  { move => *; simplify_map_eq. } cbn.
-  rewrite ! heap_update_big_update.
+  split! => *. destruct_all?. simplify_eq.
+  rewrite bool_decide_false; [|compute_done].
   go_s. split!. go.
-  go_s. split!; eauto. go.
-  tstep_i. intros. destruct_all?; simplify_eq.
+  go_s. split!. go.
+  tstep_i => e *. destruct_all?; simplify_eq.
 
-  (* not sure what is the right case here *)
   destruct e; destruct_all?; simplify_eq.
-  { cbn.
-    go_s. split!. go.
+  { go_s. split!. go.
     go_s. split!. go.
     go_s. split!.
   }
-  cbn.
   go_s. split!. go.
   go_s. split!. go.
   tstep_i.
-  split!. intros. simplify_eq.
+  split! => *. simplify_eq.
   tstep_i.
   tstep_i.
-  go_s. intros. subst. go.
-  tstep_i. split!.
-  { admit. }
+  go_s => *. subst. go.
+  tstep_i. split!.  {
+    rewrite !map_union_weak_insert map_union_weak_empty.
+    rewrite shift_loc_0 lookup_alter_ne.
+    2: { destruct l. rewrite /shift_loc /=. naive_solver lia. }
+    rewrite shift_loc_assoc lookup_alter lookup_alter_ne.
+    2: { destruct l. rewrite /shift_loc /=. naive_solver lia. }
+    rewrite lookup_alter_ne.
+    2: { destruct l. rewrite /shift_loc /=. naive_solver lia. }
+    by rewrite heap_alloc_h_lookup/=; [|lia..].
+  }
   tstep_i.
   tstep_i.
-  split!; [intros; simplify_eq|].
+  split!.
   intros. destruct_all?; simplify_eq.
-  rewrite bool_decide_false; cycle 1.
-  { move => *; simplify_map_eq. }
-  cbn.
+  rewrite bool_decide_false; [|compute_done].
   go_s. split!. go.
   go_s. split!. go.
-  tstep_i. intros. destruct_all?; simplify_eq.
+  tstep_i => e *. destruct_all?; simplify_eq.
   destruct e; destruct_all?; simplify_eq.
-  { cbn.
-    go_s. split!. go.
+  { go_s. split!. go.
     go_s. split!. go.
     go_s. split!.
   }
-  cbn.
   go_s. split!. go.
   go_s. split!. go.
   tstep_i.
   split!. intros. simplify_eq.
   tstep_i.
   go_s. intros. subst. go.
-  go_s. eauto.
-  (* TODO: finish this proof *)
-Admitted.
+  go_s. done.
+Qed.
 
 Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
@@ -697,7 +661,7 @@ Proof.
   go_i. split!. go.
   go_i => ?. go.
   go_i.
-  go_i => *. destruct_all?; simplify_eq.
+  go_i => *. unfold i2a_regs_call in *. destruct_all?; simplify_eq.
   iSatStart. iIntros!.
   iDestruct (i2a_args_intro with "[$]") as "?"; [done|]. rewrite i2a_args_cons ?i2a_args_nil; [|done].
   iDestruct!. iSatStop.
@@ -705,11 +669,15 @@ Proof.
   rename select (main_f2i !! _ = Some _) into Hf2i. unfold main_f2i in Hf2i. simplify_map_eq'.
   rewrite bool_decide_false. 2: unfold main_asm_dom, memmove_asm_dom, memcpy_asm_dom; unlock; by vm_compute.
   rewrite bool_decide_true. 2: compute_done.
-  go_i.
+  tstep_i. rewrite -/print_itree. go.
   go_i => -[??]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
-  go_i. split. admit. go.
+  go_i. split. {
+    apply not_elem_of_dom.
+    apply: not_elem_of_disjoint; [done|].
+    unfold main_asm_dom, memmove_asm_dom, memcpy_asm_dom; unlock; compute_done.
+  } go.
   go_i => ?. go.
   go_i => ?. go.
   go_i => *. go. destruct_all?; simplify_eq.
@@ -737,8 +705,60 @@ Proof.
   { iSatMono. simplify_map_eq'. iFrame. iSplit; [done|]. iAccu. }
   iSatClear.
 
-  (* TODO: finish this proof *)
-Admitted.
+  go_i => *. go.
+  go_i => *. simplify_eq. go.
+  go_i => *. split!. go.
+  go_i => *. go.
+  go_i.
+  go_i => *. unfold i2a_regs_call in *. destruct_all?; simplify_eq.
+  iSatStart. iIntros!.
+  iDestruct (i2a_args_intro with "[$]") as "?"; [done|]. rewrite i2a_args_cons ?i2a_args_nil; [|done].
+  iDestruct!. iSatStop.
+
+  rename select (main_f2i !! _ = Some _) into Hf2i2. unfold main_f2i in Hf2i2. simplify_map_eq'.
+  rewrite bool_decide_false. 2: unfold main_asm_dom, memmove_asm_dom, memcpy_asm_dom; unlock; by vm_compute.
+  rewrite bool_decide_true. 2: compute_done.
+  tstep_i. rewrite -/print_itree. go.
+  go_i => -[??]. go.
+  go_i => ?. go. simplify_eq.
+  go_i. split!. go.
+  go_i. split. {
+    apply not_elem_of_dom.
+    apply: not_elem_of_disjoint; [done|].
+    unfold main_asm_dom, memmove_asm_dom, memcpy_asm_dom; unlock; compute_done.
+  } go.
+  go_i => ?. go.
+  go_i => ?. go.
+  go_i => *. go. destruct_all?; simplify_eq.
+
+  go_s. eexists _. go. simplify_map_eq'.
+  go_s. eexists _. go. simplify_map_eq'.
+  go_s. split; [done|]. go.
+  go_s. split; [done|]. go.
+
+  go_i => *. unfold i2a_regs_call in *. case_match; destruct_all?; simplify_eq.
+  go_s. eexists (_, _). go.
+  go_s. split!. go.
+  go_s => ?. go.
+
+  go_i => -[??]. go.
+  go_i => ?. go. simplify_eq.
+  go_i => *. go. destruct_all?; simplify_map_eq'. rewrite bool_decide_true; [|done].
+  go_i => ??. simplify_eq.
+  go_i. eexists false. split; [done|]. eexists _, _, [ValNum _]. split!. { by simplify_map_eq'. }
+  { split. { by simplify_map_eq'. }
+    apply map_preserved_insert_r_not_in; [compute_done|].
+    apply map_preserved_insert_r_not_in; [compute_done|].
+    apply map_preserved_insert_r_not_in; [compute_done|].
+    done. }
+  { iSatMono. simplify_map_eq'. iFrame. iSplit; [done|]. iAccu. }
+  iSatClear.
+
+  go_i => ?. go.
+  go_i => ?. simplify_eq. go.
+  go_i. split!. go.
+  by go_s.
+Qed.
 
 Lemma complete_refinement :
   trefines (MS asm_module (initial_asm_state (main_asm ∪ memmove_asm ∪ memcpy_asm ∪ locle_asm ∪ print_asm)))

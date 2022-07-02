@@ -188,7 +188,7 @@ Proof.
   tstep_s. split!; [apply (heap_fresh_is_fresh ∅)|]. move => *; simplify_eq.
   tstep_s => *; simplify_eq.
   tstep_s.
-  tstep_s => *; simplify_map_eq.
+  tstep_s => ???. simplify_map_eq. rewrite heap_alloc_h_lookup; [|done|lia] => ?; simplify_map_eq.
   tstep_s.
   change (FreeA [(heap_fresh ∅ h, 1)] (imp.Call "add" [Val 1; Val 1])) with (expr_fill [FreeACtx [(heap_fresh ∅ h, 1)]] (imp.Call "add" [Val 1; Val 1])).
   apply: Hcall. { repeat econs. } { by simplify_map_eq. } { simplify_map_eq'. set_solver. } { by simplify_map_eq'. }

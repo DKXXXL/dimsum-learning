@@ -192,6 +192,29 @@ Tactic Notation "case_bool_decide" open_constr(pat) :=
   let H := fresh in case_bool_decide pat as H.
 
 
+(* TODO: upstream? *)
+Definition map_union_weak `{∀ A, Insert K A (M A), ∀ A, Empty (M A), ∀ A, Lookup K A (M A),
+    ∀ A, FinMapToList K A (M A)} {A} (m1 m2 : M A) :=
+  map_imap (λ l v, Some (default v (m1 !! l))) m2.
+
+Section theorems.
+  Lemma map_union_weak_insert {K A} `{Countable K} (m1 m2 : gmap K A) (i : K) (x : A):
+    map_union_weak (<[i := x]>m1) m2 = alter (λ _, x) i (map_union_weak m1 m2).
+  Proof.
+    rewrite /map_union_weak. apply map_eq => j. rewrite !map_lookup_imap.
+    destruct (decide (i = j)); subst.
+    - rewrite lookup_insert /= lookup_alter map_lookup_imap. by destruct (m2 !! j).
+    - by rewrite lookup_insert_ne // lookup_alter_ne // map_lookup_imap.
+  Qed.
+
+  Lemma map_union_weak_empty {K A} `{Countable K} (m : gmap K A):
+    map_union_weak ∅ m = m.
+  Proof.
+    rewrite /map_union_weak. apply map_eq => i. rewrite map_lookup_imap.
+    rewrite lookup_empty /=. by destruct (m !! i).
+  Qed.
+End theorems.
+
 Section theorems.
 Context `{FinMap K M}.
 Lemma map_disjoint_difference_l' {A} (m1 m2 : M A) : m2 ∖ m1 ##ₘ m1.
@@ -408,8 +431,15 @@ Section semi_set.
   Implicit Types x y : A.
   Implicit Types X Y : C.
   Implicit Types Xs Ys : list C.
-Lemma elem_of_subseteq_1 X Y x: X ⊆ Y → x ∈ X → x ∈ Y.
-Proof. set_solver. Qed.
+
+  Lemma elem_of_subseteq_1 X Y x: X ⊆ Y → x ∈ X → x ∈ Y.
+  Proof. set_solver. Qed.
+
+  Lemma not_elem_of_disjoint x X Y:
+    x ∈ X →
+    X ## Y →
+    x ∉ Y.
+  Proof. set_solver. Qed.
 End semi_set.
 
 Section theorems.

@@ -189,7 +189,7 @@ Definition stream_regs_init : gmap string Z :=
 Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
   TAssume (rs !!! "PC" = main_addr);;;;
-  TAssume (rs !!! "R30" ∉ yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom);;;;
+  TAssume (rs !!! "R30" ∉ yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom ∪ dom _ print_asm);;;;
   TAssume (∃ gp, gp + GUARD_PAGE_SIZE ≤ rs !!! "SP" ∧
      (i2a_mem_stack_mem (rs !!! "SP") gp ##ₘ
        (i2a_mem_stack_mem (stream_regs_init !!! "SP") stream_gp ∪ coro_regs_mem stream_regs_init)) ∧
@@ -232,12 +232,12 @@ Proof.
   go_s. eexists (_, _). go.
   go_s. split!. go.
   go_s => ?. go. simplify_map_eq'.
-  go_s => ?. go.
+  go_s => Hret. go. rewrite !not_elem_of_union in Hret.
   go_s => -[?[?[??]]]. go.
   rewrite bool_decide_true. 2: unfold yield_asm_dom, yield_asm, main_asm_dom, stream_asm_dom; unlock; by vm_compute.
   tstep_i => ??. simplify_eq.
   tstep_i. eexists true. split; [done|] => /=. eexists initial_heap_state, _, [], [], _, "main". split!.
-  { simplify_map_eq'. done. } 2: done. done.
+  { simplify_map_eq'. done. } 2: done. { rewrite !not_elem_of_union. naive_solver. }
   { apply: satisfiable_mono; [by eapply i2a_res_init|].
     iIntros!. iDestruct select (i2a_mem_auth _) as "$". iFrame.
     iDestruct (big_sepM_subseteq with "[$]") as "?"; [done|].
@@ -249,7 +249,7 @@ Proof.
   go_i. split!. go.
   go_i. split!. go.
   go_i.
-  go_i => *. destruct_all?; simplify_eq.
+  go_i => *. unfold i2a_regs_call in *. destruct_all?; simplify_eq.
   iSatStart. iIntros!.
   iDestruct (i2a_args_intro with "[$]") as "?"; [done|]. rewrite i2a_args_cons ?i2a_args_nil; [|done].
   iDestruct!. iSatStop.
@@ -262,7 +262,12 @@ Proof.
   go_i => *. go. simplify_eq.
 
   go_i. split!. go.
-  go_i. split. admit. go.
+  go_i. split. {
+    apply not_elem_of_dom.
+    apply: not_elem_of_disjoint; [done|].
+    unfold yield_asm_dom, yield_asm, main_asm_dom, stream_asm_dom; unlock; compute_done.
+  } go.
+
   go_i => ?. go.
   go_i => ?. go.
   go_i => *. go. destruct_all?; simplify_eq.
@@ -290,8 +295,73 @@ Proof.
   { iSatMono. simplify_map_eq'. iFrame. iSplit; [done|]. iAccu. }
   iSatClear.
 
-  (* TODO: finish this proof *)
-Admitted.
+  go_i => *. go.
+  go_i => *. simplify_eq. go.
+  go_i => *. split!. go.
+  go_i. go.
+  go_i => *. unfold i2a_regs_call in *. destruct_all?; simplify_eq.
+  iSatStart. iIntros!.
+  iDestruct (i2a_args_intro with "[$]") as "?"; [done|]. rewrite i2a_args_cons ?i2a_args_nil; [|done].
+  iDestruct!. iSatStop.
+
+  rename select (all_f2i !! _ = Some _) into Hf2i2. unfold all_f2i in Hf2i2. simplify_map_eq'.
+  rewrite bool_decide_false. 2: unfold yield_asm_dom, yield_asm, main_asm_dom, stream_asm_dom; unlock; by vm_compute.
+  rewrite bool_decide_true. 2: compute_done.
+  tstep_i. rewrite -/print_itree. go.
+  go_i => -[??]. go.
+  go_i => ?. go. simplify_eq.
+  go_i. split!. go.
+  go_i. split. {
+    apply not_elem_of_dom.
+    apply: not_elem_of_disjoint; [done|].
+    unfold yield_asm_dom, yield_asm, main_asm_dom, stream_asm_dom; unlock; compute_done.
+  } go.
+  go_i => ?. go.
+  go_i => ?. go.
+  go_i => *. go. destruct_all?; simplify_eq.
+
+  go_s. eexists _. go. simplify_map_eq'.
+  go_s. eexists _. go. simplify_map_eq'.
+  go_s. split; [done|]. go.
+  go_s. split; [done|]. go.
+
+  go_i => *. unfold i2a_regs_call in *. case_match; destruct_all?; simplify_eq.
+  go_s. eexists (_, _). go.
+  go_s. split!. go.
+  go_s => ?. go.
+
+  go_i => -[??]. go.
+  go_i => ?. go. simplify_eq.
+  go_i => *. go. destruct_all?; simplify_map_eq'. rewrite bool_decide_true; [|done].
+  go_i => ??. simplify_eq.
+  go_i. eexists false. split; [done|]. eexists _, _, [ValNum _]. split!. { by simplify_map_eq'. }
+  { split. { by simplify_map_eq'. }
+    apply map_preserved_insert_r_not_in; [compute_done|].
+    apply map_preserved_insert_r_not_in; [compute_done|].
+    apply map_preserved_insert_r_not_in; [compute_done|].
+    done. }
+  { iSatMono. simplify_map_eq'. iFrame. iSplit; [done|]. iAccu. }
+  iSatClear.
+
+  go_i => ?. go.
+  go_i => ?. simplify_eq. go.
+  go_i. split!. go.
+  go_i.
+  go_i => *. destruct_all?; simplify_eq. case_bool_decide; [done|]. simplify_map_eq'.
+  rewrite bool_decide_false. 2: { naive_solver. }
+
+  go_s. eexists _. go.
+  go_s. eexists _. go.
+  go_s. split; [done|]. go.
+  go_s. split. {
+    unfold i2a_regs_ret in *. destruct_all?. simplify_map_eq'.
+    iSatStart. iIntros!.
+    iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[%?]". simplify_eq/=.
+    iSatStop. done.
+  } go.
+  go_s. split!. go.
+  go_s. done.
+Qed.
 
 Lemma complete_refinement :
   trefines (MS asm_module (initial_asm_state (yield_asm ∪ (main_asm ∪ stream_asm) ∪ print_asm)))
