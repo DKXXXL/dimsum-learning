@@ -50,14 +50,3 @@ theories/iris/wp.v
 theories/iris/mono_ord.v
 theories/iris/ord_later.v
 theories/itree.v
-theories/coro/sflib.v
-theories/coro/coro.v
-# theories/rec_lang/lang.v
-# theories/rec_lang/heap.v
-# theories/rec_lang/lifting.v
-# theories/rec_lang/adequacy.v
-# theories/rec_lang/proofmode.v
-# theories/rec_lang/examples.v
-# theories/old/module.v
-# theories/old/while.v
-# theories/old/rec_lang.v
