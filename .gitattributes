@@ -1,1 +1,4 @@
 *.v gitlab-language=coq
+Notes.md export-ignore
+.gitattributes export-ignore
+build.sh export-ignore
