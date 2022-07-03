@@ -299,6 +299,20 @@ Qed.
 
 End theorems.
 
+Section theorems.
+Context `{FinMapDom K M D}.
+
+Lemma map_difference_empty_dom {A} (m1 m2 : M A):
+  dom D m1 ⊆ dom _ m2 →
+  m1 ∖ m2 = ∅.
+Proof.
+  move => Hdom. apply map_eq => i. rewrite lookup_empty.
+  apply lookup_difference_None.
+  destruct (m1 !! i) eqn: Heq; [|naive_solver].
+  right. apply elem_of_dom. apply Hdom. by apply elem_of_dom.
+Qed.
+End theorems.
+
 Section map.
   Context `{FinMap K M}.
   Context {A : Type} .
@@ -307,6 +321,12 @@ Lemma lookup_union_l' (m1 m2 : M A) i :
   m2 !! i = None → (m1 ∪ m2) !! i = m1 !! i.
 Proof using Type*. intros Hi. rewrite lookup_union Hi. by destruct (m1 !! i). Qed.
 End map.
+
+Section fin_map_dom.
+Context `{FinMapDom K M D}.
+Lemma not_elem_of_dom_1 {A} (m : M A) i : i ∉ dom D m → m !! i = None.
+Proof. apply not_elem_of_dom. Qed.
+End fin_map_dom.
 
 Section theorems.
 Context `{FinMap K M}.
@@ -482,6 +502,22 @@ Proof.  move => /elem_of_list_lookup. setoid_rewrite lookup_drop => -[??]. apply
 Lemma mjoin_length {A} (xs : list (list A)):
   length (mjoin xs) = sum_list (length <$> xs).
 Proof. elim: xs => // ???; csimpl. rewrite app_length. lia. Qed.
+
+Section mjoin.
+  Context {A : Type}.
+  Implicit Types x y z : A.
+  Implicit Types l k : list A.
+  Implicit Types ls : list (list A).
+
+  Lemma join_lookup_Some_same_length_2 n ls j i x l:
+    Forall (λ l, length l = n) ls →
+    (i < n)%nat →
+    ls !! j = Some l →
+    l !! i = Some x →
+    mjoin ls !! (j * n + i)%nat = Some x.
+  Proof. intros. apply join_lookup_Some_same_length'; naive_solver. Qed.
+End mjoin.
+
 
 Lemma sum_list_with_sum_list {A} f (xs : list A):
   sum_list_with f xs = sum_list (f <$> xs).

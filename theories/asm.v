@@ -685,6 +685,15 @@ Proof.
   - etrans; [|done]. apply insert_subseteq. apply lookup_map_seqZ_None. lia.
 Qed.
 
+Lemma deep_to_asm_instrs_lookup_nat n a pc dins:
+  pc = a + Z.of_nat n →
+  deep_to_asm_instrs a dins !! pc = deep_to_asm_instr <$> (dins !! n).
+Proof.
+  move => ->. rewrite /deep_to_asm_instrs. rewrite lookup_map_seqZ. case_option_guard; [|lia].
+  have -> : Z.to_nat (a + n - a) = n by lia.
+  by rewrite list_lookup_fmap.
+Qed.
+
 (** * itree examples *)
 Require Import refframe.itree.
 Local Ltac go :=
