@@ -292,10 +292,10 @@ Proof.
     + apply: STraceStep; [done| |].
       * move => ??. apply: shas_trace_mono; [ by apply: (IH (_, _)) | |done].
         move => /=? [?[??]]. eexists _. split; [|done]. destruct e => //=.
-        admit.
+        shelve.
       * split; eexists _; split; [| apply: He1 | | apply: He2] => /=.
         -- constructor.
-        -- admit.
+        -- shelve.
     + apply: shas_trace_mono; [ apply: (IH (_, _)) | |done].
 Abort.
 
@@ -343,9 +343,9 @@ Proof.
   elim.
   - move => [σ1 σ2] ????. eexists (_, _) => /=.
     split_and!.
-    + admit.
-    + apply: STraceEnd; [done| ]. admit.
-    + apply: STraceEnd; [done| ]. admit.
+    + shelve.
+    + apply: STraceEnd; [done| ]. shelve.
+    + apply: STraceEnd; [done| ]. shelve.
   - move => [σ1 σ2] ???? Hstep _ IH [??].
     inversion Hstep; simplify_eq.
     + have {}IH := IH (_, σ2) (conj _ ltac:(exact (eq_refl σ2))).
@@ -354,14 +354,14 @@ Proof.
           (λ κs, κs = [] ∨ κs = option_list (Vis <$> e) ∨ ∃ κs', κs = (option_list (Vis <$> e)) ++ κs' ∧ ∃ x, (f x).1 κs')
           , (λ κs, ∀ x, (f x).2 κs)) => /=.
       split_and!.
-      * admit.
+      * shelve.
       * apply: STraceStep; [done| |naive_solver]. move => ??.
         apply: shas_trace_mono; [naive_solver| |done] => /=.
         move => ??. naive_solver.
       * have [[[??]?]|?]:= EM (∃ x, ∀ κs, (f x).2 κs → ∀ x', (f x').2 κs).
         -- apply: shas_trace_mono; [naive_solver| |done] => /=. done.
         -- apply: STraceEnd. done.
-           split. admit.
+           split. shelve.
            move => [??].
 Abort.
 End failed_product_proof_attempts.

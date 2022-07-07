@@ -97,8 +97,8 @@ Proof.
   eexists (λ σi σs κs, σs ~{ m2, κs }~>ₜ (λ _, True)).
   split_and!.
   - done.
-  - move => {Hr} ?????????.  admit.
-  - admit.
+  - move => {Hr} ?????????.  shelve.
+  - shelve.
 Abort.
 
 Lemma inv''_implies_trefines {EV} (m1 m2 : mod_state EV) (inv : m1.(m_state) → m2.(m_state) → trace EV → Prop):
@@ -141,8 +141,8 @@ Proof.
   eexists (λ σi σs κs, σs ~{ m2, κs }~>ₜ (λ _, True)).
   split_and!.
   - done.
-  - move => {Hr} ?????????.  admit.
-  - admit.
+  - move => {Hr} ?????????.  shelve.
+  - shelve.
 Abort.
 *)
 

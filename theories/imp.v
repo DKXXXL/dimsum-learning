@@ -2235,11 +2235,9 @@ Proof.
     rewrite bool_decide_true /=; [|set_solver].
     apply IH; [done|]. split!.
   repeat case_bool_decide => /=.
-  admit.
+
   set_unfold; naive_solver.
   set_unfold; naive_solver.
-  admit.
-  admit.
 
 set_unfold; naive_solver.
 try by exfalso; set_unfold; naive_solver.

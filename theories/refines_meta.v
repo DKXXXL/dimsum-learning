@@ -160,10 +160,10 @@ Proof.
       * right. eexists _. split; [done|]. by apply: thas_trace_rel_nil.
       * apply: thas_trace_rel_mono_l; [done|]. naive_solver.
     + move => ?? IH.
-      apply: TRel_ex; [done| |]. admit.
+      apply: TRel_ex; [done| |]. shelve.
       move => ?. apply: thas_trace_rel_mono_l. done. naive_solver.
     + move => ?? IH.
-      admit.
+      shelve.
   - move => [κs' [Hrel Ht]]. apply: thas_trace_mono; [done| |done]. clear Ht.
     move: Hrel. move HPκs: (trace_to_set _) => Pκs Ht.
     have : ∀ x, Pκs x → trace_to_set κs x by rewrite HPκs => ?.
@@ -174,7 +174,7 @@ Proof.
       * move => ??? [??]. econstructor. naive_solver.
       * move => ????. econstructor. naive_solver.
     + move => ???????????. etrans; [done|].
-      admit.
+      shelve.
     + move => ??????????. etrans; [done|].
       constructor. naive_solver.
 Abort.
