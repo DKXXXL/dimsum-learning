@@ -1,6 +1,10 @@
-# Coq development for DimSum: A Decentralized Approach to Multi-language Semantics and Verification
+# Appendix and Coq development for DimSum: A Decentralized Approach to Multi-language Semantics and Verification
 
-This is the Coq development for the POPL'23 submission "DimSum: A Decentralized Approach to Multi-language Semantics and Verification".
+This folder contains the appendix and the Coq development for the POPL'23 submission "DimSum: A Decentralized Approach to Multi-language Semantics and Verification".
+
+## Appendix
+
+The appendix for the paper can be found in `appendix.pdf`.
 
 ## Installation
 
