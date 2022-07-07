@@ -46,7 +46,4 @@ theories/compiler/linearize.v
 theories/compiler/codegen.v
 theories/compiler/mem2reg.v
 theories/compiler/compiler.v
-theories/iris/wp.v
-theories/iris/mono_ord.v
-theories/iris/ord_later.v
 theories/itree.v
