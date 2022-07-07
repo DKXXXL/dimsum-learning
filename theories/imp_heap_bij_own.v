@@ -1409,7 +1409,7 @@ Lemma imp_heap_bij_sim_refl_static vss vsi e es ei hi hs n b Ki Ks fns1 fns2 r r
   satisfiable (heap_bij_inv hi hs ∗ ([∗ map] v1;v2 ∈ vsi; vss, val_in_bij v1 v2) ∗ r ∗ rf) →
   Imp ei hi fns1 ⪯{imp_module, imp_heap_bij imp_module, n, b} (SMProg, Imp es hs fns2, (PPInside, (), rf)).
 Proof.
-  induction e as [x|v|e1 op e2 IH1 IH2|e IH|e1 e2 IH1 IH2|e e1 e2 IH IH1 IH2| x e1 e2 IH1 IH2| f args IH| | | | |] in vss, vsi, hi, hs, n, b, Ks, Ki, es, ei, Hfill1, Hfill2, r, rf |-*;
+  induction e as [x|v|e1 op e2 IH1 IH2|e IH|e1 e2 IH1 IH2|e e1 e2 IH IH1 IH2| x e1 e2 IH1 IH2| f args IH| | | |] in vss, vsi, hi, hs, n, b, Ks, Ki, es, ei, Hfill1, Hfill2, r, rf |-*;
     intros Hsub Hcall Hcont Hstatic Hsat;
     destruct Hfill1 as [->], Hfill2 as [->].
   - simpl. destruct (vss !! x) as [v|] eqn: Hlook; last first.
@@ -1499,7 +1499,6 @@ Proof.
       eapply Forall_forall in IH; last done.
       intros ???????????????. eapply IH; eauto.
       simpl in Hstatic. by eapply forallb_True, Forall_forall in Hstatic.
-  - tstep_s. done.
   - done.
   - done.
   - done.

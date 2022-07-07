@@ -53,7 +53,6 @@ Fixpoint pass (ren : gmap string string) (e : static_expr) (s : N) : (N * static
   | SCall f args =>
       let p1 := state_bind (pass ren <$> args) s in
       (p1.1, SCall f p1.2)
-  | SUbE => (s, SUbE)
   | SLetE v e1 e2 =>
       let p1 := pass ren e1 (s + 1) in
       let p2 := pass (<[v := ssa_var v s]> ren) e2 p1.1 in
@@ -158,7 +157,6 @@ Proof.
       { constructor. by instantiate (1:=(CallCtx _ _ _) ::_). }
       move => ?? /=. rewrite !cons_middle !app_assoc -fmap_snoc. apply IH2.
       rewrite pass_state. naive_solver lia.
-  - by tstep_s.
 Qed.
 
 Definition pass_fn (f : static_fndef) : static_fndef :=

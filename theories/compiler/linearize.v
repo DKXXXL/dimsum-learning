@@ -61,10 +61,6 @@ Fixpoint pass (e : static_expr) : M var_val :=
       v ← fresh_var;
       cappend (λ x, LLetE v (LCall f vs) x);;
       mret $ VVar v
-  | SUbE =>
-      v ← fresh_var;
-      cappend (λ x, LLetE v LUbE x);;
-      mret $ VVar v
   | SLetE v e1 e2 =>
       v1 ← pass e1;
       cappend (λ x, LLetE v (LVarVal v1) x);;
@@ -320,7 +316,6 @@ Proof.
       * move => ?????? Hvsi'. apply Hcont; [lia|done|by etrans|].
         move => ? /Hvsi'[|]; [| set_unfold; naive_solver lia].
         move => /Hvsi. set_unfold; naive_solver lia.
-  - move => *. prepare_goal. by tstep_s.
 Qed.
 
 Definition pass_fn (f : static_fndef) : compiler_success error lfndef :=

@@ -59,7 +59,6 @@ Definition lexpr_op_pass (x: string) (e: lexpr_op) : M lexpr_op :=
   | LCall f args =>
     cassert UsedAsLoc (Forall (λ v, v ≠ VVar x) args);;
     mret (LCall f args)
-  | LUbE => mret $ LUbE
   end.
 
 
@@ -287,7 +286,7 @@ Lemma pass_lexpr_op_correct ei' Ki ei Ks es es' x k (l: loc) n hi hs fns1 fns2 v
 Proof.
   intros Hcalls Hcont Hsat Hxs Hxi Hsub Hl Hrun.
   destruct Hfill1 as [->], Hfill2 as [->].
-  destruct es' as [v|v1 op v2|v|v1 v2|y vs|]; simpl in Hrun.
+  destruct es' as [v|v1 op v2|v|v1 v2|y vs]; simpl in Hrun.
   - simplify_crun_eq.
     apply: lexpr_tsim_var_val; eauto; clear Hsat.
     intros v1 v2 _ _ Hsat; simpl.
@@ -361,7 +360,6 @@ Proof.
     clear Hsat; intros v1'' v2'' h1'' h2'' rf'' Hsat; simpl.
     eapply Hcont; [done..|].
     iSatMono. iIntros "($ & $ & (_ & $ & $ & $) & $)".
-  - simplify_crun_eq. tstep_s. done.
 Qed.
 
 

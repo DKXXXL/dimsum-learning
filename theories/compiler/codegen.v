@@ -241,8 +241,6 @@ Definition translate_lexpr_op (e : lexpr_op) : M unit :=
       a ← cassert_opt (UnknownFunction f) (s.(s_f2i) !! f);
       translate_args 0 vs;;
       cappend [Abranch_link true (ImmediateOp a)]
-  | LUbE =>
-      cappend [Abranch false (ImmediateOp 0)]
   end.
 
 Fixpoint translate_lexpr (e : lexpr) : M unit :=
@@ -1239,7 +1237,6 @@ Proof.
     iIntros (????) "Hvs Hp" => /=. subst.
     iApply (Hcall with "Hvs Hp"); [done|].
     iIntros (?????). by iApply "Hcont".
-  - iIntros (????) "??". iSatStop. by tstep_s.
 Qed.
 
 Lemma translate_lexpr_correct s s' p p' n e e' rs vs res K h

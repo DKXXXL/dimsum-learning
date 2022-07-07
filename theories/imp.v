@@ -128,7 +128,6 @@ Inductive expr : Set :=
 | If (e e1 e2 : expr)
 | LetE (v : string) (e1 e2 : expr)
 | Call (f : string) (args : list expr)
-| UbE
 (* expressions only appearing at runtime: *)
 | AllocA (ls : list (string * Z)) (e : expr)
 | FreeA (ls : list (loc * Z)) (e : expr)
@@ -146,7 +145,6 @@ Lemma expr_ind (P : expr → Prop) :
   (∀ (e1 e2 e3 : expr), P e1 → P e2 → P e3 → P (If e1 e2 e3)) →
   (∀ (v : string) (e1 e2 : expr), P e1 → P e2 → P (LetE v e1 e2)) →
   (∀ (f : string) (args : list expr), Forall P args → P (Call f args)) →
-  (P UbE) →
   (∀ ls (e : expr), P e → P (AllocA ls e)) →
   (∀ ls (e : expr), P e → P (FreeA ls e)) →
   (∀ (can_return_further : bool) (e : expr), P e → P (ReturnExt can_return_further e)) →
@@ -154,7 +152,7 @@ Lemma expr_ind (P : expr → Prop) :
   ∀ (e : expr), P e.
 Proof.
   move => *. generalize dependent P => P. match goal with | e : expr |- _ => revert e end.
-  fix FIX 1. move => [ ^e] => ??????? Hcall ?????.
+  fix FIX 1. move => [ ^e] => ??????? Hcall ????.
   8: { apply Hcall. apply Forall_true => ?. by apply: FIX. }
   all: auto.
 Qed.
@@ -178,7 +176,6 @@ Fixpoint assigned_vars (e : expr) : list string :=
   | If e e1 e2 => assigned_vars e ++ assigned_vars e1 ++ assigned_vars e2
   | LetE v e1 e2 => [v] ++ assigned_vars e1 ++ assigned_vars e2
   | Call f args => mjoin (assigned_vars <$> args)
-  | UbE => []
   | AllocA _ e => assigned_vars e
   | FreeA _ e => assigned_vars e
   | ReturnExt can_return_further e => assigned_vars e
@@ -196,7 +193,6 @@ Fixpoint subst (x : string) (v : val) (e : expr) : expr :=
   | If e e1 e2 => If (subst x v e) (subst x v e1) (subst x v e2)
   | LetE y e1 e2 => LetE y (subst x v e1) (if bool_decide (x ≠ y) then subst x v e2 else e2)
   | Call f args => Call f (subst x v <$> args)
-  | UbE => UbE
   | AllocA ls e => AllocA ls (subst x v e)
   | FreeA ls e => FreeA ls (subst x v e)
   | ReturnExt b e => ReturnExt b (subst x v e)
@@ -218,7 +214,6 @@ Fixpoint subst_map (x : gmap string val) (e : expr) : expr :=
   | If e e1 e2 => If (subst_map x e) (subst_map x e1) (subst_map x e2)
   | LetE y e1 e2 => LetE y (subst_map x e1) (subst_map (delete y x) e2)
   | Call f args => Call f (subst_map x <$> args)
-  | UbE => UbE
   | AllocA ls e => AllocA ls (subst_map x e)
   | FreeA ls e => FreeA ls (subst_map x e)
   | ReturnExt b e => ReturnExt b (subst_map x e)
@@ -374,7 +369,6 @@ Fixpoint is_static_expr (allow_loc : bool) (e : expr) : bool :=
   | If e e1 e2 => is_static_expr allow_loc e && is_static_expr allow_loc e1 && is_static_expr allow_loc e2
   | LetE v e1 e2 => is_static_expr allow_loc e1 && is_static_expr allow_loc e2
   | Call f args => forallb (is_static_expr allow_loc) args
-  | UbE => true
   | AllocA _ e => allow_loc && is_static_expr allow_loc e
   | FreeA _ e => allow_loc && is_static_expr allow_loc e
   | ReturnExt can_return_further e => false
@@ -899,8 +893,6 @@ Inductive head_step : imp_state → option imp_event → (imp_state → Prop) �
        ∃ b, val_to_bool v = Some b ∧ σ = Imp (if b then e1 else e2) h fns)
 | LetS x v e fns h:
   head_step (Imp (LetE x (Val v) e) h fns) None (λ σ, σ = Imp (subst x v e) h fns)
-| UbES fns h:
-  head_step (Imp UbE h fns) None (λ σ, False)
 | VarES fns h v: (* unbound variable *)
   head_step (Imp (Var v) h fns) None (λ σ, False)
 | AllocAS h h' fns ls xs e:
@@ -1049,7 +1041,6 @@ Inductive static_expr : Set :=
 | SIf (e e1 e2 : static_expr)
 | SLetE (v : string) (e1 e2 : static_expr)
 | SCall (f : string) (args : list static_expr)
-| SUbE
 .
 End static_expr.
 Lemma static_expr_ind (P : static_expr → Prop) :
@@ -1061,11 +1052,10 @@ Lemma static_expr_ind (P : static_expr → Prop) :
   (∀ (e1 e2 e3 : static_expr), P e1 → P e2 → P e3 → P (SIf e1 e2 e3)) →
   (∀ (v : string) (e1 e2 : static_expr), P e1 → P e2 → P (SLetE v e1 e2)) →
   (∀ (f : string) (args : list static_expr), Forall P args → P (SCall f args)) →
-  (P SUbE) →
   ∀ (e : static_expr), P e.
 Proof.
   move => *. generalize dependent P => P. match goal with | e : static_expr |- _ => revert e end.
-  fix FIX 1. move => [ ^e] => ??????? Hcall ?.
+  fix FIX 1. move => [ ^e] => ??????? Hcall.
   8: { apply Hcall. apply Forall_true => ?. by apply: FIX. }
   all: auto.
 Qed.
@@ -1080,7 +1070,6 @@ Fixpoint static_expr_to_expr (e : static_expr) : expr :=
   | SIf e e1 e2 => If (static_expr_to_expr e) (static_expr_to_expr e1) (static_expr_to_expr e2)
   | SLetE v e1 e2 => LetE v (static_expr_to_expr e1) (static_expr_to_expr e2)
   | SCall f args => Call f (static_expr_to_expr <$> args)
-  | SUbE => UbE
   end.
 
 Lemma static_expr_is_static e :
@@ -1101,8 +1090,7 @@ Fixpoint expr_to_static_expr (e : expr) : static_expr :=
   | If e e1 e2 => SIf (expr_to_static_expr e) (expr_to_static_expr e1) (expr_to_static_expr e2)
   | LetE v e1 e2 => SLetE v (expr_to_static_expr e1) (expr_to_static_expr e2)
   | Call f args => SCall f (expr_to_static_expr <$> args)
-  | UbE => SUbE
-  | _ => SUbE
+  | _ => SVar ""
   end.
 
 Lemma static_expr_to_expr_to_static_expr e :
@@ -1227,15 +1215,6 @@ Global Hint Resolve imp_expr_fill_ReturnExt : tstep.
 (** ** instances *)
 (* This pattern of using ImpExprFill at each rule is quite expensive
 but we don't care at the moment. *)
-Lemma imp_step_UbE_s fns h e K `{!ImpExprFill e K UbE}:
-  TStepS imp_module (Imp e h fns) (λ G, G None (λ G', True)).
-Proof.
-  destruct ImpExprFill0; subst.
-  constructor => ? HG. eexists _, _. split; [done|] => /= ??.
-  apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?. naive_solver.
-Qed.
-Global Hint Resolve imp_step_UbE_s : tstep.
-
 Lemma imp_step_Var_s fns h e K v `{!ImpExprFill e K (Var v)}:
   TStepS imp_module (Imp e h fns) (λ G, G None (λ G', True)).
 Proof.
@@ -1964,7 +1943,6 @@ Proof.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst.
     + tstep_s. done.
-    + tstep_s. done.
     + tstep_s => *. split!; [done..|] => /= *; simplify_eq. tend. split!.
       apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst_l.
@@ -1997,7 +1975,6 @@ Proof.
       apply is_static_expr_expr_fill. split!. destruct b; naive_solver.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst.
-    + tstep_s. done.
     + tstep_s. done.
     + tstep_s => *. split!; [done..|] => /= *; simplify_eq. tend. split!.
       apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
@@ -2081,7 +2058,6 @@ Proof.
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst.
       * by tstep_s.
-      * by tstep_s.
       * tstep_s => *. split!; [done..|] => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst_l.
@@ -2125,7 +2101,6 @@ Proof.
       * tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst.
-      * by tstep_s.
       * by tstep_s.
       * tstep_s => *. split!; [done..|] => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].

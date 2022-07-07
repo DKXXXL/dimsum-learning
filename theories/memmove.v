@@ -847,3 +847,6 @@ Proof.
   }
   done.
 Qed.
+
+(* Print Assumptions complete_refinement. *)
+(* Print Assumptions sim_trefines. *)

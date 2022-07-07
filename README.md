@@ -110,9 +110,9 @@ Section 5:
 
 ### Axioms
 The development relies on the following non-constructive axioms:
-* Hilbert's epsilon, Choice (`constructive_indefinite_description` of `Coq.Logic.Epsilon`)
-* Propositional Extensionality, PE (`propositional_extensionality` from `Coq.Logic.PropExtensionality`)
+* Functional form of the (non extensional) axiom of choice, Choice (`FunctionalChoice` of `Coq.Logic.ChoiceFacts`)
 * (Dependent) Functional Extensionality, (D)FE (`functional_extensionality_dep` from `Coq.Logic.FunctionalExtensionality`)
-* Proof Irrelevance (already implied by Propositional Extensionality), PI (`proof_irrelevance` from `Coq.Logic.ProofIrrelevance`)
+* Proof Irrelevance, PI (`proof_irrelevance` from `Coq.Logic.ProofIrrelevance`)
 * Excluded Middle (already implied by the combination of Choice and FE), XM (`classic` from `Coq.Logic.Classical_Prop`)
+* Invariance by Substitution of Reflexive Equality Proofs (already implied XM), UIP (`Eq_rect_eq` from `Coq.Logic.EqdepFacts`)
 These axioms [can be safely added to Coq](https://github.com/coq/coq/wiki/The-Logic-of-Coq#what-axioms-can-be-safely-added-to-coq).
