@@ -1,5 +1,5 @@
-Require Export refframe.base.
-Require Export refframe.axioms.
+Require Export dimsum.base.
+Require Export dimsum.axioms.
 
 Inductive event (EV : Type) : Type :=
 | Nb | Ub | Vis (e : EV).

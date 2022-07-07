@@ -1,0 +1,17 @@
+opam-version: "2.0"
+maintainer: "Anonymous"
+authors: "Anonymous"
+license: "BSD-3-Clause"
+version: "dev"
+
+synopsis: "DimSum"
+
+depends: [
+  "coq" { (>= "8.15.0" & < "8.16~") | (= "dev") }
+  "coq-iris" { (= "dev.2022-01-24.0.72a4bd62") | (= "dev") }
+  "coq-itree" { (= "4.0.0") }
+  "coq-record-update" { (= "0.3.0") | (= "dev") }
+]
+
+build: [make "-j%{jobs}%"]
+install: [make "install"]

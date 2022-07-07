@@ -1,11 +1,11 @@
-Require Export refframe.module.
-Require Import refframe.trefines.
-Require Import refframe.filter.
-Require Import refframe.product.
-Require Import refframe.seq_product.
-Require Import refframe.link.
-Require Import refframe.prepost.
-Require Import refframe.proof_techniques.
+Require Export dimsum.module.
+Require Import dimsum.trefines.
+Require Import dimsum.filter.
+Require Import dimsum.product.
+Require Import dimsum.seq_product.
+Require Import dimsum.link.
+Require Import dimsum.prepost.
+Require Import dimsum.proof_techniques.
 
 Local Open Scope Z_scope.
 
@@ -695,7 +695,7 @@ Proof.
 Qed.
 
 (** * itree examples *)
-Require Import refframe.itree.
+Require Import dimsum.itree.
 Local Ltac go :=
   clear_itree.
 Local Ltac go_s :=

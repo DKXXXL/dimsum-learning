@@ -1,8 +1,8 @@
-Require Export refframe.module.
-Require Import refframe.srefines.
-Require Import refframe.trefines.
-Require Import refframe.example_modules.
-Require Import refframe.proof_techniques.
+Require Export dimsum.module.
+Require Import dimsum.srefines.
+Require Import dimsum.trefines.
+Require Import dimsum.example_modules.
+Require Import dimsum.proof_techniques.
 
 Inductive filter_step {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) :
   m.(m_state) → option EV2 → (m.(m_state) → Prop) → Prop :=

@@ -1,5 +1,5 @@
-Require Import refframe.base.
-Require Import refframe.trefines.
+Require Import dimsum.base.
+Require Import dimsum.trefines.
 
 Record compiler_pass {EV A B E} := Pass {
   pass_compile : A → B + E;

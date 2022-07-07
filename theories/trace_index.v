@@ -1,5 +1,5 @@
-Require Import refframe.base.
-Require Import refframe.axioms.
+Require Import dimsum.base.
+Require Import dimsum.axioms.
 
 Inductive trace_index : Type :=
 | tiO | tiS (n : trace_index) | tiChoice (T : Type) (f : T → trace_index).

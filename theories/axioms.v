@@ -1,7 +1,7 @@
 Require Import Coq.Logic.ChoiceFacts.
 Require Import Coq.Logic.EqdepFacts.
 Require Export Coq.Logic.FunctionalExtensionality.
-Require Import refframe.base.
+Require Import dimsum.base.
 
 Module Ax : EqdepElimination.
 

@@ -1,5 +1,5 @@
-Require Export refframe.module.
-Require Export refframe.srefines.
+Require Export dimsum.module.
+Require Export dimsum.srefines.
 
 (*** Demonic module **)
 Inductive dem_event (EV : Type) : Type :=

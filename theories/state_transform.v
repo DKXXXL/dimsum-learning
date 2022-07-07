@@ -1,6 +1,6 @@
-Require Export refframe.module.
-Require Import refframe.trefines.
-Require Import refframe.proof_techniques.
+Require Export dimsum.module.
+Require Import dimsum.trefines.
+Require Import dimsum.proof_techniques.
 
 (*** state transform *)
 Inductive state_transform_step {EV S} (m : module EV) (R : S → m.(m_state) → Prop) :

@@ -1,8 +1,8 @@
-Require Export refframe.module.
-Require Import refframe.srefines.
-Require Import refframe.trefines.
-Require Import refframe.filter.
-Require Import refframe.proof_techniques.
+Require Export dimsum.module.
+Require Import dimsum.srefines.
+Require Import dimsum.trefines.
+Require Import dimsum.filter.
+Require Import dimsum.proof_techniques.
 
 
 (*** [product] *)

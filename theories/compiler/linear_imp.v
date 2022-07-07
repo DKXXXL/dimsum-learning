@@ -1,4 +1,4 @@
-Require Import refframe.imp.
+Require Import dimsum.imp.
 
 Inductive var_val :=
 | VVar (v : string)

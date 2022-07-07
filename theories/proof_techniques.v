@@ -1,5 +1,5 @@
-Require Export refframe.module.
-Require Import refframe.trefines.
+Require Export dimsum.module.
+Require Import dimsum.trefines.
 
 (*** Proving refinement *)
 

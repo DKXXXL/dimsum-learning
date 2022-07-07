@@ -1,7 +1,7 @@
 From iris.algebra Require Export cmra local_updates proofmode_classes auth.
 From iris.algebra Require Import updates.
 From iris.prelude Require Import options.
-From refframe Require Export trace_index.
+From dimsum Require Export trace_index.
 
 (** This file is based min_nat in iris/algebra/numbers.v and mono_nat in iris/algebra/lib/mono_nat.v . *)
 

@@ -1,4 +1,4 @@
--Q theories refframe
+-Q theories dimsum
 # We sometimes want to locally override notation (e.g. in proofmode/base.v, bi/embedding.v), and there
 # is no good way to do that with scopes.
 -arg -w -arg -notation-overridden

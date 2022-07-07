@@ -1,5 +1,5 @@
-Require Export refframe.module.
-Require Export refframe.trace_index.
+Require Export dimsum.module.
+Require Export dimsum.trace_index.
 
 (** [trefines] is a weaker notion of refinement that does not allow commuting choices and externally visible events*)
 

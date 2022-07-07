@@ -1,5 +1,5 @@
-Require Import refframe.base.
-Require Import refframe.axioms.
+Require Import dimsum.base.
+Require Import dimsum.axioms.
 
 Set Default Proof Using "Type".
 

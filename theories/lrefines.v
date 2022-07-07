@@ -1,5 +1,5 @@
-Require Export refframe.module.
-Require Export refframe.axioms.
+Require Export dimsum.module.
+Require Export dimsum.axioms.
 
 (*
 Compare this to

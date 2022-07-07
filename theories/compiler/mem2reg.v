@@ -1,18 +1,18 @@
-Require Export refframe.module.
-Require Import refframe.trefines.
-Require Import refframe.filter.
-Require Import refframe.product.
-Require Import refframe.seq_product.
-Require Import refframe.link.
+Require Export dimsum.module.
+Require Import dimsum.trefines.
+Require Import dimsum.filter.
+Require Import dimsum.product.
+Require Import dimsum.seq_product.
+Require Import dimsum.link.
 Require Import stdpp.strings.
 Require Import stdpp.pretty.
-Require Import refframe.prepost.
-Require Import refframe.proof_techniques.
-Require Import refframe.imp.
-Require Export refframe.compiler.monad.
-Require Export refframe.compiler.linear_imp.
-Require Export refframe.compiler.linearize.
-Require Import refframe.imp_heap_bij_own.
+Require Import dimsum.prepost.
+Require Import dimsum.proof_techniques.
+Require Import dimsum.imp.
+Require Export dimsum.compiler.monad.
+Require Export dimsum.compiler.linear_imp.
+Require Export dimsum.compiler.linearize.
+Require Import dimsum.imp_heap_bij_own.
 
 
 Module ci2a_mem2reg.
@@ -167,6 +167,16 @@ Definition test_fn_3 : fndef := {|
 |}.
 
 Compute test_opt_fn test_fn_3.
+
+Definition test_fn_4 : fndef := {|
+  fd_args := ["x"];
+  fd_vars := [("y", 1%Z)];
+  fd_body := (LetE "_" (Store (Var "y") (Var "x"))
+             ((BinOp (Load (Var "y")) AddOp (Load (Var "y")))));
+  fd_static := I;
+|}.
+
+Compute test_opt_fn test_fn_4.
 
 
 Lemma lexpr_tsim_var_val  v es ei Ks Ki vss vsi x n hi hs fns1 fns2 rf r

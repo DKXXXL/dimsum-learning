@@ -2,13 +2,13 @@ Require Export iris.algebra.cmra.
 Require Export iris.algebra.updates.
 Require Export iris.base_logic.base_logic.
 Require Export iris.proofmode.proofmode.
-Require Export refframe.module.
-Require Export refframe.satisfiable.
-Require Import refframe.trefines.
-Require Import refframe.link.
-Require Import refframe.seq_product.
-Require Import refframe.state_transform.
-Require Import refframe.proof_techniques.
+Require Export dimsum.module.
+Require Export dimsum.satisfiable.
+Require Import dimsum.trefines.
+Require Import dimsum.link.
+Require Import dimsum.seq_product.
+Require Import dimsum.state_transform.
+Require Import dimsum.proof_techniques.
 
 Set Default Proof Using "Type".
 

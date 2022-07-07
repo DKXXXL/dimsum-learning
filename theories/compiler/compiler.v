@@ -1,21 +1,21 @@
-Require Export refframe.module.
-Require Import refframe.trefines.
-Require Import refframe.filter.
-Require Import refframe.product.
-Require Import refframe.seq_product.
-Require Import refframe.link.
-Require Import refframe.prepost.
-Require Import refframe.proof_techniques.
-Require Import refframe.imp.
-Require Import refframe.asm.
-Require Import refframe.imp_to_asm.
-Require Import refframe.i2a_bij_vertical.
-Require Import refframe.compiler.monad.
-Require Import refframe.compiler.linear_imp.
-Require Import refframe.compiler.ssa.
-Require Import refframe.compiler.linearize.
-Require Import refframe.compiler.mem2reg.
-Require Import refframe.compiler.codegen.
+Require Export dimsum.module.
+Require Import dimsum.trefines.
+Require Import dimsum.filter.
+Require Import dimsum.product.
+Require Import dimsum.seq_product.
+Require Import dimsum.link.
+Require Import dimsum.prepost.
+Require Import dimsum.proof_techniques.
+Require Import dimsum.imp.
+Require Import dimsum.asm.
+Require Import dimsum.imp_to_asm.
+Require Import dimsum.i2a_bij_vertical.
+Require Import dimsum.compiler.monad.
+Require Import dimsum.compiler.linear_imp.
+Require Import dimsum.compiler.ssa.
+Require Import dimsum.compiler.linearize.
+Require Import dimsum.compiler.mem2reg.
+Require Import dimsum.compiler.codegen.
 
 Local Open Scope Z_scope.
 Set Default Proof Using "Type".

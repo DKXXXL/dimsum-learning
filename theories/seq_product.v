@@ -1,9 +1,9 @@
-Require Export refframe.module.
-Require Import refframe.trefines.
-Require Import refframe.proof_techniques.
-Require Import refframe.product.
-Require Import refframe.filter.
-Require Import refframe.state_transform.
+Require Export dimsum.module.
+Require Import dimsum.trefines.
+Require Import dimsum.proof_techniques.
+Require Import dimsum.product.
+Require Import dimsum.filter.
+Require Import dimsum.state_transform.
 
 (*** [seq_product] *)
 Inductive seq_product_state :=

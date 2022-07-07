@@ -1,9 +1,9 @@
-Require Export refframe.module.
-Require Import refframe.srefines.
-Require Import refframe.trefines.
-Require Import refframe.lrefines.
-Require Import refframe.dem_module.
-Require Import refframe.example_modules.
+Require Export dimsum.module.
+Require Import dimsum.srefines.
+Require Import dimsum.trefines.
+Require Import dimsum.lrefines.
+Require Import dimsum.dem_module.
+Require Import dimsum.example_modules.
 
 (*** Proof that trefines implies srefines *)
 Inductive thas_trace_rel {EV} : (list (event EV) → Prop) → (trace EV) → Prop :=

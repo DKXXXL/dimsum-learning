@@ -1,13 +1,13 @@
-Require Export refframe.module.
-Require Import refframe.trefines.
-Require Import refframe.filter.
-Require Import refframe.product.
-Require Import refframe.seq_product.
-Require Import refframe.proof_techniques.
-Require Import refframe.prepost.
-Require Import refframe.imp.
-Require Import refframe.asm.
-Require Import refframe.imp_to_asm.
+Require Export dimsum.module.
+Require Import dimsum.trefines.
+Require Import dimsum.filter.
+Require Import dimsum.product.
+Require Import dimsum.seq_product.
+Require Import dimsum.proof_techniques.
+Require Import dimsum.prepost.
+Require Import dimsum.imp.
+Require Import dimsum.asm.
+Require Import dimsum.imp_to_asm.
 
 Local Open Scope Z_scope.
 
