@@ -2,3 +2,4 @@
 Notes.md export-ignore
 .gitattributes export-ignore
 build.sh export-ignore
+.gitlab-ci.yml export-ignore
