@@ -37,10 +37,8 @@ Note the following differences between the paper and the Coq development:
 Section 2:
 - Verification of the running example including programs and specifications: theories/memmove.v
 - Proof rules in Figure 5:
-  - asm-link-syn-1: asm_link_refines_prod in theories/asm.v
-  - asm-link-syn-2: asm_prod_refines_link in theories/asm.v
-  - rec-link-syn-1: imp_link_refines_prod in theories/imp.v
-  - rec-link-syn-2: imp_prod_refines_link in theories/imp.v
+  - asm-link-syn: asm_link_refines_prod and asm_prod_refines_link in theories/asm.v
+  - rec-link-syn: imp_link_refines_prod and imp_prod_refines_link in theories/imp.v
   - asm-link-horizontal: asm_prod_trefines in theories/asm.v
   - rec-link-horizontal: imp_prod_trefines in theories/imp.v
   - rec-wrapper-compat: imp_to_asm_trefines in theories/imp_to_asm.v
