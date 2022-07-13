@@ -83,7 +83,7 @@ Definition full_asm_add : gmap Z asm_instr :=
 Definition full_imp_add_prog : gmap string fndef :=
   imp_add_prog ∪ imp_add_client_prog.
 
-Local Ltac go := destruct_all?; simplify_eq/=.
+Local Ltac go := destruct!/=.
 Local Ltac go_i := tstep_i; go.
 Local Ltac go_s := tstep_s; go.
 
@@ -137,7 +137,7 @@ Proof.
   apply imp_to_asm_proof; [set_solver..|].
   move => n i rs mem K f fn vs h cs pc ret gp rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
   unfold imp_add_prog in Hf. unfold asm_add in Hi.
-  move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
+  move: Hf2i. rewrite !lookup_insert_Some => ?; destruct!; simplify_map_eq/=.
   destruct vs as [|v1 [|v2 []]] => //=. unfold i2a_regs_call in *.
   iSatStart. iIntros!. rewrite i2a_args_cons ?i2a_args_cons; [|done..].
   iDestruct!. iSatStop.
@@ -165,7 +165,7 @@ Proof.
   apply imp_to_asm_proof; [set_solver..|].
   move => n i rs mem K f fn vs h cs pc ret gp rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
   unfold imp_add_client_prog in Hf. unfold asm_add_client in Hi.
-  move: Hf2i. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
+  move: Hf2i. rewrite !lookup_insert_Some => ?; destruct!; simplify_map_eq/=.
   destruct vs as [|] => //=. unfold i2a_regs_call in *.
   iSatStart. iIntros!. iSatStop.
   tstep_i => ??. simplify_map_eq'.

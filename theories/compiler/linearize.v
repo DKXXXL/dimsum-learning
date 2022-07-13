@@ -153,7 +153,7 @@ Local Ltac prepare_goal :=
   end;
   unfold fresh_var in *;
   simplify_crun_eq;
-  repeat (destruct_all!; unfold fresh_var in *; simplify_crun_eq);
+  repeat (destruct!; unfold fresh_var in *; simplify_crun_eq);
   learn_state.
 
 Lemma pass_correct ei' Ki ei Ks es es' n h fns1 fns2 v s s' vsi vss

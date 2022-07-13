@@ -804,7 +804,7 @@ Proof.
   constructor => ??. apply itree_impl_rel_intro.
   move: ITreeTStep0 => [->].
   apply: steps_impl_mono; [by apply itree_tstepi_proof|].
-  move => /= * ?? HP ?. destruct_all?; simplify_eq. eexists _, _. split_and!; [done|naive_solver|].
+  move => /= * ?? HP ?. destruct!. eexists _, _. split_and!; [done|naive_solver|].
   move => ? /H2[?[?[? [/HP[?[??]] [? HG]]]]]. eexists _, _, _. split_and!; [done| |done].
   etrans; [|done]. apply eqit_flip. by apply: eqit_mon; [..|done].
 Qed.
@@ -825,7 +825,7 @@ Proof.
   constructor => ??. apply itree_impl_rel_intro.
   move: ITreeEq0 => [->].
   apply: steps_impl_mono; [by apply itree_tstepi_proof|].
-  move => /= * ?? HP ?. destruct_all?; simplify_eq. eexists _, _. split_and!; [done|naive_solver|].
+  move => /= * ?? HP ?. destruct!. eexists _, _. split_and!; [done|naive_solver|].
   move => ? /H2[?[?[? [/HP[?[??]] [? HG]]]]]. eexists (_, _). split; [done|]. apply HG. etrans; [|done].
   apply eqit_flip. by apply: eqit_mon; [..|done].
 Qed.

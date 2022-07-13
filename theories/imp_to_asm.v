@@ -571,7 +571,7 @@ Proof.
   iMod (i2a_mem_delete_big' with "[$] [$]").
   iMod (i2a_mem_alloc_big' with "[$]") as "[? $]".
   { apply map_disjoint_spec => ???. rewrite !lookup_difference_Some lookup_difference_None /is_Some.
-    move => ??. destruct_all?; simplify_eq. } iModIntro.
+    move => ??. destruct!. } iModIntro.
   rewrite map_difference_id // map_union_comm ?map_difference_union //. apply map_disjoint_difference_l'.
 Qed.
 
@@ -595,7 +595,7 @@ Proof.
     setoid_rewrite lookup_difference_Some. unfold is_Some.
     setoid_rewrite i2a_ih_constant_None.
     setoid_rewrite i2a_ih_shared_None.
-    move => ??. destruct_all?; simplify_eq.
+    move => ??. destruct!.
     - destruct y; naive_solver.
     - have ? := lookup_weaken _ _ _ _ ltac:(done) Hsub2.
       apply: Hdisj; by apply elem_of_dom.
@@ -615,7 +615,7 @@ Proof.
   { apply map_disjoint_spec => ???.
     rewrite lookup_union_Some_raw !lookup_fmap !fmap_Some !fmap_None.
     setoid_rewrite lookup_difference_Some.
-    move => ??. destruct_all?; simplify_eq.
+    move => ??. destruct!.
     apply: Hdisj; by apply elem_of_dom.
   } iModIntro.
   iAssert ([∗ map] p↦a ∈ ihs, i2a_heap_shared p a)%I as "#Hsh'". {
@@ -1365,7 +1365,7 @@ Inductive imp_to_asm_combine_stacks (ins1 ins2 : gset Z) :
 .
 
 Local Ltac go := repeat match goal with | x : asm_ev |- _ => destruct x end;
-                 destruct_all?; simplify_eq/=; destruct_all?; simplify_eq/=.
+                 destruct!/=; destruct!/=.
 Local Ltac go_i := tstep_i; intros; go.
 Local Ltac go_s := tstep_s; go.
 
@@ -1425,8 +1425,8 @@ Proof.
   { split!. econs. by rewrite /i2a_mem_map big_sepM_union. }
   all: move => [cs1 lr1] [cs2 lr2] [cs lr] x1 x2 x ? ics.
   - move => e ? e' /= ? ??.
-    destruct_all?; simplify_eq.
-    destruct e as [rs mem| | |]; destruct_all?; simplify_eq/=.
+    destruct!.
+    destruct e as [rs mem| | |]; destruct!/=.
     move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. split; [done|]. eexists b.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
     + move => ret f Hargs Hin Hf2i /not_elem_of_union[??] ? ??.
@@ -1439,15 +1439,15 @@ Proof.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
       1: by simpl_map_decide.
       1: by econs.
-    + move => *. destruct_all?; simplify_eq.
+    + move => *. destruct!.
       repeat case_bool_decide => //.
       revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
       inversion Hstack; simplify_eq/= => //. 2: { exfalso. set_solver. }
       split!.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
   - move => e ? e' /= ? ??.
-    destruct_all?; simplify_eq.
-    destruct e as [rs mem| | |]; destruct_all?; simplify_eq/=.
+    destruct!.
+    destruct e as [rs mem| | |]; destruct!/=.
     move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. split; [done|]. eexists b.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
     + move => ret f Hargs Hin Hf2i /not_elem_of_union[??] ???.
@@ -1460,13 +1460,13 @@ Proof.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
       1: by simpl_map_decide.
       1: by econs.
-    + move => *. destruct_all?; simplify_eq. repeat case_bool_decide => //.
+    + move => *. destruct!. repeat case_bool_decide => //.
       revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
       inversion Hstack; simplify_eq/= => //.
       split!.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
   - move => [? [f vs h|v h]] ? /= *.
-    all: destruct_all?; simplify_eq/=; split; [done|].
+    all: destruct!/=; split; [done|].
     + repeat case_bool_decide => //. 2: { exfalso. set_solver. } eexists true => /=.
       split!.
       1: done.
@@ -1480,7 +1480,7 @@ Proof.
       split!.
       1: { iSatMono. iIntros!. iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]". simplify_eq/=. iFrame. }
   - move => [? [f vs h|v h]] ? ? ? /= *.
-    all: destruct_all?; simplify_eq/=.
+    all: destruct!/=.
     + repeat case_bool_decide => //. 1: { exfalso. set_solver. }
       split!.
       1: done.
@@ -1495,7 +1495,7 @@ Proof.
       split!.
       1: { iSatMono. iIntros!. iFrame. }
   - move => [? [f vs h|v h]] ? /= *.
-    all: destruct_all?; simplify_eq/=; split; [done|].
+    all: destruct!/=; split; [done|].
     + repeat case_bool_decide => //. 2: { exfalso. set_solver. } eexists true.
       split!.
       1: done.
@@ -1509,7 +1509,7 @@ Proof.
       split!.
       1: { iSatMono. iIntros!. iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]". simplify_eq/=. iFrame. }
   - move => [? [f vs h|v h]] ? /= ? *.
-    all: destruct_all?; simplify_eq/=.
+    all: destruct!/=.
     + repeat case_bool_decide => //. 1: { exfalso. set_solver. }
       split!.
       1: done.
@@ -1606,10 +1606,10 @@ Proof.
       cs1 = I2AI true pc lr' :: cs2 ∧
       lr2 = rs2
 ). }
-  { move => ??? *. destruct_all?. repeat case_match; naive_solver. }
-  { move => /= *. destruct_all?. repeat case_match. naive_solver. }
+  { move => ??? *. destruct!. repeat case_match; naive_solver. }
+  { move => /= *. destruct!. repeat case_match. naive_solver. }
   { move => /=. eexists []. split!. }
-  move => /= n [i rs mem ins'] [[?[???]][[?[cs ?]]r]] d ? ? Hstay Hcall Hret. destruct_all?; simplify_eq/=.
+  move => /= n [i rs mem ins'] [[?[???]][[?[cs ?]]r]] d ? ? Hstay Hcall Hret. destruct!/=.
   tstep_i => ??????.
   go_s. split!.
   go_s => -[] ? /=.
@@ -1651,10 +1651,10 @@ Proof.
       tstep_s. split!. { instantiate (1:=[_]). done. } { iSatMono. iIntros!. iFrame. iAccu. }
       apply Hstay; [done|]. by split!.
     }
-    { move => ?? [????] [[?[???]][[?[??]]?]] ??. destruct_all?. simplify_eq. split!; [done..|].
+    { move => ?? [????] [[?[???]][[?[??]]?]] ??. destruct!. split!; [done..|].
       move => *. apply: tsim_mono; [naive_solver|]. etrans; [|done]. apply ti_le_S. }
     iSatClear.
-    move => n' /= Hn' IH [i' rs' mem' ins'] [[?[???]][[?[??]]?]] ?. destruct_all?; simplify_eq.
+    move => n' /= Hn' IH [i' rs' mem' ins'] [[?[???]][[?[??]]?]] ?. destruct!.
     apply: Hf; [try done..| |].
     { iSatMono. iIntros!. iFrame. iAccu. }
     + iSatClear.
@@ -1680,9 +1680,9 @@ Proof.
         apply Hcall. { etrans; [|done]. apply ti_le_S. } { by split!. }
         iSatClear.
         move => [i2 rs2 mem2 ins'2] [[?[???]][[?[??]]?]].
-        move => [i3 rs3 mem3 ins'3] [[?[???]][[?[??]]?]] ??. destruct_all?; simplify_eq.
+        move => [i3 rs3 mem3 ins'3] [[?[???]][[?[??]]?]] ??. destruct!.
         repeat match goal with | H : expr_fill _ _ = expr_fill _ _ |- _ => apply expr_fill_Waiting_inj in H end.
-        destruct_all?; simplify_eq.
+        destruct!.
         rewrite !expr_fill_app /=.
         eapply Hret' => //.
         iSatMono. iIntros!. iFrame.
@@ -1693,6 +1693,6 @@ Proof.
     tstep_s. simplify_eq. destruct d; [exfalso; naive_solver|]. split!.
     apply Hret; [done..| |].
     + by split!.
-    + split!; [|done..]. destruct_all?; simplify_eq/=.
+    + split!; [|done..]. destruct!/=.
       iSatMono. iIntros!. iFrame.
 Qed.

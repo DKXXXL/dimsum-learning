@@ -11,6 +11,33 @@ Global Unset Program Cases.
 (** * Tactics *)
 (** Inspired by inv in CompCert/Coqlib.v *)
 Ltac inv H := inversion H; clear H; simplify_eq.
+Tactic Notation "inv/=" ident(H) := inversion H; clear H; simplify_eq/=.
+
+Ltac inv_all_tac f :=
+  repeat lazymatch goal with
+         | H : f |- _ => inv H
+         | H : f _ |- _ => inv H
+         | H : f _ _|- _ => inv H
+         | H : f _ _ _|- _ => inv H
+         | H : f _ _ _ _|- _ => inv H
+         | H : f _ _ _ _ _|- _ => inv H
+         | H : f _ _ _ _ _ _|- _ => inv H
+         | H : f _ _ _ _ _ _ _|- _ => inv H
+         | H : f _ _ _ _ _ _ _ _|- _ => inv H
+         | H : f _ _ _ _ _ _ _ _ _|- _ => inv H
+         end.
+
+Tactic Notation "inv_all/=" constr(f) := inv_all_tac f; simplify_eq/=.
+Tactic Notation "inv_all" constr(f) := inv_all_tac f.
+
+Tactic Notation "case_match" "as" ident(Hd) :=
+  match goal with
+  | H : context [ match ?x with _ => _ end ] |- _ => destruct x eqn:Hd
+  | |- context [ match ?x with _ => _ end ] => destruct x eqn:Hd
+  end.
+
+Tactic Notation "econs" := econstructor.
+Tactic Notation "econs" integer(n) := econstructor n.
 
 (** exploit from CompCert/Coqlib.v *)
 Lemma tac_exploit: forall (P Q: Prop), P -> (P -> Q) -> Q.
@@ -53,6 +80,8 @@ Ltac exploit x :=
  || refine (tac_exploit _ _ (x _ _) _)
  || refine (tac_exploit _ _ (x _) _).
 
+(** [specialize_hyps] looks for hypothesis of the form [∀ x, P x → ...] and
+ tries to find a unique solution for x. *)
 Ltac specialize_hyps :=
   repeat match goal with
   | H : ∀ x, @?P x → ?G |- _ =>
@@ -62,7 +91,7 @@ Ltac specialize_hyps :=
       assert_succeeds (clear; assert (∀ x, P x → x = i) by naive_solver);
       specialize (H i H');
       clear H'
-         end.
+   end.
 
 Ltac destruct_hyps :=
   simplify_eq/=;
@@ -75,49 +104,62 @@ Ltac destruct_hyps :=
       end; simplify_eq/=
     ).
 
-Tactic Notation "econs" := econstructor.
-Tactic Notation "econs" integer(n) := econstructor n.
-
-Tactic Notation "destruct_prod" "?" ident(H) :=
-  repeat match type of H with
-         | context [ match ?x with | (y, z) => _ end] =>
+Ltac destruct_tac tac :=
+  repeat match goal with
+         | H : context [ match ?x with | (y, z) => _ end] |- _ =>
              let y := fresh y in
              let z := fresh z in
              destruct x as [y z]
+         | H : ∃ x, _ |- _ => let x := fresh x in destruct H as [x H]
+         | |- _ => destruct_and!
+         | |- _ => destruct_or!
+         | |- _ => progress simplify_eq
+         | |- _ => tac
          end.
-Tactic Notation "destruct_prod" "!" ident(H) := progress (destruct_prod? H).
-Tactic Notation "destruct_prod" "?" :=
-  repeat match goal with H : _ |- _ => progress (destruct_prod? H) end.
-Tactic Notation "destruct_prod" "!" :=
-  progress destruct_prod?.
-Tactic Notation "destruct_exist" "?" ident(H) :=
-  repeat match type of H with
-         | ∃ x, _ => let x := fresh x in destruct H as [x H]
-         end.
-Tactic Notation "destruct_exist" "!" ident(H) := progress (destruct_exist? H).
-Tactic Notation "destruct_exist" "?" :=
-  repeat match goal with H : _ |- _ => progress (destruct_exist? H) end.
-Tactic Notation "destruct_exist" "!" :=
-  progress destruct_exist?.
-Tactic Notation "destruct_all" "?" :=
-  repeat first [
-      destruct_prod!
-      | destruct_and!
-      | destruct_or!
-      | destruct_exist!
-      ].
-Tactic Notation "destruct_all" "!" :=
-  progress destruct_all?.
+
+Tactic Notation "destruct!" := destruct_tac ltac:(fail).
+Tactic Notation "destruct!/=" := destruct_tac ltac:(progress csimpl in * ).
+
+(* Tactic Notation "destruct_prod" "?" ident(H) := *)
+(*   repeat match type of H with *)
+(*          | context [ match ?x with | (y, z) => _ end] => *)
+(*              let y := fresh y in *)
+(*              let z := fresh z in *)
+(*              destruct x as [y z] *)
+(*          end. *)
+(* Tactic Notation "destruct_prod" "!" ident(H) := progress (destruct_prod? H). *)
+(* Tactic Notation "destruct_prod" "?" := *)
+(*   repeat match goal with H : _ |- _ => progress (destruct_prod? H) end. *)
+(* Tactic Notation "destruct_prod" "!" := *)
+(*   progress destruct_prod?. *)
+(* Tactic Notation "destruct_exist" "?" ident(H) := *)
+(*   repeat match type of H with *)
+(*          | ∃ x, _ => let x := fresh x in destruct H as [x H] *)
+(*          end. *)
+(* Tactic Notation "destruct_exist" "!" ident(H) := progress (destruct_exist? H). *)
+(* Tactic Notation "destruct_exist" "?" := *)
+(*   repeat match goal with H : _ |- _ => progress (destruct_exist? H) end. *)
+(* Tactic Notation "destruct_exist" "!" := *)
+(*   progress destruct_exist?. *)
+(* Tactic Notation "destruct_all" "?" := *)
+(*   repeat first [ *)
+(*       destruct_prod! *)
+(*       | destruct_and! *)
+(*       | destruct_or! *)
+(*       | destruct_exist! *)
+(*       ]. *)
+(* Tactic Notation "destruct_all" "!" := *)
+(*   progress destruct_all?. *)
 
 Ltac simpl_or :=
   repeat match goal with
          | |- ?P ∨ _ =>
-             assert_succeeds (exfalso; assert P; [| destruct_all?;
+             assert_succeeds (exfalso; assert P; [| destruct!;
                   repeat match goal with | H : ?Q |- _ => has_evar Q; clear H end;
                                                     done]);
              right
          | |- _ ∨ ?P =>
-             assert_succeeds (exfalso; assert P; [| destruct_all?;
+             assert_succeeds (exfalso; assert P; [| destruct!;
                   repeat match goal with | H : ?Q |- _ => has_evar Q; clear H end;
                                                     done]);
              left
@@ -363,7 +405,7 @@ Lemma list_to_map_list_find {A} (l : list (K * A)) i y:
 Proof.
   elim: l i => /=. { move => ?. split => ?; simplify_map_eq; naive_solver. }
   move => [??] ? IH i /=. rewrite lookup_insert_Some. case_decide; [naive_solver|].
-  rewrite IH. setoid_rewrite fmap_Some. split => ?; destruct_all?; simplify_eq.
+  rewrite IH. setoid_rewrite fmap_Some. split => ?; destruct!.
   - eexists _, (_, (_, _)). done.
   - destruct x as [?[??]]. naive_solver.
 Qed.
@@ -645,30 +687,6 @@ Section least.
     apply prop_least_fixpoint_ind_wf; [done|]. move => [??] /=. naive_solver.
   Qed.
 End least.
-
-Ltac inv_all_tac f :=
-  repeat lazymatch goal with
-         | H : f |- _ => inv H
-         | H : f _ |- _ => inv H
-         | H : f _ _|- _ => inv H
-         | H : f _ _ _|- _ => inv H
-         | H : f _ _ _ _|- _ => inv H
-         | H : f _ _ _ _ _|- _ => inv H
-         | H : f _ _ _ _ _ _|- _ => inv H
-         | H : f _ _ _ _ _ _ _|- _ => inv H
-         | H : f _ _ _ _ _ _ _ _|- _ => inv H
-         | H : f _ _ _ _ _ _ _ _ _|- _ => inv H
-         end.
-
-(* Tactic Notation "invert_all" constr(f) := invert_all_tac f; simplify_eq/=; specialize_hyps. *)
-Tactic Notation "inv_all/=" constr(f) := inv_all_tac f; simplify_eq/=.
-Tactic Notation "inv_all" constr(f) := inv_all_tac f.
-
-Tactic Notation "case_match" "as" ident(Hd) :=
-  match goal with
-  | H : context [ match ?x with _ => _ end ] |- _ => destruct x eqn:Hd
-  | |- context [ match ?x with _ => _ end ] => destruct x eqn:Hd
-  end.
 
 
 Definition map_list_included {K A} `{Countable K} (ns : list K) (rs : gmap K A) :=

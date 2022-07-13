@@ -509,12 +509,11 @@ Proof.
       ∧ tsim_remember_call_stack n mi ms R RR d σi σs
 ). }
   { split!. done. econs. } {
-    move => ? n' ?? /=??. destruct_all?. split!; [done|].
+    move => ? n' ?? /=??. destruct!. split!; [done|].
     apply: tsim_remember_call_stack_mono; [done|]. etrans; [|done].
     apply ti_le_S_maybe.
   }
-  move => n ? /= Hloop σi1 σs1 ?.
-  destruct_all?; simplify_eq.
+  move => n ? /= Hloop σi1 σs1 ?. destruct!.
   apply: Hcall; [done..| | |].
   - move => ?????. apply Hloop; [done|]. split!. { etrans; [done|]. naive_solver. }
     apply: tsim_remember_call_stack_mono; [|done].
@@ -523,8 +522,7 @@ Proof.
     2: { apply: IPSStep. by apply: tsim_remember_call_stack_mono. done. }
     done.
   - move => ???????.
-    revert select (tsim_remember_call_stack _ _ _ _ _ _ _ _) => Hs.
-    inversion Hs; clear Hs; simplify_eq/= => //.
+    revert select (tsim_remember_call_stack _ _ _ _ _ _ _ _) => Hs. inv/= Hs.
     apply: tsim_mono; [|done].
     naive_solver.
 Qed.
@@ -542,7 +540,7 @@ Proof.
   move => Hσ.
   unshelve apply: tsim_remember. { exact: (λ _ σ1 σ2, ∃ σ', σ1 = fσ1 σ' ∧ σ2 = fσ2 σ'). }
   { by split!. } { done. }
-  move => n1 /= ? IH ???. destruct_all?; simplify_eq.
+  move => n1 /= ? IH ???. destruct!.
   apply Hσ; [done|].
   move => P Hcont.
   apply steps_impl_step_end => κ Pσ2 ?.
@@ -658,7 +656,7 @@ Lemma tsim_tstep_s {EV} (ms : module EV) σs κs P `{!TStepS ms σs P} mi σi n 
   σi ⪯{mi, ms, n, b, κs} σs.
 Proof.
   move => /tsteps_proof[κ [?[? HG']]] ????.
-  repeat case_match => //; destruct_all?; simplify_eq/= => //.
+  repeat case_match => //; destruct!.
   - apply: (thas_trace_trans (tcons _ tnil)); simplify_eq/=.
     { apply (steps_spec_has_trace' _ (Some _)); naive_solver. }
     naive_solver.
@@ -677,7 +675,7 @@ Lemma thas_trace_tstep_s {EV} (m : module EV) σ κs Pσ `{!TStepS m σ P} :
   σ ~{m, κs}~>ₜ Pσ.
 Proof.
  move => /tsteps_proof[?[?[??]]].
- case_match; destruct_all?; simplify_eq/=.
+ case_match; destruct!.
  - revert select (_ ⊆ _) => <-.
    apply: (thas_trace_trans (tcons _ tnil)); simplify_eq/=.
     { apply (steps_spec_has_trace' _ (Some _)); naive_solver. }

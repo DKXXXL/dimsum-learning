@@ -684,7 +684,7 @@ Lemma mod_map_step_s {EV1 EV2 S} m (f : mod_map_fn EV1 EV2 S) σ σf P `{!TStepS
 Proof.
   constructor => G /tsteps_proof [κ [? [[? [κ' [?[??]]]] HG']]]. eexists _, _. split; [done|].
   move => ? /HG'. move => /steps_spec_has_trace_1 Ht. apply steps_spec_has_trace_elim.
-  apply: mod_map_nil; [done|] => ?/=?. tend. destruct κ; destruct_all?; simplify_eq/=.
+  apply: mod_map_nil; [done|] => ?/=?. tend. destruct κ; destruct!/=.
   - apply: steps_spec_step_end. { econs. { apply: ProductStepBoth; [done|]. by econs. } done. }
     move => [??]/=?. naive_solver.
   - by apply steps_spec_end.

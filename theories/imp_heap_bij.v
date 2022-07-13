@@ -169,7 +169,7 @@ Global Instance heap_bij_extend_preorder pl : PreOrder (heap_bij_extend pl).
 Proof.
   unfold heap_bij_extend. constructor.
   - move => *. done.
-  - move => *. destruct_all?. split; [by etrans|split; by etrans].
+  - move => *. destruct!. split; [by etrans|split; by etrans].
 Qed.
 Global Typeclasses Opaque heap_bij_extend.
 
@@ -181,13 +181,13 @@ Program Definition heap_bij_add_shared (pi ps : prov) (bij : heap_bij)
   HeapBij (<[ps := HBShared pi]> (hb_bij bij)) (hb_players_i bij) _ _.
 Next Obligation.
   move => ??? Hnotin ??. move: Hnotin. rewrite elem_of_hb_provs_i => ?.
-  rewrite !lookup_insert_Some => ?. destruct_all?; simplify_eq/= => //; try naive_solver.
+  rewrite !lookup_insert_Some => ?. destruct!/= => //; try naive_solver.
   - apply eq_None_ne_Some => ??. naive_solver.
   - by apply: hb_disj.
 Qed.
 Next Obligation.
   move => ??? Hnotin ???. move: Hnotin. rewrite elem_of_hb_provs_i => ?.
-  rewrite !lookup_insert_Some => ??. destruct_all?; simplify_eq/= => //; try naive_solver.
+  rewrite !lookup_insert_Some => ??. destruct!/= => //; try naive_solver.
   by apply: hb_iff.
 Qed.
 
@@ -195,22 +195,22 @@ Program Definition heap_bij_add_player (ps : prov) (pl : player) (bij : heap_bij
   HeapBij (<[ps := HBOwned pl]> (hb_bij bij)) (hb_players_i bij) _ _.
 Next Obligation.
   move => ?????.
-  rewrite !lookup_insert_Some => ?. destruct_all?; simplify_eq/= => //. by apply: hb_disj.
+  rewrite !lookup_insert_Some => ?. destruct!/= => //. by apply: hb_disj.
 Qed.
 Next Obligation.
   move => ??????.
-  rewrite !lookup_insert_Some => ??. destruct_all?; simplify_eq/= => //. by apply: hb_iff.
+  rewrite !lookup_insert_Some => ??. destruct!/= => //. by apply: hb_iff.
 Qed.
 
 Program Definition heap_bij_delete (ps : prov) (bij : heap_bij) :=
   HeapBij (delete ps (hb_bij bij)) (hb_players_i bij) _ _.
 Next Obligation.
   move => ????.
-  rewrite !lookup_delete_Some => ?. destruct_all?; simplify_eq/= => //. by apply: hb_disj.
+  rewrite !lookup_delete_Some => ?. destruct!/= => //. by apply: hb_disj.
 Qed.
 Next Obligation.
   move => ?????.
-  rewrite !lookup_delete_Some => ??. destruct_all?; simplify_eq/= => //. by apply: hb_iff.
+  rewrite !lookup_delete_Some => ??. destruct!/= => //. by apply: hb_iff.
 Qed.
 
 (* Definition heap_bij_map_player_bij (f : prov → player → player) (bij : heap_bij) : gmap prov heap_bij_elem := *)
@@ -277,7 +277,7 @@ Lemma heap_bij_merge_player_i pii bijb bija pl:
     ∃ pi, pl = Prog ∧ hb_bij bija !! pi = Some (HBShared pii) ∧ pi ∉ hb_shared_i bijb.
 Proof.
   rewrite elem_of_hb_player_i /= lookup_union_Some_raw lookup_gset_to_gmap_Some elem_of_filter.
-  split => ?; destruct_all?; simplify_eq; try naive_solver.
+  split => ?; destruct!; try naive_solver.
   - right. revert select (_ ∈ _). rewrite elem_of_hb_shared_i => -[??]. eexists _.
     split; [done|]. split; [done|].
     move => ?. revert select (map_Forall _ _). apply; [|done]. by rewrite hb_shared_lookup_Some.
@@ -467,7 +467,7 @@ Lemma expr_in_bij_mono bij bij' e1 e2:
   expr_in_bij bij' e1 e2.
 Proof.
   elim: e1 e2 => //=*; repeat case_match => //; try naive_solver (eauto using val_in_bij_mono).
-  destruct_all?; simplify_eq. split!.
+  destruct!. split!.
   revert select (Forall id _). generalize dependent args.
   revert select (Forall _ _). elim. { by case. }
   move => ????? []//=??? *; decompose_Forall_hyps. econs; naive_solver.
@@ -581,7 +581,7 @@ Lemma expr_in_bij_fill_item_l bij Ki e1 e2 :
   expr_in_bij bij (expr_fill_item Ki e1) e2 →
   ∃ Ki' e', e2 = expr_fill_item Ki' e' ∧ ectx_item_in_bij bij Ki Ki' ∧ expr_in_bij bij e1 e'.
 Proof.
-  destruct Ki, e2 => //= *; destruct_all?; simplify_eq; try case_match => //; simplify_eq. 10: {
+  destruct Ki, e2 => //= *; destruct!; try case_match => //; simplify_eq. 10: {
     revert select (Forall _ _) => /Forall_zip_with_1 Hall.
     move: (Hall ltac:(done)) => /Forall2_app_inv_l[?[?[Hv[/(Forall2_cons_inv_l _ _)[?[?[?[??]]]]?]]]]. simplify_eq.
     move: Hv => /Forall2_bij_val_inv_l[?[??]]. simplify_eq.
@@ -596,7 +596,7 @@ Lemma expr_in_bij_fill_l bij K e1 e2 :
 Proof.
   elim: K e1 e2 => /=. { move => *. eexists [], _. split!. econs. }
   move => Ki K IH e1 e2 /IH[K'[?[?[?/expr_in_bij_fill_item_l?]]]].
-  destruct_all?; simplify_eq. eexists (_ :: _), _ => /=. split_and!; [done| |done].
+  destruct!. eexists (_ :: _), _ => /=. split_and!; [done| |done].
   by econs.
 Qed.
 
@@ -607,7 +607,7 @@ Lemma eval_binop_bij o v1 v2 v1' v2' v bij:
   ∃ v', eval_binop o v1' v2' = Some v' ∧
        val_in_bij bij v' v.
 Proof.
-  destruct o, v1, v2, v1', v2' => //= *; destruct_all?; simplify_eq. all: split!.
+  destruct o, v1, v2, v1', v2' => //= *; destruct!. all: split!.
   lia.
 Qed.
 *)
@@ -914,7 +914,7 @@ Proof.
   rewrite elem_of_list_omap.
   split.
   - move => [[[??]?]]. rewrite elem_of_map_to_list => ?. repeat case_match => //; naive_solver.
-  - move => ?. destruct_all?. eexists (_,_,_). rewrite elem_of_map_to_list. split; [done|].
+  - move => ?. destruct!. eexists (_,_,_). rewrite elem_of_map_to_list. split; [done|].
     by simplify_option_eq.
 Qed.
 Opaque heap_through_bij.
@@ -957,7 +957,7 @@ Proof.
   rewrite elem_of_hb_player_s /heap_bij_splitb_bij !lookup_union_Some_raw lookup_union_None lookup_fmap.
   rewrite fmap_None fmap_Some lookup_union_None hb_shared_lookup.
   rewrite !lookup_gset_to_gmap_Some lookup_gset_to_gmap_None elem_of_hb_player_s.
-  split; [|naive_solver]. move => ?. destruct_all? => //. naive_solver (simplify_option_eq).
+  split; [|naive_solver]. move => ?. destruct! => //. naive_solver (simplify_option_eq).
 Qed.
 
 Lemma heap_bij_splitb_bij_env X bijb bija bij' ps :
@@ -969,7 +969,7 @@ Proof.
   rewrite elem_of_hb_player_s /heap_bij_splitb_bij !lookup_union_Some_raw lookup_union_None lookup_fmap.
   rewrite fmap_None fmap_Some lookup_union_None hb_shared_lookup.
   rewrite !lookup_gset_to_gmap_Some lookup_gset_to_gmap_None elem_of_hb_player_s.
-  split => ?; destruct_all?; simplify_option_eq => //.
+  split => ?; destruct!; simplify_option_eq => //.
   right.
   rewrite fresh_map_lookup_None not_elem_of_difference elem_of_hb_shared_s.
   destruct (hb_bij bijb !! ps) eqn:? => /=; [|naive_solver].
@@ -985,7 +985,7 @@ Proof.
   rewrite /heap_bij_splitb_bij !lookup_union_Some_raw lookup_union_None lookup_fmap.
   rewrite fmap_None fmap_Some lookup_union_None.
   rewrite !lookup_gset_to_gmap_Some lookup_gset_to_gmap_None elem_of_hb_player_s.
-  split => Heq; destruct_all?; simplify_eq.
+  split => Heq; destruct!.
   - revert select ((_ ∪ _) !! _ = Some _) => /lookup_union_Some_raw.
     rewrite hb_shared_lookup_Some. naive_solver.
   - left. revert select (fresh_map _ _ !! _ = None) => /fresh_map_lookup_None. rewrite not_elem_of_difference.
@@ -1012,7 +1012,7 @@ Qed.
 Next Obligation.
   move => ????? Hp pi ??.
   rewrite !heap_bij_splitb_bij_bij // => ??.
-  destruct_all?; simplify_bij.
+  destruct!; simplify_bij.
   - done.
   - fresh_map_learn. move: (Hp pi). rewrite elem_of_hb_provs_i. naive_solver.
   - fresh_map_learn. move: (Hp pi). rewrite elem_of_hb_provs_i. naive_solver.
@@ -1059,10 +1059,10 @@ Proof.
        move => [??] [??] /elem_of_map_to_list? /elem_of_map_to_list? /= ?. subst.
        f_equal. by apply: fresh_map_bij. }
   rewrite elem_of_list_fmap.
-  split => ?; destruct_all?; simplify_eq; try naive_solver.
+  split => ?; destruct!; try naive_solver.
   - revert select (_ ∈ map_to_list _) => /elem_of_map_to_list Hfresh. right. eexists _. split; [done|].
-    fresh_map_learn. destruct_all?. by simplify_option_eq.
-  - fresh_map_learn. destruct_all?; simplify_eq.
+    fresh_map_learn. destruct!. by simplify_option_eq.
+  - fresh_map_learn. destruct!.
     right. split. { apply eq_None_not_Some. rewrite -elem_of_dom. set_solver. }
     eexists (_, _). rewrite elem_of_map_to_list. split; [|done]. by simplify_option_eq.
 Qed.
@@ -1103,9 +1103,9 @@ Next Obligation.
 Qed.
 Next Obligation.
   move => X bija bijb bij' HX [/=Hsub [Hprog_s Hprog_i]] pii pi pi'.
-  rewrite !heap_bij_splita_bij_bij // => ??. destruct_all?; simplify_bij.
+  rewrite !heap_bij_splita_bij_bij // => ??. destruct!; simplify_bij.
   - done.
-  - fresh_map_learn. destruct_all?; simplify_eq.
+  - fresh_map_learn. destruct!.
     destruct (decide (pi' ∈ hb_shared_i bijb)) as [Hin'|Hin'].
     + move: Hin'. rewrite elem_of_hb_shared_i => -[ps' ?]. move: (Hsub ps' pii).
       rewrite heap_bij_merge_shared => /(_ ltac:(naive_solver)) ?. simplify_bij.
@@ -1113,7 +1113,7 @@ Next Obligation.
     + revert select (hb_bij bij' !! _ = Some _) => /hb_disj?.
       have : hb_players_i bij' !! pii = Some Prog; [|naive_solver].
       eapply heap_bij_merge_prog_eq_i; [done|]. naive_solver.
-  - fresh_map_learn. destruct_all?; simplify_eq.
+  - fresh_map_learn. destruct!.
     destruct (decide (pi ∈ hb_shared_i bijb)) as [Hin'|Hin'].
     + move: Hin'. rewrite elem_of_hb_shared_i => -[ps' ?]. move: (Hsub ps' pii).
       rewrite heap_bij_merge_shared => /(_ ltac:(naive_solver)) ?. simplify_bij.
@@ -1166,21 +1166,21 @@ Proof.
              rewrite !elem_of_hb_shared_s. naive_solver. }
            naive_solver.
       * move => [? [Hor ?]].
-        destruct_all?; simplify_eq.
+        destruct!.
         -- apply Hextend1. rewrite heap_bij_merge_shared. naive_solver.
-        -- exfalso. fresh_map_learn. destruct_all?. revert select (_ ∉ _). apply.
+        -- exfalso. fresh_map_learn. destruct!. revert select (_ ∉ _). apply.
            apply HX2. rewrite elem_of_dom. naive_solver.
-        -- exfalso. fresh_map_learn. destruct_all?. revert select (_ ∉ _). apply.
+        -- exfalso. fresh_map_learn. destruct!. revert select (_ ∉ _). apply.
            apply HX1. rewrite elem_of_hb_provs_i. naive_solver.
         -- have := fresh_map_bij _ _ ps0 ps _ ltac:(done) ltac:(done). naive_solver.
     + move => pl. split; apply set_eq => ?; destruct pl.
       * rewrite - {1}Hprog_s !heap_bij_merge_player_s heap_bij_splitb_bij_prog ?elem_of_hb_player_s//.
         setoid_rewrite heap_bij_splitb_bij_bij; [|done].
-        split => ?; destruct_all?; simplify_eq; try naive_solver.
+        split => ?; destruct!; try naive_solver.
         -- right. eexists _. split; [naive_solver|].
            apply default_eq_Some' => -[?|?] /=.
-           ++ rewrite heap_bij_splita_bij_bij // => -[?|?]; simplify_option_eq. destruct_all?.
-              exfalso. fresh_map_learn. destruct_all?. revert select (_ ∉ _). apply.
+           ++ rewrite heap_bij_splita_bij_bij // => -[?|?]; simplify_option_eq. destruct!.
+              exfalso. fresh_map_learn. destruct!. revert select (_ ∉ _). apply.
               apply HX1. rewrite elem_of_hb_provs_i. naive_solver.
            ++ rewrite heap_bij_splita_bij_player elem_of_hb_player_s => ?. by simplify_option_eq.
         -- right. eexists _. split; [done|]. rewrite default_eq_Some' /= => y.
@@ -1189,7 +1189,7 @@ Proof.
            ++ rewrite heap_bij_splita_bij_player elem_of_hb_player_s => ?. naive_solver.
         -- simpl in *. unfold default in *. case_match as Hc => /=; simplify_eq/=.
            ++ move: Hc. rewrite heap_bij_splita_bij_player elem_of_hb_player_s => ?.
-              exfalso. fresh_map_learn. destruct_all?. revert select (_ ∉ _). apply.
+              exfalso. fresh_map_learn. destruct!. revert select (_ ∉ _). apply.
               apply HX2. rewrite elem_of_dom. naive_solver.
            ++ move: Hc => /heap_bij_splita_bij_None. naive_solver.
       * rewrite !heap_bij_merge_player_s heap_bij_splitb_bij_env //=.
@@ -1199,11 +1199,11 @@ Proof.
         rewrite Hempty. set_solver.
       * rewrite - {1}Hprog_i !heap_bij_merge_player_i /= heap_bij_splita_player_i_prog elem_of_hb_player_i.
         setoid_rewrite heap_bij_splita_bij_bij; [|done].
-        split => ?; destruct_all?; simplify_eq; try by left.
+        split => ?; destruct!; try by left.
         -- right. split!; [by left|]. rewrite elem_of_hb_shared_i => /= -[?].
            rewrite heap_bij_splitb_bij_bij // => -[?|?].
            ++ revert select (_ ∉ _). apply. rewrite elem_of_hb_shared_i. naive_solver.
-           ++ fresh_map_learn. destruct_all?; simplify_eq. revert select (_ ∉ _). apply. apply HX2.
+           ++ fresh_map_learn. destruct!. revert select (_ ∉ _). apply. apply HX2.
               rewrite elem_of_dom. naive_solver.
         -- right. split!; [done|] => Hb. revert select (_ ∉ _). apply.
            move: Hb. rewrite !elem_of_hb_shared_i => -[??]. eexists _.
@@ -1230,13 +1230,13 @@ Proof.
   - move => ? /=/elem_of_dom[x ]. rewrite elem_of_union elem_of_hb_shared_i /=.
     setoid_rewrite heap_bij_splitb_bij_bij; [|done].
     destruct x.
-    + rewrite heap_bij_splita_bij_bij //. move => ?. destruct_all?. 2: naive_solver.
+    + rewrite heap_bij_splita_bij_bij //. move => ?. destruct!. 2: naive_solver.
       right. apply HX2. by apply elem_of_dom.
     + rewrite heap_bij_splita_bij_player elem_of_hb_player_s. right. apply HX2. by apply elem_of_dom.
   - move => ?? /=. rewrite heap_bij_splita_bij_bij //. setoid_rewrite heap_bij_splitb_bij_bij; [|done].
     naive_solver.
   - move => ?? /=. rewrite heap_bij_splitb_bij_bij //. setoid_rewrite heap_bij_splita_bij_bij; [|done].
-    move => [//|?]. fresh_map_learn; destruct_all?. naive_solver.
+    move => [//|?]. fresh_map_learn; destruct!. naive_solver.
 Qed.
 
 (** ** proof of vertical compositionality *)
@@ -1283,7 +1283,7 @@ Proof.
   }
   all: move => [bija hia hsa] [bijb hib hsb] [bij hi hs] ??? e ? /=.
   - move => bij' vs h' Hextend Hdh Hprovs Hvs Hh Hps Hpi.
-    destruct_all?; simplify_eq/=.
+    destruct!/=.
     move: (Hextend) => /(heap_bij_merge_extend (h_provs hib))[//|//|//|bijb' [bija' [?[?[Hbij1e[?[?[??]]]]]]]]
                       ; simplify_eq.
     eexists _, (val_through_bij bijb' <$> vs),
@@ -1299,7 +1299,7 @@ Proof.
       rewrite lookup_union.
       rewrite map_filter_lookup_true. 2: { move => *. rewrite elem_of_hb_shared_s. naive_solver. }
       destruct (decide (pi ∈ hb_shared_i bijb')) as [Hpi'|Hpi'].
-      all: rewrite elem_of_hb_shared_i in Hpi'; destruct_all?.
+      all: rewrite elem_of_hb_shared_i in Hpi'; destruct!.
       * rewrite map_filter_lookup_None_2.
         2: { right. move => *. rewrite !elem_of_hb_shared_s elem_of_hb_shared_i /=. naive_solver. }
         rewrite right_id_L.
@@ -1309,7 +1309,7 @@ Proof.
         move: (Hh pii ps' o) => [|_ Hv]. { rewrite heap_bij_merge_shared. naive_solver. }
         efeed pose proof Hv as Hv'; [done..|].
         move: Hv'. rewrite val_in_bij_merge => -[?[Hv1 Hv2]].
-        unfold val_in_bij in Hv1, Hv2. repeat case_match => //; destruct_all?; simplify_option_eq => //.
+        unfold val_in_bij in Hv1, Hv2. repeat case_match => //; destruct!; simplify_option_eq => //.
         split; [done|]. congruence.
       * destruct (h_heap (heap_through_bij bijb' h') !! (pi, o)) as [|] eqn: Hht => /=.
         { move: Hht => /heap_through_bij_Some. naive_solver. }
@@ -1337,14 +1337,14 @@ Proof.
       rewrite heap_bij_merge_shared. naive_solver.
     + move => pi ps o /= ?.
       destruct (decide (pi ∈ hb_shared_s bija')) as [Hpi'|Hpi'];
-        rewrite elem_of_hb_shared_s in Hpi'; destruct_all?.
+        rewrite elem_of_hb_shared_s in Hpi'; destruct!.
       * rewrite lookup_union.
         rewrite map_filter_lookup_true. 2: { move => *. rewrite elem_of_hb_shared_s. naive_solver. }
         rewrite map_filter_lookup_None_2.
         2: { right. move => *. rewrite elem_of_hb_shared_s elem_of_hb_shared_i. naive_solver. }
         rewrite right_id_L.
         rewrite heap_through_bij_is_Some' //. split; [done|].
-        move => ??. rewrite heap_through_bij_Some => ? ?. destruct_all?; simplify_bij.
+        move => ??. rewrite heap_through_bij_Some => ? ?. destruct!; simplify_bij.
         eapply val_through_in_bij => ??.
         move: (Hh pi0 ps0 o) => [|]. { rewrite heap_bij_merge_shared. naive_solver. }
         simplify_option_eq. revert select (h_heap h' !! _ = Some _) => ->. move => [_ [//|v' ?]] Hv.
@@ -1373,7 +1373,7 @@ Proof.
     + by apply: satisfiable_pure_1.
   - move => bijb' vsb hb' [Hextendb [Henvb_s Henvb_i]] Hdhb Hpsb Hvsb Hhb Hpb_i Hpb_s ??.
     move => bija' vsa ha' [Hextenda [Henva_s Henva_i]] Hdha Hpsa Hvsa Hha Hpa_i Hpa_s ??.
-    destruct_all?; simplify_eq/=.
+    destruct!/=.
     rewrite ->heap_of_event_event_set_vals_heap in *.
     rewrite ->vals_of_event_event_set_vals_heap in *. 2: solve_length.
     split!.
@@ -1462,7 +1462,7 @@ Proof.
   { by rewrite left_id. } { by apply satisfiable_pure_1. }
   { split!.  all: rewrite /hb_player; unlock; set_solver. }
   all: move => [bij1 hi1] [bij2 hi2] [bij hi] ? ? ics1 ics2.
-  - move => e ics' e' /= *. unfold heap_bij_extend in *. destruct_all?; simplify_eq/=.
+  - move => e ics' e' /= *. unfold heap_bij_extend in *. destruct!/=.
     eexists (heap_bij_map_player (λ p2 p, if decide (p2 ∈ hb_player Prog bij2) then Env else p) bij).
     split!.
     { set_unfold.
@@ -1473,14 +1473,14 @@ Proof.
     1: by destruct e.
     1: { apply: disjoint_mono; [apply hb_disj_priv| |done]. set_unfold; naive_solver. }
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
-  - move => e ics' e' /= *. unfold heap_bij_extend in *; destruct_all?; simplify_eq/=.
+  - move => e ics' e' /= *. unfold heap_bij_extend in *; destruct!/=.
     unshelve split!. 1: econstructor. all: shelve_unifiable. all: split!. all: split!.
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
     1: by iIntros "$".
     1: by destruct e.
     1: { apply: disjoint_mono; [apply hb_disj_priv| |done]. set_unfold; naive_solver. }
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
-  - move => [? e] /= *. unfold heap_bij_extend in *; destruct_all?; simplify_eq/=.
+  - move => [? e] /= *. unfold heap_bij_extend in *; destruct!/=.
     unshelve split!. 1: econstructor. all: shelve_unifiable.
     all: split!; rewrite ?heap_of_event_event_set_vals_heap; split!. all: split!.
     1: { rewrite vals_of_event_event_set_vals_heap //. by apply: Forall2_length. }
@@ -1490,7 +1490,7 @@ Proof.
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
     1: by destruct e.
     1: by destruct e.
-  - move => [? e] /= *. unfold heap_bij_extend in *; destruct_all?; simplify_eq/=.
+  - move => [? e] /= *. unfold heap_bij_extend in *; destruct!/=.
     unshelve split!. 1: econstructor. all: shelve_unifiable.
     all: split!; rewrite ?heap_of_event_event_set_vals_heap; split!. all: split!.
     1: by destruct e.
@@ -1498,7 +1498,7 @@ Proof.
     1: { etrans; [done|]. iIntros ">[? $]". iStopProof. etrans; [done|]. by iIntros ">[_ $]". }
     1: { apply: disjoint_mono; [apply hb_disj_priv|done|]. set_unfold; naive_solver. }
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
-  - move => [? e] /= *. unfold heap_bij_extend in *; destruct_all?; simplify_eq/=.
+  - move => [? e] /= *. unfold heap_bij_extend in *; destruct!/=.
     unshelve split!. 1: econstructor. all: shelve_unifiable.
     all: split!; rewrite ?heap_of_event_event_set_vals_heap; split!. all: split!.
     1: { rewrite vals_of_event_event_set_vals_heap //. by apply: Forall2_length. }
@@ -1508,7 +1508,7 @@ Proof.
     1: { apply: heap_preserved_mono; [done|]. set_unfold; naive_solver. }
     1: by destruct e.
     1: by destruct e.
-  - move => [? e] /= *. unfold heap_bij_extend in *; destruct_all?; simplify_eq/=.
+  - move => [? e] /= *. unfold heap_bij_extend in *; destruct!/=.
     unshelve split!. 1: econstructor. all: shelve_unifiable.
     all: split!; rewrite ?heap_of_event_event_set_vals_heap; split!. all: split!.
     1: by destruct e.
@@ -1590,7 +1590,7 @@ Proof.
     { apply is_static_expr_subst_l; [|solve_length]. apply is_static_expr_mono. apply fd_static. }   }
   { naive_solver. }
   move => /= n' ? Hloop [ei hi fnsi] [[ips [es hs fnss]] [[pp [bij he]] ?]] ?.
-  destruct_all?; simplify_eq.
+  destruct!.
   destruct (to_val ei') eqn:?.
   - destruct ei' => //; simplify_eq/=. destruct es' => //; simplify_eq/=.
     apply Hret; [done|]. clear Hloop Hret Hcall. split!.
@@ -1600,11 +1600,11 @@ Proof.
     { etrans; [|done]. etrans; [|done]. bij_solver. }
   - (* TODO: remove this use of EM *)
     have [?|?]:= EM (∃ K f vs, fns !! f = None ∧ ei' = expr_fill K (Call f (Val <$> vs))).
-    + destruct_all?; simplify_eq/=.
+    + destruct!/=.
       revert select (expr_in_bij _ (expr_fill _ _) _) => /expr_in_bij_fill_l[?[?[?[??]]]].
-      destruct_all?; simplify_eq/=.
+      destruct!/=.
       revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
-      case_match => //; destruct_all?; simplify_eq/=.
+      case_match => //; destruct!/=.
       revert select (Forall id _) => /Forall_zip_with_1 Hall.
       move: (Hall ltac:(done)) => /Forall2_bij_val_inv_l[?[??]]; simplify_eq.
       apply: Hcall; [done..| | |].
@@ -1623,19 +1623,19 @@ Proof.
     + tstep_both.
       apply steps_impl_step_end => ?? /= Hprim.
       move: Hprim => /prim_step_inv[//|??].
-      destruct_all?; simplify_eq.
+      destruct!.
       revert select (expr_in_bij _ (expr_fill _ _) _) => /expr_in_bij_fill_l[?[?[?[??]]]].
-      destruct_all?; simplify_eq.
+      destruct!.
       revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
-      invert_all' @head_step; destruct_all?; simplify_eq/=.
+      invert_all' @head_step; destruct!/=.
       all: repeat (case_match; destruct_all? => //); simplify_eq.
       * tstep_s => ? /eval_binop_bij Hbin. have [?[??]]:= Hbin _ _ _ ltac:(done) ltac:(done).
         tend. split!. apply: Hloop; [done|]. split!. 1: done. 1: done. all: split!.
-      * tstep_s => *; simplify_eq/=. destruct v1 => //; simplify_eq/=; destruct_all?; simplify_eq/=. tend.
+      * tstep_s => *; simplify_eq/=. destruct v1 => //; simplify_eq/=; destruct!/=. tend.
         have [//|?[??]]:= heap_in_bij_lookup _ _ _ _ _ _ ltac:(done) ltac:(done) ltac:(done).
         split!. 1: done.
         apply: Hloop; [done|]. split!. 1: done. 1: done. all: split!.
-      * tstep_s => *; simplify_eq/=. destruct v1 => //; simplify_eq/=; destruct_all?; simplify_eq/=. tend.
+      * tstep_s => *; simplify_eq/=. destruct v1 => //; simplify_eq/=; destruct!/=. tend.
         split!. 1: by apply: heap_in_bij_alive.
         apply: Hloop; [done|]. split!. 1: done. 1: done. all: split!.
         1: by apply: heap_preserved_bij_env.
@@ -1643,7 +1643,7 @@ Proof.
       * tstep_s => *; simplify_eq/=.
         set (l' := (heap_fresh (hb_provs_right bij') hs)).
         eexists l'. split; [apply heap_fresh_is_fresh|] => *; simplify_eq/=. tend.
-        destruct v => //; simplify_eq/=; destruct_all?; simplify_eq/=.
+        destruct v => //; simplify_eq/=; destruct!/=.
         split!.
         apply Hloop; [done|].
         unshelve eexists (heap_bij_add_loc l.1 l'.1 bij' _ _).
@@ -1662,7 +1662,7 @@ Proof.
           done. done. apply heap_fresh_is_fresh. }
         1: bij_solver.
       * tstep_s => *; simplify_eq/=. tend.
-        destruct v => //; simplify_eq/=; destruct_all?; simplify_eq/=.
+        destruct v => //; simplify_eq/=; destruct!/=.
         split!. 1: by apply: heap_in_bij_alive. apply: Hloop; [done|]. split!. 1: done. 1: done. all: split!.
         1: by apply: heap_preserved_bij_env_free.
         1: by apply heap_in_bij_free.
@@ -1696,7 +1696,7 @@ Proof.
                              ). }
   { split!. } { done. }
   move => {}n _ /= Hloop [[σm1 [[σf σ1] [[pp [bij hi]] ?]]] σc1] [[σm2 σ2] σc2] ?.
-  destruct_all?; simplify_eq/=.
+  destruct!/=.
   - tstep_i. apply steps_impl_step_end => ???. invert_all' @m_step; simplify_eq/=. split!.
     tstep_s. eexists (Some (inr _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
     tstep_i. apply steps_impl_step_end => ???. invert_all @m_step. split!.
@@ -1716,10 +1716,10 @@ Proof.
     apply steps_impl_step_end => ???. invert_all @m_step => ?; simplify_eq.
     + destruct i as [? [? vs' |]]; simplify_eq/=.
       tstep_s. eexists (Some _). split!.
-      apply: steps_spec_step_end; [econs|]=> /=??. destruct_all?; simplify_eq/=. tend.
+      apply: steps_spec_step_end; [econs|]=> /=??. destruct!/=. tend.
       split!.
       tstep_both. apply steps_impl_step_end => ???. invert_all @m_step.
-      tstep_s. eexists (None). apply: steps_spec_step_end; [econs|]=> /=??. destruct_all?; simplify_eq/=. tend.
+      tstep_s. eexists (None). apply: steps_spec_step_end; [econs|]=> /=??. destruct!/=. tend.
       have ?: vs0 = ValNum <$> vs'0. {
         revert select (m_step _ _ _ _) => _.
         revert select (Forall2 _ _ _). elim: vs'0 vs0; csimpl => *; decompose_Forall_hyps => //.
@@ -1735,8 +1735,8 @@ Proof.
       apply: Hloop; [done|]. split!.
     + destruct i as [? []]; simplify_eq/=.
       tstep_s. eexists (Some _). split!.
-      apply: steps_spec_step_end; [econs|]=> /=??. destruct_all?; simplify_eq/=.
-      tstep_s. eexists None. apply: steps_spec_step_end; [econs|]=> /=??. destruct_all?; simplify_eq/=.
+      apply: steps_spec_step_end; [econs|]=> /=??. destruct!/=.
+      tstep_s. eexists None. apply: steps_spec_step_end; [econs|]=> /=??. destruct!/=.
       destruct vs as [|v ?]; decompose_Forall_hyps. destruct v => //; simplify_eq/=.
       tend. split!.
       tstep_i. apply: steps_impl_step_end => ???. invert_all @m_step. split!.

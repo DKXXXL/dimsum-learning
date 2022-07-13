@@ -101,7 +101,7 @@ Lemma coro_regs_regs_lookup_in r rs rs' :
 Proof.
   move => ?. set_unfold. rewrite /coro_regs_regs. cbn.
   rewrite -!insert_union_l left_id_L.
-  destruct_all?; simplify_eq.
+  destruct!.
   all: repeat (rewrite lookup_total_insert_ne; [|done]).
   all: by rewrite lookup_total_insert.
 Qed.
@@ -158,7 +158,7 @@ Proof.
   rewrite /coro_regs_mem_n lookup_map_seqZ_Some list_lookup_fmap fmap_Some.
   setoid_rewrite lookup_take_Some. setoid_rewrite coro_get_regs_lookup_Some.
   have ->: Z.to_nat (coro_state_addr + k - coro_state_addr) = k by lia.
-  split => ?; destruct_all?; simplify_eq; split!; lia.
+  split => ?; destruct!; split!; lia.
 Qed.
 
 Lemma coro_regs_mem_lookup_Some (k : nat) rs j  v:
@@ -187,7 +187,7 @@ Proof.
     rewrite !list_lookup_fmap !fmap_Some.
     setoid_rewrite lookup_take_Some.
     setoid_rewrite coro_get_regs_lookup_Some.
-    split => ?; destruct_all?; simplify_eq; split!; try lia; rewrite lookup_total_insert_ne // => ?; subst.
+    split => ?; destruct!; split!; try lia; rewrite lookup_total_insert_ne // => ?; subst.
     have /NoDup_alt Hx : NoDup coro_saved_regs by compute_done.
     efeed pose proof Hx; [exact: Hk| done| ]. lia.
     have /NoDup_alt Hx : NoDup coro_saved_regs by compute_done.
@@ -261,7 +261,7 @@ Proof.
     σa.(asm_instrs) = yield_asm ∧
     rs !!! "PC" ∉ yield_asm_dom). }
   { split!. } { done. }
-  move => n _ Hloop [????] [? rsold] ?. destruct_all?; simplify_eq/=.
+  move => n _ Hloop [????] [? rsold] ?. destruct!/=.
   tstep_i => ?? rs mem ? Hi. simpl.
   tstep_s. rewrite -/yield_itree. go.
   go_s. eexists (_, _). go.
@@ -300,7 +300,7 @@ Proof.
       by rewrite coro_regs_regs_n_0 left_id_L. }
    { rewrite coro_regs_mem_n_0 left_id_L. symmetry. by apply map_subseteq_union. } }
   { done. }
-  move => n1 ? Hloop2 [? rs' ??] [??] [i ?]. destruct_all?. simplify_eq/=.
+  move => n1 ? Hloop2 [? rs' ??] [??] [i ?]. destruct!/=.
   tstep_i => ??. simplify_map_eq'.
   rewrite (deep_to_asm_instrs_lookup_nat (S (S (i * 3)))) /=; [|lia].
   have Hlen: length (mjoin (imap (λ (i : nat) (r : string), yield_swap_reg r i) (locked saved_registers))) = 36%nat.
@@ -586,15 +586,15 @@ Proof.
     fast_set_solver.
   }
   apply: tsim_implies_trefines => n0 /=.
-  tstep_i => *. case_match; destruct_all?; simplify_eq/=.
+  tstep_i => *. case_match; destruct!/=.
   tstep_s. split!.
   tstep_s. move => -[] //= ? h gp vs avs ret f *.
   tstep_s. split!.
   tstep_s => ?.
-  have ? : regs !!! "PC" ∈ ins1. { efeed pose proof Hi1; [done|]. destruct_all?. simplify_eq. naive_solver. }
+  have ? : regs !!! "PC" ∈ ins1. { efeed pose proof Hi1; [done|]. destruct!. naive_solver. }
   rewrite bool_decide_false; [|fast_set_solver].
   rewrite bool_decide_true; [|fast_set_solver].
-  tstep_i => *. case_match; destruct_all?; simplify_eq/=.
+  tstep_i => *. case_match; destruct!/=.
   rewrite bool_decide_true; [|fast_set_solver].
   tstep_i => *. simplify_eq.
   tstep_i. eexists true. split; [done|]. eexists h, gp, vs, avs, ret, f.
@@ -661,8 +661,8 @@ Proof.
   clear -Hyf Hidisj Hfdisj Hydisj Hy1 Hy2 Hi1 Hi2 Hag Hf1 Hf2 Hfy Hf1in VisNoAll0 VisNoAll1.
   have ? : yield_addr ∈ yield_asm_dom by rewrite /yield_asm_dom /yield_asm; unlock; compute_done.
   move => n ? Hloop [[[σpy1 σpy2][yt yregs]][[[σpc1 σpc2][[σsm1 σ1][[pp1 [cs1 lr1]]x1]]][[σsm2 σ2][[pp2 [cs2 lr2]]x2]]]].
-  move => [[σsm' [[[σlc σc] σ1'] σ2']][[ppc [csc lrc]] xc]] [state ?]. destruct_all?; simplify_eq.
-  destruct σc as [[| |] finit] => //; simplify_eq/=; destruct_all?; simplify_eq/=.
+  move => [[σsm' [[[σlc σc] σ1'] σ2']][[ppc [csc lrc]] xc]] [state ?]. destruct!.
+  destruct σc as [[| |] finit] => //; simplify_eq/=; destruct!/=.
   - tsim_mirror m1 σ1. move => ??? Hcont.
     tstep_both. apply Hcont => κ ? Hstep Hs. destruct κ as [[? e]|].
     2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
@@ -674,10 +674,10 @@ Proof.
     all: apply: steps_spec_step_end; [done|] => σ'' ?; assert (σ'' = σ') by naive_solver.
     + (* left to right *)
       tstep_s => ?.
-      tstep_i => *. unfold i2a_regs_call in *. destruct_all?; simplify_map_eq'.
+      tstep_i => *. unfold i2a_regs_call in *. destruct!; simplify_map_eq'.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
-      move => /= *. destruct_all?; simplify_map_eq'.
+      move => /= *. destruct!; simplify_map_eq'.
       rewrite bool_decide_true; [|done].
       tstep_i. rewrite -/yield_itree. go.
       go_i => -[??]. go.
@@ -693,17 +693,17 @@ Proof.
       go_i.
       go_i => ?. go.
       go_i => ?. go.
-      go_i => *. destruct_all?. simplify_map_eq'. go.
+      go_i => *. destruct!. simplify_map_eq'. go.
       rewrite (coro_regs_regs_lookup_in "PC"); [|compute_done].
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_true. 2: fast_set_solver.
-      tstep_i => *. destruct_all?; simplify_eq/=. destruct_all?; simplify_map_eq'.
+      tstep_i => *. destruct!/=. destruct!; simplify_map_eq'.
       rewrite (coro_regs_regs_lookup_in "PC"); [|compute_done].
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_true. 2: fast_set_solver.
       tstep_i => *. simplify_eq.
       tstep_i.
-      destruct finit; destruct_all?; simplify_eq.
+      destruct finit; destruct!.
       * eexists true. split!.
         { apply: i2a_args_pure_mono; [|done].
           apply map_preserved_insert_r_not_in; [compute_done|].
@@ -764,7 +764,7 @@ Proof.
     + (* left call to outside *)
       case_bool_decide; [by tstep_s|].
       rewrite bool_decide_true //=.
-      tstep_i => ? rs *. destruct_all?; simplify_eq.
+      tstep_i => ? rs *. destruct!.
       have ?: rs !!! "PC" ∉ ins. {
         set_unfold => -[[?|?]|?].
         - efeed pose proof Hfy; [apply lookup_union_Some_raw; naive_solver|done|done].
@@ -773,7 +773,7 @@ Proof.
       }
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
-      move => /= *. destruct_all?; simplify_eq/=.
+      move => /= *. destruct!/=.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
       tstep_s. split!. { done. } { fast_set_solver. } { apply lookup_union_Some_raw. naive_solver. }
@@ -782,13 +782,13 @@ Proof.
       iSatClear.
 
       (* go back inside *)
-      tstep_i => e *. destruct e; destruct_all?; simplify_eq.
+      tstep_i => e *. destruct e; destruct!.
       tstep_s. split!.
       tstep_s => -[] /= *. { tstep_s. split!. by tstep_s. }
-      tstep_s. split!. destruct_all?; simplify_eq.
+      tstep_s. split!. destruct!.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_true. 2: fast_set_solver.
-      tstep_i => /= *. destruct_all?; simplify_eq/=. destruct_all?; simplify_eq/=.
+      tstep_i => /= *. destruct!/=. destruct!/=.
       rewrite bool_decide_true; [|done].
       tstep_i => *. simplify_eq.
       tstep_i => *. eexists false. split!.
@@ -801,10 +801,10 @@ Proof.
       apply: Hloop. { etrans; [|done]. etrans; [|done]. apply ti_le_S. }
       split!. iSplit; iIntros!; iFrame.
     + (* left return to outside *)
-      tstep_i => *. destruct_all?; simplify_eq.
+      tstep_i => *. destruct!.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
-      move => /= *. destruct_all?; simplify_eq/=.
+      move => /= *. destruct!/=.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
       tstep_s. split!.
@@ -812,15 +812,15 @@ Proof.
       iSatClear.
 
       (* going back inside *)
-      tstep_i => e *. tstep_s. split!.  destruct_all?; simplify_eq/=.
-      destruct e; destruct_all?; simplify_eq.
+      tstep_i => e *. tstep_s. split!.  destruct!/=.
+      destruct e; destruct!.
       tstep_s => -[] //= ? h' gp' vs' avs' ret' f' *.
       tstep_s. split!.
       tstep_s => ?.
-      have ? : regs !!! "PC" ∈ ins1. { efeed pose proof Hi1; [done|]. destruct_all?. simplify_eq. naive_solver. }
+      have ? : regs !!! "PC" ∈ ins1. { efeed pose proof Hi1; [done|]. destruct!. naive_solver. }
       rewrite bool_decide_false; [|fast_set_solver].
       rewrite bool_decide_true; [|fast_set_solver].
-      tstep_i => *. case_match; destruct_all?; simplify_eq/=.
+      tstep_i => *. case_match; destruct!/=.
       rewrite bool_decide_true; [|fast_set_solver].
       tstep_i => *. simplify_eq.
       tstep_i. eexists true. split; [done|]. eexists h', gp', vs', avs', ret', f'.
@@ -844,10 +844,10 @@ Proof.
     all: apply: steps_spec_step_end; [done|] => σ'' ?; assert (σ'' = σ') by naive_solver.
     + (* right to left *)
       tstep_s => ?.
-      tstep_i => *. unfold i2a_regs_call in *. destruct_all?; simplify_map_eq'.
+      tstep_i => *. unfold i2a_regs_call in *. destruct!; simplify_map_eq'.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
-      move => /= *. destruct_all?; simplify_map_eq'.
+      move => /= *. destruct!; simplify_map_eq'.
       rewrite bool_decide_true. 2: done.
       tstep_i. rewrite -/yield_itree. go.
       go_i => -[??]. go.
@@ -863,11 +863,11 @@ Proof.
       go_i.
       go_i => ?. go.
       go_i => ?. go.
-      go_i => *. destruct_all?. simplify_map_eq'. go.
+      go_i => *. destruct!. simplify_map_eq'. go.
       rewrite (coro_regs_regs_lookup_in "PC"); [|compute_done].
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_true. 2: fast_set_solver.
-      tstep_i => *. destruct_all?; simplify_eq/=. destruct_all?; simplify_map_eq'.
+      tstep_i => *. destruct!/=; simplify_map_eq'.
       rewrite (coro_regs_regs_lookup_in "PC"); [|compute_done].
       rewrite bool_decide_true. 2: fast_set_solver.
       tstep_i => *. simplify_eq.
@@ -904,7 +904,7 @@ Proof.
     + (* right call to outside *)
       case_bool_decide; [by tstep_s|].
       rewrite bool_decide_true //=.
-      tstep_i => ? rs *. destruct_all?; simplify_eq.
+      tstep_i => ? rs *. destruct!.
       have ? : f2i !! fn = Some (rs !!! "PC"). {
         apply lookup_union_Some_raw.
         destruct (f2i1 !! fn) eqn:?; naive_solver.
@@ -917,7 +917,7 @@ Proof.
       }
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
-      move => /= *. destruct_all?; simplify_eq/=.
+      move => /= *. destruct!/=.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
       tstep_s. split!. { done. } { fast_set_solver. } { fast_set_solver. }
@@ -925,13 +925,13 @@ Proof.
       iSatClear.
 
       (* go back inside *)
-      tstep_i => e *. destruct e; destruct_all?; simplify_eq.
+      tstep_i => e *. destruct e; destruct!.
       tstep_s. split!.
       tstep_s => -[] /= *. { tstep_s. split!. by tstep_s. }
-      tstep_s. split!. destruct_all?; simplify_eq.
+      tstep_s. split!. destruct!.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_true. 2: fast_set_solver.
-      tstep_i => /= *. destruct_all?; simplify_eq/=. destruct_all?; simplify_eq/=.
+      tstep_i => /= *. destruct!/=. destruct!/=.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_true; [|done].
       tstep_i => *. simplify_eq.

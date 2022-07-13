@@ -103,7 +103,7 @@ Proof.
     pp = PPOutside ∧
     (P ⊢ [∗ map] p↦z∈ps, i2a_heap_shared p z)). }
   { split!. iIntros!. by rewrite big_sepM_empty. } { done. }
-  move => n _ Hloop [????] [[?[? ps]][[??]?]] ?. destruct_all?; simplify_eq/=.
+  move => n _ Hloop [????] [[?[? ps]][[??]?]] ?. destruct!/=.
   tstep_i => ????? Hi. tstep_s. split!.
   tstep_i => ??. simplify_map_eq.
   tstep_s => *. case_match => /= *. 2: congruence.
@@ -214,18 +214,18 @@ Lemma main_int_to_ptr_refines_itree :
            (MS (mod_itree _ _) (main_itree, tt)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
-  tstep_i => *. case_match; destruct_all?; simplify_eq.
+  tstep_i => *. case_match; destruct!.
   go_s. eexists (_, _, _). go. go_s. split!. go.
   go_s => ?. go. go_s => ?. go. simplify_eq. rewrite bool_decide_true; [|compute_done].
   tstep_i. split! => ???? Hf ?. simplify_eq.
   change (@nil expr) with (Val <$> []).
   tstep_i. split!. move => ??. simplify_eq. unfold main_imp_prog in Hf. simplify_map_eq. split!.
-  tstep_i => ???. destruct_all?; simplify_eq. split!. { repeat econs. }
+  tstep_i => ???. destruct!. split!. { repeat econs. }
   tstep_i. split. { apply heap_alive_alloc; [done|lia]. }
   tstep_i. change ([Val (ValLoc l)]) with (Val <$> [ValLoc l]).
   tstep_i. split. { move => *; simplify_map_eq. }
   move => ????. rewrite bool_decide_false; [|compute_done]. rewrite bool_decide_true; [|compute_done].
-  move => *. destruct_all?. simplify_eq/=.
+  move => *. destruct!/=.
   tstep_i. rewrite -/int_to_ptr_itree. go.
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq/=.
@@ -233,7 +233,7 @@ Proof.
   go_i. split!. go.
   go_i => z. go.
   go_i. go_i. simplify_map_eq'.
-  go_i => *. go. destruct_all?; simplify_eq.
+  go_i => *. go. destruct!.
   go_i. split!. move => *. simplify_eq.
   go_i.
   go_i.
@@ -241,7 +241,7 @@ Proof.
   go_i. change ([Val (z + l.2)]) with (Val <$> [ValNum (z + l.2)]).
   tstep_i. split. { move => *; simplify_map_eq. }
   move => ????. rewrite bool_decide_false; [|compute_done]. rewrite bool_decide_true; [|compute_done].
-  move => *. destruct_all?. simplify_eq/=.
+  move => *. destruct!/=.
   tstep_i. rewrite -/int_to_ptr_itree. go.
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq/=.
@@ -250,14 +250,14 @@ Proof.
   go_i. eexists l. go.
   go_i.
   go_i. simplify_map_eq. split; [f_equal; lia|]. go.
-  go_i => *. go. destruct_all?; simplify_eq.
+  go_i => *. go. destruct!.
   go_i. split!. move => *. simplify_eq.
   go_i.
   go_i. eexists _. simplify_map_eq. rewrite heap_alloc_h_lookup; [|lia..]. split. { by simplify_map_eq. }
   go_i. change ([Val 1]) with (Val <$> [ValNum 1]).
   go_i. split. { move => *; simplify_map_eq. }
   move => ????. rewrite bool_decide_false; [|compute_done].
-  move => *. destruct_all?. simplify_eq/=.
+  move => *. destruct!/=.
   go_s. eexists _. go.
   go_s. split!. go.
   go_s. done.
@@ -347,7 +347,7 @@ Proof.
   unshelve eapply tsim_remember. { exact (λ _ '(AsmState i rs _ ins) _,
       i = ARunning [] ∧ rs !!! "PC" = 102 ∧ ins = exit_asm). }
   { split!. by simplify_map_eq'. } { done. }
-  move => ?? Hloop [????] ? ?. destruct_all?; simplify_eq.
+  move => ?? Hloop [????] ? ?. destruct!.
   go_i => ??. simplify_map_eq'.
   go_i.
   apply Hloop; [done|]. split!. by simplify_map_eq'.
@@ -393,12 +393,12 @@ Lemma top_level_refines_itree :
            (MS (mod_itree _ _) (top_level_itree, tt)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
-  go_i => ??????. case_match; destruct_all?; simplify_eq.
+  go_i => ??????. case_match; destruct!.
   go_s. eexists (_, _). go.
   go_s. split!. go.
   go_s => ?. go.
   go_s => ?. go.
-  go_s => ?. go. destruct_all?. simplify_map_eq'.
+  go_s => ?. go. destruct!. simplify_map_eq'.
   rewrite bool_decide_true; [|unfold main_asm_dom;unlock; compute_done].
   go_i => ??. simplify_eq.
   go_i. eexists true => /=. split; [done|]. eexists initial_heap_state, _, [], [], (regs !!! "R30"), "main".
@@ -414,7 +414,7 @@ Proof.
   go_i. split!. go.
   go_i => ?. go.
   go_i.
-  go_i. move => *. unfold main_f2i in *. destruct_all?; simplify_map_eq'.
+  go_i. move => *. unfold main_f2i in *. destruct!; simplify_map_eq'.
   rewrite bool_decide_false; [|unfold main_asm_dom;unlock;compute_done].
   rewrite bool_decide_true; [|compute_done].
   go_i => -[??]. go.
@@ -424,14 +424,14 @@ Proof.
   go_i => ?. go.
   go_i => ?. go.
   go_i => ?. go.
-  go_i => *. destruct_all?; simplify_eq. go.
+  go_i => *. destruct!. go.
   go_s. eexists _. go.
   go_s. eexists _. go.
   go_s. split; [shelve|]. go.
   go_s. split; [shelve|]. go.
   go_s. split; [shelve|]. go.
   go_s. split!. go.
-  go_i => *. case_match; destruct_all?; simplify_eq.
+  go_i => *. case_match; destruct!.
   go_s. eexists (_, _). go.
   go_s. split!. go.
   go_i => -[??]. go.

@@ -286,7 +286,7 @@ Lemma asm_step_AWaiting_s rs mem ins:
       ins !! pc = Some i ∧
       G (Some (Incoming, EAJump rs' mem')) (λ G', G' (AsmState (ARunning []) rs' mem' ins))).
 Proof.
-  constructor => ??. destruct_all!. eexists _, _. split; [done|] => ? /= ?.
+  constructor => ??. destruct!. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { by econs. } naive_solver.
 Qed.
 Global Hint Resolve asm_step_AWaiting_s : tstep.
@@ -438,7 +438,7 @@ Proof.
   unshelve apply: tsim_remember. { exact: (λ _, asm_link_prod_inv ins1 ins2). }
   { naive_solver. } { done. }
   move => /= {}n _ Hloop [i1 rs1 mem1 ins1'] [[[σf s] [il rsl meml insl]] [ir rsr memr insr]] [? [? [? Hinv]]].
-  case_match; destruct_all?; simplify_eq.
+  case_match; destruct!.
   - destruct i as [|[??|???|???|]?].
     + tstep_i => pc ?. case_match as Hunion. 1: move: Hunion => /lookup_union_Some_raw[Hl|[? Hl]].
       * tstep_s. split!. simplify_option_eq. apply: Hloop; [done|]. naive_solver.
@@ -494,9 +494,9 @@ Proof.
   unshelve apply: tsim_remember. { exact: (λ _, flip (asm_link_prod_inv ins1 ins2)). }
   { naive_solver. } { done. }
   move => /= {}n _ Hloop [[[σf ?] [il rsl meml insl]] [ir rsr memr insr]] [i1 rs1 mem1 ins1'] [? [? [? Hinv]]].
-  case_match; destruct_all?; simplify_eq.
+  case_match; destruct!.
   - destruct i as [|[??|???|???|]?].
-    + tstep_i => pc ?. case_match => *; destruct_all?; simplify_eq/=.
+    + tstep_i => pc ?. case_match => *; destruct!/=.
       * tstep_s. split!. erewrite lookup_union_Some_l by done.
         apply: Hloop; [done|]. naive_solver.
       * tstep_s. split!. rewrite lookup_union_r //.
@@ -510,11 +510,11 @@ Proof.
     + tstep_both => *. tstep_s => ?. tend. split!. case_match.
       * apply: Hloop; [done|]. naive_solver.
       * by tstep_i.
-    + tstep_both => *. destruct_all?; simplify_eq. tstep_s. split!; [done|]. tend.
-      tstep_both => *. destruct_all?; case_match; destruct_all?; simplify_eq/=. tstep_s. split!; [done|]. tend.
+    + tstep_both => *. destruct!. tstep_s. split!; [done|]. tend.
+      tstep_both => *. destruct!; case_match; destruct!/=. tstep_s. split!; [done|]. tend.
       tstep_i => *. simplify_eq/=. apply: Hloop; [done|]. naive_solver.
   - destruct i as [|[??|???|???|]?].
-    + tstep_i => pc ?. case_match => *; destruct_all?; simplify_eq/=.
+    + tstep_i => pc ?. case_match => *; destruct!/=.
       * tstep_s. split!. erewrite lookup_union_Some_r by done.
         apply: Hloop; [done|]. naive_solver.
       * tstep_s. split!. rewrite lookup_union_l' //.
@@ -528,10 +528,10 @@ Proof.
     + tstep_both => *. tstep_s => ?. tend. split!. case_match.
       * apply: Hloop; [done|]. naive_solver.
       * by tstep_i.
-    + tstep_both => *. destruct_all?; simplify_eq. tstep_s. split!; [done|]. tend.
-      tstep_both => *. destruct_all?; case_match; destruct_all?; simplify_eq/=. tstep_s. split!; [done|]. tend.
+    + tstep_both => *. destruct!. tstep_s. split!; [done|]. tend.
+      tstep_both => *. destruct!; case_match; destruct!/=. tstep_s. split!; [done|]. tend.
       tstep_i => *. simplify_eq/=. apply: Hloop; [done|]. naive_solver.
-  - tstep_i => -[] /= *; destruct_all?; simplify_eq/=.
+  - tstep_i => -[] /= *; destruct!/=.
     tstep_s.
     repeat case_bool_decide => //.
     all: revert select (_ ∈ dom _ _) => /elem_of_dom[? Hin];
@@ -859,7 +859,7 @@ Module asm_examples.
       naive_solver.
     }
     move => {}n rc pc rs mem i CONT HPC Hi Hloop HCONT.
-    move: Hi. rewrite !lookup_insert_Some !lookup_empty => Hi. destruct_all!; simplify_eq.
+    move: Hi. rewrite !lookup_insert_Some !lookup_empty => Hi. destruct!.
     all: repeat (rewrite bool_decide_false; [|done]); rewrite bool_decide_true //.
     all: try by go_s.
 
@@ -930,7 +930,7 @@ Module asm_examples.
       naive_solver.
     }
     move=> {}n rc pc rs mem i CONT HPC Hi Hloop HCONT.
-    move: Hi. rewrite !lookup_insert_Some !lookup_empty => Hi. destruct_all!; simplify_eq.
+    move: Hi. rewrite !lookup_insert_Some !lookup_empty => Hi. destruct!.
     all: repeat (rewrite bool_decide_false; [|done]); rewrite bool_decide_true //.
     all: try by go_s.
     tstep_i; simplify_map_eq'.

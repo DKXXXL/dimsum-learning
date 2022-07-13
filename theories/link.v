@@ -132,7 +132,7 @@ Section mod_link.
     move => ??? [[[sp σ1]σ2][[σ s] ok]] ??.
     eexists (σ, s, σ1, σ2) => -[[[??]?]?]/=.
     split => ?; simplify_eq => //.
-    inv_all/= @m_step; inv_all @mod_link_filter; destruct_all?; simplify_eq.
+    inv_all/= @m_step; inv_all @mod_link_filter; destruct!.
     all: unfold mod_link_to_state in *; repeat case_match => //; simplify_eq => //.
   Qed.
 
@@ -145,7 +145,7 @@ Section mod_link.
     apply: mod_state_transform_trefines; [| | |done..].
     - move => [[??]?] [[[??]?]?] [[[??]?]?] /=. naive_solver.
     - move => [[??]?] [[[??]?][[??]?]] [[[??]?][[??]?]] ?????; simplify_eq.
-      inv_all/= @m_step; inv_all @mod_link_filter; destruct_all?; simplify_eq.
+      inv_all/= @m_step; inv_all @mod_link_filter; destruct!.
       all: eexists (_, _, _); do 3 f_equal; repeat case_match => //; simplify_eq/= => //.
       all: unfold mod_link_to_state in *; repeat case_match; simplify_eq => //.
     - apply mod_map_trefines => /=. by apply mod_seq_product_trefines.
@@ -166,7 +166,7 @@ Section mod_link.
     - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
       + case_match; simplify_eq. naive_solver.
       + case_match; simplify_eq. inv_all @mod_link_filter.
-        split!; [done| |done] => /=?. destruct_all?.
+        split!; [done| |done] => /=?. destruct!.
         split!; [naive_solver..|]. move => /= ? HP. move: HP => /H2[?[??]]. eexists (_, _, _, _).
         split!; [by destruct ok, s0|done|by destruct ok, s0|naive_solver].
   Qed.
@@ -186,7 +186,7 @@ Section mod_link.
     - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
       + case_match; simplify_eq. naive_solver.
       + case_match; simplify_eq. inv_all @mod_link_filter.
-        split!; [done| |done] => /=?. destruct_all?.
+        split!; [done| |done] => /=?. destruct!.
         split!; [naive_solver..|]. move => /= ? HP. move: HP => /H2[?[??]]. eexists (_, _, _, _).
         split!; [by destruct s0, ok|done|by destruct s0, ok|naive_solver] => /=.
   Qed.
@@ -241,7 +241,7 @@ Section mod_link.
       end)).
   Proof.
     constructor => G /tsteps_proof [κ [? [? HG']]]. clear TStepS0.
-    destruct κ as [[[] e]|] => //; destruct_all?.
+    destruct κ as [[[] e]|] => //; destruct!.
     all: eexists _, _; split; [done|] => G' /= /HG'?; tstep_s.
     all: split!; [..|apply: steps_spec_mono; [done|]] => //=; try by econs.
     all: move => ?? [[[p?]?]?]//=?; destruct p => //; by simplify_eq/=.
@@ -258,7 +258,7 @@ Section mod_link.
       end)).
   Proof.
     constructor => G /tsteps_proof [κ [? [? HG']]]. clear TStepS0.
-    destruct κ as [[[] e]|] => //; destruct_all?.
+    destruct κ as [[[] e]|] => //; destruct!.
     all: eexists _, _; split; [done|] => G' /= /HG'?; tstep_s.
     all: split!; [..|apply: steps_spec_mono; [done|]] => //=; try by econs.
     all: move => ?? [[[p?]?]?]//=?; destruct p => //; by simplify_eq/=.
@@ -273,7 +273,7 @@ Section mod_link.
       end)).
   Proof.
     constructor => G /tsteps_proof [κ [? [? HG']]]. clear TStepS0.
-    destruct κ as [[[] e']|] => //; destruct_all?.
+    destruct κ as [[[] e']|] => //; destruct!.
     all: eexists _, _; split; [done|] => G' /=; try move => [?]; move => /HG'?; tstep_s; simplify_eq.
     all: split!; [..|apply: steps_spec_mono; [done|]] => //=; try by econs.
     all: move => ?? [[[p?]?]?]//=?; destruct p => //; by simplify_eq/=.
@@ -288,7 +288,7 @@ Section mod_link.
       end)).
   Proof.
     constructor => G /tsteps_proof [κ [? [? HG']]]. clear TStepS0.
-    destruct κ as [[[] e']|] => //; destruct_all?.
+    destruct κ as [[[] e']|] => //; destruct!.
     all: eexists _, _; split; [done|] => G' /=; try move => [?]; move => /HG'?; tstep_s; simplify_eq.
     all: split!; [..|apply: steps_spec_mono; [done|]] => //=; try by econs.
     all: move => ?? [[[p?]?]?]//=?; destruct p => //; by simplify_eq/=.

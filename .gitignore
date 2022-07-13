@@ -21,3 +21,4 @@ builddep/
 _opam
 *.o
 theories/coro/gttest
+theories/old

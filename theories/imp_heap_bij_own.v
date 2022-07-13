@@ -163,13 +163,13 @@ Program Definition hb_share (p1 p2 : prov) (bij : heap_bij)
   HeapBij (<[p2 := HBShared p1]> (hb_bij bij)) (hb_priv_i bij) _ _.
 Next Obligation.
   move => ??? Hnotin ??. move: Hnotin. rewrite elem_of_hb_provs_i => ?.
-  rewrite !lookup_insert_Some => ?. destruct_all?; simplify_eq/= => //; try naive_solver.
+  rewrite !lookup_insert_Some => ?. destruct!/= => //; try naive_solver.
   - apply eq_None_ne_Some => ??. naive_solver.
   - by apply: hb_disj.
 Qed.
 Next Obligation.
   move => ??? Hnotin ???. move: Hnotin. rewrite elem_of_hb_provs_i => ?.
-  rewrite !lookup_insert_Some => ??. destruct_all?; simplify_eq/= => //; try naive_solver.
+  rewrite !lookup_insert_Some => ??. destruct!/= => //; try naive_solver.
   by apply: hb_iff.
 Qed.
 
@@ -180,14 +180,14 @@ Program Definition hb_share_big (s : gmap prov prov) (bij : heap_bij)
 Next Obligation.
   move => ?? Hnotin ???.
   rewrite lookup_union_Some_raw lookup_fmap fmap_Some fmap_None => ?.
-  destruct_all?; simplify_eq/= => //; try naive_solver.
+  destruct!/= => //; try naive_solver.
   - setoid_rewrite elem_of_hb_provs_i in Hnotin. apply eq_None_not_Some. naive_solver.
   - by apply: hb_disj.
 Qed.
 Next Obligation.
   move => ?? Hnotin Hag ???.
   rewrite !lookup_union_Some_raw !lookup_fmap !fmap_Some !fmap_None => ??.
-  destruct_all?; simplify_eq/= => //; try naive_solver.
+  destruct!/= => //; try naive_solver.
   - setoid_rewrite elem_of_hb_provs_i in Hnotin. naive_solver.
   - setoid_rewrite elem_of_hb_provs_i in Hnotin. naive_solver.
   - by apply: hb_iff.
@@ -201,11 +201,11 @@ Program Definition hb_update_const_s (p : prov) (h : gmap Z val) (bij : heap_bij
   HeapBij (<[p := HBConstant h]> (hb_bij bij)) (hb_priv_i bij) _ _.
 Next Obligation.
   move => ?????.
-  rewrite !lookup_insert_Some => ?. destruct_all?; simplify_eq/= => //. by apply: hb_disj.
+  rewrite !lookup_insert_Some => ?. destruct!/= => //. by apply: hb_disj.
 Qed.
 Next Obligation.
   move => ??????.
-  rewrite !lookup_insert_Some => ??. destruct_all?; simplify_eq/= => //. by apply: hb_iff.
+  rewrite !lookup_insert_Some => ??. destruct!/= => //. by apply: hb_iff.
 Qed.
 
 Program Definition hb_update_const_s_big (s : gmap prov (gmap Z val)) (bij : heap_bij) :=
@@ -213,12 +213,12 @@ Program Definition hb_update_const_s_big (s : gmap prov (gmap Z val)) (bij : hea
 Next Obligation.
   move => ????.
   rewrite !lookup_union_Some_raw !lookup_fmap !fmap_Some fmap_None => ?.
-  destruct_all?; simplify_eq/= => //. by apply: hb_disj.
+  destruct!/= => //. by apply: hb_disj.
 Qed.
 Next Obligation.
   move => ?????.
   rewrite !lookup_union_Some_raw !lookup_fmap !fmap_Some !fmap_None => ??.
-  destruct_all?; simplify_eq/= => //. by apply: hb_iff.
+  destruct!/= => //. by apply: hb_iff.
 Qed.
 
 Lemma hb_update_const_s_big_empty bij:
@@ -245,11 +245,11 @@ Program Definition hb_delete_s (p : prov) (bij : heap_bij) :=
   HeapBij (delete p (hb_bij bij)) (hb_priv_i bij) _ _.
 Next Obligation.
   move => ????.
-  rewrite !lookup_delete_Some => ?. destruct_all?; simplify_eq/= => //. by apply: hb_disj.
+  rewrite !lookup_delete_Some => ?. destruct!/= => //. by apply: hb_disj.
 Qed.
 Next Obligation.
   move => ?????.
-  rewrite !lookup_delete_Some => ??. destruct_all?; simplify_eq/= => //. by apply: hb_iff.
+  rewrite !lookup_delete_Some => ??. destruct!/= => //. by apply: hb_iff.
 Qed.
 
 Program Definition hb_delete_s_big (s : gmap prov (gmap Z val)) (bij : heap_bij) :=
@@ -534,7 +534,7 @@ Proof.
     setoid_rewrite lookup_difference_None. rewrite /is_Some.
     setoid_rewrite hb_shared_lookup_Some. setoid_rewrite hb_shared_lookup_None.
     setoid_rewrite hb_priv_s_lookup_None.
-    move => ??. destruct_all?; simplify_eq.
+    move => ??. destruct!.
     - destruct x; naive_solver.
     - naive_solver.
   }
@@ -548,7 +548,7 @@ Proof.
     setoid_rewrite lookup_difference_None. rewrite /is_Some.
     setoid_rewrite hb_shared_lookup_Some. setoid_rewrite hb_shared_lookup_None.
     setoid_rewrite hb_priv_s_lookup_Some. setoid_rewrite hb_priv_s_lookup_None.
-    move => ??. destruct_all?; simplify_eq.
+    move => ??. destruct!.
     - destruct x; naive_solver.
     - naive_solver.
   }
@@ -565,7 +565,7 @@ Proof.
     setoid_rewrite hb_shared_lookup_Some.
     setoid_rewrite hb_shared_lookup_None.
     split => ?.
-    + destruct_all?; simplify_eq/= => //; try destruct e; naive_solver.
+    + destruct!/= => //; try destruct e; naive_solver.
     + destruct e.
       * split!; [naive_solver|].
         destruct (hb_shared bij !! p) eqn: Heq;
@@ -750,7 +750,7 @@ Lemma expr_in_bij_fill_item_l Ki e1 e2 :
   ∃ Ki' e', ⌜e2 = expr_fill_item Ki' e'⌝ ∗ ectx_item_in_bij Ki Ki' ∗ expr_in_bij e1 e'.
 Proof.
   iIntros "He".
-  destruct Ki, e2 => //=; iDestruct!; destruct_all?; simplify_eq; try case_match => //; simplify_eq. 8: {
+  destruct Ki, e2 => //=; iDestruct!; destruct!; try case_match => //; simplify_eq. 8: {
     rewrite big_sepL_zip_with_same_length //.
     iDestruct (big_sepL2_app_inv_l with "[$]") as (???) "[Hv1 Hel]".
     iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[He Hel]". subst.
@@ -839,7 +839,7 @@ Proof.
   iIntros (??) "Hh Hv". destruct l1 as [p1 ?], l2 as [p2 o]; simplify_eq/=.
   iIntros (p1' p2' o' ?) => /=. iDestruct ("Hh" with "[//]") as "[%Hh1 Hh2]". iSplit.
   - iPureIntro. by rewrite !lookup_alter_is_Some.
-  - iIntros (???%lookup_alter_Some?%lookup_alter_Some); destruct_all?; simplify_bij => //.
+  - iIntros (???%lookup_alter_Some?%lookup_alter_Some); destruct!; simplify_bij => //.
     by iApply "Hh2".
 Qed.
 
@@ -1036,7 +1036,7 @@ Lemma heap_bij_inv_alloc_list hi hi' hs hs' lsi lss xs:
   heap_bij_inv hi' hs' ∗ [∗ list] li;ls∈lsi;lss, loc_in_bij li ls.
 Proof.
   iIntros (Hi Hs) "Hinv".
-  iInduction xs as [] "IH" forall (lsi lss hi hi' hs hs' Hi Hs); simplify_eq/=; destruct_all?; simplify_eq/=.
+  iInduction xs as [] "IH" forall (lsi lss hi hi' hs hs' Hi Hs); simplify_eq/=; destruct!/=.
   { by iFrame. }
   iMod (heap_bij_inv_alloc with "Hinv") as "[Hinv $]"; [done..|].
   by iApply "IH".
@@ -1099,7 +1099,7 @@ Lemma heap_bij_inv_free_list hi hs hs' lis lss lis' lss':
 Proof.
   iIntros (Hf Hl2 -> ->) "Hinv Hls".
   iInduction lss as [|ls lss] "IH" forall (hi hs hs' lis Hf Hl2);
-      simplify_eq/=; destruct lis as [|li lis] => //; destruct_all?; simplify_eq/=.
+      simplify_eq/=; destruct lis as [|li lis] => //; destruct!/=.
   { iSplit!. }
   iDestruct "Hls" as "[? ?]".
   iDestruct (heap_bij_inv_range with "[$] [$]") as %?; [done|].
@@ -1230,9 +1230,9 @@ Proof.
   { move => /=. split! => //; [lia|..]. { iSatMono. iFrame. iAccu. } iSatClear.
     move => ?????????. apply: Hret; [done|]. eexists [_]. split!; [done|].
     iSatMono. iIntros!. iFrame. }
-  { iSatClear. move => n' n'' [e1 {}h1 ?] [[σfs [e2 {}h2 ?]] [[??]?]] ??. destruct_all?. split! => //.
+  { iSatClear. move => n' n'' [e1 {}h1 ?] [[σfs [e2 {}h2 ?]] [[??]?]] ??. destruct!. split! => //.
     by apply: imp_heap_bij_return_mono. }
-  iSatClear. move => n' /= ? IH [e1 {}h1 ?] [[σfs [e2 {}h2 ?]] [[?[]]?]] ?. destruct_all?. simplify_eq/=.
+  iSatClear. move => n' /= ? IH [e1 {}h1 ?] [[σfs [e2 {}h2 ?]] [[?[]]?]] ?. destruct!. simplify_eq/=.
   have [?[??]]:= (Hlen _ _ ltac:(done)).
   iSatStart. iIntros!. iDestruct (big_sepL2_length with "[$]") as %?. iSatStop.
   apply: Hf => //; [lia|..]. { iSatMono. iFrame. }
@@ -1294,35 +1294,35 @@ Proof.
   { move => ?? [] /=*; naive_solver. }
   { split!. by rewrite left_id. }
   all: move => [] [] [] P1 P2 P ics1 ics2.
-  - move => e ics' e' /= ? ? *; destruct_all?; simplify_eq/=.
+  - move => e ics' e' /= ? ? *; destruct!/=.
     setoid_subst.
     split!.
     { iSatMono. iIntros!. iFrame. }
     { by destruct e. }
-  - move => e ics' e' /= ? ? *; destruct_all?; simplify_eq/=.
+  - move => e ics' e' /= ? ? *; destruct!/=.
     setoid_subst.
     split!.
     { iSatMono; iIntros!; iFrame. }
     { by destruct e. }
-  - move => [? e] /= ? Hr *; destruct_all?; simplify_eq/=.
+  - move => [? e] /= ? Hr *; destruct!/=.
     all: rewrite ?heap_of_event_event_set_vals_heap; split!.
     split!.
     { iSatMono; iIntros!; iFrame.
       iDestruct (big_sepL2_length with "[$]") as %?. rewrite vals_of_event_event_set_vals_heap //. }
     { by destruct e. }
     { by destruct e. }
-  - move => [? e] /= *; destruct_all?; simplify_eq/=.
+  - move => [? e] /= *; destruct!/=.
     split!.
     1: by destruct e.
     { iSatMono; iIntros!; iFrame. }
-  - move => [? e] /= ? *; destruct_all?; simplify_eq/=.
+  - move => [? e] /= ? *; destruct!/=.
     split!.
     all: rewrite ?heap_of_event_event_set_vals_heap; split!.
     { iSatMono; iIntros!; iFrame.
       iDestruct (big_sepL2_length with "[$]") as %?. rewrite vals_of_event_event_set_vals_heap //. }
     1: by destruct e.
     1: by destruct e.
-  - move => [? e] /= ? *; destruct_all?; simplify_eq/=.
+  - move => [? e] /= ? *; destruct!/=.
     split!.
     1: by destruct e.
     { iSatMono; iIntros!; iFrame. }
@@ -1556,7 +1556,7 @@ Proof.
                              ). }
   { split!. } { done. }
   move => {}n _ /= Hloop [[σm1 [[σf σ1] [[pp []] r]]] σc1] [[σm2 σ2] σc2] ?.
-  destruct_all?; simplify_eq/=.
+  destruct!/=.
   - tstep_i. apply steps_impl_step_end => ???. inv_all/= @m_step. split!.
     tstep_s. eexists (Some (SMEEmit _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
     tstep_i. apply steps_impl_step_end => ???. inv_all @m_step. split!.
@@ -1583,10 +1583,10 @@ Proof.
     apply steps_impl_step_end => ???. inv_all @m_step => ?; simplify_eq.
     + destruct i as [? [? vs' |]]; simplify_eq/=.
       tstep_s. eexists (Some _). split!.
-      apply: steps_spec_step_end; [econs|]=> /=??. destruct_all?; simplify_eq/=. tend.
+      apply: steps_spec_step_end; [econs|]=> /=??. destruct!/=. tend.
       split!.
       tstep_both. apply steps_impl_step_end => ???. inv_all @m_step.
-      tstep_s. eexists (None). apply: steps_spec_step_end; [econs|]=> /=??. destruct_all?; simplify_eq/=. tend.
+      tstep_s. eexists (None). apply: steps_spec_step_end; [econs|]=> /=??. destruct!/=. tend.
       iSatStart.
       iIntros!. iDestruct (big_sepL2_ValNum_inv_r with "[$]") as %?. subst.
       iSatStop.
@@ -1601,8 +1601,8 @@ Proof.
       apply: Hloop; [done|]. split!.
     + destruct i as [? []]; simplify_eq/=.
       tstep_s. eexists (Some _). split!.
-      apply: steps_spec_step_end; [econs|]=> /=??. destruct_all?; simplify_eq/=.
-      tstep_s. eexists None. apply: steps_spec_step_end; [econs|]=> /=??. destruct_all?; simplify_eq/=.
+      apply: steps_spec_step_end; [econs|]=> /=??. destruct!/=.
+      tstep_s. eexists None. apply: steps_spec_step_end; [econs|]=> /=??. destruct!/=.
       iSatStart. iIntros!.
       iDestruct (big_sepL2_cons_inv_r with "[$]") as ([]??) "[??]"; subst => //=; iDestruct!.
       iSatStop.
@@ -1662,7 +1662,7 @@ Proof.
   apply: imp_heap_bij_proof. { set_solver. }
   { move => ??. setoid_rewrite lookup_insert_Some. setoid_rewrite lookup_empty. naive_solver. }
   move => n K1 K2 f fn1 fn2 vs1 vs2 h1 h2 r rf Hf1 ???? Hcall Hret.
-  move: Hf1. rewrite !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
+  move: Hf1. rewrite !lookup_insert_Some => ?; destruct!; simplify_map_eq/=.
   destruct vs1, vs2 => //.
   tstep_s. split!; [apply (heap_fresh_is_fresh ∅)|]. move => _.
   tstep_i => ??[??]. simplify_eq. split!.

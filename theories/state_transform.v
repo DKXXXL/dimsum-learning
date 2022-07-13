@@ -73,7 +73,7 @@ Lemma mod_state_transform_tstep_s {EV S} (m : module EV) (f : S → m.(m_state))
 Proof.
   constructor => G /tsteps_proof [κ [? [? HG']]]. split!; [done|] => ? /= /HG'/steps_spec_has_trace_1 Ht.
   apply steps_spec_has_trace_elim. apply: mod_state_transform_nil; [done..|].
-  move => ?? /= ??; subst. case_match; destruct_all?.
+  move => ?? /= ??; subst. case_match; destruct!.
   - apply: steps_spec_step_end; [by econs|] => /= ? [?[??]]. naive_solver.
   - apply: steps_spec_end. naive_solver.
 Qed.

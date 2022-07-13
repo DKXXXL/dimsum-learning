@@ -247,7 +247,7 @@ Proof.
          ((∃ e, σf1' = SMProgRecv e) ∨ σf1' = SMProg)). }
   { split!. } { done. }
   move => {}n _ Hloop [[σf1 [[σf1' σ1] [[σpp1' []] ?]] [[σpp1 s1] x1]]] [[σf2 σ2] [[σpp2 s2] x2]] ?.
-  destruct_all?; simplify_eq.
+  destruct!.
   - tstep_both. apply: steps_impl_step_end => κ ??. case_match => *.
     + subst. tstep_s. eexists (Some _). split!.
       apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
@@ -414,7 +414,7 @@ Section prepost.
       { split!. } { done. }
       move => {}n _ /= Hloop {Hinv}.
       move => [[[σl1 {}sr1] [[σf1 {}σ1] [[σpp1 {}s1] {}x1]]] [[σf2 {}σ2] [[σpp2 {}s2] {}x2]]].
-      move => [[σf [[[σl2 {}sr2] σ1'] σ2']] [[σpp {}s] {}x]] ?. destruct_all?; simplify_eq.
+      move => [[σf [[[σl2 {}sr2] σ1'] σ2']] [[σpp {}s] {}x]] ?. destruct!.
       - tstep_i => ? p' ?? ok1 ?.
         tstep_s. split!.
         tstep_s. apply pp_to_all_forall => ri xi Hi x' Hsat.
@@ -426,7 +426,7 @@ Section prepost.
           tstep_i => ??. simplify_eq.
           tstep_i.
           apply: pp_to_ex_mono; [clear HN2L HN2R HL2R HL2N HR2L HR2N; naive_solver|].
-          move => [[??]?] ? /= *. destruct_all?; simplify_eq. split!; [done|].
+          move => [[??]?] ? /= *. destruct!. split!; [done|].
           tstep_s.
           split!; [done..|] => /=.
           destruct ok2; [|by tstep_s].
@@ -438,7 +438,7 @@ Section prepost.
           tstep_i => ??. simplify_eq.
           tstep_i.
           apply: pp_to_ex_mono; [clear HN2L HN2R HL2R HL2N HR2L HR2N; naive_solver|].
-          move => [[??]?] ? /= *. destruct_all?; simplify_eq. split!; [done|].
+          move => [[??]?] ? /= *. destruct!. split!; [done|].
           tstep_s.
           split!; [done..|] => /=.
           destruct ok2; [|by tstep_s].
@@ -467,7 +467,7 @@ Section prepost.
           tstep_i => ??; simplify_eq.
           tstep_i.
           apply: pp_to_ex_mono; [clear HN2L HN2R HL2R HL2N HR2L HR2N; naive_solver|].
-          move => [[??]?] ? /=?. destruct_all?; simplify_eq. split!; [done|].
+          move => [[??]?] ? /=?. destruct!. split!; [done|].
           tstep_s. eexists (Some (Outgoing, _)). split!; [done|].
           destruct e; simplify_eq/=.
           apply: steps_spec_step_end; [done|] => ??.
@@ -476,14 +476,14 @@ Section prepost.
         + move: ri xi Hi x' Hsat sr1' e' Hri HR1. apply: pp_to_all_forall_2.
           apply: pp_to_all_mono; [by apply: HL2N|].
           move => [[??]?] ? /= Hcont ??????.
-          have {}Hcont := Hcont _ _ _ ltac:(done) ltac:(done) ltac:(done). destruct_all?.
+          have {}Hcont := Hcont _ _ _ ltac:(done) ltac:(done) ltac:(done). destruct!.
           destruct e; simplify_eq/=.
           destruct ok1, ok2 => //.
           tstep_s. eexists (Some (Outgoing, _)). split!; [done|].
           apply: steps_spec_step_end; [done|] => ??.
           tstep_s.
           apply: pp_to_ex_mono; [done|].
-          move => [[??]?] ? /=?. destruct_all?; simplify_eq. split!; [done|].
+          move => [[??]?] ? /=?. destruct!. split!; [done|].
           apply: Hloop; [done|]. split!. clear HN2L HN2R HL2R HL2N HR2L HR2N; naive_solver.
       - tstep_both.
         apply steps_impl_step_end => κ Pσ2 ?. case_match; intros; simplify_eq.
@@ -510,7 +510,7 @@ Section prepost.
           tstep_i => ??; simplify_eq.
           tstep_i.
           apply: pp_to_ex_mono; [clear HN2L HN2R HL2R HL2N HR2L HR2N; naive_solver|].
-          move => [[??]?] ? /=?. destruct_all?; simplify_eq. split!; [done|].
+          move => [[??]?] ? /=?. destruct!. split!; [done|].
           tstep_s. eexists (Some (Outgoing, _)). split!; [done|].
           destruct e; simplify_eq/=.
           apply: steps_spec_step_end; [done|] => ??.
@@ -519,14 +519,14 @@ Section prepost.
         + move: ri xi Hi x' Hsat sr1' e' Hri HR1. apply: pp_to_all_forall_2.
           apply: pp_to_all_mono; [by apply: HR2N|].
           move => [[??]?] ? /= Hcont ??????.
-          have {}Hcont := Hcont _ _ _ ltac:(done) ltac:(done) ltac:(done). destruct_all?.
+          have {}Hcont := Hcont _ _ _ ltac:(done) ltac:(done) ltac:(done). destruct!.
           destruct e; simplify_eq/=.
           destruct ok1, ok2 => //.
           tstep_s. eexists (Some (Outgoing, _)). split!; [done|].
           apply: steps_spec_step_end; [done|] => ??.
           tstep_s.
           apply: pp_to_ex_mono; [done|].
-          move => [[??]?] ? /= ?. destruct_all?; simplify_eq. split!; [done|].
+          move => [[??]?] ? /= ?. destruct!. split!; [done|].
           apply: Hloop; [done|]. split!. clear HN2L HN2R HL2R HL2N HR2L HR2N; naive_solver.
     Qed.
 
@@ -583,7 +583,7 @@ Section prepost.
       { split!. } { done. }
       move => {}n _ /= Hloop {Hinv}.
       move => [[σf1 [[σf2 σ1] [[σpp2 {}s2] {}x2]]] [[σpp1 {}s1] {}x1]].
-      move => [[σf {}σ] [[σpp {}s] {}x]] ?. destruct_all?; simplify_eq.
+      move => [[σf {}σ] [[σpp {}s] {}x]] ?. destruct!.
       - tstep_i => ?.
         tstep_s. split!.
         tstep_s. apply: pp_to_all_mono; [by apply: Henv|]. move => r y /= ???.
@@ -661,11 +661,11 @@ Section prepost.
       { split!. } { done. }
       move => {}n _ /= Hloop {Hinv}.
       move => [[σfi σi] [[σppi {}si] {}xi]].
-      move => [[σfs {}σs] [[σpps {}ss] {}xs]] ?. destruct_all?; simplify_eq.
+      move => [[σfs {}σs] [[σpps {}ss] {}xs]] ?. destruct!.
       - tstep_i => ?.
         tstep_s. split!.
         tstep_s. apply: pp_to_all_mono; [by apply: Henv|]. move => r y /= ???.
-        tstep_i. apply: pp_to_ex_mono; [naive_solver|]. move => r1 y1 /= [?[??]]. split!; [done|]. destruct_all?.
+        tstep_i. apply: pp_to_ex_mono; [naive_solver|]. move => r1 y1 /= [?[??]]. split!; [done|]. destruct!.
         apply: Hloop; [done|]. split!. by f_equal.
       - tstep_both.
         apply steps_impl_step_end => κ Pσ2 ? *. destruct κ as [e'|]. 2: {

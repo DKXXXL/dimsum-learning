@@ -169,7 +169,7 @@ Section compiler_monad.
     rewrite /crun/mbind/cbind/=.
     destruct (x s1) as [xs ? ?].
     repeat case_match; simplify_eq/= => //. 2: naive_solver.
-    split => ?; destruct_all?; simplify_eq.
+    split => ?; destruct!.
     + destruct (f res xs) eqn: Heq. naive_solver.
     + revert select (f _ _ = _) => -> /=. done.
   Qed.

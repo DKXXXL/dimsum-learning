@@ -1023,13 +1023,13 @@ Proof.
   destruct ImpExprFill0; subst. destruct r.
   elim: vars ls s s' p h' rs vm. {
     unfold initialize_locals.
-    move => ls s s' p h' rs vm /= ????. iIntros "? Hcont". destruct_all?. simplify_crun_eq.
+    move => ls s s' p h' rs vm /= ????. iIntros "? Hcont". destruct!. simplify_crun_eq.
     iApply "Hcont"; try iPureIntro; try done.
     - destruct s. rewrite /set/=. f_equal. lia.
     - by rewrite left_id_L.
   }
   move => [v sz] vars IH ls s s' p h' rs vm; csimpl.
-  unfold initialize_locals => ? /NoDup_cons[??] ? /Forall_cons[??]. destruct_all?. simplify_crun_eq.
+  unfold initialize_locals => ? /NoDup_cons[??] ? /Forall_cons[??]. destruct!. simplify_crun_eq.
   iIntros "Hinv Hcont". rewrite -!app_assoc /=.
   iApply sim_get_sp. iIntros (Hsp). simplify_eq/=. case_match; [|done].
   iApply alloc_stack_correct; [done|lia|].
@@ -1263,7 +1263,7 @@ Proof.
     rewrite -subst_subst_map_delete.
     by iApply ("IH" with "[//] Hp").
   - iApply (translate_lexpr_op_correct with "Hp"); [typeclasses eauto with tstep|done..|eauto using suffix_app_r|].
-    iIntros (??????) "Hv Hp" => /=. repeat (destruct_all?; simplify_crun_eq).
+    iIntros (??????) "Hv Hp" => /=. repeat (destruct!; simplify_crun_eq).
     rewrite -?app_assoc.
 
     destruct_all unit.
@@ -1387,7 +1387,7 @@ Proof.
   apply imp_to_asm_proof; [done|set_solver|].
   move => n i rs mem K f' fn' vs h cs pc ret gp rf rc lr Hpc Hins Hf ? Hsat Hargs Hlen Hlr Hcall Hret.
   move: Hf. rewrite {1}fmap_insert {1}fmap_empty lookup_insert_Some lookup_empty => ?.
-   unfold i2a_regs_call in *. destruct_all?; simplify_map_eq'.
+   unfold i2a_regs_call in *. destruct!; simplify_map_eq'.
 
   apply: (sim_intro (initial_state f2i)).
   1: by simplify_map_eq'. 1: done. 1: set_solver. 1: done. {
@@ -1528,9 +1528,9 @@ Proof.
       apply list_eq => {}i. apply option_eq => ?.
       rewrite 2!list_lookup_fmap !fmap_Some.
       setoid_rewrite lookup_zip_with_Some.
-      split => ?; destruct_all?; simplify_eq.
+      split => ?; destruct!.
       * split!. by rewrite seqZ_length.
-      * efeed pose proof @Forall2_lookup_r; [done..|]. destruct_all?.
+      * efeed pose proof @Forall2_lookup_r; [done..|]. destruct!.
         split!. by rewrite seqZ_length.
     + iFrame.
   - unfold i2a_regs_ret. simplify_map_eq'. split!.

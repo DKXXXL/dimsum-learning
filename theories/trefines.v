@@ -579,7 +579,7 @@ Proof.
     move => ?. apply: under_tall_mono; [done..|].
     move => ?? Hκ [[??]|?]; [left|right].
     + split; [|done]. by rewrite -Hκ.
-    + destruct_all?. eexists _, _, _, _. split_and! => //. { by etrans. }
+    + destruct!. eexists _, _, _, _. split_and! => //. { by etrans. }
       etrans; [done|]. etrans; [|done]. by econs.
 Qed.
 
@@ -634,7 +634,7 @@ Definition steps_spec_rec {EV} (m : module EV) (κ : option EV) (Pσ : m.(m_stat
           (if κ' is Some _ then κ = κ' else True) ∧ (∀ σ', Pσ' σ' → (κ = κ' ∧ Pσ σ') ∨ κ' = None ∧ R σ').
 
 Global Instance steps_spec_rec_mono {EV} (m : module EV) κ Pσ: MonoPred (steps_spec_rec m κ Pσ).
-Proof. constructor => ??? x [?|?]; destruct_all!; simplify_eq. { by left. } right. naive_solver. Qed.
+Proof. constructor => ??? x [?|?]; destruct!; simplify_eq. { by left. } right. naive_solver. Qed.
 
 Definition steps_spec {EV} (m : module EV) (σ : m.(m_state)) (κ : option EV) (Pσ : m.(m_state) → Prop) :=
   prop_least_fixpoint (steps_spec_rec m κ Pσ) σ.
@@ -753,7 +753,7 @@ Definition steps_impl_rec {EV} (m : module EV) (R : (m.(m_state) * (bool → opt
                 Pσ true κ Pσ2 ∨ ∃ σ2, Pσ2 σ2 ∧ κ = None ∧ R (σ2, (λ _, Pσ true))).
 
 Global Instance steps_impl_rec_mono {EV} (m : module EV): MonoPred (steps_impl_rec m).
-Proof. constructor => ??? [??] [?|?]; destruct_all?; simplify_eq. { by left. } right. naive_solver. Qed.
+Proof. constructor => ??? [??] [?|?]; destruct!. { by left. } right. naive_solver. Qed.
 
 Definition steps_impl {EV} (m : module EV) (σ : m.(m_state)) (Pσ : bool → option EV → (m.(m_state) → Prop) → Prop) :=
   prop_least_fixpoint (steps_impl_rec m) (σ, Pσ).
@@ -821,13 +821,13 @@ Proof.
   { econs. naive_solver. }
   apply tnhas_trace_inv in Hs.
   apply under_tall_idemp. apply: under_tall_mono'; [done|].
-  move => ?[?|?]; destruct_all!. { econs. by left. }
-  have [?|[?[?[? {}IH]]]] := IH _ _ ltac:(done); destruct_all?; simplify_eq/=.
+  move => ?[?|?]; destruct!. { econs. by left. }
+  have [?|[?[?[? {}IH]]]] := IH _ _ ltac:(done); destruct!/=.
   + econs. right. eexists _, _, _, _, _. split_and!; [done|simpl;done|done|] => /=.
     move => ??. apply: tnhas_trace_mono; [naive_solver|done|by econs|done].
   + rename select (κs' ⊆ _) into Hκs.
     apply: under_tall_mono'. { apply IH. rewrite -Hκs. naive_solver. }
-    move => /= κs'' [?|?]; destruct_all?. { by left. } right.
+    move => /= κs'' [?|?]; destruct!. { by left. } right.
     eexists _, _, _, _, _. split_and!; [done|done| |done] => /=.
     etrans; [|done]. econs. econs. etrans; [|done]. apply ti_le_S_maybe.
     Unshelve. all: done.
@@ -842,7 +842,7 @@ Lemma steps_impl_elim {EV} (m : module EV) κs Pσ σ:
   ).
 Proof.
   move => ? /thas_trace_n[??]. apply: under_tall_mono'; [ by apply: steps_impl_elim_n|].
-  move => ? [?|?]. { by left. } right. destruct_all!. eexists _, _, _, _. split_and!; [done..|] => ??.
+  move => ? [?|?]. { by left. } right. destruct!. eexists _, _, _, _. split_and!; [done..|] => ??.
   apply thas_trace_n. naive_solver.
 Qed.
 
@@ -860,7 +860,7 @@ Proof.
   - apply steps_impl_end. by apply: Hend.
   - apply steps_impl_step => ?? /Hstep[?[? [/IH[?|/=?] [??]]]]; clear IH.
     + naive_solver.
-    + right. destruct_all!; simplify_eq. eexists (f _). split_and!; [naive_solver..|].
+    + right. destruct!; simplify_eq. eexists (f _). split_and!; [naive_solver..|].
       apply H2; first naive_solver. done.
 Qed.
 
@@ -874,15 +874,15 @@ Tactic Notation "thas_trace_inv" ident(H) :=
   end;
   lazymatch goal with
   | |- under_tall _ _ =>
-      apply (under_tall_mono' _ _ _ H) => {H} ? [H|H]; destruct_all?
+      apply (under_tall_mono' _ _ _ H) => {H} ? [H|H]; destruct!
   | |- _ ~{ _, _ }~>ₜ _ =>
-      apply (thas_trace_under_tall _ _ _ _ _ _ H); [done|] => {H} ? [H|H]; destruct_all?
+      apply (thas_trace_under_tall _ _ _ _ _ _ H); [done|] => {H} ? [H|H]; destruct!
   | |- _ ~{ _, _, _ }~>ₜ _ =>
-      apply (tnhas_trace_under_tall _ _ _ _ _ _ _ H); [done|] => {H} ? [H|H]; destruct_all?
+      apply (tnhas_trace_under_tall _ _ _ _ _ _ _ H); [done|] => {H} ? [H|H]; destruct!
   | |- _ ⊆@{trace _} _ =>
-      apply (subtrace_under_tall _ _ _ H) => {H} ? [H|H]; destruct_all?
+      apply (subtrace_under_tall _ _ _ H) => {H} ? [H|H]; destruct!
   | |- subtrace _ _ =>
-      apply (subtrace_under_tall _ _ _ H) => {H} ? [H|H]; destruct_all?
+      apply (subtrace_under_tall _ _ _ H) => {H} ? [H|H]; destruct!
   end
 .
 Tactic Notation "thas_trace_inv" :=

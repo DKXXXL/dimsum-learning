@@ -59,7 +59,7 @@ Proof.
     σa.(asm_cur_instr) = AWaiting ∧
     σa.(asm_instrs) = print_asm). }
   { split!. } { done. }
-  move => n _ Hloop [????] [??] ?. destruct_all?; simplify_eq/=.
+  move => n _ Hloop [????] [??] ?. destruct!/=.
   tstep_i => ????? Hi. tstep_s. rewrite -/print_itree. go.
   go_s. eexists (_, _). go.
   go_s. split!. go.

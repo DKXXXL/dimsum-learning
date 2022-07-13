@@ -329,11 +329,11 @@ Lemma mod_seq_product_step_l_s {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1
     ∃ s', (if κ is None then s' = SPLeft else True) ∧ G ((λ e, SPELeft e s') <$> κ) (λ G',
        P' (λ σ, G' (s', σ, σ2))))).
 Proof.
-  constructor => G /tsteps_proof[?[?[? HG']]]. destruct_all!.
+  constructor => G /tsteps_proof[?[?[? HG']]]. destruct!.
   eexists _, _. split; [done|] => ?/= /HG' /steps_spec_has_trace_1 Ht.
   apply steps_spec_has_trace_elim.
   apply: thas_trace_mono; [ by apply: seq_product_nil_l |done|] => /= [[[??]?]?].
-  case_match; destruct_all?; simplify_eq/=. 2: apply steps_spec_end; naive_solver.
+  case_match; destruct!/=. 2: apply steps_spec_end; naive_solver.
   apply: steps_spec_step_end. { by eapply (SPLeftS _ _ (Some _)). }
   move => [[??]?]? /=. naive_solver.
 Qed.
@@ -344,11 +344,11 @@ Lemma mod_seq_product_step_r_s {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1
     ∃ s', (if κ is None then s' = SPRight else True) ∧ G ((λ e, SPERight e s') <$> κ) (λ G',
        P' (λ σ, G' (s', σ1, σ))))).
 Proof.
-  constructor => G /tsteps_proof[?[?[? HG']]]. destruct_all!.
+  constructor => G /tsteps_proof[?[?[? HG']]]. destruct!.
   eexists _, _. split; [done|] => ?/= /HG' /steps_spec_has_trace_1 Ht.
   apply steps_spec_has_trace_elim.
   apply: thas_trace_mono; [ by apply: seq_product_nil_r |done|] => /= [[[??]?]?].
-  case_match; destruct_all?; simplify_eq/=. 2: apply steps_spec_end; naive_solver.
+  case_match; destruct!/=. 2: apply steps_spec_end; naive_solver.
   apply: steps_spec_step_end. { by eapply (SPRightS _ _ (Some _)). }
   move => [[??]?]? /=. naive_solver.
 Qed.
@@ -403,7 +403,7 @@ Global Instance mod_seq_map_vis_no_all {EV1 EV2} (m : module EV1) (f : module (s
 Proof.
   apply: mod_state_transform_vis_no_all.
   move => ??? [[[sp σ1]σf][σ ?]] ??. eexists (σ, σ1, σf) => -[[??]?].
-  inv_all @m_step; inv_all @mod_seq_map_filter; destruct_all?; simplify_eq.
+  inv_all @m_step; inv_all @mod_seq_map_filter; destruct!.
   all: repeat case_match => //; simplify_eq/=.
   naive_solver.
 Qed.
@@ -416,7 +416,7 @@ Proof.
   apply: mod_state_transform_trefines; [| | |done..].
   - move => [[??]?] [[[??]?]?] [[[??]?]?]. unfold mod_seq_map_trans. naive_solver.
   - unfold mod_seq_map_trans. move => [[??]?] [[[??]?]?] [[[??]?]?] ?????; simplify_eq.
-    inv_all @m_step; inv_all @mod_seq_map_filter; destruct_all?; simplify_eq.
+    inv_all @m_step; inv_all @mod_seq_map_filter; destruct!.
     all: eexists (_, _, _); do 3 f_equal;repeat case_match => //; by simplify_eq/=.
   - apply mod_map_trefines. by apply mod_seq_product_trefines.
 Qed.
@@ -478,10 +478,10 @@ Proof.
   - naive_solver.
   - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
     + case_match; simplify_eq. eexists _, _. split_and!;[done| |naive_solver] => /= ?.
-      destruct_all?. eexists _, _. split_and!;[done..|]. move => ? /H3[?[??]].
+      destruct!. eexists _, _. split_and!;[done..|]. move => ? /H3[?[??]].
       eexists (_, _, _). split!; [|done] => /=. done.
     + case_match; simplify_eq. eexists _, _. split_and!;[done| |naive_solver] => /= ?.
-      inv_all @mod_seq_map_filter. destruct_all?. eexists _, _. split_and!;[naive_solver..|].
+      inv_all @mod_seq_map_filter. destruct!. eexists _, _. split_and!;[naive_solver..|].
       move => ? /H2[?[??]]. eexists (_, _, _). split!; [|done] => /=. done.
 Qed.
 Global Hint Resolve mod_seq_map_step_filter_recv_i | 4 : tstep.
@@ -496,10 +496,10 @@ Proof.
   - naive_solver.
   - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
     + case_match; simplify_eq. eexists _, _. split_and!;[done| |naive_solver] => /= ?.
-      destruct_all?. eexists _, _. split_and!;[done..|]. move => ? /H3[?[??]].
+      destruct!. eexists _, _. split_and!;[done..|]. move => ? /H3[?[??]].
       eexists (_, _, _). split!; [|done] => /=. done.
     + case_match; simplify_eq. eexists _, _. split_and!;[done| |naive_solver] => /= ?.
-      inv_all @mod_seq_map_filter. destruct_all?. eexists _, _. split_and!;[naive_solver..|].
+      inv_all @mod_seq_map_filter. destruct!. eexists _, _. split_and!;[naive_solver..|].
       move => ? /H2[?[??]]. eexists (_, _, _). split!; [|done] => /=. done.
 Qed.
 Global Hint Resolve mod_seq_map_step_prog_i | 4 : tstep.
@@ -514,10 +514,10 @@ Proof.
   - naive_solver.
   - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
     + case_match; simplify_eq. eexists _, _. split_and!;[done| |naive_solver] => /= ?.
-      destruct_all?. eexists _, _. split_and!;[done..|]. move => ? /H3[?[??]].
+      destruct!. eexists _, _. split_and!;[done..|]. move => ? /H3[?[??]].
       eexists (_, _, _). split!; [|done] => /=. done.
     + case_match; simplify_eq. eexists _, _. split_and!;[done| |naive_solver] => /= ?.
-      inv_all @mod_seq_map_filter. destruct_all?. eexists _, _. split_and!;[naive_solver..|].
+      inv_all @mod_seq_map_filter. destruct!. eexists _, _. split_and!;[naive_solver..|].
       move => ? /H2[?[??]]. eexists (_, _, _). split!; [|done] => /=. done.
 Qed.
 Global Hint Resolve mod_seq_map_step_prog_recv_i | 4 : tstep.
@@ -549,7 +549,7 @@ Lemma mod_seq_map_step_filter_recv_s {EV1 EV2} m (f : module (sm_event EV1 EV2))
 Proof.
   constructor => G /tsteps_proof [κ [? [? HG']]]. eexists _, _. split; [done|].
   move => ? /=?. clear TStepS0. tstep_s. eexists κ, _. split; [by case_match|].
-  case_match; destruct_all?; simplify_eq; eexists _, _, _ => /=.
+  case_match; destruct!; eexists _, _, _ => /=.
   - split_and!; [econs|done|].
     apply: steps_spec_mono; [naive_solver|] => /= ? ? [[[|||]]]/=; naive_solver.
   - split_and!; [done..|].
@@ -579,7 +579,7 @@ Lemma mod_seq_map_step_prog_recv_s {EV1 EV2} m (f : module (sm_event EV1 EV2)) �
 Proof.
   constructor => G /tsteps_proof [κ [? [? HG']]]. eexists _, _. split; [done|].
   move => ? /=?. clear TStepS0. tstep_s. eexists κ, _. split; [by case_match|].
-  case_match; destruct_all?; simplify_eq; eexists _, _, _ => /=.
+  case_match; destruct!; eexists _, _, _ => /=.
   - split_and!; [econs|done|].
     apply: steps_spec_mono; [naive_solver|] => /= ? ? [[[|||]]]/=; naive_solver.
   - split_and!; [done..|].

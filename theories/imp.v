@@ -537,7 +537,7 @@ Lemma heap_update_big_update h l v m:
 Proof.
   apply heap_state_eq => /=. split!. apply map_eq => i. apply option_eq => v'. rewrite !map_lookup_imap.
   rewrite !bind_Some. setoid_rewrite lookup_alter_Some.
-  split => ?; destruct_all?; simplify_eq.
+  split => ?; destruct!.
   - split!. destruct (m !! i) eqn:?.
     + by erewrite lookup_union_Some_l.
     + rewrite lookup_union_r //=. by simplify_map_eq.
@@ -1250,8 +1250,8 @@ Lemma imp_step_Waiting_s fns h e K b `{!ImpExprFill e K (Waiting b)}:
    ).
 Proof.
   destruct ImpExprFill0; subst.
-  constructor => ? HG. destruct_all!; (split!; [done|]) => /= ??. 2: destruct b => //.
-  all: apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?; destruct_all?; simplify_eq; done.
+  constructor => ? HG. destruct!; (split!; [done|]) => /= ??. 2: destruct b => //.
+  all: apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?; destruct!; done.
 Qed.
 Global Hint Resolve imp_step_Waiting_s : tstep.
 
@@ -1274,7 +1274,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
-  destruct_all?; simplify_eq. done.
+  destruct!. done.
 Qed.
 Global Hint Resolve imp_step_ReturnExt_s : tstep.
 
@@ -1304,9 +1304,9 @@ Lemma imp_step_Call_s fns h e K f vs `{!ImpExprFill e K (imp.Call f es)} `{!AsVa
            G' (Imp (expr_fill K (Waiting true)) h fns)))).
 Proof.
   destruct AsVals0, ImpExprFill0; subst.
-  constructor => ? HG. destruct_all?; (split!; [done|]); move => /= ??.
+  constructor => ? HG. destruct!; (split!; [done|]); move => /= ??.
   all: apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
-  all: destruct_all?; simplify_eq; naive_solver.
+  all: destruct!; naive_solver.
 Qed.
 Global Hint Resolve imp_step_Call_s : tstep.
 
@@ -1329,7 +1329,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
-  destruct_all?; simplify_eq. naive_solver.
+  destruct!. naive_solver.
 Qed.
 Global Hint Resolve imp_step_Binop_s | 10 : tstep.
 
@@ -1390,7 +1390,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
-  destruct_all?; simplify_eq. naive_solver.
+  destruct!. naive_solver.
 Qed.
 Global Hint Resolve imp_step_Load_s : tstep.
 
@@ -1414,7 +1414,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
-  destruct_all?; simplify_eq. naive_solver.
+  destruct!. naive_solver.
 Qed.
 Global Hint Resolve imp_step_Store_s : tstep.
 
@@ -1439,7 +1439,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ?[?[?[??]]].
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
-  destruct_all?; simplify_eq. naive_solver.
+  destruct!. naive_solver.
 Qed.
 Global Hint Resolve imp_step_Alloc_s : tstep.
 
@@ -1462,7 +1462,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
-  destruct_all?; simplify_eq. naive_solver.
+  destruct!. naive_solver.
 Qed.
 Global Hint Resolve imp_step_FreeA_s : tstep.
 
@@ -1485,7 +1485,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
-  destruct_all?; simplify_eq. naive_solver.
+  destruct!. naive_solver.
 Qed.
 Global Hint Resolve imp_step_LetE_s : tstep.
 
@@ -1508,7 +1508,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
-  destruct_all?; simplify_eq. destruct v => //. naive_solver.
+  destruct!. destruct v => //. naive_solver.
 Qed.
 Global Hint Resolve imp_step_If_s | 10 : tstep.
 
@@ -1571,9 +1571,9 @@ Proof.
          Imp (expr_fill K2 (Val v')) h' fns2
 
   ). } { eexists [], []. split!. }
-  { move => /= ?? [???] [???] *. destruct_all?. split!; [done..|].
+  { move => /= ?? [???] [???] *. destruct!. split!; [done..|].
     move => ???. apply: tsim_mono; [naive_solver|done]. }
-  move => /= n1 ? IH [???] [???] ?. destruct_all?. simplify_eq.
+  move => /= n1 ? IH [???] [???] ?. destruct!.
   tstep_both. split!.
   2: { move => *. tstep_s. right. split!; [done|]. tend. apply: tsim_mono_b. naive_solver. }
   move => f fn1 vs h ?.
@@ -1601,9 +1601,9 @@ Proof.
   { eexists (ReturnExtCtx _ :: _), (ReturnExtCtx _ :: _). split!; [try done; congruence..|].
     move => ??. tstep_both. tstep_s. split!; [done|]. tend.
     apply IH; [done|]. by split!. }
-  { move => /= ?? [???] [???] *. destruct_all?. split!; [done..|].
+  { move => /= ?? [???] [???] *. destruct!. split!; [done..|].
     move => ??. apply: tsim_mono; [naive_solver|]. by apply ti_lt_impl_le. }
-  move => n2 ? IH2 [???] [???] ?. destruct_all?; simplify_eq.
+  move => n2 ? IH2 [???] [???] ?. destruct!.
   efeed pose proof Hc as Hp; [done|]. move: Hp => [?[?[? Hp]]]. simplify_eq.
   eapply Hp; [lia|..].
   - move => n' f' ?? ?? es1 es2 vs1' vs2' ??? [?][?] ? Hall1 Hall2 ???.
@@ -1702,10 +1702,10 @@ Proof.
       pp2 = PPRecv1 (Incoming, EIReturn v hi2) ∧
       s2 = s1 ∧
       r2 = r1). }
-  { move => ??? *. destruct_all?. repeat case_match; naive_solver. }
-  { move => /= *. destruct_all?. repeat case_match. naive_solver. }
+  { move => ??? *. destruct!. repeat case_match; naive_solver. }
+  { move => /= *. destruct!. repeat case_match. naive_solver. }
   { move => /=. eexists [], []. split!. }
-  move => /= n [ei hi fnsi] [[ips [es hs fnss]] [[pp {}s] r]] d ? ? Hstay Hcall Hret. destruct_all!; simplify_eq.
+  move => /= n [ei hi fnsi] [[ips [es hs fnss]] [[pp {}s] r]] d ? ? Hstay Hcall Hret. destruct!.
   tstep_i. split => *.
   - tstep_s. split!.
     tstep_s. apply: pp_to_all_mono. { by eapply (Hc n (ReturnExtCtx _ :: Ki) (ReturnExtCtx _ :: Ks)). }
@@ -1722,12 +1722,12 @@ Proof.
       apply Hcall; [done| |]. { split!; [done..|]. by etrans. }
       move => [ei2 hi2 fnsi2] [[ips2 [es2 hs2 fnss2]] [[pp2 {}s2] r2]].
       move => [ei3 hi3 fnsi3] [[ips3 [es3 hs3 fnss3]] [[pp3 {}s3] r3]] ??.
-      destruct_all?; simplify_eq.
+      destruct!.
       tstep_s. apply: pp_to_all_mono; [naive_solver|].
-      move => [??] ? Hsim ??. move: Hsim => /(_ _ ltac:(done))?. destruct_all?. simplify_eq/=.
+      move => [??] ? Hsim ??. move: Hsim => /(_ _ ltac:(done))?. destruct!/=.
       tstep_s. right. split!.
       repeat match goal with | H : expr_fill _ _ = expr_fill _ _ |- _ => apply expr_fill_Waiting_inj in H end.
-      destruct_all?; simplify_eq. done.
+      destruct!. done.
     + move => *. tstep_s. tstep_i. rewrite orb_true_r. tstep_s. apply: pp_to_ex_mono; [done|].
       move => [??] ? [?[?[??]]] /=. subst. split!; [done|]. apply: tsim_mono; [|done].
       apply: Hstay; [done|]. split!; [done..|]. naive_solver.
@@ -1909,7 +1909,7 @@ Proof.
     move => [m [K [Kl [Kr [e1' [el' [er' [bl [br [?[?[?[HK[?[?[? Hm]]]]]]]]]]]]]]]]; simplify_eq.
     elim/lt_wf_ind: m ipfs h1 hl hr cs K Kl Kr e1' el' er' bl br HK Hm => m IHm.
     move => ipfs h1 hl hr cs K Kl Kr e1' el' er' bl br HK Hmatch.
-    case_match; destruct_all?; simplify_eq/=.
+    case_match; destruct!/=.
     - destruct (to_val el') eqn:?; [ |apply: Hloop; naive_solver].
       destruct el'; simplify_eq/=.
       inversion HK; clear HK; simplify_eq/=.
@@ -1927,7 +1927,7 @@ Proof.
         rewrite !expr_fill_app. apply: IHm; [|done|]; [lia|]. split!. by apply is_static_expr_expr_fill.
     - apply: Hloop; naive_solver.
   }
-  destruct_all?; simplify_eq/=. case_match; destruct_all?; simplify_eq.
+  destruct!/=. case_match; destruct!.
   - tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]].
     simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
     rewrite -expr_fill_app.
@@ -2028,21 +2028,21 @@ Proof.
   unshelve apply: tsim_remember. { exact: (λ _, flip (imp_link_prod_inv false fns1 fns2)). }
   { split!. 1: by econs. all: done. } { done. }
   move => /= {}n _ Hloop [[[ipfs cs] [el hl fnsl]] [er hr fnsr]] [e1 h1 fns1'] [m [K [Kl [Kr ?]]]].
-  destruct_all?; simplify_eq/=. case_match; destruct_all?; simplify_eq.
+  destruct!/=. case_match; destruct!.
   - destruct (to_val el') eqn:?.
     + destruct el'; simplify_eq/=.
       revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _ _) => HK.
       inversion HK; clear HK; simplify_eq/=.
-      * tstep_i => *; destruct_all?; simplify_eq. tstep_s. split!.
+      * tstep_i => *; destruct!. tstep_s. split!.
         apply: Hloop; [done|]. by split!.
-      * tstep_i => *; destruct_all?; simplify_eq/=.
+      * tstep_i => *; destruct!/=.
         tstep_i; split => *; simplify_eq.
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..|].
         by apply is_static_expr_expr_fill.
     + tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]] *.
       simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
       rewrite -expr_fill_app.
-      inv_all/= head_step => //; destruct_all?; simplify_eq.
+      inv_all/= head_step => //; destruct!.
       * tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.
@@ -2068,25 +2068,24 @@ Proof.
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..|].
         apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l.
         apply is_static_expr_mono. apply fd_static.
-      * move => *. destruct_all?; simplify_eq/=. repeat case_bool_decide => //.
+      * move => *. destruct!/=. repeat case_bool_decide => //.
         -- tend. split!. tstep_i. split => *; simplify_eq.
            apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_forallb.
         -- tstep_s. right. split!; [apply lookup_union_None;split!;by apply not_elem_of_dom| done|].
            tend. split!. apply: Hloop; [done|]. split!; [by econs|done..].
   - destruct (to_val er') eqn:?.
     + destruct er'; simplify_eq/=.
-      revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _ _) => HK.
-      inversion HK; clear HK; simplify_eq/=.
-      * tstep_i => *; destruct_all?; simplify_eq. tstep_s. split!.
+      revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _ _) => HK. inv/= HK.
+      * tstep_i => *; destruct!. tstep_s. split!.
         apply: Hloop; [done|]. by split!.
-      * tstep_i => *; destruct_all?; simplify_eq/=.
+      * tstep_i => *; destruct!/=.
         tstep_i; split => *; simplify_eq.
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..|].
         by apply is_static_expr_expr_fill.
     + tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]] *.
       simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
       rewrite -expr_fill_app.
-      inv_all/= head_step => //; destruct_all?; simplify_eq.
+      inv_all/= head_step => //; destruct!.
       * tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.
@@ -2112,27 +2111,27 @@ Proof.
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..|].
         apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l.
         apply is_static_expr_mono. apply fd_static.
-      * move => *. destruct_all?; simplify_eq/=. repeat case_bool_decide => //.
+      * move => *. destruct!/=. repeat case_bool_decide => //.
         -- tend. split!. tstep_i. split => *; simplify_eq.
            apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_forallb.
         -- tstep_s. right. split!; [apply lookup_union_None;split!;by apply not_elem_of_dom|done|].
            tend. split!. apply: Hloop; [done|]. split!; [by econs|rewrite ?orb_true_r; done..].
   - tstep_i => *.
-    repeat match goal with | x : imp_ev |- _ => destruct x end; simplify_eq/=; destruct_all?; simplify_eq/=.
+    repeat match goal with | x : imp_ev |- _ => destruct x end; simplify_eq/=; destruct!/=.
     + tstep_s. left. repeat case_bool_decide => //.
       all: revert select (_ ∈ dom _ _) => /elem_of_dom[??]; split!;
                [rewrite lookup_union_Some //; naive_solver |].
-      * tstep_i. split => *; destruct_all?; simplify_eq/=.
+      * tstep_i. split => *; destruct!/=.
         apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_forallb.
-      * tstep_i. split => *; destruct_all?; simplify_eq/=.
+      * tstep_i. split => *; destruct!/=.
         apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_forallb.
     + tstep_s. right.
       revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _ _) => HK.
       inversion HK; clear HK; simplify_eq; rewrite ?orb_true_r.
-      * split!. tstep_i. split => *; destruct_all?; simplify_eq/=.
+      * split!. tstep_i. split => *; destruct!/=.
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done|done..|].
         by apply is_static_expr_expr_fill.
-      * split!. tstep_i. split => *; destruct_all?; simplify_eq/=.
+      * split!. tstep_i. split => *; destruct!/=.
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done|done..|].
         by apply is_static_expr_expr_fill.
 Qed.
@@ -2199,10 +2198,10 @@ Proof.
   apply tsim_implies_trefines => n /=.
   unshelve apply: tsim_remember. { exact: (λ _, imp_prod_assoc_inv fns1 fns2 fns3 m1 m2 m3). }
   { eexists IPANone. split!. } { done. }
-  move => ?? IH [[[??]?][[[??]?]?]] [[[??][[[??]?]?]]?] /= ?. destruct_all?; simplify_eq.
+  move => ?? IH [[[??]?][[[??]?]?]] [[[??][[[??]?]?]]?] /= ?. destruct!.
   (* revert select (imp_prod_assoc_stack _ _ _ _ _ _ _ _ _ _ _) => Hstack. inversion Hstack; simplify_eq. *)
-  case_match; destruct_all?; simplify_eq.
-  tstep_i => *. case_match; destruct_all?; simplify_eq.
+  case_match; destruct!.
+  tstep_i => *. case_match; destruct!.
   tstep_s. split!; [repeat case_bool_decide; set_solver|].
   case_bool_decide => /=.
   - rewrite bool_decide_true; [|set_solver].

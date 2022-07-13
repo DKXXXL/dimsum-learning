@@ -217,7 +217,7 @@ Proof.
     setoid_rewrite list_lookup_fmap.
     setoid_rewrite fmap_Some.
     setoid_rewrite list_lookup_imap_Some.
-    move => ?. destruct_all?; simplify_eq.
+    move => ?. destruct!.
     + split!; left; split! => //.
       * move => j' ???.
         have ?:= lookup_lt_Some vs j _ ltac:(done).
@@ -225,15 +225,15 @@ Proof.
         naive_solver.
       * naive_solver.
     + split!; right; split! => //.
-      * contradict H. destruct_all?; simplify_eq/=.
+      * contradict H. destruct!/=.
         have ?:= lookup_lt_Some (sfd_args fn) _ _ ltac:(done).
         have [|??]:= lookup_lt_is_Some_2 vs i; [lia|]. by split!.
       * move => j' ???.
         have ?:= lookup_lt_Some ls j _ ltac:(done).
         have [|??]:= lookup_lt_is_Some_2 ls j'; [lia|].
-        destruct_all?; simplify_eq/=.
+        destruct!/=.
         apply: H2; [|done]. split!.
-      * move => ?. destruct_all?; simplify_eq/=.
+      * move => ?. destruct!/=.
         have ?:= lookup_lt_Some (sfd_args fn) _ _ ltac:(done). lia.
       * naive_solver lia.
   - move => ???. apply lookup_union_None. split; apply not_elem_of_list_to_map_1.

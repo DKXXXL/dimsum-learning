@@ -69,7 +69,7 @@ Proof.
     pp = PPOutside ∧
     (P ⊢ [∗ map] p↦z∈ps, i2a_heap_shared p z)). }
   { split!. iIntros!. by rewrite big_sepM_empty. } { done. }
-  move => n _ Hloop [????] [[?[? ps]][[??]?]] ?. destruct_all?; simplify_eq/=.
+  move => n _ Hloop [????] [[?[? ps]][[??]?]] ?. destruct!/=.
   tstep_i => ????? Hi. tstep_s. split!.
   tstep_i => ??. simplify_map_eq'.
   tstep_s => *. case_match => /= *. 2: congruence.
@@ -143,7 +143,7 @@ Proof.
     eqit eq true false t1 locle_itree_strong ∧
     t2 ≈ locle_itree). }
   { split!. } { done. }
-  move => n _ Hloop [??] [??] ?. destruct_all?. simplify_eq/=.
+  move => n _ Hloop [??] [??] ?. destruct!/=.
   go_i. go_s. fold locle_itree_strong in *. fold locle_itree in *.
   go_i => -[[??]?]. go.
   go_i.
@@ -343,7 +343,7 @@ Proof.
       move => ?. apply: tsim_mono; [done|]. etrans; [|done]. apply ti_le_S.
     }
     apply map_eq => i. apply option_eq => v'. rewrite !lookup_kmap_Some.
-    setoid_rewrite lookup_map_seqZ_Some. split; move => [j ?]; destruct_all?; simplify_eq.
+    setoid_rewrite lookup_map_seqZ_Some. split; move => [j ?]; destruct!.
     + eexists (Z.pred j).
       rewrite Z.sub_pred_l -Z.sub_succ_r. split!; [|lia].
       rewrite /shift_loc/=. f_equal. lia.
@@ -414,8 +414,8 @@ Proof.
     e = Waiting false ∧
     fns = (memmove_prog ∪ memcpy_prog)). }
   { split!. } { done. }
-  move => n ? IH [[[??] [???]] [??]] [??] ?. destruct_all?; simplify_eq.
-  tstep_i => *. case_match; destruct_all?; simplify_eq/=.
+  move => n ? IH [[[??] [???]] [??]] [??] ?. destruct!.
+  tstep_i => *. case_match; destruct!/=.
   go_s.
   go_s. eexists (_, _, _). rewrite -/memmove_itree. go.
   go_s. split!. go.
@@ -429,8 +429,8 @@ Proof.
   simplify_map_eq/=. case_bool_decide; [|done].
   tstep_i. split!. move => *. simplify_map_eq.
   tstep_i. split!. move => ??. simplify_map_eq. split!.
-  tstep_i => *. destruct_all?. simplify_eq/=. split!.
-  tstep_i. split!. move => *. destruct_all?. simplify_eq. repeat case_bool_decide => //.
+  tstep_i => *. destruct!/=. split!.
+  tstep_i. split!. move => *. destruct!. repeat case_bool_decide => //.
   tstep_i. rewrite -/locle_itree. go.
   go_i => -[[??]?]. go.
   go_i => *. simplify_eq. go.
@@ -440,14 +440,14 @@ Proof.
   go_i. split!. go.
   go_i => b. go.
   go_i => Heq. go.
-  go_i => *. destruct_all?. simplify_eq. go.
+  go_i => *. destruct!. go.
   tstep_i. split!. move => *. simplify_eq.
   tstep_i.
   destruct b.
   - apply: memcpy_spec; [eauto_tstep|done|by left|by rewrite bool_decide_true|by rewrite bool_decide_true| |done|done|..].
     { rewrite bool_decide_true //. case_bool_decide; lia. }
     simpl. tstep_i. split!.
-    tstep_i. move => *. destruct_all?; simplify_eq/=.
+    tstep_i. move => *. destruct!/=.
     go_s. split!. rewrite bind_ret_l. go.
     eapply IH; [done|]. split!.
   - tstep_i.
@@ -463,7 +463,7 @@ Proof.
     { done. }
     { done. }
     simpl. tstep_i. split!.
-    tstep_i. move => *. destruct_all?; simplify_eq/=.
+    tstep_i. move => *. destruct!/=.
     go_s. split!. rewrite bind_ret_l. go.
     eapply IH; [done|]. split!.
 Qed.
@@ -491,14 +491,14 @@ Lemma main_refines_itree :
            (MS (mod_itree _ _) (main_itree, tt)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
-  tstep_i => *. case_match; destruct_all?; simplify_eq/=.
+  tstep_i => *. case_match; destruct!/=.
   go_s. eexists (_, _, _). rewrite -/main_itree. go.
   go_s. split!. go.
   go_s => ?. go. simplify_eq. rewrite bool_decide_true; [|done].
   go_s => ?. go.
   tstep_i. split! => ???? Hf ?. unfold main_prog in Hf. simplify_map_eq.
   tstep_i. split! => ? Hf. unfold main_prog in Hf. simplify_map_eq. split!.
-  tstep_i => *. destruct_all?; simplify_eq/=. split; [by repeat econs|].
+  tstep_i => *. destruct!/=. split; [by repeat econs|].
   tstep_i. rewrite shift_loc_0.
   tstep_i.
   split.
@@ -514,7 +514,7 @@ Proof.
   tstep_i.
   tstep_i.
   tstep_i.
-  split! => *. destruct_all?. subst. simplify_eq/=.
+  split! => *. destruct!/=.
   rewrite bool_decide_false; [|compute_done].
   rewrite bool_decide_true; [|compute_done].
   rewrite shift_loc_0 /=.
@@ -544,8 +544,8 @@ Proof.
   }
   go.
 
-  go_i => ??????. destruct_all?; simplify_eq. go.
-  go_i. split! => *. destruct_all?; simplify_eq.
+  go_i => ??????. destruct!. go.
+  go_i. split! => *. destruct!.
   rewrite !kmap_insert kmap_empty.
   tstep_i.
   tstep_i.
@@ -560,13 +560,13 @@ Proof.
   }
   tstep_i.
   tstep_i.
-  split! => *. destruct_all?. simplify_eq.
+  split! => *. destruct!.
   rewrite bool_decide_false; [|compute_done].
   go_s. split!. go.
   go_s. split!. go.
-  tstep_i => e *. destruct_all?; simplify_eq.
+  tstep_i => e *. destruct!.
 
-  destruct e; destruct_all?; simplify_eq.
+  destruct e; destruct!.
   { go_s. split!. go.
     go_s. split!. go.
     go_s. split!.
@@ -591,12 +591,12 @@ Proof.
   tstep_i.
   tstep_i.
   split!.
-  intros. destruct_all?; simplify_eq.
+  intros. destruct!.
   rewrite bool_decide_false; [|compute_done].
   go_s. split!. go.
   go_s. split!. go.
-  tstep_i => e *. destruct_all?; simplify_eq.
-  destruct e; destruct_all?; simplify_eq.
+  tstep_i => e *. destruct!.
+  destruct e; destruct!.
   { go_s. split!. go.
     go_s. split!. go.
     go_s. split!.
@@ -641,7 +641,7 @@ Lemma top_level_refines_itree :
            (MS (mod_itree _ _) (top_level_itree, tt)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
-  tstep_i => *. case_match; destruct_all?; simplify_eq/=.
+  tstep_i => *. case_match; destruct!/=.
   go_s. eexists (_, _). go.
   go_s. split!. go.
   go_s => ?. go. simplify_map_eq'.
@@ -661,7 +661,7 @@ Proof.
   go_i. split!. go.
   go_i => ?. go.
   go_i.
-  go_i => *. unfold i2a_regs_call in *. destruct_all?; simplify_eq.
+  go_i => *. unfold i2a_regs_call in *. destruct!.
   iSatStart. iIntros!.
   iDestruct (i2a_args_intro with "[$]") as "?"; [done|]. rewrite i2a_args_cons ?i2a_args_nil; [|done].
   iDestruct!. iSatStop.
@@ -680,21 +680,21 @@ Proof.
   } go.
   go_i => ?. go.
   go_i => ?. go.
-  go_i => *. go. destruct_all?; simplify_eq.
+  go_i => *. go. destruct!.
 
   go_s. eexists _. go. simplify_map_eq'.
   go_s. eexists _. go. simplify_map_eq'.
   go_s. split; [done|]. go.
   go_s. split; [done|]. go.
 
-  go_i => *. unfold i2a_regs_call in *. case_match; destruct_all?; simplify_eq.
+  go_i => *. unfold i2a_regs_call in *. case_match; destruct!.
   go_s. eexists (_, _). go.
   go_s. split!. go.
   go_s => ?. go.
 
   go_i => -[??]. go.
   go_i => ?. go. simplify_eq.
-  go_i => *. go. destruct_all?; simplify_map_eq'. rewrite bool_decide_true; [|done].
+  go_i => *. go. destruct!; simplify_map_eq'. rewrite bool_decide_true; [|done].
   go_i => ??. simplify_eq.
   go_i. eexists false. split; [done|]. eexists _, _, [ValNum _]. split!. { by simplify_map_eq'. }
   { split. { by simplify_map_eq'. }
@@ -710,7 +710,7 @@ Proof.
   go_i => *. split!. go.
   go_i => *. go.
   go_i.
-  go_i => *. unfold i2a_regs_call in *. destruct_all?; simplify_eq.
+  go_i => *. unfold i2a_regs_call in *. destruct!.
   iSatStart. iIntros!.
   iDestruct (i2a_args_intro with "[$]") as "?"; [done|]. rewrite i2a_args_cons ?i2a_args_nil; [|done].
   iDestruct!. iSatStop.
@@ -729,21 +729,21 @@ Proof.
   } go.
   go_i => ?. go.
   go_i => ?. go.
-  go_i => *. go. destruct_all?; simplify_eq.
+  go_i => *. go. destruct!.
 
   go_s. eexists _. go. simplify_map_eq'.
   go_s. eexists _. go. simplify_map_eq'.
   go_s. split; [done|]. go.
   go_s. split; [done|]. go.
 
-  go_i => *. unfold i2a_regs_call in *. case_match; destruct_all?; simplify_eq.
+  go_i => *. unfold i2a_regs_call in *. case_match; destruct!.
   go_s. eexists (_, _). go.
   go_s. split!. go.
   go_s => ?. go.
 
   go_i => -[??]. go.
   go_i => ?. go. simplify_eq.
-  go_i => *. go. destruct_all?; simplify_map_eq'. rewrite bool_decide_true; [|done].
+  go_i => *. go. destruct!; simplify_map_eq'. rewrite bool_decide_true; [|done].
   go_i => ??. simplify_eq.
   go_i. eexists false. split; [done|]. eexists _, _, [ValNum _]. split!. { by simplify_map_eq'. }
   { split. { by simplify_map_eq'. }
