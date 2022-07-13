@@ -94,7 +94,7 @@ Inductive mod_itree_step EV S : (itree (moduleE EV S) unit * S) → option EV �
 Definition mod_itree EV S := Mod (mod_itree_step EV S).
 
 Global Instance itree_vis_no_all EV S: VisNoAll (mod_itree EV S).
-Proof. move => *. invert_all @m_step; naive_solver. Qed.
+Proof. move => *. inv_all @m_step; naive_solver. Qed.
 
 (* Section test. *)
 (* Polymorphic Universe u v w x y. *)
@@ -144,7 +144,7 @@ Lemma tnhas_trace_Tau_inv' {EV S} t t' n Pσ s κs:
     ∃ n', tiS n' ⊆ n ∧ (t, s) ~{ mod_itree _ _,  κs, n' }~>ₜ Pσ).
 Proof.
   move => Htau Ht. thas_trace_inv Ht. { naive_solver. }
-  right. invert_all @m_step; rewrite ->Htau in *; simplify_eq.
+  right. inv_all @m_step; rewrite ->Htau in *; simplify_eq.
   eexists _. split; last first.
   - rewrite -H0. naive_solver.
   - etrans; [|done]. econs. by econs.
@@ -178,7 +178,7 @@ Lemma tnhas_trace_Ret_inv' {EV S} t x n Pσ s κs:
 Proof.
   move => Hret. move => Ht.
   thas_trace_inv Ht; [done|].
-  invert_all @m_step; rewrite ->Hret in *; simplify_eq.
+  inv_all @m_step; rewrite ->Hret in *; simplify_eq.
 Qed.
 Lemma tnhas_trace_Ret_inv {EV S} x n Pσ s κs:
   (Ret x, s) ~{mod_itree EV S, κs, n}~>ₜ Pσ →
@@ -202,7 +202,7 @@ Lemma thas_trace_Vis_inv {EV S} e k Pσ s κs:
    ∃ κs', tcons e κs' ⊆ κs ∧ (k (), s) ~{ mod_itree EV S, κs' }~>ₜ Pσ ).
 Proof.
   move => Ht. thas_trace_inv Ht; [naive_solver|].
-  invert_all' @m_step; simpl in *; simplify_eq; simplify_K; specialize_hyps.
+  inv_all @m_step; simpl in *; simplify_eq; simplify_K.
   naive_solver.
 Qed.
 
@@ -218,7 +218,7 @@ Lemma thas_trace_All_inv {EV S} T k Pσ s κs:
    ∀ x, (k x, s) ~{ mod_itree EV S, κs }~>ₜ Pσ ).
 Proof.
   move => Ht. thas_trace_inv Ht; [naive_solver|].
-  invert_all' @m_step; simpl in *; simplify_eq; simplify_K; specialize_hyps.
+  inv_all @m_step; simpl in *; simplify_eq; simplify_K.
   right => ?. revert select (_ ⊆ _) => <- /=. naive_solver.
 Qed.
 Lemma thas_trace_All {EV S} T k Pσ s κs:
@@ -233,7 +233,7 @@ Lemma thas_trace_Exist_inv {EV S} T k Pσ s κs:
    ∃ x, (k x, s) ~{ mod_itree EV S, κs }~>ₜ Pσ ).
 Proof.
   move => Ht. thas_trace_inv Ht; [naive_solver|].
-  invert_all' @m_step; simpl in *; simplify_eq; simplify_K; specialize_hyps.
+  inv_all @m_step; simpl in *; simplify_eq; simplify_K.
   right. eexists _. revert select (_ ⊆ _) => <- /=. naive_solver.
 Qed.
 Lemma thas_trace_Exist {EV S} T x k Pσ s κs:
@@ -248,7 +248,7 @@ Lemma thas_trace_Get_inv {EV S} k Pσ s κs:
    (k s, s) ~{ mod_itree EV S, κs }~>ₜ Pσ ).
 Proof.
   move => Ht. thas_trace_inv Ht; [naive_solver|].
-  invert_all' @m_step; simpl in *; simplify_eq; simplify_K; specialize_hyps.
+  inv_all @m_step; simpl in *; simplify_eq; simplify_K.
   right. revert select (_ ⊆ _) => <- /=. naive_solver.
 Qed.
 Lemma thas_trace_Get {EV S} k Pσ s κs:
@@ -263,7 +263,7 @@ Lemma thas_trace_Put_inv {EV S} k Pσ s s' κs:
    (k (), s') ~{ mod_itree EV S, κs }~>ₜ Pσ ).
 Proof.
   move => Ht. thas_trace_inv Ht; [naive_solver|].
-  invert_all' @m_step; simpl in *; simplify_eq; simplify_K; specialize_hyps.
+  inv_all @m_step; simpl in *; simplify_eq; simplify_K.
   right. revert select (_ ⊆ _) => <- /=. naive_solver.
 Qed.
 Lemma thas_trace_Put {EV S} k Pσ s s' κs:
@@ -291,12 +291,12 @@ Proof.
   move: Heq. move Hot: (observe t) => ot. move Hot': (observe t') => ot' Heq.
   elim: Heq t t' s Pσ' Pσ HP IHn Hot Hot'.
   - move => ?? -> t t' s Pσ' Pσ HP IHn Hot Hot'.
-    apply steps_impl_step_end => ???. invert_all @m_step; congruence.
+    apply steps_impl_step_end => ???. inv_all @m_step; congruence.
   - move => m1 m2 [REL|//] t t' s Pσ' Pσ HP IHn Hot Hot'. rewrite -/(eqit _ _ _) in REL.
     move: IHn => [?| {}IHn]; simplify_eq.
     + apply: steps_impl_end. eapply HP; [|done..]. move => t1 ? [? ?]. subst. eexists _. split; [|done].
       rewrite (itree_eta t1) Hot (itree_eta t') Hot'. by apply eqit_Tau.
-    + apply: steps_impl_step => ???. invert_all @m_step; try congruence. have ?: t'0 = m2 by congruence. subst.
+    + apply: steps_impl_step => ???. inv_all @m_step; try congruence. have ?: t'0 = m2 by congruence. subst.
       have [?|[?[?[? Hfix]]]]:= (IHn _ _ ltac:(by econs)); simplify_eq.
       * left. eapply HP; [|done..]. naive_solver.
       * right. eexists _. split_and!; [done..|].
@@ -310,7 +310,7 @@ Proof.
       apply eqit_Vis => v. move: (Hu v) => [|//]. done.
     }
     apply: steps_impl_step => ???.
-    invert_all @m_step; rewrite ->Hot' in *; simplify_eq; simplify_K.
+    inv_all @m_step; rewrite ->Hot' in *; simplify_eq; simplify_K.
     + have [?|[?[?[??]]]]:= (IHn _ _ ltac:(by econs)); simplify_eq. left.
       eapply HP; [|done..]. move => t1 ? [? ?]. subst. eexists _. split; [|done].
       move: (Hu tt) => [|//]. done.
@@ -356,7 +356,7 @@ Proof.
            apply: mono_pred. 3: done. { apply (steps_impl_rec_mono (mod_itree _ _)). } done.
         -- move => ???????. apply: HP; [|done]. naive_solver.
   - move => ot1 t2 ? REL IH t t' s Pσ' Pσ HP IHn Hot Hot'.
-    apply: steps_impl_step => ???. invert_all @m_step; try congruence.
+    apply: steps_impl_step => ???. inv_all @m_step; try congruence.
     right. eexists _. split_and!;[done..|]. apply: IH; [|done|done|congruence].
     move => ????????. by apply: HP.
 Qed.
@@ -385,14 +385,14 @@ Proof.
   move: Heq. move Hot: (observe t) => ot. move Hot': (observe t') => ot' Heq.
   elim: Heq t t' s IHn Hot Hot'.
   - move => ?? -> t t' s IHn Hot Hot'.
-    move: IHn => [[??]|[?[?[?[??]]]]]. 2: { invert_all @m_step; congruence. } subst.
+    move: IHn => [[??]|[?[?[?[??]]]]]. 2: { inv_all @m_step; congruence. } subst.
     apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
     rewrite (itree_eta t) Hot (itree_eta t') Hot'. done.
   - move => m1 m2 [REL|//] t t' s IHn Hot Hot'. rewrite -/(eqit _ _ _) in REL.
     move: IHn => [[??]|[?[?[? [? Ht]]]]]; simplify_eq.
     + apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
       rewrite (itree_eta t) Hot (itree_eta t') Hot'. by apply eqit_Tau.
-    + invert_all @m_step; try congruence. have ?: t'0 = m1 by congruence. subst.
+    + inv_all @m_step; try congruence. have ?: t'0 = m1 by congruence. subst. specialize_hyps.
       move: Ht => [[??]|[? Hfix]]; simplify_eq.
       * apply: steps_spec_step_end. { by econs. } move => ? ->. eapply HP; [|done]. done.
       * apply: steps_spec_step; [by econs|] => ? ->. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
@@ -404,7 +404,7 @@ Proof.
       rewrite (itree_eta t) Hot (itree_eta t') Hot'.
       apply eqit_Vis => v. move: (Hu v) => [|//]. done.
     }
-    invert_all @m_step; rewrite ->Hot in *; simplify_eq; simplify_K.
+    inv_all @m_step; rewrite ->Hot in *; simplify_eq; simplify_K; specialize_hyps.
     + apply: steps_spec_step_end; [by econs|] => ? /= ->. move: Ht => [[??]|[??//]].
       eapply HP; [|done]. split; [|done].
       move: (Hu tt) => [|//]. done.
@@ -441,7 +441,7 @@ Proof.
     move: IHn => [[??]|[?[?[? [? Ht]]]]]; simplify_eq.
     + apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=. etrans; [|done].
       destruct b1 => //. rewrite (itree_eta t) Hot. by apply eqit_Tau_l.
-    + invert_all @m_step; try congruence. have ?: t'0 = t1 by congruence. subst.
+    + inv_all @m_step; try congruence. have ?: t'0 = t1 by congruence. subst. specialize_hyps.
       move: Ht => [[??]|[? Hfix]]; simplify_eq.
       * apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=. done.
       * apply: IH; [|done|done].
@@ -492,7 +492,7 @@ Proof.
       apply eqit_Vis => v. move: (Hu v) => [|//]. done.
     }
     revert select (_ ⊆@{trace _} _) => <-.
-    invert_all @m_step; rewrite ->Hot in *; simplify_eq; simplify_K.
+    inv_all @m_step; rewrite ->Hot in *; simplify_eq; simplify_K.
     + specialize (H1 _ ltac:(done)).
       apply: (TNTraceStep _ _ (const (fn ((t'0 (), s) ↾ eq_refl)))).
       { by econs. } 3: { simpl; done. } 2: { etrans; [|done]. econs. econs => -[??] /=. by econs. }
@@ -565,7 +565,7 @@ Proof.
       apply eqit_Vis => v. move: (Hu v) => [|//]. done.
     }
     revert select (_ ⊆@{trace _} _) => <-.
-    invert_all @m_step; rewrite ->Hot in *; simplify_eq; simplify_K.
+    inv_all @m_step; rewrite ->Hot in *; simplify_eq; simplify_K.
     + specialize (H1 _ ltac:(done)).
       tstep_Some; [by econs|] => ? ->.
       apply: IHn; [ |done| |done].
@@ -895,7 +895,7 @@ Lemma itree_step_Tau_i EV S t s:
   ITreeTStepI (EV:=EV) (S:=S) (Tau t) s (λ G, G true None (λ G', G' t s)).
 Proof.
   constructor => ??. apply: steps_impl_step_end => ???.
-  invert_all @m_step; simplify_eq/=. naive_solver.
+  inv_all @m_step; simplify_eq/=. naive_solver.
 Qed.
 Global Hint Resolve itree_step_Tau_i : tstep.
 
@@ -911,7 +911,7 @@ Lemma itree_step_Vis_i EV S k s e:
   ITreeTStepI (EV:=EV) (S:=S) (r ← TVis e;;; k r) s (λ G, G true (Some e) (λ G', G' (k tt) s)).
 Proof.
   constructor => ??. apply: steps_impl_step_end => ???.
-  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
+  inv_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
   eexists _, _. split_and!; [done..|]. move => /= ? HG. eexists _, _, _. split_and!; [done| |done].
   by setoid_rewrite bind_ret_l.
 Qed.
@@ -929,7 +929,7 @@ Lemma itree_step_Get_i EV S k s:
   ITreeTStepI (EV:=EV) (S:=S) (x ← TGet;;; k x) s (λ G, G true None (λ G', G' (k s) s)).
 Proof.
   constructor => ??. apply: steps_impl_step_end => ???.
-  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
+  inv_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
   eexists _, _. split_and!; [done..|]. move => /= ? HG. eexists _, _, _. split_and!; [done| |done].
   by setoid_rewrite bind_ret_l.
 Qed.
@@ -947,7 +947,7 @@ Lemma itree_step_Put_i EV S k s s':
   ITreeTStepI (EV:=EV) (S:=S) (x ← TPut s';;; k x) s (λ G, G true None (λ G', G' (k tt) s')).
 Proof.
   constructor => ??. apply: steps_impl_step_end => ???.
-  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
+  inv_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
   eexists _, _. split_and!; [done..|]. move => /= ? HG. eexists _, _, _. split_and!; [done| |done].
   by setoid_rewrite bind_ret_l.
 Qed.
@@ -965,7 +965,7 @@ Lemma itree_step_All_i EV S T k s:
   ITreeTStepI (EV:=EV) (S:=S) (x ← TAll T;;; k x) s (λ G, G true None (λ G', ∃ x, G' (k x) s)).
 Proof.
   constructor => ??. apply: steps_impl_step_end => ???.
-  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
+  inv_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
   eexists _, _. split_and!; [done..|]. move => /= ? [? HG]. eexists _, _, _. split_and!; [naive_solver| |done].
   by setoid_rewrite bind_ret_l.
 Qed.
@@ -983,7 +983,7 @@ Lemma itree_step_Exist_i EV S T k s:
   ITreeTStepI (EV:=EV) (S:=S) (x ← TExist T;;; k x) s (λ G, ∀ x, G true None (λ G', G' (k x) s)).
 Proof.
   constructor => ??. apply: steps_impl_step_end => ???.
-  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
+  inv_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
   eexists _, _. split_and!; [done..|]. move => /= ? HG. eexists _, _, _. split_and!; [naive_solver| |done].
   by setoid_rewrite bind_ret_l.
 Qed.
@@ -1009,7 +1009,7 @@ Lemma itree_step_Nb_i EV S T (k : T → _) s:
   ITreeTStepI (EV:=EV) (S:=S) (x ← TNb;;; k x) s (λ G, G true None (λ G', True)).
 Proof.
   constructor => ??. apply: steps_impl_step_end => ???.
-  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K. destruct x.
+  inv_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K. destruct x.
 Qed.
 Global Hint Resolve itree_step_Nb_i : tstep.
 
@@ -1017,7 +1017,7 @@ Lemma itree_step_Nb_end_i EV S s:
   ITreeTStepI (EV:=EV) (S:=S) TNb s (λ G, G true None (λ G', True)).
 Proof.
   constructor => ??. apply: steps_impl_step_end => ???.
-  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K. destruct x.
+  inv_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K. destruct x.
 Qed.
 Global Hint Resolve itree_step_Nb_end_i : tstep.
 
@@ -1033,7 +1033,7 @@ Lemma itree_step_Assume_i EV S P k s:
   ITreeTStepI (EV:=EV) (S:=S) (x ← TAssume P;;; k x) s (λ G, G true None (λ G', P ∧ G' (k tt) s)).
 Proof.
   constructor => ??. apply: steps_impl_step_end => ???.
-  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
+  inv_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
   eexists _, _. split_and!; [done..|]. move => /= ? [? HG]. eexists _, _, _. split_and!; [naive_solver| |done].
   setoid_rewrite bind_ret_l. by setoid_rewrite bind_ret_l.
   Unshelve. done.
@@ -1053,7 +1053,7 @@ Lemma itree_step_Assert_i EV S P k s:
   ITreeTStepI (EV:=EV) (S:=S) (x ← TAssert P;;; k x) s (λ G, P → G true None (λ G', G' (k tt) s)).
 Proof.
   constructor => ??. apply: steps_impl_step_end => ???.
-  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K. destruct x.
+  inv_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K. destruct x.
   eexists _, _. split_and!; [naive_solver|done..|].
   move => /= ??. eexists _, _, _. split_and!; [naive_solver| |done].
   setoid_rewrite bind_ret_l. by setoid_rewrite bind_ret_l.
@@ -1072,7 +1072,7 @@ Lemma itree_step_AssumeOpt_i EV S T (o : option T) k s:
   ITreeTStepI (EV:=EV) (S:=S) (x ← TAssumeOpt o;;; k x) s (λ G, G true None (λ G', ∃ x, o = Some x ∧ G' (k x) s)).
 Proof.
   constructor => ??. apply: steps_impl_step_end => ???.
-  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
+  inv_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K.
   eexists _, _. split_and!; [done..|]. move => /= ? [? [? HG]]. subst.
   eexists _, _, _. split_and!; [naive_solver| |done].
   setoid_rewrite bind_ret_l.
@@ -1092,7 +1092,7 @@ Lemma itree_step_AssertOpt_i EV S T (o : option T) k s:
   ITreeTStepI (EV:=EV) (S:=S) (x ← TAssertOpt o;;; k x) s (λ G, ∀ x, o = Some x → G true None (λ G', G' (k x) s)).
 Proof.
   constructor => ??. apply: steps_impl_step_end => ???.
-  invert_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K. destruct x.
+  inv_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K. destruct x.
   eexists _, _. split_and!; [naive_solver|done..|].
   move => /= ??. eexists _, _, _. split_and!; [naive_solver| |done].
   setoid_rewrite bind_ret_l. by setoid_rewrite bind_ret_l.

@@ -1010,7 +1010,7 @@ Qed.
 Definition imp_module := Mod prim_step.
 
 Global Instance imp_vis_no_all: VisNoAll imp_module.
-Proof. move => *. invert_all' @m_step; invert_all head_step; naive_solver. Qed.
+Proof. move => *. inv_all @m_step; inv_all head_step; naive_solver. Qed.
 
 (** * static expr *)
 Inductive static_val := | StaticValNum (z : Z) | StaticValBool (b : bool).
@@ -1235,7 +1235,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
-  invert_all head_step.
+  inv_all head_step.
   - naive_solver.
   - naive_solver.
 Qed.
@@ -1262,7 +1262,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
-  invert_all head_step.
+  inv_all head_step.
   naive_solver.
 Qed.
 Global Hint Resolve imp_step_ReturnExt_i : tstep.
@@ -1290,7 +1290,7 @@ Proof.
     apply sub_redexes_are_values_item; case; try naive_solver.
     move => /= ??? e' [_ Heq]. by apply: list_expr_val_inv.
   } { done. } subst.
-  invert_all head_step.
+  inv_all head_step.
   - naive_solver.
   - naive_solver.
 Qed.
@@ -1317,7 +1317,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
-  invert_all head_step.
+  inv_all head_step.
   naive_solver.
 Qed.
 Global Hint Resolve imp_step_Binop_i | 10 : tstep.
@@ -1378,7 +1378,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
-  invert_all head_step.
+  inv_all head_step.
   naive_solver.
 Qed.
 Global Hint Resolve imp_step_Load_i : tstep.
@@ -1401,7 +1401,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
-  invert_all head_step.
+  inv_all head_step.
   naive_solver.
 Qed.
 Global Hint Resolve imp_step_Store_i : tstep.
@@ -1426,7 +1426,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
-  invert_all head_step.
+  inv_all head_step.
   naive_solver.
 Qed.
 Global Hint Resolve imp_step_AllocA_i : tstep.
@@ -1450,7 +1450,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
-  invert_all head_step.
+  inv_all head_step.
   naive_solver.
 Qed.
 Global Hint Resolve imp_step_FreeA_i : tstep.
@@ -1473,7 +1473,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
-  invert_all head_step.
+  inv_all head_step.
   naive_solver.
 Qed.
 Global Hint Resolve imp_step_LetE_i : tstep.
@@ -1496,7 +1496,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
-  invert_all head_step.
+  inv_all head_step.
   naive_solver.
 Qed.
 Global Hint Resolve imp_step_If_i | 10 : tstep.
@@ -1793,7 +1793,7 @@ Definition imp_closed_filter_module : module (sm_event imp_event imp_closed_even
   Mod imp_closed_step.
 
 Global Instance imp_closed_filter_module_vis_no_all : VisNoAll imp_closed_filter_module.
-Proof. move => ????. invert_all @m_step; naive_solver. Qed.
+Proof. move => ????. inv_all @m_step; naive_solver. Qed.
 
 Definition imp_closed (m : module imp_event) : module imp_closed_event :=
   mod_seq_map m imp_closed_filter_module.
@@ -1931,7 +1931,7 @@ Proof.
   - tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]].
     simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
     rewrite -expr_fill_app.
-    invert_all head_step => //.
+    inv_all head_step => //.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
@@ -1964,7 +1964,7 @@ Proof.
   - tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]].
     simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
     rewrite -expr_fill_app.
-    invert_all head_step => //.
+    inv_all head_step => //.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
@@ -2042,7 +2042,7 @@ Proof.
     + tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]] *.
       simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
       rewrite -expr_fill_app.
-      invert_all head_step => //; destruct_all?; simplify_eq.
+      inv_all/= head_step => //; destruct_all?; simplify_eq.
       * tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.
@@ -2086,7 +2086,7 @@ Proof.
     + tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]] *.
       simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
       rewrite -expr_fill_app.
-      invert_all head_step => //; destruct_all?; simplify_eq.
+      inv_all/= head_step => //; destruct_all?; simplify_eq.
       * tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.

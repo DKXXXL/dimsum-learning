@@ -35,7 +35,7 @@ Definition mod_product {EV1 EV2} (m1 : module EV1) (m2 : module EV2) : module (o
 Global Instance product_vis_no_all {EV1 EV2} (m1 : module EV1) (m2 : module EV2) `{!VisNoAll m1} `{!VisNoAll m2}:
   VisNoAll (mod_product m1 m2).
 Proof.
-  move => [??]???. invert_all @m_step; try case_match => //; simplify_eq.
+  move => [??]???. inv_all @m_step; try case_match => //; simplify_eq.
   - have [??]:= vis_no_all _ _ _ ltac:(done). eexists (_, _) => -[??]. naive_solver.
   - have [??]:= vis_no_all _ _ _ ltac:(done). eexists (_, _) => -[??]. naive_solver.
   - have [??]:= vis_no_all _ _ _ ltac:(done). clear H4.
@@ -197,13 +197,13 @@ Lemma prod_mod1_srefines_prod_mod:
 Proof.
   constructor => Pκs /= Himpl.
   inversion Himpl; simplify_eq. 1: by apply: STraceEnd.
-  invert_all @m_step.
+  inv_all @m_step.
 
   apply: STraceStep. { econstructor. { apply: ProductStepR. constructor. } done. } 2: done.
   move => [??] [?[?|?]]; simplify_eq.
   - have {}H := (H0 1 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: by apply: STraceEnd.
-    invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
 
     apply: STraceStep. { econstructor. { apply: ProductStepBoth; constructor. } naive_solver. }
     2: done. move => [??] [??]; simplify_eq/=.
@@ -215,14 +215,14 @@ Proof.
     2: naive_solver. move => [??] [??]; simplify_eq/=.
 
     inversion H3; simplify_eq. 1: by apply: STraceEnd.
-    invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
     apply: STraceStep. { econstructor. { apply: ProductStepR. constructor. } naive_solver. }
     2: naive_solver. move => [??] [??]; simplify_eq/=.
     inversion H5; simplify_eq. 1: by apply: STraceEnd.
-    invert_all @m_step => //.
+    inv_all @m_step => //.
   - have {}H := (H0 4 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: by apply: STraceEnd.
-    invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
 
     apply: STraceStep. { econstructor. { apply: ProductStepBoth; constructor. } naive_solver. }
     2: done. move => [??] [??]; simplify_eq/=.
@@ -234,11 +234,11 @@ Proof.
     2: naive_solver. move => [??] [??]; simplify_eq/=.
 
     inversion H3; simplify_eq. 1: by apply: STraceEnd.
-    invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
     apply: STraceStep. { econstructor. { apply: ProductStepR. constructor. } naive_solver. }
     2: naive_solver. move => [??] [??]; simplify_eq/=.
     inversion H5; simplify_eq. 1: by apply: STraceEnd.
-    invert_all @m_step => //.
+    inv_all @m_step => //.
 Qed.
 
 Lemma prod_mod1_not_refines_prod_mod':
@@ -260,11 +260,11 @@ Proof.
       move => /= ??; simplify_eq.
       apply: STraceEnd; [done|]. naive_solver.
   - inversion Hr'; simplify_eq. 1: naive_solver.
-    invert_all @m_step. 1,2: naive_solver.
+    inv_all @m_step. 1,2: naive_solver.
     have ? : κ = None by naive_solver. subst κ. clear H3 H1 Hr Hr'.
     have {}H := (H0 (_, _) ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //. 3: naive_solver.
+    inv_all @m_step => //. 3: naive_solver.
     (* This should work by passing the opposite of the demonic choice
     to the angelic choice but has many case distinctions *)
 Abort.
@@ -584,7 +584,7 @@ Proof.
   move => /wp_complete /= Hr1 /wp_complete/=Hr2.
   apply wp_implies_refines => n. elim/ti_lt_ind: n σ1 σ1' σ2 σ2' {Hr1 Hr2} (Hr1 n) (Hr2 n).
   move => n IH σ1 σ1' σ2 σ2' Hr1 Hr2.
-  apply Wp_step => Pσi n' κ Hsub Hstep. invert_all @m_step.
+  apply Wp_step => Pσi n' κ Hsub Hstep. inv_all @m_step.
   - inversion Hr1 as [??? Hr1']; simplify_eq.
     have [?[Ht HP]]:= Hr1' _ _ _ ltac:(done) ltac:(done).
     case_match; simplify_eq/=.
@@ -641,7 +641,7 @@ Definition mod_map_mod {EV1 EV2 S} (f : mod_map_fn EV1 EV2 S) : module (EV1 * op
 
 Global Instance mod_map_mod_vis_no_all {EV1 EV2 S} (f : mod_map_fn EV1 EV2 S):
   VisNoAll (mod_map_mod f).
-Proof. move => ????. invert_all @m_step; try case_match => //; simplify_eq. naive_solver. Qed.
+Proof. move => ????. inv_all @m_step; try case_match => //; simplify_eq. naive_solver. Qed.
 
 Definition mod_map {EV1 EV2 S} (m : module EV1) (f : mod_map_fn EV1 EV2 S) : module EV2 :=
   mod_filter (mod_product m (mod_map_mod f)) (λ e er, e.2 = (λ x, (x, er)) <$> e.1).
@@ -669,7 +669,7 @@ Proof.
   constructor => G /tstepi_proof HP.
   apply: (steps_impl_submodule _ (mod_map _ _) (λ x, (x, (σf, true)))); [done| |].
   - move => ?? /= [?[?[HG [? HG']]]]. eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
-  - move => ????. invert_all' @m_step; simplify_eq/=; eexists _, _.
+  - move => ????. inv_all/= @m_step; eexists _, _.
     all: split_and!; [done| |repeat case_match => //;naive_solver].
     + move => [?[?[HG [? HG']]]]. case_match; simplify_eq.
       eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.

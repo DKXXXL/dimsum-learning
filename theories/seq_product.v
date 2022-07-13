@@ -48,7 +48,7 @@ Definition mod_seq_product {EV1 EV2} (m1 : module EV1) (m2 : module EV2) : modul
 Global Instance seq_product_vis_no_all {EV1 EV2} (m1 : module EV1) (m2 : module EV2) `{!VisNoAll m1} `{!VisNoAll m2}:
   VisNoAll (mod_seq_product m1 m2).
 Proof.
-  move => [[??]?]???. invert_all @m_step; try case_match => //; simplify_eq.
+  move => [[??]?]???. inv_all @m_step; try case_match => //; simplify_eq.
   - naive_solver.
   - have [??]:= vis_no_all _ _ _ ltac:(done). eexists (_, _, _) => -[[??]?]. naive_solver.
   - have [??]:= vis_no_all _ _ _ ltac:(done). eexists (_, _, _) => -[[??]?]. naive_solver.
@@ -282,7 +282,7 @@ Qed.
 Lemma mod_seq_product_step_None_i {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2:
   TStepI (mod_seq_product m1 m2) (SPNone, σ1, σ2) (λ G, ∀ s, G true (Some (SPENone s)) (λ G', G' (s, σ1, σ2))).
 Proof.
-  constructor => G HG. apply: steps_impl_step_end => ???. invert_all @m_step.
+  constructor => G HG. apply: steps_impl_step_end => ???. inv_all @m_step.
   eexists _, _. split_and!; [done..|]. naive_solver.
 Qed.
 Global Hint Resolve mod_seq_product_step_None_i : tstep.
@@ -295,7 +295,7 @@ Proof.
   constructor => G /tstepi_proof HP.
   apply: (steps_impl_submodule _ (mod_seq_product _ _) (λ x, (SPLeft, x, σ2))); [done| |].
   - move => ?? /= [?[?[HG[? HG']]]]. eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
-  - move => ????. invert_all' @m_step; simplify_eq/=; eexists _, _.
+  - move => ????. inv_all/= @m_step; eexists _, _.
     split_and!; [done| |naive_solver].
     move => [?[?[HG [? HG']]]]. eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
 Qed.
@@ -309,7 +309,7 @@ Proof.
   constructor => G /tstepi_proof HP.
   apply: (steps_impl_submodule _ (mod_seq_product _ _) (λ x, (SPRight, σ1, x))); [done| |].
   - move => ?? /= [?[?[HG [? HG']]]]. eexists _,_. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
-  - move => ????. invert_all' @m_step; simplify_eq/=; eexists _, _.
+  - move => ????. inv_all/= @m_step; eexists _, _.
     split_and!; [done| |naive_solver].
     move => [?[?[HG [? HG']]]]. eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
 Qed.
@@ -403,7 +403,7 @@ Global Instance mod_seq_map_vis_no_all {EV1 EV2} (m : module EV1) (f : module (s
 Proof.
   apply: mod_state_transform_vis_no_all.
   move => ??? [[[sp σ1]σf][σ ?]] ??. eexists (σ, σ1, σf) => -[[??]?].
-  invert_all @m_step; invert_all @mod_seq_map_filter; destruct_all?; simplify_eq.
+  inv_all @m_step; inv_all @mod_seq_map_filter; destruct_all?; simplify_eq.
   all: repeat case_match => //; simplify_eq/=.
   naive_solver.
 Qed.
@@ -416,7 +416,7 @@ Proof.
   apply: mod_state_transform_trefines; [| | |done..].
   - move => [[??]?] [[[??]?]?] [[[??]?]?]. unfold mod_seq_map_trans. naive_solver.
   - unfold mod_seq_map_trans. move => [[??]?] [[[??]?]?] [[[??]?]?] ?????; simplify_eq.
-    invert_all @m_step; invert_all @mod_seq_map_filter; destruct_all?; simplify_eq.
+    inv_all @m_step; inv_all @mod_seq_map_filter; destruct_all?; simplify_eq.
     all: eexists (_, _, _); do 3 f_equal;repeat case_match => //; by simplify_eq/=.
   - apply mod_map_trefines. by apply mod_seq_product_trefines.
 Qed.
@@ -462,9 +462,9 @@ Proof.
   (* destruct κ as [[e|e]|]; simplify_eq/=. *)
   apply: (steps_impl_submodule _ (mod_seq_map _ _) (λ x, (SMFilter, σ, x))); [done| |].
   - naive_solver.
-  - move => /= ??? Hs. invert_all' @state_transform_step; simplify_eq. invert_all' @m_step; simplify_eq/=.
+  - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
     + case_match; simplify_eq. naive_solver.
-    + case_match; simplify_eq. invert_all @mod_seq_map_filter; try destruct e; naive_solver.
+    + case_match; simplify_eq. inv_all @mod_seq_map_filter; try destruct e; naive_solver.
 Qed.
 Global Hint Resolve mod_seq_map_step_filter_i | 4 : tstep.
 
@@ -476,12 +476,12 @@ Proof.
   constructor => G /tstepi_proof?.
   apply: (steps_impl_submodule _ (mod_seq_map _ _) (λ x, (SMFilterRecv e, σ, x))); [done| |].
   - naive_solver.
-  - move => /= ??? Hs. invert_all' @state_transform_step; simplify_eq. invert_all' @m_step; simplify_eq/=.
+  - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
     + case_match; simplify_eq. eexists _, _. split_and!;[done| |naive_solver] => /= ?.
-      destruct_all?. eexists _, _. split_and!;[done..|]. move => ? /H2[?[??]].
+      destruct_all?. eexists _, _. split_and!;[done..|]. move => ? /H3[?[??]].
       eexists (_, _, _). split!; [|done] => /=. done.
     + case_match; simplify_eq. eexists _, _. split_and!;[done| |naive_solver] => /= ?.
-      invert_all @mod_seq_map_filter. destruct_all?. eexists _, _. split_and!;[naive_solver..|].
+      inv_all @mod_seq_map_filter. destruct_all?. eexists _, _. split_and!;[naive_solver..|].
       move => ? /H2[?[??]]. eexists (_, _, _). split!; [|done] => /=. done.
 Qed.
 Global Hint Resolve mod_seq_map_step_filter_recv_i | 4 : tstep.
@@ -494,12 +494,12 @@ Proof.
   constructor => G /tstepi_proof?.
   apply: (steps_impl_submodule _ (mod_seq_map _ _) (λ x, (SMProg, x, σf))); [done| |].
   - naive_solver.
-  - move => /= ??? Hs. invert_all' @state_transform_step; simplify_eq. invert_all' @m_step; simplify_eq/=.
+  - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
     + case_match; simplify_eq. eexists _, _. split_and!;[done| |naive_solver] => /= ?.
-      destruct_all?. eexists _, _. split_and!;[done..|]. move => ? /H2[?[??]].
+      destruct_all?. eexists _, _. split_and!;[done..|]. move => ? /H3[?[??]].
       eexists (_, _, _). split!; [|done] => /=. done.
     + case_match; simplify_eq. eexists _, _. split_and!;[done| |naive_solver] => /= ?.
-      invert_all @mod_seq_map_filter. destruct_all?. eexists _, _. split_and!;[naive_solver..|].
+      inv_all @mod_seq_map_filter. destruct_all?. eexists _, _. split_and!;[naive_solver..|].
       move => ? /H2[?[??]]. eexists (_, _, _). split!; [|done] => /=. done.
 Qed.
 Global Hint Resolve mod_seq_map_step_prog_i | 4 : tstep.
@@ -512,12 +512,12 @@ Proof.
   constructor => G /tstepi_proof?.
   apply: (steps_impl_submodule _ (mod_seq_map _ _) (λ x, (SMProgRecv e, x, σf))); [done| |].
   - naive_solver.
-  - move => /= ??? Hs. invert_all' @state_transform_step; simplify_eq. invert_all' @m_step; simplify_eq/=.
+  - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
     + case_match; simplify_eq. eexists _, _. split_and!;[done| |naive_solver] => /= ?.
-      destruct_all?. eexists _, _. split_and!;[done..|]. move => ? /H2[?[??]].
+      destruct_all?. eexists _, _. split_and!;[done..|]. move => ? /H3[?[??]].
       eexists (_, _, _). split!; [|done] => /=. done.
     + case_match; simplify_eq. eexists _, _. split_and!;[done| |naive_solver] => /= ?.
-      invert_all @mod_seq_map_filter. destruct_all?. eexists _, _. split_and!;[naive_solver..|].
+      inv_all @mod_seq_map_filter. destruct_all?. eexists _, _. split_and!;[naive_solver..|].
       move => ? /H2[?[??]]. eexists (_, _, _). split!; [|done] => /=. done.
 Qed.
 Global Hint Resolve mod_seq_map_step_prog_recv_i | 4 : tstep.

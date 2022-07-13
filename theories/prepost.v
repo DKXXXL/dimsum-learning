@@ -130,7 +130,7 @@ Section prepost.
     Mod (pp_filter_step i o).
 
   Global Instance mod_prepost_filter_vis_no_all i o : VisNoAll (mod_prepost_filter i o).
-  Proof. move => ????. invert_all @m_step; naive_solver. Qed.
+  Proof. move => ????. inv_all @m_step; naive_solver. Qed.
 
   Definition mod_prepost i o m : module EV2 :=
     mod_seq_map m (mod_prepost_filter i o).
@@ -150,7 +150,7 @@ Section prepost.
         ∀ e, G true (Some e) (λ G', G' (SMFilter, σ, (PPRecv1 e, s, x)))).
   Proof.
     constructor => G /= ?. tstep_i.
-    apply steps_impl_step_end => ???. invert_all @m_step => ???. split! => ?. split!; [naive_solver|done|].
+    apply steps_impl_step_end => ???. inv_all @m_step => ???. split! => ?. split!; [naive_solver|done|].
     naive_solver.
   Qed.
 
@@ -160,9 +160,9 @@ Section prepost.
                       G true None (λ G', G' (SMProgRecv r.1, σ, (PPInside, r.2, x'))))).
   Proof.
     constructor => G /= /pp_to_ex_exists[r [? [[?[? HG]]?]]]. tstep_i.
-    apply steps_impl_step_next => ???. invert_all @m_step.
+    apply steps_impl_step_next => ???. inv_all @m_step.
     eexists (_, _). split!. { apply pp_to_ex_exists. naive_solver. }
-    apply steps_impl_step_end => ???. invert_all @m_step => ???. naive_solver.
+    apply steps_impl_step_end => ???. inv_all @m_step => ???. naive_solver.
   Qed.
 
   Lemma mod_prepost_step_Inside_i i o m σ s e x:
@@ -171,10 +171,10 @@ Section prepost.
             G true (Some (r.1)) (λ G', G' (SMFilter, σ, (PPOutside, r.2, x'))))).
   Proof.
     constructor => G /= ?. apply steps_impl_step_trans. tstep_i.
-    apply steps_impl_step_end => ???. invert_all @m_step => ? b *; simplify_eq. split! => ?. split!; [done|].
+    apply steps_impl_step_end => ???. inv_all @m_step => ? b *; simplify_eq. split! => ?. split!; [done|].
     tstep_i.
-    apply steps_impl_step_next => ???. invert_all @m_step => *; simplify_eq. split!.
-    apply steps_impl_step_end => ???. invert_all @m_step => *; simplify_eq. split! => ?.
+    apply steps_impl_step_next => ???. inv_all @m_step => *; simplify_eq. split!.
+    apply steps_impl_step_end => ???. inv_all @m_step => *; simplify_eq. split! => ?.
     have [?[?[?[??]]]]:= pp_to_all_ex _ _ _ ltac:(done) ltac:(done); subst.
     split!; [naive_solver|by destruct b|]. naive_solver.
   Qed.

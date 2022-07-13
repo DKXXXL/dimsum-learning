@@ -18,7 +18,7 @@ Definition mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Pro
 
 Global Instance filter_vis_no_all {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) `{!VisNoAll m}:
   VisNoAll (mod_filter m R).
-Proof. move => *. invert_all @m_step; case_match; simplify_eq. by apply: vis_no_all. Qed.
+Proof. move => *. inv_all/= @m_step; case_match; simplify_eq. by apply: vis_no_all. Qed.
 
 Module filter_example.
   (* This example shows that filter does not preserve refinement if
@@ -44,23 +44,23 @@ Lemma mod_ang_comm1_filter_traces Pκs:
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
     split; [naive_solver|]. right.
     have [κ' ?]: ∃ κ', κ = Some κ' by naive_solver. subst.
     eexists κ'.
     inversion H1; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //.
 
     have {}H := (H3 3 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
-    inversion H6; simplify_eq. 2: invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
+    inversion H6; simplify_eq. 2: inv_all @m_step => //.
 
     have {}H := (H3 5 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
     inversion H11; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //.
   - move => [?[?|[n [? [? HP]]]]]. 1: by apply: STraceEnd.
     apply: STraceStep. { apply: (FilterStep _ _ _ _ (Some n)). econstructor. naive_solver. }
     2: naive_solver.
@@ -91,16 +91,16 @@ Lemma mod_ang_comm2_filter_traces Pκs:
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //.
     split; [naive_solver|].
 
     have {}H := (H1 2 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //.
 
     have {}H := (H1 5 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //. right.
+    inv_all @m_step => //. right. specialize_hyps.
 
     have [κ' ?]: ∃ κ', κ = Some κ' by naive_solver. subst.
     have [κ'' ?]: ∃ κ', κ0 = Some κ' by naive_solver. subst.
@@ -110,20 +110,20 @@ Proof.
     inversion H3; simplify_eq. 1: {
       eexists true.
       inversion H5; simplify_eq. 1: eexists true; naive_solver.
-      invert_all @m_step => //.
+      inv_all @m_step => //. specialize_hyps.
 
-      inversion H11; simplify_eq. 2: invert_all @m_step => //.
+      inversion H11; simplify_eq. 2: inv_all @m_step => //.
       eexists false; naive_solver.
     }
     eexists false.
-    invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
 
-    inversion H8; simplify_eq. 2: invert_all @m_step => //.
+    inversion H8; simplify_eq. 2: inv_all @m_step => //.
 
     inversion H5; simplify_eq. 1: eexists true; naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
 
-    inversion H14; simplify_eq. 2: invert_all @m_step => //.
+    inversion H14; simplify_eq. 2: inv_all @m_step => //.
     eexists false; naive_solver.
   - move => [?[?|[n1 [n2 [? [? [? [? [b1 [b2 [??]]]]]]]]]]]. 1: by apply: STraceEnd.
     apply: STraceStep. { econstructor; [constructor|]. naive_solver. } 2: naive_solver.

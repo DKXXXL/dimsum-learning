@@ -1,6 +1,5 @@
-Require Export dimsum.module.
-Require Import dimsum.srefines.
-Require Import dimsum.trefines.
+From dimsum Require Export module.
+From dimsum Require Import srefines trefines.
 
 (*
     1
@@ -18,9 +17,9 @@ Lemma mod1_straces Pκs:
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
     inversion H1; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //.
   - move => [?|[??]]. 1: by apply: STraceEnd.
     apply: STraceStep; [by constructor| | naive_solver ].
     move => ??. simplify_eq.
@@ -34,10 +33,10 @@ Proof.
   split.
   - move => Ht.
     thas_trace_inv Ht. { by apply: (subtrace_all_l true). }
-    invert_all @m_step => //. apply: (subtrace_all_l false).
+    inv_all @m_step => //. specialize_hyps. apply: (subtrace_all_l false).
     revert select (_ ⊆ _) => <-. constructor.
     thas_trace_inv => //.
-    invert_all @m_step.
+    inv_all @m_step.
   - move => <-. apply thas_trace_all => -[]. 1: by tend.
     tstep_Some. { by econs. }
     move => ??. simplify_eq/=.
@@ -59,11 +58,11 @@ Lemma mod2_straces Pκs:
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
     inversion H1; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
     inversion H3; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //.
   - move => [?|[[??]|[?[??]]]].
     + by apply: STraceEnd.
     + apply: STraceStep; [by constructor| |naive_solver].
@@ -104,9 +103,9 @@ Lemma mod1ub_straces Pκs:
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
     inversion H1; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //.
     naive_solver.
   - move => [?|[??]].
     + by apply: STraceEnd.
@@ -145,7 +144,7 @@ Lemma modnb_straces EV Pκs:
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
-    invert_all @m_step.
+    inv_all @m_step.
   - move => ?. by apply: STraceEnd.
 Qed.
 
@@ -171,15 +170,15 @@ Lemma mod12_ang_straces Pκs:
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //.
     have {}H := (H1 1 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
-    inversion H3; simplify_eq. 2: invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
+    inversion H3; simplify_eq. 2: inv_all @m_step => //.
     have {}H := (H1 2 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
-    inversion H7; simplify_eq. 2: invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
+    inversion H7; simplify_eq. 2: inv_all @m_step => //.
     naive_solver.
   - move => [?|[?[??]]].
     + by apply: STraceEnd.
@@ -196,11 +195,11 @@ Lemma mod1_srefines_mod2 :
 Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: STraceEnd.
-  invert_all @m_step => //.
+  inv_all @m_step => //. specialize_hyps.
   apply: STraceStep. { constructor. } 2: done.
   move => ? ->.
   inversion H0; simplify_eq. 1: by apply: STraceEnd.
-  invert_all @m_step => //.
+  inv_all @m_step => //.
 Qed.
 
 Lemma mod1_trefines_mod2 :
@@ -208,11 +207,11 @@ Lemma mod1_trefines_mod2 :
 Proof.
   constructor => κs /= Hs.
   thas_trace_inv. { tend. }
-  invert_all @m_step => //.
+  inv_all @m_step => //. specialize_hyps.
   revert select (_ ⊆ _) => <-.
   tstep_Some. { econs. } move => ? ->.
   thas_trace_inv. { tend. }
-  invert_all @m_step.
+  inv_all @m_step.
 Qed.
 
 Lemma mod2_srefines_mod3 :
@@ -220,15 +219,15 @@ Lemma mod2_srefines_mod3 :
 Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: STraceEnd.
-  invert_all @m_step => //.
+  inv_all @m_step => //. specialize_hyps.
   apply: STraceStep. { constructor. } 2: done.
   move => ? ->. simplify_eq.
   inversion H0; simplify_eq. 1: by apply: STraceEnd.
-  invert_all @m_step => //.
+  inv_all @m_step => //. specialize_hyps.
   apply: STraceStep. { constructor. } 2: done.
   move => ? ->. simplify_eq.
   inversion H2; simplify_eq. 1: by apply: STraceEnd.
-  invert_all @m_step => //.
+  inv_all @m_step => //.
 Qed.
 
 Lemma mod2_srefines_mod1_ub :
@@ -236,7 +235,7 @@ Lemma mod2_srefines_mod1_ub :
 Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: STraceEnd.
-  invert_all @m_step => //.
+  inv_all @m_step => //. specialize_hyps.
   apply: STraceStep. { constructor. } 2: done.
   move => ? ->. simplify_eq.
   inversion H0; simplify_eq. 1: by apply: STraceEnd.
@@ -249,7 +248,7 @@ Lemma mod2_srefines_mod1 :
 Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: STraceEnd.
-  invert_all @m_step => //.
+  inv_all @m_step => //. specialize_hyps.
   apply: STraceStep. { constructor. } 2: done.
   move => ? ->. simplify_eq.
   inversion H0; simplify_eq.
@@ -257,7 +256,7 @@ Proof.
     done.
     (* split. 2: move => <-.  *)
   }
-  invert_all @m_step => //.
+  inv_all @m_step => //.
   apply: STraceStep; [| | ]. Fail constructor.
   (* Undo. Undo. apply: STraceEnd; [done|]. *)
 Abort.
@@ -268,12 +267,12 @@ Lemma mod12_ang_srefines_mod1 :
 Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: STraceEnd.
-  invert_all @m_step => //.
+  inv_all @m_step => //.
   have H := (H0 1 ltac:(naive_solver)).
   inversion H; simplify_eq. 1: by apply: STraceEnd.
-  invert_all @m_step => //.
+  inv_all @m_step => //. specialize_hyps.
   inversion H3; simplify_eq.
-  2: invert_all @m_step => //.
+  2: inv_all @m_step => //.
   apply: STraceStep; [by constructor| | naive_solver].
   move => ?->. by apply: STraceEnd.
 Qed.
@@ -283,14 +282,14 @@ Lemma mod12_ang_srefines_mod3' :
 Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: STraceEnd.
-  invert_all @m_step => //.
+  inv_all @m_step => //.
   have H := (H0 1 ltac:(naive_solver)).
 Abort.
   (* inversion H; simplify_eq. *)
-  (* 2: invert_all @m_step => //. *)
+  (* 2: inv_all @m_step => //. *)
   (* have {}H := (H0 _ (Some 2) ltac:(naive_solver)). *)
   (* inversion H; simplify_eq. *)
-  (* 2: invert_all @m_step => //. *)
+  (* 2: inv_all @m_step => //. *)
   (* exfalso. simplify_eq/=. *)
   (* move: (H3 [2]). move: (H5 []). *)
 (* Abort. *)
@@ -339,21 +338,21 @@ Lemma mod_ang_comm1_straces Pκs:
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
     split; [naive_solver|].
     inversion H1; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //.
 
     have {}H := (H3 3 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
-    inversion H5; simplify_eq. 2: invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
+    inversion H5; simplify_eq. 2: inv_all @m_step => //.
 
     have {}H := (H3 5 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
     inversion H9; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //.
   - move => [?[?|[? HP]]]. 1: by apply: STraceEnd.
     apply: STraceStep; [by constructor| |done].
     move => /= ??; simplify_eq.
@@ -377,22 +376,22 @@ Lemma mod_ang_comm2_straces Pκs:
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //.
     split; [naive_solver|].
 
     have {}H := (H1 2 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
     inversion H3; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
-    inversion H5; simplify_eq. 2: invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
+    inversion H5; simplify_eq. 2: inv_all @m_step => //.
 
     have {}H := (H1 5 ltac:(naive_solver)).
     inversion H; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
     inversion H9; simplify_eq. 1: naive_solver.
-    invert_all @m_step => //.
-    inversion H11; simplify_eq. 2: invert_all @m_step => //.
+    inv_all @m_step => //. specialize_hyps.
+    inversion H11; simplify_eq. 2: inv_all @m_step => //.
     naive_solver.
   - move => [?[?|[? HP]]]. 1: by apply: STraceEnd.
     apply: STraceStep; [by constructor| |done].
@@ -428,19 +427,19 @@ Proof.
       tstep_Some; [constructor|] => ? ->.
       by tend.
   - move: Hr2 => /thas_trace_ex_inv/thas_trace_nil_inv Hr2.
-    inversion Hr2; simplify_eq => //. 2: invert_all @m_step => //; easy.
+    inversion Hr2; simplify_eq => //. 2: inv_all @m_step => //; easy.
     move: H => [[] {}Hr].
     all: move: Hr => /(thas_trace_cons_inv _ _ _)/thas_trace_nil_inv{}Hr.
-    all: inversion Hr; simplify_K; [| invert_all @m_step => //; easy].
+    all: inversion Hr; simplify_K; [| inv_all @m_step => //; easy].
     all: move: H => [? [? {}Hr]].
-    all: invert_all @m_step.
+    all: inv_all @m_step; specialize_hyps.
 
     all: move: Hr => /(thas_trace_cons_inv _ _ _)/thas_trace_nil_inv{}Hr.
-    all: inversion Hr; simplify_K; [ move: H => [?[??]]; by invert_all @m_step|].
-    all: invert_all @m_step.
+    all: inversion Hr; simplify_K; [ move: H => [?[??]]; by inv_all @m_step|].
+    all: inv_all @m_step.
     1: move: (H2 5 ltac:(naive_solver)) => {}Hr.
     2: move: (H2 3 ltac:(naive_solver)) => {}Hr.
-    all: inversion Hr; simplify_K; [ move: H => [?[??]]; invert_all mod_ang_comm1_step|].
-    all: invert_all @m_step.
+    all: inversion Hr; simplify_K; [ move: H => [?[??]]; inv_all mod_ang_comm1_step|].
+    all: inv_all @m_step.
     all: pose proof (transitivity H5 H3); easy.
 Qed.

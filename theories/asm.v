@@ -114,7 +114,7 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
 Definition asm_module := Mod asm_step.
 
 Global Instance asm_vis_no_all: VisNoAll asm_module.
-Proof. move => *. invert_all @m_step; naive_solver. Qed.
+Proof. move => *. inv_all @m_step; naive_solver. Qed.
 
 (** * tstep *)
 Lemma asm_step_WriteReg_i r f es rs ins mem:
@@ -122,7 +122,7 @@ Lemma asm_step_WriteReg_i r f es rs ins mem:
             (λ G, G true None (λ G', G' (AsmState (ARunning es) (<[r:=f rs]>rs) mem ins))).
 Proof.
   constructor => ? ?. apply steps_impl_step_end => ???.
-  invert_all @m_step. eexists _, _. split_and!; [done|done|].
+  inv_all @m_step. eexists _, _. split_and!; [done|done|].
   move => ? /=. naive_solver.
 Qed.
 Global Hint Resolve asm_step_WriteReg_i : tstep.
@@ -148,7 +148,7 @@ Lemma asm_step_ReadMem_i r1 r2 f es rs ins mem:
 Proof.
   constructor => ? ?.
   apply steps_impl_step_end => ???.
-  invert_all @m_step. eexists _, _. split_and!; [done|done|].
+  inv_all @m_step. eexists _, _. split_and!; [done|done|].
   move => ? /=. naive_solver.
 Qed.
 Global Hint Resolve asm_step_ReadMem_i : tstep.
@@ -177,7 +177,7 @@ Lemma asm_step_WriteMem_i r1 r2 f es rs ins mem:
                             AsmState AHalted rs mem ins))).
 Proof.
   constructor => ? ?. apply steps_impl_step_end => ???.
-  invert_all @m_step. eexists _, _. split_and!; [done|done|].
+  inv_all @m_step. eexists _, _. split_and!; [done|done|].
   move => ? /=. naive_solver.
 Qed.
 Global Hint Resolve asm_step_WriteMem_i : tstep.
@@ -202,7 +202,7 @@ Lemma asm_step_Syscall_call_i es rs ins mem:
                     (λ G', G' (AsmState (AWaitingSyscall es) rs mem ins))).
 Proof.
   constructor => ? ?. apply steps_impl_step_end => ???.
-  invert_all @m_step. eexists _, _. split_and!; [done|done|].
+  inv_all @m_step. eexists _, _. split_and!; [done|done|].
   move => ? /=. naive_solver.
 Qed.
 Global Hint Resolve asm_step_Syscall_call_i : tstep.
@@ -223,7 +223,7 @@ Lemma asm_step_Syscall_ret_i es rs ins mem:
                     (λ G', G' (AsmState (ARunning es) (<["R0" := ret]> rs) mem' ins))).
 Proof.
   constructor => ? ?. apply steps_impl_step_end => ???.
-  invert_all @m_step. eexists _, _. split_and!; [naive_solver|done|].
+  inv_all @m_step. eexists _, _. split_and!; [naive_solver|done|].
   move => ? /=. naive_solver.
 Qed.
 Global Hint Resolve asm_step_Syscall_ret_i : tstep.
@@ -248,7 +248,7 @@ Lemma asm_step_Jump_i rs ins mem:
    ).
 Proof.
   constructor => ? HG. apply steps_impl_step_end => ???.
-  invert_all @m_step; simplify_option_eq.
+  inv_all/= @m_step; specialize_hyps; simplify_option_eq.
   all: eexists _, _; split_and!; [done..|]; naive_solver.
 Qed.
 Global Hint Resolve asm_step_Jump_i : tstep.
@@ -276,7 +276,7 @@ Lemma asm_step_AWaiting_i rs ins mem:
    ).
 Proof.
   constructor => ? HG. apply steps_impl_step_end => ???.
-  invert_all @m_step. eexists _, _. split_and!; [naive_solver..|]. naive_solver.
+  inv_all @m_step. eexists _, _. split_and!; [naive_solver..|]. naive_solver.
 Qed.
 Global Hint Resolve asm_step_AWaiting_i : tstep.
 
@@ -297,7 +297,7 @@ Lemma asm_step_APagefaulting_i rs ins mem a:
    ).
 Proof.
   constructor => ? HG. apply steps_impl_step_end => ???.
-  invert_all @m_step. eexists _, _. split_and!; [naive_solver..|]. naive_solver.
+  inv_all @m_step. eexists _, _. split_and!; [naive_solver..|]. naive_solver.
 Qed.
 Global Hint Resolve asm_step_APagefaulting_i : tstep.
 
@@ -313,7 +313,7 @@ Global Hint Resolve asm_step_APagefaulting_s : tstep.
 Lemma asm_step_AHalted_i rs ins mem:
   TStepI asm_module (AsmState AHalted rs mem ins) (λ G, True).
 Proof.
-  constructor => ? HG. apply steps_impl_step_end => ???. invert_all @m_step.
+  constructor => ? HG. apply steps_impl_step_end => ???. inv_all @m_step.
 Qed.
 Global Hint Resolve asm_step_AHalted_i : tstep.
 

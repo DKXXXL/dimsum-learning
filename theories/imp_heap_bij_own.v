@@ -1557,9 +1557,9 @@ Proof.
   { split!. } { done. }
   move => {}n _ /= Hloop [[σm1 [[σf σ1] [[pp []] r]]] σc1] [[σm2 σ2] σc2] ?.
   destruct_all?; simplify_eq/=.
-  - tstep_i. apply steps_impl_step_end => ???. invert_all' @m_step; simplify_eq/=. split!.
+  - tstep_i. apply steps_impl_step_end => ???. inv_all/= @m_step. split!.
     tstep_s. eexists (Some (SMEEmit _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
-    tstep_i. apply steps_impl_step_end => ???. invert_all @m_step. split!.
+    tstep_i. apply steps_impl_step_end => ???. inv_all @m_step. split!.
     tstep_s. eexists (Some (SMEReturn _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
     tstep_i => ??; simplify_eq/=.
     tstep_i. eexists (ValNum <$> vs), initial_heap_state. split!.
@@ -1580,20 +1580,20 @@ Proof.
   - tstep_both. apply steps_impl_step_end => κ ??. tstep_s. eexists _. apply: steps_spec_step_end; [done|] => ??.
     case_match; tend; (split!; [done|]). 2: { apply: Hloop; [done|]. split!. }
     tstep_i => ? vs *. tstep_both => *.
-    apply steps_impl_step_end => ???. invert_all @m_step => ?; simplify_eq.
+    apply steps_impl_step_end => ???. inv_all @m_step => ?; simplify_eq.
     + destruct i as [? [? vs' |]]; simplify_eq/=.
       tstep_s. eexists (Some _). split!.
       apply: steps_spec_step_end; [econs|]=> /=??. destruct_all?; simplify_eq/=. tend.
       split!.
-      tstep_both. apply steps_impl_step_end => ???. invert_all @m_step.
+      tstep_both. apply steps_impl_step_end => ???. inv_all @m_step.
       tstep_s. eexists (None). apply: steps_spec_step_end; [econs|]=> /=??. destruct_all?; simplify_eq/=. tend.
       iSatStart.
       iIntros!. iDestruct (big_sepL2_ValNum_inv_r with "[$]") as %?. subst.
       iSatStop.
       split!; [done|].
-      tstep_i. apply steps_impl_step_end => ???. invert_all @m_step. split!.
+      tstep_i. apply steps_impl_step_end => ???. inv_all @m_step. split!.
       tstep_s. eexists (Some (SMEEmit _)). split!. apply: steps_spec_step_end; [econs|] => /=? ->.
-      tstep_i. apply steps_impl_step_end => ???. invert_all @m_step. split!.
+      tstep_i. apply steps_impl_step_end => ???. inv_all @m_step. split!.
       tstep_s. eexists (Some (SMEReturn _)). split!. apply: steps_spec_step_end; [econs|] => /=? ->.
       tstep_i => ? <-.
       tstep_i. eexists [ValNum _]. split!.
@@ -1607,11 +1607,11 @@ Proof.
       iDestruct (big_sepL2_cons_inv_r with "[$]") as ([]??) "[??]"; subst => //=; iDestruct!.
       iSatStop.
       tend. split!.
-      tstep_i. apply: steps_impl_step_end => ???. invert_all @m_step. split!.
-      tstep_i. apply: steps_impl_step_end => ???. invert_all @m_step. split!.
+      tstep_i. apply: steps_impl_step_end => ???. inv_all @m_step. split!.
+      tstep_i. apply: steps_impl_step_end => ???. inv_all @m_step. split!.
       tstep_s. eexists (Some (SMEEmit _)). split!.
       apply: steps_spec_step_end; [econs|]=> /=? ->.
-      tstep_i. apply: steps_impl_step_end => ???. invert_all @m_step.
+      tstep_i. apply: steps_impl_step_end => ???. inv_all @m_step.
 Qed.
 
 Lemma imp_heap_bij_trefines_implies_ctx_refines fnsi fnss :

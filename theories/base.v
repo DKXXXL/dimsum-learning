@@ -8,7 +8,50 @@ Export RecordSetNotations.
 
 Global Unset Program Cases.
 
-(** Tactics *)
+(** * Tactics *)
+(** Inspired by inv in CompCert/Coqlib.v *)
+Ltac inv H := inversion H; clear H; simplify_eq.
+
+(** exploit from CompCert/Coqlib.v *)
+Lemma tac_exploit: forall (P Q: Prop), P -> (P -> Q) -> Q.
+Proof. naive_solver. Qed.
+
+Ltac exploit x :=
+    refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _ _) _)
+ || refine (tac_exploit _ _ (x _ _) _)
+ || refine (tac_exploit _ _ (x _) _).
 
 Ltac specialize_hyps :=
   repeat match goal with
@@ -603,23 +646,23 @@ Section least.
   Qed.
 End least.
 
-Ltac invert_all_tac f :=
-  let do_invert H := inversion H; clear H in
+Ltac inv_all_tac f :=
   repeat lazymatch goal with
-         | H : f |- _ => do_invert H
-         | H : f _ |- _ => do_invert H
-         | H : f _ _|- _ => do_invert H
-         | H : f _ _ _|- _ => do_invert H
-         | H : f _ _ _ _|- _ => do_invert H
-         | H : f _ _ _ _ _|- _ => do_invert H
-         | H : f _ _ _ _ _ _|- _ => do_invert H
-         | H : f _ _ _ _ _ _ _|- _ => do_invert H
-         | H : f _ _ _ _ _ _ _ _|- _ => do_invert H
-         | H : f _ _ _ _ _ _ _ _ _|- _ => do_invert H
+         | H : f |- _ => inv H
+         | H : f _ |- _ => inv H
+         | H : f _ _|- _ => inv H
+         | H : f _ _ _|- _ => inv H
+         | H : f _ _ _ _|- _ => inv H
+         | H : f _ _ _ _ _|- _ => inv H
+         | H : f _ _ _ _ _ _|- _ => inv H
+         | H : f _ _ _ _ _ _ _|- _ => inv H
+         | H : f _ _ _ _ _ _ _ _|- _ => inv H
+         | H : f _ _ _ _ _ _ _ _ _|- _ => inv H
          end.
 
-Tactic Notation "invert_all" constr(f) := invert_all_tac f; simplify_eq/=; specialize_hyps.
-Tactic Notation "invert_all'" constr(f) := invert_all_tac f.
+(* Tactic Notation "invert_all" constr(f) := invert_all_tac f; simplify_eq/=; specialize_hyps. *)
+Tactic Notation "inv_all/=" constr(f) := inv_all_tac f; simplify_eq/=.
+Tactic Notation "inv_all" constr(f) := inv_all_tac f.
 
 Tactic Notation "case_match" "as" ident(Hd) :=
   match goal with

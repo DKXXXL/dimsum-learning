@@ -17,7 +17,7 @@ Lemma mod_state_transform_vis_no_all {EV S} (m : module EV) (R : S → m.(m_stat
   (∀ σ e Pσ σ'', m_step m σ (Some e) Pσ → Pσ σ'' → ∃ σs, ∀ σs', R σs' σ'' ↔ σs = σs') →
   VisNoAll (mod_state_transform m R).
 Proof.
-  move => Hs ????. invert_all @m_step.
+  move => Hs ????. inv_all @m_step.
   have [σ'' Hσ'']:= vis_no_all _ _ _ ltac:(done).
   have [σs Hσs]:= Hs _ _ _ _ ltac:(done) ltac:(naive_solver).
   eexists σs. naive_solver.
@@ -49,7 +49,7 @@ Proof.
   apply wp_implies_refines => n.
   move: Href => /wp_complete/(_ n)/=.
   elim/ti_lt_ind: n σ1 σ2 σ1' σ2' HR1 HR2 => n IH σ1 σ2 σ1' σ2' HR1 HRc2 Hwp.
-  apply Wp_step => Pσ n' κ ??. invert_all @m_step.
+  apply Wp_step => Pσ n' κ ??. inv_all @m_step.
   inversion Hwp as [??? Hwp']; simplify_eq.
   have ?: σ' = σ1' by naive_solver. subst σ'.
   have [Pσ' [Ht HPσ]]:= Hwp' _ _ _ ltac:(done) ltac:(done).

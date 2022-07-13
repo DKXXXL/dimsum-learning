@@ -132,7 +132,7 @@ Section mod_link.
     move => ??? [[[sp σ1]σ2][[σ s] ok]] ??.
     eexists (σ, s, σ1, σ2) => -[[[??]?]?]/=.
     split => ?; simplify_eq => //.
-    invert_all @m_step; invert_all @mod_link_filter; destruct_all?; simplify_eq.
+    inv_all/= @m_step; inv_all @mod_link_filter; destruct_all?; simplify_eq.
     all: unfold mod_link_to_state in *; repeat case_match => //; simplify_eq => //.
   Qed.
 
@@ -145,7 +145,7 @@ Section mod_link.
     apply: mod_state_transform_trefines; [| | |done..].
     - move => [[??]?] [[[??]?]?] [[[??]?]?] /=. naive_solver.
     - move => [[??]?] [[[??]?][[??]?]] [[[??]?][[??]?]] ?????; simplify_eq.
-      invert_all @m_step; invert_all @mod_link_filter; destruct_all?; simplify_eq.
+      inv_all/= @m_step; inv_all @mod_link_filter; destruct_all?; simplify_eq.
       all: eexists (_, _, _); do 3 f_equal; repeat case_match => //; simplify_eq/= => //.
       all: unfold mod_link_to_state in *; repeat case_match; simplify_eq => //.
     - apply mod_map_trefines => /=. by apply mod_seq_product_trefines.
@@ -163,9 +163,9 @@ Section mod_link.
     constructor => G /tstepi_proof?. clear TStepI0.
     apply: (steps_impl_submodule _ (mod_link _ _ _) (λ x, (MLFLeft, s, x, σ2))); [done| |].
     - naive_solver.
-    - move => /= ??? Hs. invert_all' @state_transform_step; simplify_eq. invert_all' @m_step; simplify_eq/=.
+    - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
       + case_match; simplify_eq. naive_solver.
-      + case_match; simplify_eq. invert_all @mod_link_filter.
+      + case_match; simplify_eq. inv_all @mod_link_filter.
         split!; [done| |done] => /=?. destruct_all?.
         split!; [naive_solver..|]. move => /= ? HP. move: HP => /H2[?[??]]. eexists (_, _, _, _).
         split!; [by destruct ok, s0|done|by destruct ok, s0|naive_solver].
@@ -183,9 +183,9 @@ Section mod_link.
     constructor => G /tstepi_proof?. clear TStepI0.
     apply: (steps_impl_submodule _ (mod_link _ _ _) (λ x, (MLFRight, s, σ1, x))); [done| |].
     - naive_solver.
-    - move => /= ??? Hs. invert_all' @state_transform_step; simplify_eq. invert_all' @m_step; simplify_eq/=.
+    - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
       + case_match; simplify_eq. naive_solver.
-      + case_match; simplify_eq. invert_all @mod_link_filter.
+      + case_match; simplify_eq. inv_all @mod_link_filter.
         split!; [done| |done] => /=?. destruct_all?.
         split!; [naive_solver..|]. move => /= ? HP. move: HP => /H2[?[??]]. eexists (_, _, _, _).
         split!; [by destruct s0, ok|done|by destruct s0, ok|naive_solver] => /=.
@@ -201,9 +201,9 @@ Section mod_link.
     constructor => G /tstepi_proof?. clear TStepI0.
     apply: (steps_impl_submodule _ (mod_link _ _ _) (λ x, (MLFRecvL e, s, x, σ2))); [done| |].
     - naive_solver.
-    - move => /= ??? Hs. invert_all' @state_transform_step; simplify_eq. invert_all' @m_step; simplify_eq/=.
+    - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
       + case_match; simplify_eq. naive_solver.
-      + case_match; simplify_eq. invert_all @mod_link_filter; naive_solver.
+      + case_match; simplify_eq. inv_all @mod_link_filter; naive_solver.
   Qed.
 
   Lemma mod_link_step_right_recv_i R m1 m2 s σ1 σ2 e P `{!TStepI m2 σ2 P} :
@@ -216,9 +216,9 @@ Section mod_link.
     constructor => G /tstepi_proof?. clear TStepI0.
     apply: (steps_impl_submodule _ (mod_link _ _ _) (λ x, (MLFRecvR e, s, σ1, x))); [done| |].
     - naive_solver.
-    - move => /= ??? Hs. invert_all' @state_transform_step; simplify_eq. invert_all' @m_step; simplify_eq/=.
+    - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
       + case_match; simplify_eq. naive_solver.
-      + case_match; simplify_eq. invert_all @mod_link_filter; naive_solver.
+      + case_match; simplify_eq. inv_all @mod_link_filter; naive_solver.
   Qed.
 
   Lemma mod_link_step_none_i R m1 m2 s σ1 σ2 :
@@ -226,7 +226,7 @@ Section mod_link.
       G true (Some (Incoming, e')) (λ G', G' (mod_link_to_state ok p' e', s', σ1, σ2))).
   Proof.
     constructor => G HG. apply steps_impl_step_end => ???.
-    invert_all' @m_step; simplify_eq/=; invert_all' mod_link_filter; simplify_eq/=.
+    inv_all/= @m_step; inv_all/= mod_link_filter.
     split!; [naive_solver|done|] => /= ??. eexists (_, _, _, _). split!; by destruct s0, ok.
   Qed.
 
