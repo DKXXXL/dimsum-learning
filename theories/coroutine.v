@@ -31,12 +31,12 @@ Proof. move => ?. do 12 (destruct i as [|i]; try done); lia. Qed.
 Lemma coro_saved_regs_take_PC r :
   r ≠ "PC" →
   r ∈ take 12 coro_saved_regs ↔ r ∈ coro_saved_regs.
-Proof. set_solver. Qed.
+Proof. fast_set_solver. Qed.
 Lemma coro_saved_regs_take_saved r i :
   (i < 12)%nat →
   r ≠ saved_registers !!! i →
   r ∈ take (i + 1) coro_saved_regs ↔ r ∈ take i coro_saved_regs.
-Proof. cbn. repeat (destruct i as [|i] => /=; [set_solver|try lia]). Qed.
+Proof. cbn. repeat (destruct i as [|i] => /=; [fast_set_solver|try lia]). Qed.
 
 Definition coro_get_regs (regs : gmap string Z) : list Z :=
   ((regs !!!.) <$> coro_saved_regs).
