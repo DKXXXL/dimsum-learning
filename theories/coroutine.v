@@ -114,16 +114,14 @@ Proof.
   rewrite -!insert_union_l left_id_L.
   by repeat (rewrite lookup_total_insert_ne; [|naive_solver]).
 Qed.
+Opaque coro_saved_regs.
 
 Lemma coro_regs_regs_lookup_Some rs r v:
   coro_regs_regs rs !! r = Some v ↔ r ∈ coro_saved_regs ∧ v = rs !!! r.
 Proof.
-  rewrite /coro_regs_regs.
-  cbn.
-  rewrite !lookup_insert_Some !lookup_empty !elem_of_cons elem_of_nil.
-  naive_solver.
+  rewrite /coro_regs_regs -elem_of_list_to_map; [|compute_done].
+  rewrite elem_of_list_fmap. naive_solver.
 Qed.
-Opaque coro_saved_regs.
 
 Lemma coro_regs_regs_n_lookup_Some rs r v i:
   coro_regs_regs_n rs i !! r = Some v ↔ r ∈ take i coro_saved_regs ∧ v = rs !!! r.
