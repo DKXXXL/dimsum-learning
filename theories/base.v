@@ -254,6 +254,38 @@ Ltac simpl_map_decide :=
   | |- context [bool_decide (?P)] => rewrite (bool_decide_false P); [|go]
   end; simpl).
 
+(** ** [iDestruct!] *)
+Tactic Notation "iDestruct!" :=
+  repeat (
+     iMatchHyp (fun H P =>
+        match P with
+        | False%I => iDestruct H as %[]
+        | True%I => iDestruct H as %_
+        | emp%I => iDestruct H as "_"
+        | ⌜_⌝%I => iDestruct H as %?
+        | (_ ∗ _)%I => iDestruct H as "[??]"
+        | (∃ x, _)%I => iDestruct H as (?) "?"
+        | (□ _)%I => iDestruct H as "#?"
+        end)
+  || simplify_eq/=).
+
+Tactic Notation "iIntros!" := iIntros; iDestruct!.
+
+(** ** [iSplit!] *)
+Ltac iSplit_step tac :=
+  lazymatch goal with
+  | |- environments.envs_entails _ (∃ x, _)%I => iExists _
+  | |- environments.envs_entails _ (_ ∗ _)%I => iSplit
+  | |- environments.envs_entails _ (⌜_⌝)%I => iPureIntro
+  | |- _ => split_step tac
+  end; simpl.
+
+Ltac iSplit_tac tac :=
+  (* The outer repeat is because later split_steps may have
+  instantiated evars and thus we try earlier goals again. *)
+  repeat (simpl; repeat iSplit_step tac).
+
+Tactic Notation "iSplit!" := iSplit_tac ltac:(fail).
 
 (** * map_union_weak *)
 Definition map_union_weak `{∀ A, Insert K A (M A), ∀ A, Empty (M A), ∀ A, Lookup K A (M A),
@@ -385,6 +417,45 @@ Section map_Exists.
 End map_Exists.
 End theorems.
 
+(** ** [fresh_map] *)
+Definition fresh_map `{Countable A} `{Countable B} `{Infinite B}
+    (S : gset A) (X : gset B) : gmap A B :=
+  list_to_map (zip (elements S) (fresh_list (length (elements S)) X)).
+
+Section fresh_map.
+  Context `{Countable A} `{Countable B} `{Infinite B}.
+  Implicit Types (S : gset A) (X : gset B).
+
+  Lemma fresh_map_lookup_Some (S : gset A) (X : gset B) i x:
+    fresh_map S X !! i = Some x → i ∈ S ∧ x ∉ X.
+  Proof.
+    rewrite -elem_of_list_to_map.
+    - move => /(elem_of_zip_with _ _ _ _)[?[?[?[??]]]]. simplify_eq. split; [set_solver|].
+      by apply: fresh_list_is_fresh.
+    - rewrite fst_zip ?fresh_list_length //. apply NoDup_elements.
+  Qed.
+
+  Lemma fresh_map_lookup_None (S : gset A) (X : gset B) i:
+    fresh_map S X !! i = None ↔ i ∉ S.
+  Proof. rewrite -not_elem_of_list_to_map. rewrite fst_zip; [set_solver|]. by rewrite fresh_list_length. Qed.
+
+
+  Lemma fresh_map_bij S X i1 i2 j :
+    fresh_map S X !! i1 = Some j →
+    fresh_map S X !! i2 = Some j →
+    i1 = i2.
+  Proof.
+    rewrite -!elem_of_list_to_map.
+    2: { rewrite fst_zip ?fresh_list_length //. apply NoDup_elements. }
+    2: { rewrite fst_zip ?fresh_list_length //. apply NoDup_elements. }
+    move => /elem_of_lookup_zip_with[i1'[?[?[?[??]]]]].
+    move => /elem_of_lookup_zip_with[i2'[?[?[?[??]]]]]. simplify_eq.
+    have ? : i1' = i2'  by apply: NoDup_lookup; [eapply (NoDup_fresh_list _ X)|..]. subst.
+    naive_solver.
+  Qed.
+
+End fresh_map.
+
 (** ** [codom] (not used) *)
 Definition codom {K A} `{Countable K} `{Countable A} (m : gmap K A) : gset A :=
   list_to_set (snd <$> (map_to_list m)).
@@ -467,6 +538,14 @@ Proof.
   by eapply lookup_empty.
 Qed.
 End curry_uncurry.
+
+Lemma lookup_gset_to_gmap_Some {K A} `{Countable K} (X : gset K) (x y: A) i:
+  gset_to_gmap x X !! i = Some y ↔ x = y ∧ i ∈ X.
+Proof. rewrite lookup_gset_to_gmap. case_option_guard; naive_solver. Qed.
+
+Lemma lookup_gset_to_gmap_None {K A} `{Countable K} (X : gset K) (x: A) i:
+  gset_to_gmap x X !! i = None ↔ i ∉ X.
+Proof. rewrite lookup_gset_to_gmap. case_option_guard; naive_solver. Qed.
 
 (** ** Lemmas about map_difference *)
 Section theorems.
@@ -631,6 +710,18 @@ Section semi_set.
     X ## Y →
     x ∉ Y.
   Proof. set_solver. Qed.
+
+  Lemma disjoint_mono X Y X' Y' :
+    X' ## Y' →
+    X ⊆ X' →
+    Y ⊆ Y' →
+    X ## Y.
+  Proof. set_solver. Qed.
+  Lemma subseteq_mono_eq_r X Y Y' :
+    X ⊆ Y →
+    Y = Y' →
+    X ⊆ Y'.
+  Proof. set_solver. Qed.
 End semi_set.
 
 (** * Lemmas about lists *)
@@ -692,6 +783,158 @@ End mjoin.
 Lemma sum_list_with_sum_list {A} f (xs : list A):
   sum_list_with f xs = sum_list (f <$> xs).
 Proof. elim: xs => // ??; csimpl. lia. Qed.
+
+Lemma Forall_zip_with_1 {A B} l1 l2 (f : A → B → Prop):
+  Forall id (zip_with f l1 l2) →
+  length l1 = length l2 →
+  Forall2 f l1 l2.
+Proof.
+  elim: l1 l2 => /=. { case => //; econs. }
+  move => ?? IH []//?? /(Forall_cons_1 _ _)[??] [?]. econs; [done|]. by apply: IH.
+Qed.
+
+Lemma Forall_zip_with_2 {A B} l1 l2 (f : A → B → Prop):
+  Forall2 f l1 l2 →
+  Forall id (zip_with f l1 l2).
+Proof. elim => /=; by econs. Qed.
+
+Section fmap.
+  Context {A B : Type} (f : A → option B).
+  Implicit Types l : list A.
+
+  Lemma NoDup_omap_2_strong l :
+    (∀ x y z, x ∈ l → y ∈ l → f x = Some z → f y = Some z → x = y) →
+    NoDup l →
+    NoDup (omap f l).
+  Proof.
+    intros Hinj. induction 1 as [|x l Hnotin ? IH]; csimpl; [constructor|].
+    case_match. 2: apply IH; set_solver. constructor.
+    - intros [y [Hxy ?]]%elem_of_list_omap. contradict Hnotin.
+      erewrite (Hinj x); set_solver.
+    - apply IH. set_solver.
+  Qed.
+End fmap.
+
+Lemma list_fmap_delete {X Y: Type} i (f: X → Y) (L: list X):
+  f <$> (delete i L) = delete i (f <$> L).
+Proof.
+  induction L in i |-*; destruct i; simpl; eauto.
+  by erewrite IHL.
+Qed.
+
+Lemma NoDup_delete {X} p (L: list X):
+  NoDup L →
+  NoDup (delete p L).
+Proof.
+  intros Hnd. induction Hnd in p |-*; destruct p; simpl; eauto using NoDup_nil_2.
+  eapply NoDup_cons. split; last done.
+  intros [j Hlook]%elem_of_list_lookup_1.
+  destruct (decide (j < p)).
+  - rewrite lookup_delete_lt // in Hlook.
+    eapply elem_of_list_lookup_2 in Hlook. done.
+  - rewrite lookup_delete_ge // in Hlook; last lia.
+    eapply elem_of_list_lookup_2 in Hlook. done.
+Qed.
+
+Section imap.
+  Context {A B : Type} (f : nat → A → B).
+  Lemma list_lookup_imap_Some l i x : imap f l !! i = Some x ↔ ∃ y, l !! i = Some y ∧ x = f i y.
+  Proof. rewrite list_lookup_imap fmap_Some. done. Qed.
+End imap.
+
+Lemma app_inj_middle {A} (l1 l2 l1' l2' : list A) x:
+  x ∉ l2 →
+  x ∉ l2' →
+  l1 ++ x :: l2 = l1' ++ x :: l2' → l1 = l1' ∧ l2 = l2'.
+Proof.
+  move => Hnotin1 Hnotin2 Heq.
+  destruct (decide (length l1 = length l1')). { move: Heq => /app_inj_1. naive_solver. }
+  exfalso.
+  have Hi : ∀ i, (l1 ++ x :: l2) !! i = (l1' ++ x :: l2') !! i by rewrite Heq.
+  destruct (decide (length l1 < length l1')).
+  - have := Hi (length l1').
+    rewrite lookup_app_r ?list_lookup_middle ?lookup_cons_ne_0; [|lia..].
+    move => /(elem_of_list_lookup_2 _ _ _). done.
+  - have := Hi (length l1).
+    rewrite list_lookup_middle ?lookup_app_r ?lookup_cons_ne_0; [|lia..].
+    move => ?. apply Hnotin2. by apply: elem_of_list_lookup_2.
+Qed.
+
+(** * Lemmas about [option] *)
+Lemma default_eq_Some {A} (x : A) o:
+  x = default x o ↔ (∀ y, o = Some y → x = y).
+Proof. destruct o; naive_solver. Qed.
+
+Lemma default_eq_Some' {A} (x : A) o:
+  default x o = x ↔ (∀ y, o = Some y → x = y).
+Proof. destruct o; naive_solver. Qed.
+
+Lemma default_eq_neq {A} (x y : A) o:
+  x ≠ y →
+  default x o = y ↔ o = Some y.
+Proof. destruct o; naive_solver. Qed.
+
+(** * Strings and pretty *)
+Notation string_to_list := list_ascii_of_string.
+
+Lemma string_list_eq s1 s2 :
+  s1 = s2 ↔ string_to_list s1 = string_to_list s2.
+Proof.
+  elim: s1 s2 => //=. { case; naive_solver. }
+  move => ???. case; naive_solver.
+Qed.
+
+Global Instance string_to_list_inj : Inj (=) (=) (string_to_list).
+Proof. move => ?? /string_list_eq. done. Qed.
+
+Lemma string_to_list_app s1 s2 :
+  string_to_list (s1 +:+ s2) = string_to_list s1 ++ string_to_list s2.
+Proof. elim: s1 => //. cbn. move => ?? <-. done. Qed.
+
+Lemma string_app_inj_r x y z:
+  x +:+ z = y +:+ z → x = y.
+Proof. move => /string_list_eq. rewrite !string_to_list_app => /app_inj_2[//|??]. by simplify_eq. Qed.
+
+Definition digits : list ascii :=
+  ["0"; "1"; "2"; "3"; "4"; "5"; "6"; "7"; "8"; "9"]%char.
+
+Lemma pretty_N_char_digits n:
+  pretty_N_char n ∈ digits.
+Proof. compute. repeat case_match; set_solver. Qed.
+
+Lemma pretty_N_go_digits (n : N) s:
+  string_to_list s ⊆ digits →
+  string_to_list (pretty_N_go n s) ⊆ digits.
+Proof.
+  revert s. induction (N.lt_wf_0 n) as [n _ IH] => s Hs.
+  destruct (decide (n = 0%N)); subst => //=.
+  rewrite pretty_N_go_step; [|lia].
+  apply IH => /=. { apply N.div_lt; lia. }
+  apply list_subseteq_cons_l; [|done].
+  apply pretty_N_char_digits.
+Qed.
+
+Lemma pretty_N_digits (n : N):
+  string_to_list (pretty n) ⊆ digits.
+Proof. rewrite /pretty/pretty_N. case_decide; [set_solver|]. apply pretty_N_go_digits. set_solver. Qed.
+
+Lemma pretty_N_go_last n s c:
+  last (string_to_list s) = Some c →
+  last (string_to_list (pretty_N_go n s)) = Some c.
+Proof.
+  revert s. induction (N.lt_wf_0 n) as [n _ IH] => s Hs.
+  destruct (decide (n = 0%N)); subst => //=.
+  rewrite pretty_N_go_step; [|lia].
+  apply IH => /=. { apply N.div_lt; lia. }
+  by rewrite last_cons Hs.
+Qed.
+
+Lemma pretty_N_last (n : N):
+  last (string_to_list (pretty n)) = Some (pretty_N_char (n `mod` 10)).
+Proof.
+  rewrite /pretty/pretty_N. case_decide; subst => //.
+  rewrite pretty_N_go_step; [|lia]. by erewrite pretty_N_go_last.
+Qed.
 
 (** * Fixpoints based on iris/bi/lib/fixpoint.v *)
 Class MonoPred {A : Type} (F : (A → Prop) → (A → Prop)) := {
@@ -1000,142 +1243,7 @@ Ltac simplify_map_list :=
              rewrite ->(map_preserved_eq' ns m)
          end.
 
-Section semi_set.
-  Context `{SemiSet A C}.
-  Implicit Types x y : A.
-  Implicit Types X Y : C.
-  Implicit Types Xs Ys : list C.
-  Lemma disjoint_mono X Y X' Y' :
-    X' ## Y' →
-    X ⊆ X' →
-    Y ⊆ Y' →
-    X ## Y.
-  Proof. set_solver. Qed.
-  Lemma subseteq_mono_eq_r X Y Y' :
-    X ⊆ Y →
-    Y = Y' →
-    X ⊆ Y'.
-  Proof. set_solver. Qed.
-End semi_set.
-
-Lemma Forall_zip_with_1 {A B} l1 l2 (f : A → B → Prop):
-  Forall id (zip_with f l1 l2) →
-  length l1 = length l2 →
-  Forall2 f l1 l2.
-Proof.
-  elim: l1 l2 => /=. { case => //; econs. }
-  move => ?? IH []//?? /(Forall_cons_1 _ _)[??] [?]. econs; [done|]. by apply: IH.
-Qed.
-
-Lemma Forall_zip_with_2 {A B} l1 l2 (f : A → B → Prop):
-  Forall2 f l1 l2 →
-  Forall id (zip_with f l1 l2).
-Proof. elim => /=; by econs. Qed.
-
-
-
-Lemma default_eq_Some {A} (x : A) o:
-  x = default x o ↔ (∀ y, o = Some y → x = y).
-Proof. destruct o; naive_solver. Qed.
-
-Lemma default_eq_Some' {A} (x : A) o:
-  default x o = x ↔ (∀ y, o = Some y → x = y).
-Proof. destruct o; naive_solver. Qed.
-
-Lemma default_eq_neq {A} (x y : A) o:
-  x ≠ y →
-  default x o = y ↔ o = Some y.
-Proof. destruct o; naive_solver. Qed.
-
-Lemma exists_Some_unique {A} (x : A) (P : A → Prop):
-  (∃ x', Some x = Some x' ∧ P x') ↔ P x.
-Proof. naive_solver. Qed.
-
-Lemma lookup_gset_to_gmap_Some {K A} `{Countable K} (X : gset K) (x y: A) i:
-  gset_to_gmap x X !! i = Some y ↔ x = y ∧ i ∈ X.
-Proof. rewrite lookup_gset_to_gmap. case_option_guard; naive_solver. Qed.
-
-Lemma lookup_gset_to_gmap_None {K A} `{Countable K} (X : gset K) (x: A) i:
-  gset_to_gmap x X !! i = None ↔ i ∉ X.
-Proof. rewrite lookup_gset_to_gmap. case_option_guard; naive_solver. Qed.
-
-Section fmap.
-  Context {A B : Type} (f : A → option B).
-  Implicit Types l : list A.
-
-  Lemma NoDup_omap_2_strong l :
-    (∀ x y z, x ∈ l → y ∈ l → f x = Some z → f y = Some z → x = y) →
-    NoDup l →
-    NoDup (omap f l).
-  Proof.
-    intros Hinj. induction 1 as [|x l Hnotin ? IH]; csimpl; [constructor|].
-    case_match. 2: apply IH; set_solver. constructor.
-    - intros [y [Hxy ?]]%elem_of_list_omap. contradict Hnotin.
-      erewrite (Hinj x); set_solver.
-    - apply IH. set_solver.
-  Qed.
-End fmap.
-
-Lemma list_fmap_delete {X Y: Type} i (f: X → Y) (L: list X):
-  f <$> (delete i L) = delete i (f <$> L).
-Proof.
-  induction L in i |-*; destruct i; simpl; eauto.
-  by erewrite IHL.
-Qed.
-
-Lemma NoDup_delete {X} p (L: list X):
-  NoDup L →
-  NoDup (delete p L).
-Proof.
-  intros Hnd. induction Hnd in p |-*; destruct p; simpl; eauto using NoDup_nil_2.
-  eapply NoDup_cons. split; last done.
-  intros [j Hlook]%elem_of_list_lookup_1.
-  destruct (decide (j < p)).
-  - rewrite lookup_delete_lt // in Hlook.
-    eapply elem_of_list_lookup_2 in Hlook. done.
-  - rewrite lookup_delete_ge // in Hlook; last lia.
-    eapply elem_of_list_lookup_2 in Hlook. done.
-Qed.
-
-
-Definition fresh_map `{Countable A} `{Countable B} `{Infinite B}
-    (S : gset A) (X : gset B) : gmap A B :=
-  list_to_map (zip (elements S) (fresh_list (length (elements S)) X)).
-
-Section fresh_map.
-  Context `{Countable A} `{Countable B} `{Infinite B}.
-  Implicit Types (S : gset A) (X : gset B).
-
-  Lemma fresh_map_lookup_Some (S : gset A) (X : gset B) i x:
-    fresh_map S X !! i = Some x → i ∈ S ∧ x ∉ X.
-  Proof.
-    rewrite -elem_of_list_to_map.
-    - move => /(elem_of_zip_with _ _ _ _)[?[?[?[??]]]]. simplify_eq. split; [set_solver|].
-      by apply: fresh_list_is_fresh.
-    - rewrite fst_zip ?fresh_list_length //. apply NoDup_elements.
-  Qed.
-
-  Lemma fresh_map_lookup_None (S : gset A) (X : gset B) i:
-    fresh_map S X !! i = None ↔ i ∉ S.
-  Proof. rewrite -not_elem_of_list_to_map. rewrite fst_zip; [set_solver|]. by rewrite fresh_list_length. Qed.
-
-
-  Lemma fresh_map_bij S X i1 i2 j :
-    fresh_map S X !! i1 = Some j →
-    fresh_map S X !! i2 = Some j →
-    i1 = i2.
-  Proof.
-    rewrite -!elem_of_list_to_map.
-    2: { rewrite fst_zip ?fresh_list_length //. apply NoDup_elements. }
-    2: { rewrite fst_zip ?fresh_list_length //. apply NoDup_elements. }
-    move => /elem_of_lookup_zip_with[i1'[?[?[?[??]]]]].
-    move => /elem_of_lookup_zip_with[i2'[?[?[?[??]]]]]. simplify_eq.
-    have ? : i1' = i2'  by apply: NoDup_lookup; [eapply (NoDup_fresh_list _ X)|..]. subst.
-    naive_solver.
-  Qed.
-
-End fresh_map.
-
+(** * Lemmas about [big_sepL] *)
 Section big_op.
 Context {PROP : bi}.
 Implicit Types P Q : PROP.
@@ -1154,6 +1262,7 @@ Proof.
 Qed.
 End big_op.
 
+(** * Lemmas about [big_sepM] *)
 Section big_op.
 Context {PROP : bi}.
 Implicit Types P Q : PROP.
@@ -1220,17 +1329,6 @@ Section sep_map.
     ([∗ map] k↦y ∈ m2, Ψ k y).
   Proof. iIntros "Hm Hi". by iDestruct (big_sepM_impl_strong with "Hm Hi") as "[? _]". Qed.
 
-End sep_map.
-End big_op.
-
-Section sep_map.
-Context {PROP : bi}.
-Implicit Types P Q : PROP.
-Implicit Types Ps Qs : list PROP.
-Implicit Types A : Type.
-  Context `{Countable K} {A : Type}.
-  Implicit Types m : gmap K A.
-  Implicit Types Φ Ψ : K → A → PROP.
   Lemma big_sepM_delete_2 Φ m i:
     (∀ y, Affine (Φ i y)) →
     ([∗ map] k↦y ∈ m, Φ k y) -∗
@@ -1259,7 +1357,9 @@ Implicit Types A : Type.
       iFrame.
 Qed.
 End sep_map.
+End big_op.
 
+(** * Lemmas about [big_sepM2] *)
 Section big_op.
 Context {PROP : bi}.
 Implicit Types P Q : PROP.
@@ -1283,123 +1383,3 @@ Section map2.
   Qed.
 End map2.
 End big_op.
-
-Tactic Notation "iDestruct!" :=
-  repeat (
-     iMatchHyp (fun H P =>
-        match P with
-        | False%I => iDestruct H as %[]
-        | True%I => iDestruct H as %_
-        | emp%I => iDestruct H as "_"
-        | ⌜_⌝%I => iDestruct H as %?
-        | (_ ∗ _)%I => iDestruct H as "[??]"
-        | (∃ x, _)%I => iDestruct H as (?) "?"
-        | (□ _)%I => iDestruct H as "#?"
-        end)
-  || simplify_eq/=).
-
-Tactic Notation "iIntros!" := iIntros; iDestruct!.
-
-Ltac iSplit_step :=
-  lazymatch goal with
-  | |- environments.envs_entails _ (∃ x, _)%I => iExists _
-  | |- environments.envs_entails _ (_ ∗ _)%I => iSplit
-  | |- environments.envs_entails _ (⌜_⌝)%I => iPureIntro
-  | |- _ => split_step ltac:(fail)
-  end; simpl.
-
-Ltac original_iSplit_tac :=
-  (* The outer repeat is because later split_steps may have
-  instantiated evars and thus we try earlier goals again. *)
-  repeat (simpl; repeat iSplit_step).
-
-Ltac iSplit_tac :=
-  original_iSplit_tac.
-
-Tactic Notation "iSplit!" := iSplit_tac.
-
-Section imap.
-  Context {A B : Type} (f : nat → A → B).
-  Lemma list_lookup_imap_Some l i x : imap f l !! i = Some x ↔ ∃ y, l !! i = Some y ∧ x = f i y.
-  Proof. rewrite list_lookup_imap fmap_Some. done. Qed.
-End imap.
-
-Lemma app_inj_middle {A} (l1 l2 l1' l2' : list A) x:
-  x ∉ l2 →
-  x ∉ l2' →
-  l1 ++ x :: l2 = l1' ++ x :: l2' → l1 = l1' ∧ l2 = l2'.
-Proof.
-  move => Hnotin1 Hnotin2 Heq.
-  destruct (decide (length l1 = length l1')). { move: Heq => /app_inj_1. naive_solver. }
-  exfalso.
-  have Hi : ∀ i, (l1 ++ x :: l2) !! i = (l1' ++ x :: l2') !! i by rewrite Heq.
-  destruct (decide (length l1 < length l1')).
-  - have := Hi (length l1').
-    rewrite lookup_app_r ?list_lookup_middle ?lookup_cons_ne_0; [|lia..].
-    move => /(elem_of_list_lookup_2 _ _ _). done.
-  - have := Hi (length l1).
-    rewrite list_lookup_middle ?lookup_app_r ?lookup_cons_ne_0; [|lia..].
-    move => ?. apply Hnotin2. by apply: elem_of_list_lookup_2.
-Qed.
-
-(** * strings *)
-Notation string_to_list := list_ascii_of_string.
-
-Lemma string_list_eq s1 s2 :
-  s1 = s2 ↔ string_to_list s1 = string_to_list s2.
-Proof.
-  elim: s1 s2 => //=. { case; naive_solver. }
-  move => ???. case; naive_solver.
-Qed.
-
-Global Instance string_to_list_inj : Inj (=) (=) (string_to_list).
-Proof. move => ?? /string_list_eq. done. Qed.
-
-Lemma string_to_list_app s1 s2 :
-  string_to_list (s1 +:+ s2) = string_to_list s1 ++ string_to_list s2.
-Proof. elim: s1 => //. cbn. move => ?? <-. done. Qed.
-
-Lemma string_app_inj_r x y z:
-  x +:+ z = y +:+ z → x = y.
-Proof. move => /string_list_eq. rewrite !string_to_list_app => /app_inj_2[//|??]. by simplify_eq. Qed.
-
-Definition digits : list ascii :=
-  ["0"; "1"; "2"; "3"; "4"; "5"; "6"; "7"; "8"; "9"]%char.
-
-Lemma pretty_N_char_digits n:
-  pretty_N_char n ∈ digits.
-Proof. compute. repeat case_match; set_solver. Qed.
-
-Lemma pretty_N_go_digits (n : N) s:
-  string_to_list s ⊆ digits →
-  string_to_list (pretty_N_go n s) ⊆ digits.
-Proof.
-  revert s. induction (N.lt_wf_0 n) as [n _ IH] => s Hs.
-  destruct (decide (n = 0%N)); subst => //=.
-  rewrite pretty_N_go_step; [|lia].
-  apply IH => /=. { apply N.div_lt; lia. }
-  apply list_subseteq_cons_l; [|done].
-  apply pretty_N_char_digits.
-Qed.
-
-Lemma pretty_N_digits (n : N):
-  string_to_list (pretty n) ⊆ digits.
-Proof. rewrite /pretty/pretty_N. case_decide; [set_solver|]. apply pretty_N_go_digits. set_solver. Qed.
-
-Lemma pretty_N_go_last n s c:
-  last (string_to_list s) = Some c →
-  last (string_to_list (pretty_N_go n s)) = Some c.
-Proof.
-  revert s. induction (N.lt_wf_0 n) as [n _ IH] => s Hs.
-  destruct (decide (n = 0%N)); subst => //=.
-  rewrite pretty_N_go_step; [|lia].
-  apply IH => /=. { apply N.div_lt; lia. }
-  by rewrite last_cons Hs.
-Qed.
-
-Lemma pretty_N_last (n : N):
-  last (string_to_list (pretty n)) = Some (pretty_N_char (n `mod` 10)).
-Proof.
-  rewrite /pretty/pretty_N. case_decide; subst => //.
-  rewrite pretty_N_go_step; [|lia]. by erewrite pretty_N_go_last.
-Qed.
