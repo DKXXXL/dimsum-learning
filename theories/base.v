@@ -7,6 +7,7 @@ From iris.proofmode Require Import proofmode.
 Export RecordSetNotations.
 
 Global Unset Program Cases.
+Local Set Default Proof Using "Type*".
 
 (** * Tactics *)
 (** Inspired by inv in CompCert/Coqlib.v *)
@@ -30,14 +31,33 @@ Ltac inv_all_tac f :=
 Tactic Notation "inv_all/=" constr(f) := inv_all_tac f; simplify_eq/=.
 Tactic Notation "inv_all" constr(f) := inv_all_tac f.
 
+(** "as" variant of case_match  *)
 Tactic Notation "case_match" "as" ident(Hd) :=
   match goal with
   | H : context [ match ?x with _ => _ end ] |- _ => destruct x eqn:Hd
   | |- context [ match ?x with _ => _ end ] => destruct x eqn:Hd
   end.
 
+(** [case_bool_decide] variant that takes a pattern  *)
+Tactic Notation "case_bool_decide" open_constr(pat) "as" ident(Hd) :=
+  match goal with
+  | H : context [@bool_decide ?P ?dec] |- _ =>
+    unify P pat;
+    destruct_decide (@bool_decide_reflect P dec) as Hd
+  | |- context [@bool_decide ?P ?dec] =>
+    unify P pat;
+    destruct_decide (@bool_decide_reflect P dec) as Hd
+  end.
+Tactic Notation "case_bool_decide" open_constr(pat) :=
+  let H := fresh in case_bool_decide pat as H.
+
+(** abbreviations for [econstructor] *)
 Tactic Notation "econs" := econstructor.
 Tactic Notation "econs" integer(n) := econstructor n.
+
+(** [fast_set_solver] is a faster version of [set_solver] that does
+not call set_unfold and setoid_subst so often. *)
+Ltac fast_set_solver := set_unfold; naive_solver.
 
 (** exploit from CompCert/Coqlib.v *)
 Lemma tac_exploit: forall (P Q: Prop), P -> (P -> Q) -> Q.
@@ -110,15 +130,6 @@ Ltac destruct_go tac :=
 Tactic Notation "destruct!" := destruct_go ltac:(fail).
 Tactic Notation "destruct!/=" := destruct_go ltac:( progress csimpl in * ).
 
-(** [SplitAssumeInj] *)
-Class SplitAssumeInj {A B} (R : relation A) (S : relation B) (f : A → B) : Prop := split_assume_inj : True.
-Global Instance split_assume_inj_inj A B R S (f : A → B) `{!Inj R S f} : SplitAssumeInj R S f.
-Proof. done. Qed.
-
-Class SplitAssumeInj2 {A B C} (R1 : relation A) (R2 : relation B) (S : relation C) (f : A → B → C) : Prop := split_assume_inj2 : True.
-Global Instance split_assume_inj2_inj2 A B C R1 R2 S (f : A → B → C) `{!Inj2 R1 R2 S f} : SplitAssumeInj2 R1 R2 S f.
-Proof. done. Qed.
-
 (** [split_or] tries to simplify an or in the goal by proving that one side implies False. *)
 Ltac split_or :=
   repeat match goal with
@@ -135,6 +146,15 @@ Ltac split_or :=
                done]);
              left
          end.
+
+(** [SplitAssumeInj] *)
+Class SplitAssumeInj {A B} (R : relation A) (S : relation B) (f : A → B) : Prop := split_assume_inj : True.
+Global Instance split_assume_inj_inj A B R S (f : A → B) `{!Inj R S f} : SplitAssumeInj R S f.
+Proof. done. Qed.
+
+Class SplitAssumeInj2 {A B C} (R1 : relation A) (R2 : relation B) (S : relation C) (f : A → B → C) : Prop := split_assume_inj2 : True.
+Global Instance split_assume_inj2_inj2 A B C R1 R2 S (f : A → B → C) `{!Inj2 R1 R2 S f} : SplitAssumeInj2 R1 R2 S f.
+Proof. done. Qed.
 
 (** [split!] splits the goal *)
 Ltac split_step tac :=
@@ -181,8 +201,7 @@ Ltac split_tac tac :=
 
 Tactic Notation "split!" := split_tac ltac:(fail).
 
-Ltac simpl_map_ext tac := idtac.
-
+(** [simplify_map_eq'] is a version of [simplify_map_eq] that also simplifies lookup total. *)
 Tactic Notation "simpl_map_total" "by" tactic3(tac) := repeat
    match goal with
    | H : ?m !! ?i = Some ?x |- context [?m !!! ?i] =>
@@ -209,12 +228,13 @@ Tactic Notation "simpl_map_total" "by" tactic3(tac) := repeat
    (*     rewrite H1 in H2 *)
    end.
  Tactic Notation "simplify_map_eq'" "/=" "by" tactic3(tac) :=
-  repeat (progress csimpl in * || (progress simpl_map_total by tac) || (progress simpl_map_ext tac) || simplify_map_eq by tac ).
+  repeat (progress csimpl in * || (progress simpl_map_total by tac) || simplify_map_eq by tac ).
  Tactic Notation "simplify_map_eq'" :=
-  repeat (progress (simpl_map_total by eauto with simpl_map map_disjoint) || (progress simpl_map_ext ltac:(eauto with simpl_map map_disjoint)) || simplify_map_eq by eauto with simpl_map map_disjoint ).
+  repeat (progress (simpl_map_total by eauto with simpl_map map_disjoint) || simplify_map_eq by eauto with simpl_map map_disjoint ).
 Tactic Notation "simplify_map_eq'" "/=" :=
   simplify_map_eq'/= by eauto with simpl_map map_disjoint.
 
+(** [sort_map_insert] sorts concrete inserts such that they can later be eliminated via [insert_insert]. *)
 Ltac sort_map_insert :=
   repeat match goal with
          | |- context [<[ ?i := ?x ]> (<[ ?j := ?y ]> ?m)] =>
@@ -224,6 +244,8 @@ Ltac sort_map_insert :=
              rewrite (insert_commute m i j x y); [|done]
          end.
 
+(** [simpl_map_decide] tries to simplify bool_decide in the goal *)
+(* TODO: make more principled *)
 Ltac simpl_map_decide :=
   let go' := first [done | by apply elem_of_dom | by apply not_elem_of_dom] in
   let go := solve [ first [go' | by match goal with | H : _ ## _ |- _ => move => ?; apply: H; go' end] ] in
@@ -232,20 +254,8 @@ Ltac simpl_map_decide :=
   | |- context [bool_decide (?P)] => rewrite (bool_decide_false P); [|go]
   end; simpl).
 
-Tactic Notation "case_bool_decide" open_constr(pat) "as" ident(Hd) :=
-  match goal with
-  | H : context [@bool_decide ?P ?dec] |- _ =>
-    unify P pat;
-    destruct_decide (@bool_decide_reflect P dec) as Hd
-  | |- context [@bool_decide ?P ?dec] =>
-    unify P pat;
-    destruct_decide (@bool_decide_reflect P dec) as Hd
-  end.
-Tactic Notation "case_bool_decide" open_constr(pat) :=
-  let H := fresh in case_bool_decide pat as H.
 
-
-(* TODO: upstream? *)
+(** * map_union_weak *)
 Definition map_union_weak `{∀ A, Insert K A (M A), ∀ A, Empty (M A), ∀ A, Lookup K A (M A),
     ∀ A, FinMapToList K A (M A)} {A} (m1 m2 : M A) :=
   map_imap (λ l v, Some (default v (m1 !! l))) m2.
@@ -268,6 +278,197 @@ Section theorems.
   Qed.
 End theorems.
 
+(** * Lemmas about maps *)
+(** ** [map_seqZ] *)
+Fixpoint map_seqZ `{Insert Z A M, Empty M} (start : Z) (xs : list A) : M :=
+  match xs with
+  | [] => ∅
+  | x :: xs => <[start:=x]> (map_seqZ (Z.succ start) xs)
+  end.
+
+Section map_seqZ.
+  Context `{FinMap Z M} {A : Type}.
+  Implicit Types x : A.
+  Implicit Types xs : list A.
+
+  Global Instance map_seqZ_proper `{Equiv A} start :
+    Proper ((≡@{list A}) ==> (≡)) (map_seqZ (M:=M A) start).
+  Proof.
+    intros l1 l2 Hl. revert start.
+    induction Hl as [|x1 x2 l1 l2 ?? IH]; intros start; simpl.
+    - intros ?. rewrite lookup_empty; constructor.
+    - repeat (done || f_equiv).
+  Qed.
+
+  Lemma lookup_map_seqZ start xs i :
+    map_seqZ (M:=M A) start xs !! i = guard (start ≤ i)%Z; xs !! Z.to_nat (i - start)%Z.
+  Proof.
+    revert start. induction xs as [|x' xs IH]; intros start; simpl.
+    { rewrite lookup_empty; simplify_option_eq; by rewrite ?lookup_nil. }
+    destruct (decide (start = i)) as [->|?].
+    - by rewrite lookup_insert option_guard_True ?Z.sub_diag; try lia.
+    - rewrite lookup_insert_ne // IH.
+      simplify_option_eq; try done || lia.
+      replace (i - start)%Z with (Z.succ (i - Z.succ start))%Z by lia.
+      by rewrite Z2Nat.inj_succ; [|lia].
+  Qed.
+  Lemma lookup_map_seqZ_0 xs i :
+    (0 ≤ i)%Z →
+    map_seqZ (M:=M A) 0 xs !! i = xs !! Z.to_nat i.
+  Proof. move => ?. by rewrite lookup_map_seqZ option_guard_True // ?Z.sub_0_r. Qed.
+
+  Lemma lookup_map_seqZ_Some_inv start xs i x :
+    xs !! i = Some x ↔ map_seqZ (M:=M A) start xs !! (start + Z.of_nat i)%Z = Some x.
+  Proof.
+    rewrite ->lookup_map_seqZ, option_guard_True by lia.
+    have ->: Z.to_nat (start + i - start) = i by lia.
+    done.
+  Qed.
+
+  Lemma lookup_map_seqZ_Some start xs i x :
+    map_seqZ (M:=M A) start xs !! i = Some x ↔ (start ≤ i)%Z ∧ xs !! (Z.to_nat (i - start)) = Some x.
+  Proof. rewrite lookup_map_seqZ. case_option_guard; naive_solver. Qed.
+
+  Lemma lookup_map_seqZ_None start xs i :
+    map_seqZ (M:=M A) start xs !! i = None ↔ (i < start ∨ start + length xs ≤ i)%Z.
+  Proof.
+    rewrite lookup_map_seqZ.
+    case_option_guard; rewrite ?lookup_ge_None; naive_solver lia.
+  Qed.
+
+  Lemma lookup_map_seqZ_is_Some start xs i :
+    is_Some (map_seqZ (M:=M A) start xs !! i) ↔ (start ≤ i < start + length xs)%Z.
+  Proof. rewrite -not_eq_None_Some lookup_map_seqZ_None. lia. Qed.
+
+  Lemma lookup_map_seqZ_disjoint start1 start2 xs1 xs2 :
+    map_seqZ (M:=M A) start1 xs1 ##ₘ map_seqZ (M:=M A) start2 xs2 ↔
+     (start1 + length xs1 ≤ start2 ∨ start2 + length xs2 ≤ start1 ∨ length xs1 = 0%nat ∨ length xs2 = 0%nat)%Z.
+  Proof.
+    rewrite map_disjoint_alt.
+    setoid_rewrite lookup_map_seqZ_None.
+    split => Hi; [|lia].
+    have ?:= (Hi (start1)%Z). have ?:= (Hi (start2)%Z). lia.
+  Qed.
+
+  Lemma map_seqZ_app start xs1 xs2 :
+    map_seqZ start (xs1 ++ xs2)
+    =@{M A} map_seqZ start xs1 ∪ map_seqZ (start + length xs1) xs2.
+  Proof.
+    revert start. induction xs1 as [|x1 xs1 IH]; intros start; simpl.
+    - by rewrite ->(left_id_L _ _), Z.add_0_r.
+    - by rewrite IH /= Nat2Z.inj_succ Z.add_succ_r Z.add_succ_l !insert_union_singleton_l (assoc_L _).
+  Qed.
+End map_seqZ.
+
+(** ** [map_Exists] *)
+Definition map_Exists `{Lookup K A M} (P : K → A → Prop) : M → Prop :=
+  λ m, ∃ i x, m !! i = Some x ∧ P i x.
+
+Section theorems.
+Context `{FinMap K M}.
+Section map_Exists.
+  Context {A} (P : K → A → Prop).
+  Implicit Types m : M A.
+  Lemma map_Exists_to_list m : map_Exists P m ↔ Exists (uncurry P) (map_to_list m).
+  Proof.
+    rewrite Exists_exists. split.
+    - intros [? [? [? ?]]]. eexists (_, _). by rewrite elem_of_map_to_list.
+    - intros [[??] [??]]. eexists _, _. by rewrite <-elem_of_map_to_list.
+  Qed.
+
+  Context `{∀ i x, Decision (P i x)}.
+  Global Instance map_Exists_dec m : Decision (map_Exists P m).
+  Proof.
+    refine (cast_if (decide (Exists (uncurry P) (map_to_list m))));
+      by rewrite map_Exists_to_list.
+  Defined.
+End map_Exists.
+End theorems.
+
+(** ** [codom] (not used) *)
+Definition codom {K A} `{Countable K} `{Countable A} (m : gmap K A) : gset A :=
+  list_to_set (snd <$> (map_to_list m)).
+
+(** ** Misc lemmas about map *)
+Section map.
+  Context `{FinMap K M}.
+  Context {A : Type} .
+  Implicit Types m : M A.
+Lemma lookup_union_l' (m1 m2 : M A) i :
+  m2 !! i = None → (m1 ∪ m2) !! i = m1 !! i.
+Proof. intros Hi. rewrite lookup_union Hi. by destruct (m1 !! i). Qed.
+
+Lemma lookup_union_None_1 (m1 m2 : M A) i :
+  (m1 ∪ m2) !! i = None → m1 !! i = None ∧ m2 !! i = None.
+Proof. apply lookup_union_None. Qed.
+Lemma lookup_union_None_2 (m1 m2 : M A) i :
+  m1 !! i = None → m2 !! i = None → (m1 ∪ m2) !! i = None.
+Proof. move => ??. by apply lookup_union_None. Qed.
+End map.
+
+Section fin_map_dom.
+Context `{FinMapDom K M D}.
+Lemma not_elem_of_dom_1 {A} (m : M A) i : i ∉ dom D m → m !! i = None.
+Proof. apply not_elem_of_dom. Qed.
+End fin_map_dom.
+
+Section map_filter.
+  Context `{FinMap K M}.
+  Context {A} (P : K * A → Prop) `{!∀ x, Decision (P x)}.
+  Implicit Types m : M A.
+  Lemma map_filter_lookup_true m i :
+    (∀ x, m !! i = Some x → P (i, x)) → filter P m !! i = m !! i.
+  Proof. move => ?. rewrite map_filter_lookup. destruct (m !! i) => //=. case_option_guard; naive_solver. Qed.
+
+  Lemma map_filter_empty_iff_2 m :
+    map_Forall (λ i x, ¬P (i,x)) m →
+    filter P m = ∅.
+  Proof. apply map_filter_empty_iff. Qed.
+End map_filter.
+
+Section theorems.
+Context `{FinMap K M}.
+
+Lemma lookup_total_partial_alter {A} `{Inhabited A} (f : option A → option A) (m : M A) i:
+  partial_alter f i m !!! i = default inhabitant (f (m !! i)).
+Proof. by rewrite lookup_total_alt lookup_partial_alter. Qed.
+
+Lemma lookup_partial_alter_Some {A} (f : option A → option A) (m : M A) i j x :
+  partial_alter f i m !! j = Some x ↔ (i = j ∧ f (m !! i) = Some x) ∨ (i ≠ j ∧ m !! j = Some x).
+Proof.
+  destruct (decide (i = j)); subst.
+  - rewrite lookup_partial_alter. naive_solver.
+  - rewrite lookup_partial_alter_ne; naive_solver.
+Qed.
+
+Lemma delete_alter {A} (m : M A) i f :
+  delete i (alter f i m) = delete i m.
+Proof. by setoid_rewrite <-partial_alter_compose. Qed.
+
+Lemma alter_insert {A} (m : M A) i f x :
+  alter f i (<[i := x]> m) = <[i := f x]> m.
+Proof. by setoid_rewrite <-partial_alter_compose. Qed.
+
+Lemma alter_insert_ne {A} (m : M A) i j f x :
+  i ≠ j →
+  alter f i (<[j := x]> m) = <[j := x]> (alter f i m).
+Proof. move => ?. by setoid_rewrite <-partial_alter_commute at 1. Qed.
+
+End theorems.
+
+Section curry_uncurry.
+  Context `{Countable K1, Countable K2} {A : Type}.
+
+Lemma lookup_total_gmap_curry (m : gmap (K1 * K2) A) (i : K1) (j : K2):
+  ((gmap_curry m !!! i): gmap K2 A) !! j = m !! (i, j).
+Proof.
+  rewrite -lookup_gmap_curry lookup_total_alt.
+  destruct (gmap_curry m !! i); simpl; first done.
+  by eapply lookup_empty.
+Qed.
+End curry_uncurry.
+
+(** ** Lemmas about map_difference *)
 Section theorems.
 Context `{FinMap K M}.
 Lemma map_disjoint_difference_l' {A} (m1 m2 : M A) : m2 ∖ m1 ##ₘ m1.
@@ -288,12 +489,9 @@ Proof.
   rewrite !lookup_union_Some_raw (lookup_merge _).
   destruct (m1 !! i) as [x'|], (m2 !! i) => /=; intuition congruence.
 Qed.
-End theorems.
 
-Section theorems.
-Context `{FinMap K M}.
 Lemma map_difference_difference {A} (m1 m2 m3 : M A) :
-     m1 ∖ m2 ∖ m3 = m1 ∖ (m2 ∪ m3).
+  m1 ∖ m2 ∖ m3 = m1 ∖ (m2 ∪ m3).
 Proof.
   apply map_eq. intros i. apply option_eq. intros v.
   rewrite !lookup_difference_Some lookup_union_None.
@@ -364,23 +562,25 @@ Proof.
   destruct (m1 !! i) eqn: Heq; [|naive_solver].
   right. apply elem_of_dom. apply Hdom. by apply elem_of_dom.
 Qed.
+
+Lemma map_difference_eq_dom {A} (m m1 m2 : M A) :
+  dom D m1 ≡ dom D m2 →
+  m ∖ m1 = m ∖ m2.
+Proof.
+  move => Hdom.
+  apply map_eq. intros i. move: (Hdom i). rewrite !elem_of_dom -!not_eq_None_Some => ?.
+  apply option_eq. intros v.
+  unfold difference, map_difference, difference_with, map_difference_with.
+  rewrite !(lookup_merge _).
+  destruct (m !! i), (m1 !! i) as [x'|] eqn: Heq1, (m2 !! i) eqn: Heq2 => /=; try intuition congruence.
+Qed.
+Lemma map_difference_eq_dom_L {A} (m m1 m2 : M A) `{!LeibnizEquiv D}:
+  dom D m1 = dom D m2 →
+  m ∖ m1 = m ∖ m2.
+Proof. unfold_leibniz. apply: map_difference_eq_dom. Qed.
 End theorems.
 
-Section map.
-  Context `{FinMap K M}.
-  Context {A : Type} .
-  Implicit Types m : M A.
-Lemma lookup_union_l' (m1 m2 : M A) i :
-  m2 !! i = None → (m1 ∪ m2) !! i = m1 !! i.
-Proof using Type*. intros Hi. rewrite lookup_union Hi. by destruct (m1 !! i). Qed.
-End map.
-
-Section fin_map_dom.
-Context `{FinMapDom K M D}.
-Lemma not_elem_of_dom_1 {A} (m : M A) i : i ∉ dom D m → m !! i = None.
-Proof. apply not_elem_of_dom. Qed.
-End fin_map_dom.
-
+(** ** Lemmas about [list_to_map] *)
 Section theorems.
 Context `{FinMap K M}.
 Lemma list_to_map_list_find {A} (l : list (K * A)) i y:
@@ -416,89 +616,7 @@ Proof.
 Qed.
 End theorems.
 
-Section map_filter_lookup.
-  Local Set Default Proof Using "Type*".
-  Context `{FinMap K M}.
-  Context {A} (P : K * A → Prop) `{!∀ x, Decision (P x)}.
-  Implicit Types m : M A.
-  Lemma map_filter_lookup_true m i :
-    (∀ x, m !! i = Some x → P (i, x)) → filter P m !! i = m !! i.
-  Proof. move => ?. rewrite map_filter_lookup. destruct (m !! i) => //=. case_option_guard; naive_solver. Qed.
-End map_filter_lookup.
-Section theorems.
-Context `{FinMap K M}.
-Section map_filter.
-  Context {A} (P : K * A → Prop) `{!∀ x, Decision (P x)}.
-  Implicit Types m : M A.
-
-  Lemma map_filter_empty_iff_2 m :
-    map_Forall (λ i x, ¬P (i,x)) m →
-    filter P m = ∅.
-  Proof. apply map_filter_empty_iff. Qed.
-End map_filter.
-End theorems.
-
-Section theorems.
-Context `{FinMap K M}.
-
-Lemma lookup_total_partial_alter {A} `{Inhabited A} (f : option A → option A) (m : M A) i:
-  partial_alter f i m !!! i = default inhabitant (f (m !! i)).
-Proof. by rewrite lookup_total_alt lookup_partial_alter. Qed.
-
-Lemma lookup_partial_alter_Some {A} (f : option A → option A) (m : M A) i j x :
-  partial_alter f i m !! j = Some x ↔ (i = j ∧ f (m !! i) = Some x) ∨ (i ≠ j ∧ m !! j = Some x).
-Proof.
-  destruct (decide (i = j)); subst.
-  - rewrite lookup_partial_alter. naive_solver.
-  - rewrite lookup_partial_alter_ne; naive_solver.
-Qed.
-
-Lemma delete_alter {A} (m : M A) i f :
-  delete i (alter f i m) = delete i m.
-Proof. by setoid_rewrite <-partial_alter_compose. Qed.
-
-Lemma alter_insert {A} (m : M A) i f x :
-  alter f i (<[i := x]> m) = <[i := f x]> m.
-Proof. by setoid_rewrite <-partial_alter_compose. Qed.
-
-Lemma alter_insert_ne {A} (m : M A) i j f x :
-  i ≠ j →
-  alter f i (<[j := x]> m) = <[j := x]> (alter f i m).
-Proof. move => ?. by setoid_rewrite <-partial_alter_commute at 1. Qed.
-
-End theorems.
-
-Section curry_uncurry.
-  Context `{Countable K1, Countable K2} {A : Type}.
-
-Lemma lookup_total_gmap_curry (m : gmap (K1 * K2) A) (i : K1) (j : K2):
-  ((gmap_curry m !!! i): gmap K2 A) !! j = m !! (i, j).
-Proof.
-  rewrite -lookup_gmap_curry lookup_total_alt.
-  destruct (gmap_curry m !! i); simpl; first done.
-  by eapply lookup_empty.
-Qed.
-End curry_uncurry.
-
-Section dom.
-Context `{FinMapDom K M D}.
-Lemma map_difference_eq_dom {A} (m m1 m2 : M A) :
-  dom D m1 ≡ dom D m2 →
-  m ∖ m1 = m ∖ m2.
-Proof.
-  move => Hdom.
-  apply map_eq. intros i. move: (Hdom i). rewrite !elem_of_dom -!not_eq_None_Some => ?.
-  apply option_eq. intros v.
-  unfold difference, map_difference, difference_with, map_difference_with.
-  rewrite !(lookup_merge _).
-  destruct (m !! i), (m1 !! i) as [x'|] eqn: Heq1, (m2 !! i) eqn: Heq2 => /=; try intuition congruence.
-Qed.
-Lemma map_difference_eq_dom_L {A} (m m1 m2 : M A) `{!LeibnizEquiv D}:
-  dom D m1 = dom D m2 →
-  m ∖ m1 = m ∖ m2.
-Proof. unfold_leibniz. apply: map_difference_eq_dom. Qed.
-End dom.
-
+(** * Lemmas about sets *)
 Section semi_set.
   Context `{SemiSet A C}.
   Implicit Types x y : A.
@@ -515,17 +633,7 @@ Section semi_set.
   Proof. set_solver. Qed.
 End semi_set.
 
-Section theorems.
-Context `{FinMap K M}.
-
-Lemma lookup_union_None_1 {A} (m1 m2 : M A) i :
-  (m1 ∪ m2) !! i = None → m1 !! i = None ∧ m2 !! i = None.
-Proof. apply lookup_union_None. Qed.
-Lemma lookup_union_None_2 {A} (m1 m2 : M A) i :
-  m1 !! i = None → m2 !! i = None → (m1 ∪ m2) !! i = None.
-Proof. move => ??. by apply lookup_union_None. Qed.
-End theorems.
-
+(** * Lemmas about lists *)
 Lemma snoc_inv {A} (l : list A):
   l = [] ∨ ∃ x l', l = l' ++ [x].
 Proof.
@@ -585,7 +693,7 @@ Lemma sum_list_with_sum_list {A} f (xs : list A):
   sum_list_with f xs = sum_list (f <$> xs).
 Proof. elim: xs => // ??; csimpl. lia. Qed.
 
-(** fixpoints based on iris/bi/lib/fixpoint.v *)
+(** * Fixpoints based on iris/bi/lib/fixpoint.v *)
 Class MonoPred {A : Type} (F : (A → Prop) → (A → Prop)) := {
   mono_pred (Φ Ψ : _ → Prop) :
     (∀ x, Φ x → Ψ x) → ∀ x, F Φ x → F Ψ x;
@@ -672,6 +780,8 @@ Section least.
 End least.
 
 
+(** * map_list operations *)
+(** ** Definitions *)
 Definition map_list_included {K A} `{Countable K} (ns : list K) (rs : gmap K A) :=
   list_to_set ns ⊆ dom (gset _) rs.
 
@@ -681,6 +791,8 @@ Definition map_scramble {K A} `{Countable K} `{!Inhabited A} (ns : list K) (rs r
 Definition map_preserved {K A} `{Countable K} `{!Inhabited A} (ns : list K) (rs rs' : gmap K A) :=
   ∀ i, i ∈ ns → rs !!! i = rs' !!! i.
 
+(** ** Lemmas *)
+(** *** map_list_included *)
 Lemma map_list_included_nil {K A} `{Countable K} (m : gmap K A):
   map_list_included [] m.
 Proof. unfold map_list_included. set_solver. Qed.
@@ -713,14 +825,8 @@ Lemma map_list_included_mono {K A} `{Countable K} (ns ns' : list K) (rs : gmap K
   map_list_included ns' rs.
 Proof. set_solver. Qed.
 
+(** *** map_scramble *)
 Global Instance map_scramble_preorder {K A} `{Countable K} `{!Inhabited A} ns : PreOrder (map_scramble (K:=K) (A:=A) ns).
-Proof.
-  constructor.
-  - move => ???. done.
-  - move => ??? Hm1 Hm2 ??. etrans; [by apply Hm1|]. by apply Hm2.
-Qed.
-
-Global Instance map_preserved_preorder {K A} `{Countable K} `{!Inhabited A} ns : PreOrder (map_preserved (K:=K) (A:=A) ns).
 Proof.
   constructor.
   - move => ???. done.
@@ -772,6 +878,14 @@ Lemma map_scramble_mono {K A} `{Countable K} `{!Inhabited A} ns ns' (m m' : gmap
   ns ⊆ ns' →
   map_scramble ns' m m'.
 Proof. unfold map_scramble. set_solver. Qed.
+
+(** *** map_preserved *)
+Global Instance map_preserved_preorder {K A} `{Countable K} `{!Inhabited A} ns : PreOrder (map_preserved (K:=K) (A:=A) ns).
+Proof.
+  constructor.
+  - move => ???. done.
+  - move => ??? Hm1 Hm2 ??. etrans; [by apply Hm1|]. by apply Hm2.
+Qed.
 
 Lemma map_preserved_sym {K A} `{Countable K} `{!Inhabited A} ns (m m' : gmap K A) :
   map_preserved ns m m' ↔ map_preserved ns m' m.
@@ -843,102 +957,48 @@ Proof. unfold map_preserved, map_scramble. set_solver. Qed.
 
 Global Opaque map_list_included map_scramble map_preserved.
 
-Fixpoint map_seqZ `{Insert Z A M, Empty M} (start : Z) (xs : list A) : M :=
-  match xs with
-  | [] => ∅
-  | x :: xs => <[start:=x]> (map_seqZ (Z.succ start) xs)
-  end.
-
-Section map_seqZ.
-  Context `{FinMap Z M} {A : Type}.
-  Implicit Types x : A.
-  Implicit Types xs : list A.
-
-  Lemma lookup_map_seqZ start xs i :
-    map_seqZ (M:=M A) start xs !! i = guard (start ≤ i)%Z; xs !! Z.to_nat (i - start)%Z.
-  Proof.
-    revert start. induction xs as [|x' xs IH]; intros start; simpl.
-    { rewrite lookup_empty; simplify_option_eq; by rewrite ?lookup_nil. }
-    destruct (decide (start = i)) as [->|?].
-    - by rewrite lookup_insert option_guard_True ?Z.sub_diag; try lia.
-    - rewrite lookup_insert_ne // IH.
-      simplify_option_eq; try done || lia.
-      replace (i - start)%Z with (Z.succ (i - Z.succ start))%Z by lia.
-      by rewrite Z2Nat.inj_succ; [|lia].
-  Qed.
-  Lemma lookup_map_seqZ_0 xs i :
-    (0 ≤ i)%Z →
-    map_seqZ (M:=M A) 0 xs !! i = xs !! Z.to_nat i.
-  Proof. move => ?. by rewrite lookup_map_seqZ option_guard_True // ?Z.sub_0_r. Qed.
-(*
-  Lemma lookup_map_seq_Some_inv start xs i x :
-    xs !! i = Some x ↔ map_seq (M:=M A) start xs !! (start + i) = Some x.
-  Proof.
-    rewrite lookup_map_seq, option_guard_True by lia.
-    by rewrite Nat.add_sub_swap, Nat.sub_diag.
-  Qed.
-*)
-  Lemma lookup_map_seqZ_Some start xs i x :
-    map_seqZ (M:=M A) start xs !! i = Some x ↔ (start ≤ i)%Z ∧ xs !! (Z.to_nat (i - start)) = Some x.
-  Proof. rewrite lookup_map_seqZ. case_option_guard; naive_solver. Qed.
-
-  Lemma lookup_map_seqZ_None start xs i :
-    map_seqZ (M:=M A) start xs !! i = None ↔ (i < start ∨ start + length xs ≤ i)%Z.
-  Proof.
-    rewrite lookup_map_seqZ.
-    case_option_guard; rewrite ?lookup_ge_None; naive_solver lia.
-  Qed.
-
-  Lemma lookup_map_seqZ_is_Some start xs i :
-    is_Some (map_seqZ (M:=M A) start xs !! i) ↔ (start ≤ i < start + length xs)%Z.
-  Proof. rewrite -not_eq_None_Some lookup_map_seqZ_None. lia. Qed.
-
-  Lemma lookup_map_seqZ_disjoint start1 start2 xs1 xs2 :
-    map_seqZ (M:=M A) start1 xs1 ##ₘ map_seqZ (M:=M A) start2 xs2 ↔
-     (start1 + length xs1 ≤ start2 ∨ start2 + length xs2 ≤ start1 ∨ length xs1 = 0%nat ∨ length xs2 = 0%nat)%Z.
-  Proof.
-    rewrite map_disjoint_alt.
-    setoid_rewrite lookup_map_seqZ_None.
-    split => Hi; [|lia].
-    have ?:= (Hi (start1)%Z). have ?:= (Hi (start2)%Z). lia.
-  Qed.
-
-  Lemma map_seqZ_app start xs1 xs2 :
-    map_seqZ start (xs1 ++ xs2)
-    =@{M A} map_seqZ start xs1 ∪ map_seqZ (start + length xs1) xs2.
-  Proof.
-    revert start. induction xs1 as [|x1 xs1 IH]; intros start; simpl.
-    - by rewrite ->(left_id_L _ _), Z.add_0_r.
-    - by rewrite IH /= Nat2Z.inj_succ Z.add_succ_r Z.add_succ_l !insert_union_singleton_l (assoc_L _).
-  Qed.
-End map_seqZ.
-
-Definition map_Exists `{Lookup K A M} (P : K → A → Prop) : M → Prop :=
-  λ m, ∃ i x, m !! i = Some x ∧ P i x.
-
-Section theorems.
-Context `{FinMap K M}.
-Section map_Exists.
-  Context {A} (P : K → A → Prop).
-  Implicit Types m : M A.
-  Lemma map_Exists_to_list m : map_Exists P m ↔ Exists (uncurry P) (map_to_list m).
-  Proof.
-    rewrite Exists_exists. split.
-    - intros [? [? [? ?]]]. eexists (_, _). by rewrite elem_of_map_to_list.
-    - intros [[??] [??]]. eexists _, _. by rewrite <-elem_of_map_to_list.
-  Qed.
-
-  Context `{∀ i x, Decision (P i x)}.
-  Global Instance map_Exists_dec m : Decision (map_Exists P m).
-  Proof.
-    refine (cast_if (decide (Exists (uncurry P) (map_to_list m))));
-      by rewrite map_Exists_to_list.
-  Defined.
-End map_Exists.
-End theorems.
-
-Definition codom {K A} `{Countable K} `{Countable A} (m : gmap K A) : gset A :=
-  list_to_set (snd <$> (map_to_list m)).
+(** ** [simplify_map_list] tactic *)
+Ltac simplify_map_list :=
+  repeat match goal with
+         | H : map_list_included ?ns ?m |- is_Some (?m !! ?r) =>
+             is_closed_term ns;
+             apply (map_list_included_is_Some _ _ _ H);
+             compute_done
+         | |- map_list_included ?ns (<[?i:=?x]> ?m) =>
+             apply (map_list_included_insert ns m i x)
+         | |- context [ map_scramble ?ns ?m (<[?i:=?x]> ?m') ] =>
+             is_closed_term ns;
+             rewrite ->(map_scramble_insert_r_in ns m m' i x) by compute_done
+         | |- context [ map_preserved ?ns ?m (<[?i:=?x]> ?m') ] =>
+             is_closed_term ns;
+             rewrite ->(map_preserved_insert_r_not_in ns m m' i x) by compute_done
+         | H : map_scramble ?ns (<[?i:=?x]> ?m) ?m' |- _ =>
+             is_closed_term ns;
+             rewrite ->(map_scramble_insert_l_in ns m m' i x) in H by compute_done
+         | H : map_preserved ?ns (<[?i:=?x]> ?m) ?m' |- _ =>
+             is_closed_term ns;
+             rewrite ->(map_preserved_insert_l_not_in ns m m' i x) in H by compute_done
+         | H : map_scramble ?ns (<[?i:=?x]> ?m) ?m' |- _ =>
+             is_closed_term ns;
+             apply map_scramble_insert_l_not_in in H; [|compute_done];
+             let H' := fresh in
+             destruct H as [H' H]
+         | H : map_preserved ?ns (<[?i:=?x]> ?m) ?m' |- _ =>
+             is_closed_term ns;
+             apply map_preserved_insert_l_in in H; [|compute_done];
+             let H' := fresh in
+             destruct H as [H' H]
+         | |- context [map_scramble ?ns ?m (<[?i:=?x]> ?m')] =>
+             is_closed_term ns;
+             rewrite ->(map_scramble_insert_r_not_in ns m m' i x) by compute_done
+         | |- context [map_preserved ?ns ?m (<[?i:=?x]> ?m')] =>
+             is_closed_term ns;
+             rewrite ->(map_preserved_insert_r_in ns m m' i x) by compute_done
+         | |- context [ map_scramble ?ns ?m ?m ] =>
+             rewrite ->(map_scramble_eq' ns m)
+         | |- context [ map_preserved ?ns ?m ?m ] =>
+             rewrite ->(map_preserved_eq' ns m)
+         end.
 
 Section semi_set.
   Context `{SemiSet A C}.

@@ -87,48 +87,6 @@ Local Ltac go := destruct!/=.
 Local Ltac go_i := tstep_i; go.
 Local Ltac go_s := tstep_s; go.
 
-Ltac simpl_map_ext tac ::=
-  repeat match goal with
-         | H : map_list_included ?ns ?m |- is_Some (?m !! ?r) =>
-             is_closed_term ns;
-             apply (map_list_included_is_Some _ _ _ H);
-             compute_done
-         | |- map_list_included ?ns (<[?i:=?x]> ?m) =>
-             apply (map_list_included_insert ns m i x)
-         | |- context [ map_scramble ?ns ?m (<[?i:=?x]> ?m') ] =>
-             is_closed_term ns;
-             rewrite ->(map_scramble_insert_r_in ns m m' i x) by compute_done
-         | |- context [ map_preserved ?ns ?m (<[?i:=?x]> ?m') ] =>
-             is_closed_term ns;
-             rewrite ->(map_preserved_insert_r_not_in ns m m' i x) by compute_done
-         | H : map_scramble ?ns (<[?i:=?x]> ?m) ?m' |- _ =>
-             is_closed_term ns;
-             rewrite ->(map_scramble_insert_l_in ns m m' i x) in H by compute_done
-         | H : map_preserved ?ns (<[?i:=?x]> ?m) ?m' |- _ =>
-             is_closed_term ns;
-             rewrite ->(map_preserved_insert_l_not_in ns m m' i x) in H by compute_done
-         | H : map_scramble ?ns (<[?i:=?x]> ?m) ?m' |- _ =>
-             is_closed_term ns;
-             apply map_scramble_insert_l_not_in in H; [|compute_done];
-             let H' := fresh in
-             destruct H as [H' H]
-         | H : map_preserved ?ns (<[?i:=?x]> ?m) ?m' |- _ =>
-             is_closed_term ns;
-             apply map_preserved_insert_l_in in H; [|compute_done];
-             let H' := fresh in
-             destruct H as [H' H]
-         | |- context [map_scramble ?ns ?m (<[?i:=?x]> ?m')] =>
-             is_closed_term ns;
-             rewrite ->(map_scramble_insert_r_not_in ns m m' i x) by compute_done
-         | |- context [map_preserved ?ns ?m (<[?i:=?x]> ?m')] =>
-             is_closed_term ns;
-             rewrite ->(map_preserved_insert_r_in ns m m' i x) by compute_done
-         | |- context [ map_scramble ?ns ?m ?m ] =>
-             rewrite ->(map_scramble_eq' ns m)
-         | |- context [ map_preserved ?ns ?m ?m ] =>
-             rewrite ->(map_preserved_eq' ns m)
-         end.
-
 
 Lemma asm_add_refines_imp_add :
   trefines (MS asm_module (initial_asm_state asm_add))
@@ -152,8 +110,8 @@ Proof.
   iSatStart. simpl. iDestruct!. iSatStop.
   apply: Hret. 1: by simplify_map_eq'.
   1: { simplify_map_eq'. iSatMono. iFrame. done. }
-  1: { unfold i2a_regs_ret; split!; simplify_map_eq' => //. }
-  1: by simplify_map_eq'.
+  1: { unfold i2a_regs_ret; split!; simplify_map_eq' => //; by simplify_map_list. }
+  1: by simplify_map_list.
 Qed.
 
 Lemma asm_add_client_refines_imp_add_client :
@@ -203,7 +161,7 @@ Proof.
     iSplit!; by simplify_map_eq'.
   }
   { unfold i2a_regs_call. split!; by simplify_map_eq'. }
-  { by simplify_map_eq'. } { by simplify_map_eq'. }
+  { by simplify_map_eq'. } { by simplify_map_list. }
   iSatClear.
   move => rs'' gp'' mem'' av v h'' rf'' lr'' Hpc'' Hsat'' Hr ?.
   move: Hr => [? Hm]; simplify_map_eq'.
@@ -212,7 +170,7 @@ Proof.
   iDestruct select (i2a_mem_constant _ _) as "Hret".
   iDestruct (i2a_mem_lookup with "[$] [$]") as %?.
   iSatStop.
-  tstep_i; simplify_map_eq'. split!.
+  tstep_i; simplify_map_eq'. simplify_map_list. simplify_map_eq'. split!.
   tstep_i; simplify_map_eq'.
   tstep_i; simplify_map_eq'.
   tstep_i => ??. simplify_map_eq'.
@@ -228,8 +186,8 @@ Proof.
        iModIntro. iFrame. simplify_map_eq'.
        by rewrite Z.sub_add.
   }
-  1: { unfold i2a_regs_ret; split!; simplify_map_eq'; split!. }
-  1: { by simplify_map_eq'. }
+  1: { unfold i2a_regs_ret; split!; simplify_map_eq' => //; by simplify_map_list. }
+  1: { by simplify_map_list. }
 Qed.
 
 (*

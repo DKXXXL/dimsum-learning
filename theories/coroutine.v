@@ -523,8 +523,6 @@ Lemma coro_prod_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAl
            (MS (coro_prod ins1 ins2 m1' m2') (σ, σ1', σ2')).
 Proof. move => ??. by apply mod_link_trefines. Qed.
 
-Ltac fast_set_solver := set_unfold; naive_solver.
-
 Theorem coro_spec finit regs_init gp_init m1 m2 σ1 σ2 ins1 ins2 fns1 fns2 f2i1 f2i2
   `{!VisNoAll m1} `{!VisNoAll m2}:
   let fns := {["yield"]} ∪ fns1 ∪ fns2 in
