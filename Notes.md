@@ -1,7 +1,13 @@
 # TODOs
 
-- [ ] green-threading example
-- [ ] new example from key idea section
+Cleanup:
+- [ ] cleanup imports
+- [ ] cleanup base.v
+- [ ] update deps (Iris, Coq, ...)
+  - [ ] use gset in definition of heap_state
+- [ ] cleanup axioms
+- [ ] change folder structure
+- [ ] make combinators define mod_state instead of initial state
 
 Optional:
 - [ ] Add ghost state for f2i and add values of f2i to initial ownership (one persistent map)
@@ -26,6 +32,8 @@ Optional:
 
 
 Done:
+- [X] green-threading example
+- [X] new example from key idea section
 - [X] clean up mem2reg and integrate it into the compiler
 - [X] make regs total by using !!! and get rid of pc in EJump
 - [X] prove vertical compositionality
