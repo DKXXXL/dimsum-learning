@@ -16,6 +16,8 @@ Local Open Scope Z_scope.
 Local Coercion ImmediateOp: Z >-> asm_operand.
 Local Coercion RegisterOp: string >-> asm_operand.
 
+Local Opaque map_union. (* without this simpl takes very long *)
+
 Definition yield_addr : Z := 2000.
 
 Definition coro_state_addr : Z := 3000.
@@ -658,7 +660,7 @@ Proof.
   have ? : yield_addr ∈ yield_asm_dom by rewrite /yield_asm_dom /yield_asm; unlock; compute_done.
   move => n ? Hloop [[[σpy1 σpy2][yt yregs]][[[σpc1 σpc2][[σsm1 σ1][[pp1 [cs1 lr1]]x1]]][[σsm2 σ2][[pp2 [cs2 lr2]]x2]]]].
   move => [[σsm' [[[σlc σc] σ1'] σ2']][[ppc [csc lrc]] xc]] [state ?]. destruct!.
-  destruct σc as [[| |] finit] => //; simplify_eq/=; destruct!/=.
+  destruct σc as [[| |] finit] => //; destruct!/=.
   - tsim_mirror m1 σ1. move => ??? Hcont.
     tstep_both. apply Hcont => κ ? Hstep Hs. destruct κ as [[? e]|].
     2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
@@ -693,7 +695,7 @@ Proof.
       rewrite (coro_regs_regs_lookup_in "PC"); [|compute_done].
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_true. 2: fast_set_solver.
-      tstep_i => *. destruct!/=. destruct!; simplify_map_eq'.
+      tstep_i => *. destruct!/=; simplify_map_eq'.
       rewrite (coro_regs_regs_lookup_in "PC"); [|compute_done].
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_true. 2: fast_set_solver.
@@ -784,7 +786,7 @@ Proof.
       tstep_s. split!. destruct!.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_true. 2: fast_set_solver.
-      tstep_i => /= *. destruct!/=. destruct!/=.
+      tstep_i => /= *. destruct!/=.
       rewrite bool_decide_true; [|done].
       tstep_i => *. simplify_eq.
       tstep_i => *. eexists false. split!. { done. }
@@ -808,7 +810,7 @@ Proof.
       iSatClear.
 
       (* going back inside *)
-      tstep_i => e *. tstep_s. split!.  destruct!/=.
+      tstep_i => e *. tstep_s. split!. destruct!/=.
       destruct e; destruct!.
       tstep_s => -[] //= ? h' gp' vs' avs' ret' f' *.
       tstep_s. split!.
@@ -927,7 +929,7 @@ Proof.
       tstep_s. split!. destruct!.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_true. 2: fast_set_solver.
-      tstep_i => /= *. destruct!/=. destruct!/=.
+      tstep_i => /= *. destruct!/=.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_true; [|done].
       tstep_i => *. simplify_eq.
