@@ -93,18 +93,18 @@ Ltac specialize_hyps :=
       clear H'
    end.
 
-Ltac destruct_hyps :=
-  simplify_eq/=;
-  repeat (
-      lazymatch goal with
-      | H : (_ * _) |- _ => destruct H as [??]
-      | H : unit |- _ => destruct H
-      | H : ∃ x, _ |- _ => destruct H as [??]
-      | H : _ ∧ _ |- _ => destruct H as [??]
-      end; simplify_eq/=
-    ).
+(* Ltac destruct_hyps := *)
+(*   simplify_eq/=; *)
+(*   repeat ( *)
+(*       lazymatch goal with *)
+(*       | H : (_ * _) |- _ => destruct H as [??] *)
+(*       | H : unit |- _ => destruct H *)
+(*       | H : ∃ x, _ |- _ => destruct H as [??] *)
+(*       | H : _ ∧ _ |- _ => destruct H as [??] *)
+(*       end; simplify_eq/= *)
+(*     ). *)
 
-Ltac destruct_tac tac :=
+Ltac destruct_go tac :=
   repeat match goal with
          | H : context [ match ?x with | (y, z) => _ end] |- _ =>
              let y := fresh y in
@@ -117,8 +117,8 @@ Ltac destruct_tac tac :=
          | |- _ => tac
          end.
 
-Tactic Notation "destruct!" := destruct_tac ltac:(fail).
-Tactic Notation "destruct!/=" := destruct_tac ltac:(progress csimpl in * ).
+Tactic Notation "destruct!" := destruct_go ltac:(fail).
+Tactic Notation "destruct!/=" := destruct_go ltac:( progress csimpl in * ).
 
 (* Tactic Notation "destruct_prod" "?" ident(H) := *)
 (*   repeat match type of H with *)
@@ -151,28 +151,48 @@ Tactic Notation "destruct!/=" := destruct_tac ltac:(progress csimpl in * ).
 (* Tactic Notation "destruct_all" "!" := *)
 (*   progress destruct_all?. *)
 
-Ltac simpl_or :=
+(** [SplitAssumeInj] *)
+Class SplitAssumeInj {A B} (R : relation A) (S : relation B) (f : A → B) : Prop := split_assume_inj : True.
+Global Instance split_assume_inj_inj A B R S (f : A → B) `{!Inj R S f} : SplitAssumeInj R S f.
+Proof. done. Qed.
+
+Class SplitAssumeInj2 {A B C} (R1 : relation A) (R2 : relation B) (S : relation C) (f : A → B → C) : Prop := split_assume_inj2 : True.
+Global Instance split_assume_inj2_inj2 A B C R1 R2 S (f : A → B → C) `{!Inj2 R1 R2 S f} : SplitAssumeInj2 R1 R2 S f.
+Proof. done. Qed.
+
+
+(** [split_or] tries to simplify an or in the goal by proving that one side implies False. *)
+Ltac split_or :=
   repeat match goal with
          | |- ?P ∨ _ =>
-             assert_succeeds (exfalso; assert P; [| destruct!;
-                  repeat match goal with | H : ?Q |- _ => has_evar Q; clear H end;
-                                                    done]);
+             assert_succeeds (exfalso; assert P; [|
+               destruct!;
+               repeat match goal with | H : ?Q |- _ => has_evar Q; clear H end;
+               done]);
              right
          | |- _ ∨ ?P =>
-             assert_succeeds (exfalso; assert P; [| destruct!;
-                  repeat match goal with | H : ?Q |- _ => has_evar Q; clear H end;
-                                                    done]);
+             assert_succeeds (exfalso; assert P; [|
+               destruct!;
+               repeat match goal with | H : ?Q |- _ => has_evar Q; clear H end;
+               done]);
              left
          end.
 
-Ltac split_step :=
+Ltac split_step tac :=
   match goal with
   | |- ∃ x, _ => eexists _
   | |- _ ∧ _ => split
-  | |- _ ∨ _ => simpl_or
+  | |- _ ∨ _ => split_or
   | |- True → _ => intros _
+  (* | |- ?P → ?Q => *)
+   (* lazymatch type of P with *)
+   (* TODO: replace this with assert_is_trivial from RefinedC? *)
+   (* | Prop => assert_succeeds (assert (P) as _;[fast_done|]); intros _ *)
+   (* end *)
   | |- ?e1 = ?e2 => is_evar e1; reflexivity
   | |- ?e1 = ?e2 => is_evar e2; reflexivity
+  | |- ?e1 ≡ ?e2 => is_evar e1; reflexivity
+  | |- ?e1 ≡ ?e2 => is_evar e2; reflexivity
   | |- ?G => assert_fails (has_evar G); done
   | H : ?o = Some ?x |- ?o = Some ?y => assert (x = y); [|congruence]
   | |- ?x = ?y  =>
@@ -186,17 +206,24 @@ Ltac split_step :=
       | hy => idtac
       end;
       apply f_equal_help
+  | |- ?f ?a1 ?a2 = ?f ?b1 ?b2 =>
+      let _ := constr:(_ : SplitAssumeInj2 (=) (=) (=) f) in
+      apply f_equal_help; [apply f_equal_help; [done|]|]
+  | |- ?f ?a = ?f ?b =>
+      let _ := constr:(_ : SplitAssumeInj (=) (=) f) in
+      apply f_equal_help; [done|]
+  | |- _ => tac
   end; simpl.
 
-Ltac original_split_tac :=
+Ltac split_tac tac :=
   (* The outer repeat is because later split_steps may have
   instantiated evars and thus we try earlier goals again. *)
-  repeat (simpl; repeat split_step).
+  repeat (simpl; repeat split_step tac).
 
-Ltac split_tac :=
-  original_split_tac.
+(* Ltac split_tac := *)
+  (* original_split_tac. *)
 
-Tactic Notation "split!" := split_tac.
+Tactic Notation "split!" := split_tac ltac:(fail).
 
 Ltac simpl_map_ext tac := idtac.
 
@@ -1262,7 +1289,7 @@ Ltac iSplit_step :=
   | |- environments.envs_entails _ (∃ x, _)%I => iExists _
   | |- environments.envs_entails _ (_ ∗ _)%I => iSplit
   | |- environments.envs_entails _ (⌜_⌝)%I => iPureIntro
-  | |- _ => split_step
+  | |- _ => split_step ltac:(fail)
   end; simpl.
 
 Ltac original_iSplit_tac :=

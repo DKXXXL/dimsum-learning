@@ -777,7 +777,7 @@ Proof.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
       tstep_s. split!. { done. } { fast_set_solver. } { apply lookup_union_Some_raw. naive_solver. }
-      { fast_set_solver. }
+      2: { done. } { fast_set_solver. } { by etrans. }
       { iSatMono. setoid_subst. iIntros!. iFrame. iAccu. }
       iSatClear.
 
@@ -791,7 +791,7 @@ Proof.
       tstep_i => /= *. destruct!/=. destruct!/=.
       rewrite bool_decide_true; [|done].
       tstep_i => *. simplify_eq.
-      tstep_i => *. eexists false. split!.
+      tstep_i => *. eexists false. split!. { done. }
       { iSatMono. iIntros!. iFrame. iAccu. }
       tsim_mirror m1 σ' => ??? Hcont.
       tstep_both. apply Hcont => -[?|] ?? Hs *. simplify_eq.
@@ -807,7 +807,7 @@ Proof.
       move => /= *. destruct!/=.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
-      tstep_s. split!.
+      tstep_s. split!. { done. } { by etrans. }
       { iSatMono. setoid_subst. iIntros!. iFrame. iAccu. }
       iSatClear.
 
@@ -920,7 +920,7 @@ Proof.
       move => /= *. destruct!/=.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
-      tstep_s. split!. { done. } { fast_set_solver. } { fast_set_solver. }
+      tstep_s. split!. { done. } { fast_set_solver. } 2: { done. } { fast_set_solver. } { by etrans. }
       { iSatMono. setoid_subst. iIntros!. iFrame. iAccu. }
       iSatClear.
 
@@ -935,7 +935,7 @@ Proof.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_true; [|done].
       tstep_i => *. simplify_eq.
-      tstep_i => *. eexists false. split!.
+      tstep_i => *. eexists false. split!. { done. }
       { iSatMono. iIntros!. iFrame. iAccu. }
       tsim_mirror m2 σ' => ??? Hcont.
       tstep_both. apply Hcont => -[?|] ?? Hs *. simplify_eq.

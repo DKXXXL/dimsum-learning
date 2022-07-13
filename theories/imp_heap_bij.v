@@ -1240,14 +1240,6 @@ Proof.
 Qed.
 
 (** ** proof of vertical compositionality *)
-Local Ltac split_solve :=
-  match goal with
-  | _ => rewrite event_set_vals_heap_idemp
-  | |- event_set_vals_heap _ _ _ = event_set_vals_heap _ _ _ => reflexivity
-  end.
-Local Ltac split_tac ::=
-  repeat (original_split_tac; try split_solve).
-
 Lemma imp_heap_bij_vertical m σ `{!VisNoAll m}:
   trefines (MS (imp_heap_bij (imp_heap_bij m))
                (initial_imp_heap_bij_state (imp_heap_bij m) (initial_imp_heap_bij_state m σ)))
@@ -1370,6 +1362,7 @@ Proof.
       rewrite map_filter_lookup_true //.
       move => ??. rewrite elem_of_hb_shared_i /=. right => -[? /hb_disj]. naive_solver.
     + instantiate (1 := True%I). by rewrite !right_id.
+    + by rewrite event_set_vals_heap_idemp.
     + by apply: satisfiable_pure_1.
   - move => bijb' vsb hb' [Hextendb [Henvb_s Henvb_i]] Hdhb Hpsb Hvsb Hhb Hpb_i Hpb_s ??.
     move => bija' vsa ha' [Hextenda [Henva_s Henva_i]] Hdha Hpsa Hvsa Hha Hpa_i Hpa_s ??.
@@ -1398,6 +1391,7 @@ Proof.
     + apply: heap_preserved_mono; [done|].
       move => ?. rewrite heap_bij_merge_player_s elem_of_hb_player_s.
       setoid_rewrite default_eq_neq => //. setoid_rewrite <-elem_of_hb_player_s. set_solver.
+    + by rewrite event_set_vals_heap_idemp.
     + by rewrite -Henva_s.
     + revert select (satisfiable _) => _. revert select (satisfiable _) => Hsat.
       iSatMono Hsat. iIntros "[$ [??]]".

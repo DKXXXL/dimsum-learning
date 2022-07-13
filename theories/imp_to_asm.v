@@ -701,7 +701,7 @@ Proof.
   { iExists []. iSplit!. by rewrite /i2a_mem_map big_sepM_empty. }
   rewrite /i2a_mem_uninit Nat2Z.inj_succ seqZ_cons ?Z.pred_succ /=; [|lia].
   iDestruct "Hm" as "[[%v ?] ?]". iDestruct ("IH" with "[$]") as (vs ?) "Hm".
-  iExists (v :: vs) => /=. iSplit!; [lia|]. rewrite /i2a_mem_map big_sepM_insert; [by iFrame|].
+  iExists (v :: vs) => /=. iSplit!. rewrite /i2a_mem_map big_sepM_insert; [by iFrame|].
   apply lookup_map_seqZ_None. lia.
 Qed.
 
@@ -1369,16 +1369,16 @@ Local Ltac go := repeat match goal with | x : asm_ev |- _ => destruct x end;
 Local Ltac go_i := tstep_i; intros; go.
 Local Ltac go_s := tstep_s; go.
 
-Local Ltac split_solve :=
+Local Ltac i2a_split_go :=
+  idtac; (* this idtac is important as otherwise the match is evaluated eagerly *)
   match goal with
   | |- i2a_regs_call _ _ => eassumption
   | |- i2a_regs_ret _ _ _ => eassumption
-  | |- ?P ⊣⊢ _ => is_evar P; reflexivity
+  | |- i2a_args_pure _ _ _ => eassumption
   | |- map_scramble ?r ?a ?b =>
       assert_fails (has_evar r); assert_fails (has_evar a); assert_fails (has_evar b); by etrans
   end.
-Local Ltac split_tac ::=
-  repeat (original_split_tac; try split_solve).
+Local Tactic Notation "i2a_split!" := split_tac ltac:(i2a_split_go).
 
 Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 mo1 mo2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m2}:
   ins1 ## ins2 →
@@ -1433,8 +1433,7 @@ Proof.
       repeat case_bool_decide => //.
       move: Hin => /elem_of_union[?|/Hin2[?[??]]].
       2: { exfalso. move: Hf2i => /lookup_union_Some_raw. naive_solver. }
-      split!.
-      1: done.
+      i2a_split!.
       1: move: Hf2i => /lookup_union_Some_raw; naive_solver.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
       1: by simpl_map_decide.
@@ -1443,7 +1442,7 @@ Proof.
       repeat case_bool_decide => //.
       revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
       inversion Hstack; simplify_eq/= => //. 2: { exfalso. set_solver. }
-      split!.
+      i2a_split!.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
   - move => e ? e' /= ? ??.
     destruct!.
@@ -1454,8 +1453,7 @@ Proof.
       repeat case_bool_decide => //.
       move: Hin => /elem_of_union[/Hin1[?[??]]|?].
       1: { exfalso. move: Hf2i => /lookup_union_Some_raw. naive_solver. }
-      split!.
-      1: done.
+      i2a_split!.
       1: move: Hf2i => /lookup_union_Some_raw; naive_solver.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
       1: by simpl_map_decide.
@@ -1463,13 +1461,12 @@ Proof.
     + move => *. destruct!. repeat case_bool_decide => //.
       revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
       inversion Hstack; simplify_eq/= => //.
-      split!.
+      i2a_split!.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
   - move => [? [f vs h|v h]] ? /= *.
     all: destruct!/=; split; [done|].
     + repeat case_bool_decide => //. 2: { exfalso. set_solver. } eexists true => /=.
-      split!.
-      1: done.
+      i2a_split!.
       1: naive_solver.
       1: set_solver.
       1: { iSatMono. iIntros!. iFrame. }
@@ -1477,13 +1474,12 @@ Proof.
     + repeat case_bool_decide => //. eexists false => /=.
       revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
       inversion Hstack; simplify_eq/= => //.
-      split!.
+      i2a_split!.
       1: { iSatMono. iIntros!. iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]". simplify_eq/=. iFrame. }
   - move => [? [f vs h|v h]] ? ? ? /= *.
     all: destruct!/=.
     + repeat case_bool_decide => //. 1: { exfalso. set_solver. }
-      split!.
-      1: done.
+      i2a_split!.
       1: set_solver.
       1: apply lookup_union_Some_raw; naive_solver.
       1: set_solver.
@@ -1492,13 +1488,12 @@ Proof.
     + repeat case_bool_decide => //.
       revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
       inversion Hstack; simplify_eq/= => //.
-      split!.
+      i2a_split!.
       1: { iSatMono. iIntros!. iFrame. }
   - move => [? [f vs h|v h]] ? /= *.
     all: destruct!/=; split; [done|].
     + repeat case_bool_decide => //. 2: { exfalso. set_solver. } eexists true.
-      split!.
-      1: done.
+      i2a_split!.
       1: naive_solver.
       1: set_solver.
       1: { iSatMono. iIntros!. iFrame. }
@@ -1506,13 +1501,12 @@ Proof.
     + repeat case_bool_decide => //.
       revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
       inversion Hstack; simplify_eq/= => //. eexists false.
-      split!.
+      i2a_split!.
       1: { iSatMono. iIntros!. iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]". simplify_eq/=. iFrame. }
   - move => [? [f vs h|v h]] ? /= ? *.
     all: destruct!/=.
     + repeat case_bool_decide => //. 1: { exfalso. set_solver. }
-      split!.
-      1: done.
+      i2a_split!.
       1: set_solver.
       1: apply lookup_union_Some_raw; destruct (f2i1 !! f) eqn:?; naive_solver.
       1: set_solver.
@@ -1521,7 +1515,7 @@ Proof.
     + repeat case_bool_decide => //.
       revert select (imp_to_asm_combine_stacks _ _ _ _ _ _ _) => Hstack.
       inversion Hstack; simplify_eq/= => //.
-      split!.
+      i2a_split!.
       1: { iSatMono. iIntros!. iFrame. }
 Qed.
 
@@ -1675,7 +1669,7 @@ Proof.
         tstep_s.
         iSatStart. iIntros!.
         iDestruct (i2a_args_elim with "[$]") as (??) "?". iSatStop.
-        split!. { done. } { by apply not_elem_of_dom. } { by apply elem_of_dom. }
+        i2a_split!. { by apply not_elem_of_dom. } { by apply elem_of_dom. }
         { iSatMono. iIntros!. iFrame. iAccu. }
         apply Hcall. { etrans; [|done]. apply ti_le_S. } { by split!. }
         iSatClear.

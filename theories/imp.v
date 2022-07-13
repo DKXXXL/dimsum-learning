@@ -859,6 +859,10 @@ Proof. destruct e => //=. destruct vs as [|? [|]] => //. Qed.
 Lemma event_set_vals_heap_idemp e vs1 h1 vs2 h2:
   event_set_vals_heap (event_set_vals_heap e vs1 h1) vs2 h2 = event_set_vals_heap e vs2 h2.
 Proof. by destruct e. Qed.
+
+Global Instance event_set_vals_heap_split_assume_inj e : SplitAssumeInj2 (=) (=) (=) (event_set_vals_heap e).
+Proof. done. Qed.
+
 (** ** step *)
 Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
   match op with

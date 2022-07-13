@@ -1057,6 +1057,10 @@ Proof.
       etrans; [done|]. apply map_union_subseteq_r. apply i2a_combine_priv_shared_priv_s_disj.
     + by apply map_subseteq_difference_l.
     + by apply map_subseteq_difference_l.
+    + done.
+    + done.
+    + done.
+    + done.
     + rewrite /i2a_combine_priv map_difference_union_distr. apply map_union_subseteq_l'.
       rewrite map_difference_disj_id //. apply: map_disjoint_weaken_r; [|done].
       apply i2a_combine_priv_shared_priv_s_disj.

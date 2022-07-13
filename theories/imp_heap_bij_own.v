@@ -1228,7 +1228,7 @@ Proof.
        satisfiable (heap_bij_inv h1 h2 ∗ ([∗ list] v1;v2∈vs1;vs2, val_in_bij v1 v2) ∗ r ∗ rf') ∧
        imp_heap_bij_return n' fns1 fns2 K1 K2 r). }
   { move => /=. split! => //; [lia|..]. { iSatMono. iFrame. iAccu. } iSatClear.
-    move => ?????????. apply: Hret; [done|]. eexists [_]. split!; [done|].
+    move => ?????????. apply: Hret; [done|]. eexists [_]. split!.
     iSatMono. iIntros!. iFrame. }
   { iSatClear. move => n' n'' [e1 {}h1 ?] [[σfs [e2 {}h2 ?]] [[??]?]] ??. destruct!. split! => //.
     by apply: imp_heap_bij_return_mono. }
@@ -1255,23 +1255,6 @@ Proof.
       apply: tsim_mono_b. apply: Hret'. iSatMono. iIntros!. iFrame.
       iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]". by simplify_eq.
 Qed.
-
-
-
-Local Ltac split_solve :=
-  match goal with
-  | |- heap_preserved ?p _ => eassumption
-  | |- event_set_vals_heap _ _ _ = event_set_vals_heap _ _ _ => reflexivity
-  | |- ?P ⊣⊢ _ => is_evar P; reflexivity
-(*   | |- ?a ⊆ ?b => *)
-(*       assert_fails (has_evar a); assert_fails (has_evar b); etrans; [eassumption|] *)
-(*   | |- ?a ⊆ ?b => *)
-(*       assert_fails (has_evar a); assert_fails (has_evar b); etrans; [|eassumption] *)
-(*   | |- heap_preserved ?p ?a ?b => *)
-(*       assert_fails (has_evar p); assert_fails (has_evar a); assert_fails (has_evar b); etrans; [eassumption|] *)
-  end.
-Local Ltac split_tac ::=
-  repeat (original_split_tac; try split_solve).
 
 Lemma imp_heap_bij_combine fns1 fns2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m2}:
   trefines (MS (imp_prod fns1 fns2 (imp_heap_bij m1) (imp_heap_bij m2))
@@ -1327,22 +1310,6 @@ Proof.
     1: by destruct e.
     { iSatMono; iIntros!; iFrame. }
 Qed.
-
-Local Ltac split_solve ::=
-  match goal with
-  | |- expr_fill (?K' ++ ?K) _ = expr_fill ?K _ =>
-      assert_fails (has_evar K'); assert_fails (has_evar K); apply expr_fill_app
-  | |- expr_fill ?K _ = expr_fill ?K _ =>
-      assert_fails (has_evar K); reflexivity
-  | |- Is_true (is_static_expr _ (expr_fill _ _)) => apply is_static_expr_expr_fill
-  | |- _ ≡ _ => reflexivity
-  | |- heap_preserved ?p _ => eassumption
-  (* | |- expr_in_bij ?b (expr_fill _ _) (expr_fill _ _) => *)
-  (*     assert_fails (has_evar b); apply expr_in_bij_fill_2 *)
-  (* | |- ectx_in_bij ?b (_ ++ _) (_ ++ _) => assert_fails (has_evar b); by apply ectx_in_bij_app *)
-  end.
-Local Ltac split_tac ::=
-  repeat (original_split_tac; try split_solve).
 
 Lemma imp_heap_bij_sim_call_bind args vs' ws' es ei Ks Ki vss vsi n b hi hs fns1 fns2 rf f r
   `{Hfill2: !ImpExprFill ei Ki (Call f ((Val <$> vs') ++ (subst_map vsi <$> args)))}
