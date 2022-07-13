@@ -349,7 +349,7 @@ Proof.
   - move => [σ1 σ2] ???? Hstep _ IH [??].
     inversion Hstep; simplify_eq.
     + have {}IH := IH (_, σ2) (conj _ ltac:(exact (eq_refl σ2))).
-      have {IH}[f Hf]:= CHOICE IH.
+      have {IH}[f Hf]:= AxChoice1 IH.
       eexists (
           (λ κs, κs = [] ∨ κs = option_list (Vis <$> e) ∨ ∃ κs', κs = (option_list (Vis <$> e)) ++ κs' ∧ ∃ x, (f x).1 κs')
           , (λ κs, ∀ x, (f x).2 κs)) => /=.
@@ -358,7 +358,7 @@ Proof.
       * apply: STraceStep; [done| |naive_solver]. move => ??.
         apply: shas_trace_mono; [naive_solver| |done] => /=.
         move => ??. naive_solver.
-      * have [[[??]?]|?]:= EM (∃ x, ∀ κs, (f x).2 κs → ∀ x', (f x').2 κs).
+      * have [[[??]?]|?]:= AxClassic (∃ x, ∀ κs, (f x).2 κs → ∀ x', (f x').2 κs).
         -- apply: shas_trace_mono; [naive_solver| |done] => /=. done.
         -- apply: STraceEnd. done.
            split. shelve.
@@ -437,7 +437,7 @@ Proof.
   - move => [σ1 σ2] ????? Hstep _ IH ?.
     inversion Hstep; simplify_eq.
     + have {}IH := IH (_, σ2) (conj _ ltac:(exact (eq_refl σ2))).
-      have [f Hf]:= CHOICE IH.
+      have [f Hf]:= AxChoice1 IH.
       unshelve eexists (tapp (option_trace e) (tex _ (λ x, (f x).1)), (tall _ (λ x, (f x).2))) => /=.
       split_and!.
       -- apply: mod_product_rel_mono; [|done].
@@ -452,7 +452,7 @@ Proof.
       -- apply: thas_trace_all => -[??].
          apply: thas_trace_mono. naive_solver. done. naive_solver.
     + have {}IH := IH (σ1, _) (conj ltac:(exact (eq_refl σ1)) _).
-      have [f Hf]:= CHOICE IH.
+      have [f Hf]:= AxChoice1 IH.
       unshelve eexists ((tall _ (λ x, (f x).1)), tapp (option_trace e) (tex _ (λ x, (f x).2))) => /=.
       split_and!.
       -- apply: mod_product_rel_mono; [|done].
@@ -467,7 +467,7 @@ Proof.
          move => σ' Hσ'. apply: (thas_trace_ex (exist _ σ' Hσ')).
          apply: thas_trace_mono. naive_solver. done. naive_solver.
     + have {}IH := IH (_, _) (conj _ _).
-      have [f Hf]:= CHOICE2 IH.
+      have [f Hf]:= AxChoice2 IH.
       unshelve eexists (tcons e1 (tex _ (λ x1, (tall _ (λ x2, (f x1 x2).1)))),
                         tcons e2 (tex _ (λ x2, (tall _ (λ x1, (f x1 x2).2))))) => /=.
       split_and!.
@@ -484,7 +484,7 @@ Proof.
          move => ??.
          apply: thas_trace_ex. apply: thas_trace_all => -[??]. naive_solver.
   - move => T f ???? IH ?.
-    have [fx Hfx]:= AxCHOICE _ _ _ IH.
+    have [fx Hfx]:= AxChoice _ _ _ IH.
     eexists (tall T (λ x, (fx x).1), tall T (λ x, (fx x).2)) => /=.
     split_and! => //.
     -- apply: mod_product_rel_mono; [|done].

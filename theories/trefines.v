@@ -132,8 +132,8 @@ Global Instance tapp_assoc {EV} : Assoc (=) (@tapp EV).
 Proof.
   move => x. elim: x => //=.
   - move => ?????. f_equal. naive_solver.
-  - move => ?? IH ??. f_equal. apply functional_extensionality. naive_solver.
-  - move => ?? IH ??. f_equal. apply functional_extensionality. naive_solver.
+  - move => ?? IH ??. f_equal. apply AxFunctionalExtensionality. naive_solver.
+  - move => ?? IH ??. f_equal. apply AxFunctionalExtensionality. naive_solver.
 Qed.
 
 Lemma tapp_mono {EV} (κs1 κs1' κs2 κs2' : trace EV) :
@@ -164,8 +164,8 @@ Proof.
   elim: κs.
   - done.
   - move => ?? Htapp /=. by f_equal.
-  - move => ?? IH /=. f_equal. apply functional_extensionality. naive_solver.
-  - move => ?? IH /=. f_equal. apply functional_extensionality. naive_solver.
+  - move => ?? IH /=. f_equal. apply AxFunctionalExtensionality. naive_solver.
+  - move => ?? IH /=. f_equal. apply AxFunctionalExtensionality. naive_solver.
 Qed.
 
 Definition tub {EV} :=
@@ -516,16 +516,16 @@ Proof.
   elim; clear.
   - naive_solver.
   - move => σ1 Pσ2 Pσ3 κ κs κs' ? ? IH ?.
-    have [?|HF]:= EM (∀ σ2 : m_state m, Pσ2 σ2 → σ2 ~{ m, κs' }~>ₜ (λ _ : m_state m, False)).
+    have [?|HF]:= AxClassic (∀ σ2 : m_state m, Pσ2 σ2 → σ2 ~{ m, κs' }~>ₜ (λ _ : m_state m, False)).
     + left. by tstep.
-    + have [?|?]:= EM (∃ σ2, Pσ2 σ2 ∧ ¬ σ2 ~{ m, κs' }~>ₜ (λ _ : m_state m, False)).
+    + have [?|?]:= AxClassic (∃ σ2, Pσ2 σ2 ∧ ¬ σ2 ~{ m, κs' }~>ₜ (λ _ : m_state m, False)).
       naive_solver.
       exfalso. apply: HF => σ3?.
-      have [//|?]:= EM (σ3 ~{ m, κs' }~>ₜ (λ _ : m_state m, False)). naive_solver.
+      have [//|?]:= AxClassic (σ3 ~{ m, κs' }~>ₜ (λ _ : m_state m, False)). naive_solver.
   - move => T f σ κs Pσ _ IH Hsub.
-    have [[x ?]|?]:= EM (∃ x : T, ¬ σ ~{ m, f x }~>ₜ (λ _, False)). naive_solver.
+    have [[x ?]|?]:= AxClassic (∃ x : T, ¬ σ ~{ m, f x }~>ₜ (λ _, False)). naive_solver.
     left. eapply TTraceAll; [|done] => x.
-    have [|]:= EM (σ ~{ m, f x }~>ₜ (λ _ : m_state m, False)); naive_solver.
+    have [|]:= AxClassic (σ ~{ m, f x }~>ₜ (λ _ : m_state m, False)); naive_solver.
 Qed.
 
 (** tnhas_trace *)
@@ -589,11 +589,11 @@ Proof.
   elim.
   - move => ?????. eexists tiO. tend.
   - move => ???????? IH ?.
-    have [f Hf]:= CHOICE IH. eexists (tiS (tiChoice _ f)).
+    have [f Hf]:= AxChoice1 IH. eexists (tiS (tiChoice _ f)).
     tstep; [done| |done|done].
     move => ??. apply Hf.
   - move => ?????? IH ?.
-    have [f Hf]:= AxCHOICE _ _ _ IH. eexists (tiChoice _ f).
+    have [f Hf]:= AxChoice _ _ _ IH. eexists (tiChoice _ f).
     by apply: TNTraceAll.
 Qed.
 

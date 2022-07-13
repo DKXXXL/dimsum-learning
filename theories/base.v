@@ -1,29 +1,14 @@
 From Coq Require Import Ascii.
 From Coq Require Export ssreflect.
 From RecordUpdate Require Export RecordSet.
-Require Export stdpp.prelude.
-Require Export stdpp.gmap.
-Require Export stdpp.strings.
-Require Export stdpp.pretty.
-Require Export iris.prelude.prelude.
-Require Import iris.proofmode.proofmode.
+From stdpp Require Export prelude gmap strings pretty.
+From iris.prelude Require Export prelude.
+From iris.proofmode Require Import proofmode.
 Export RecordSetNotations.
 
 Global Unset Program Cases.
 
-
-Definition LEM (P : Prop) := P ∨ ¬ P.
-
-Lemma snoc_inv {A} (l : list A):
-  l = [] ∨ ∃ x l', l = l' ++ [x].
-Proof.
-  destruct l as [|x l']. by left. right.
-  elim: l' x => //. move => x. by eexists _, [].
-  move => x ? IH x'. move: (IH x) => [x'' [l'' ->]].
-  eexists x'', _. by apply: app_comm_cons.
-Qed.
-
-Record wrap A := Wrap { a : A }.
+(** Tactics *)
 
 Ltac specialize_hyps :=
   repeat match goal with
@@ -472,6 +457,15 @@ Lemma lookup_union_None_2 {A} (m1 m2 : M A) i :
   m1 !! i = None → m2 !! i = None → (m1 ∪ m2) !! i = None.
 Proof. move => ??. by apply lookup_union_None. Qed.
 End theorems.
+
+Lemma snoc_inv {A} (l : list A):
+  l = [] ∨ ∃ x l', l = l' ++ [x].
+Proof.
+  destruct l as [|x l']. by left. right.
+  elim: l' x => //. move => x. by eexists _, [].
+  move => x ? IH x'. move: (IH x) => [x'' [l'' ->]].
+  eexists x'', _. by apply: app_comm_cons.
+Qed.
 
 Lemma omap_app {A B} l1 l2 (f : A → option B) :
   omap f (l1 ++ l2) = omap f l1 ++ omap f l2.

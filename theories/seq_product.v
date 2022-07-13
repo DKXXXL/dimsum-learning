@@ -182,7 +182,7 @@ Proof.
         -- by econs.
         -- tstep_Some; [done|]. naive_solver.
         -- done.
-      * have [f Hf]:= CHOICE IH.
+      * have [f Hf]:= AxChoice1 IH.
         unshelve eexists ((tex _ (λ x, (f x).1)), (tall _ (λ x, (f x).2))) => /=.
         split_and!.
         -- apply: seq_product_rel_mono; [|done] => /=. econs => -[??]. econs. naive_solver.
@@ -196,14 +196,14 @@ Proof.
         -- by econs.
         -- done.
         -- tstep_Some; [done|]. naive_solver.
-      * have [f Hf]:= CHOICE IH.
+      * have [f Hf]:= AxChoice1 IH.
         unshelve eexists ((tall _ (λ x, (f x).1)), (tex _ (λ x, (f x).2))) => /=.
         split_and!.
         -- apply: seq_product_rel_mono; [|done] => /=. econs => -[??]. econs. naive_solver.
         -- apply: thas_trace_all => -[??]. naive_solver.
         -- tstep_None; [done|] => σ' Hσ'. apply: (thas_trace_ex (exist _ σ' Hσ')). naive_solver.
   - move => T f ???? IH ?.
-    have [fx Hfx]:= AxCHOICE _ _ _ IH.
+    have [fx Hfx]:= AxChoice _ _ _ IH.
     eexists (tall T (λ x, (fx x).1), tall T (λ x, (fx x).2)) => /=.
     split_and! => //.
     -- eapply SPR_all; [|done] => ?. econstructor. econstructor. naive_solver.

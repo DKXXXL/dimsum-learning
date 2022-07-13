@@ -291,7 +291,7 @@ Proof.
   - move => ?????. eexists tnil => /=. split; [done|]. by constructor.
   - move => ??? κ ?? Hstep ? IH Hs.
     inversion Hstep; simplify_eq.
-    have [f Hf]:= CHOICE IH.
+    have [f Hf]:= AxChoice1 IH.
     eexists (tapp (option_trace e) (tex _ f)). split.
     + etrans; [|done].
       destruct e => /=; simplify_option_eq.
@@ -305,7 +305,7 @@ Proof.
       move => ??/=. eapply thas_trace_ex. naive_solver.
       Unshelve. done.
   - move => T f ???? IH ?.
-    have [fx Hfx]:= AxCHOICE _ _ _ IH.
+    have [fx Hfx]:= AxChoice _ _ _ IH.
     eexists (tall T (λ x, fx x)) => /=.
     rewrite /filtered_trace/=-/(filtered_trace _).
     split.

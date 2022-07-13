@@ -46,8 +46,7 @@ Lemma heap_bij_eq bij1 bij2 :
   bij1 = bij2 ↔ hb_bij bij1 = hb_bij bij2 ∧ hb_players_i bij1 = hb_players_i bij2.
 Proof.
   split; [naive_solver|]. move => [??]. destruct bij1, bij2 => /=. simplify_eq/=. f_equal.
-  (* TODO: get rid of this *)
-  all: apply proof_irrelevance.
+  all: apply AxProofIrrelevance.
 Qed.
 
 Global Program Instance imp_heap_bij_empty : Empty heap_bij :=

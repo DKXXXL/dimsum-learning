@@ -248,22 +248,19 @@ Proof.
     etrans; last done. eapply ti_le_S.
 Qed.
 
-Require Import Coq.Logic.Epsilon.
-Require Import Coq.Logic.Classical_Prop.
-
 Lemma existential_property {X} (P: trace_index → X → Prop):
   (∀ n, ∃ x, P n x) →
   (∀ n n' x, P n x → n' ⊆ n → P n' x) →
   (∃ x, ∀ n, P n x).
 Proof.
-  intros HP Hdown. destruct (classic (∃ x, ∀ n, P n x)) as [|Hnex]; first done.
+  intros HP Hdown. destruct (AxClassic (∃ x, ∀ n, P n x)) as [|Hnex]; first done.
   (* we commute the quantifiers inward*)
   assert (∀ x, ∃ n, ¬ P n x) as Hnp.
-  { intros x. destruct (classic (∃ n, ¬ P n x)) as [|Hnp]; first done. exfalso.
-    eapply Hnex. exists x. intros n'. destruct (classic (P n' x)); first done.
+  { intros x. destruct (AxClassic (∃ n, ¬ P n x)) as [|Hnp]; first done. exfalso.
+    eapply Hnex. exists x. intros n'. destruct (AxClassic (P n' x)); first done.
     exfalso. eapply Hnp. exists n'. done. }
   (* choice *)
-  have [F Hnx]:= AxCHOICE _ _ _ Hnp.
+  have [F Hnx]:= AxChoice _ _ _ Hnp.
 
   (* we take the supremum *)
   pose (n_sup := (tiChoice X (λ x, F x))).
@@ -746,7 +743,7 @@ Proof.
   elim: Ht.
   - move => ?????. eexists tnil. split; [ by apply: TTraceEnd|]. move => ??. by apply: TTraceEnd.
   - move => ??? κ ?? Hstep ? IH ?.
-    have [f Hf]:= CHOICE IH.
+    have [f Hf]:= AxChoice1 IH.
     eexists (tapp (option_trace κ) (tex _ f)). split.
     + apply: TTraceStep; [done| |done]. move => ??. apply: thas_trace_ex. naive_solver.
     + move => σ2. destruct κ; simplify_eq/=.
@@ -761,7 +758,7 @@ Proof.
         apply: (thas_trace_trans tnil); [done|] => ? [[??]?].
         apply: thas_trace_mono; [|done|done]. naive_solver.
   - move => ?????? IH ?.
-    have [fx Hfx]:= AxCHOICE _ _ _ IH.
+    have [fx Hfx]:= AxChoice _ _ _ IH.
     eexists (tall _ (λ x, fx x)). split.
     + apply: thas_trace_all. naive_solver.
     + move => ? /thas_trace_all_inv ?. apply: thas_trace_mono; [|done|done].
@@ -812,7 +809,7 @@ Proof.
     have {}IH : ∀ σi1, (∃ σ2', Pσ2 σ2' ∧ iinv σi1 σ2') → ∃ n, σi1 ~{ mi1, n }~>ₜ (λ _, True) ∧
        (∀ y1 y2, sinv y1 y2 → y1 ~{ ms1, n }~>ₜ (λ _, True) → y2 ~{ ms2, κs' }~>ₜ (λ _, True)).
     { move => ?. naive_solver. }
-    have [f Hf]:= CHOICE IH.
+    have [f Hf]:= AxChoice1 IH.
     eexists (tapp (option_trace κ') (tex _ f)). split.
     + apply: thas_trace_trans; [done| ] => ?[?[??]].
       apply: thas_trace_ex. naive_solver.
@@ -837,7 +834,7 @@ Proof.
         move => ? [?[[[?[?[??]]]?]?]]. naive_solver.
   - move => ?????? IH ???.
     have {}IH := (IH _ _ ltac:(done)).
-    have [fx Hfx]:= AxCHOICE _ _ _ IH.
+    have [fx Hfx]:= AxChoice _ _ _ IH.
     eexists (tall _ (λ x, fx x)). split.
     + apply: thas_trace_all. naive_solver.
     + move => ??? /thas_trace_all_inv ?. apply: thas_trace_mono; [|done|done].

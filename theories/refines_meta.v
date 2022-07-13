@@ -106,7 +106,7 @@ Proof.
   - elim.
     + move => ???? [??]. eexists tnil. split; [by constructor|]. by apply: TTraceEnd.
     + move => ?? Pσ2 ? κ Hstep ? IH [??].
-      have [f Hf] := CHOICE IH.
+      have [f Hf] := AxChoice1 IH.
       eexists (tapp (option_trace κ) (tex _ f)).
       split.
       * destruct κ => /=.

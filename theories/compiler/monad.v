@@ -152,7 +152,7 @@ Section compiler_monad.
     cmap xs n f = cmap (A:=A) (S:=S) (B:=B) (C:=C) (E:=E) xs (Datatypes.S n) (f ∘ pred).
   Proof.
     elim: xs n f => //= ?? IH n f.
-    f_equal. apply functional_extensionality => ?. by rewrite IH.
+    f_equal. apply AxFunctionalExtensionality => ?. by rewrite IH.
   Qed.
 
   Lemma cret_success R (r' : R) (s s' : S) (a : A) (r : R):
