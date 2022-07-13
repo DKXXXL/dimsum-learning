@@ -93,17 +93,7 @@ Ltac specialize_hyps :=
       clear H'
    end.
 
-(* Ltac destruct_hyps := *)
-(*   simplify_eq/=; *)
-(*   repeat ( *)
-(*       lazymatch goal with *)
-(*       | H : (_ * _) |- _ => destruct H as [??] *)
-(*       | H : unit |- _ => destruct H *)
-(*       | H : ∃ x, _ |- _ => destruct H as [??] *)
-(*       | H : _ ∧ _ |- _ => destruct H as [??] *)
-(*       end; simplify_eq/= *)
-(*     ). *)
-
+(** [destruct!] destructs things in the context *)
 Ltac destruct_go tac :=
   repeat match goal with
          | H : context [ match ?x with | (y, z) => _ end] |- _ =>
@@ -120,37 +110,6 @@ Ltac destruct_go tac :=
 Tactic Notation "destruct!" := destruct_go ltac:(fail).
 Tactic Notation "destruct!/=" := destruct_go ltac:( progress csimpl in * ).
 
-(* Tactic Notation "destruct_prod" "?" ident(H) := *)
-(*   repeat match type of H with *)
-(*          | context [ match ?x with | (y, z) => _ end] => *)
-(*              let y := fresh y in *)
-(*              let z := fresh z in *)
-(*              destruct x as [y z] *)
-(*          end. *)
-(* Tactic Notation "destruct_prod" "!" ident(H) := progress (destruct_prod? H). *)
-(* Tactic Notation "destruct_prod" "?" := *)
-(*   repeat match goal with H : _ |- _ => progress (destruct_prod? H) end. *)
-(* Tactic Notation "destruct_prod" "!" := *)
-(*   progress destruct_prod?. *)
-(* Tactic Notation "destruct_exist" "?" ident(H) := *)
-(*   repeat match type of H with *)
-(*          | ∃ x, _ => let x := fresh x in destruct H as [x H] *)
-(*          end. *)
-(* Tactic Notation "destruct_exist" "!" ident(H) := progress (destruct_exist? H). *)
-(* Tactic Notation "destruct_exist" "?" := *)
-(*   repeat match goal with H : _ |- _ => progress (destruct_exist? H) end. *)
-(* Tactic Notation "destruct_exist" "!" := *)
-(*   progress destruct_exist?. *)
-(* Tactic Notation "destruct_all" "?" := *)
-(*   repeat first [ *)
-(*       destruct_prod! *)
-(*       | destruct_and! *)
-(*       | destruct_or! *)
-(*       | destruct_exist! *)
-(*       ]. *)
-(* Tactic Notation "destruct_all" "!" := *)
-(*   progress destruct_all?. *)
-
 (** [SplitAssumeInj] *)
 Class SplitAssumeInj {A B} (R : relation A) (S : relation B) (f : A → B) : Prop := split_assume_inj : True.
 Global Instance split_assume_inj_inj A B R S (f : A → B) `{!Inj R S f} : SplitAssumeInj R S f.
@@ -159,7 +118,6 @@ Proof. done. Qed.
 Class SplitAssumeInj2 {A B C} (R1 : relation A) (R2 : relation B) (S : relation C) (f : A → B → C) : Prop := split_assume_inj2 : True.
 Global Instance split_assume_inj2_inj2 A B C R1 R2 S (f : A → B → C) `{!Inj2 R1 R2 S f} : SplitAssumeInj2 R1 R2 S f.
 Proof. done. Qed.
-
 
 (** [split_or] tries to simplify an or in the goal by proving that one side implies False. *)
 Ltac split_or :=
@@ -178,6 +136,7 @@ Ltac split_or :=
              left
          end.
 
+(** [split!] splits the goal *)
 Ltac split_step tac :=
   match goal with
   | |- ∃ x, _ => eexists _
@@ -219,9 +178,6 @@ Ltac split_tac tac :=
   (* The outer repeat is because later split_steps may have
   instantiated evars and thus we try earlier goals again. *)
   repeat (simpl; repeat split_step tac).
-
-(* Ltac split_tac := *)
-  (* original_split_tac. *)
 
 Tactic Notation "split!" := split_tac ltac:(fail).
 
