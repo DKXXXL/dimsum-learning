@@ -612,7 +612,7 @@ Class TStepI {EV} (mi : module EV) (σi : mi.(m_state)) (P : (bool → option EV
 Global Hint Mode TStepI + + ! - : tstep.
 
 Lemma tsim_tstep_i {EV} (mi : module EV) σi P `{!TStepI mi σi P} ms σs n b:
-  P (λ b' κ Pσ, Pσ (λ σi', σi' ⪯{mi, ms, n, b || b', option_trace κ} σs)) →
+  P (λ b' κ Pσ, Pσ (λ σi', σi' ⪯{mi, ms, n, b' || b, option_trace κ} σs)) →
   σi ⪯{mi, ms, n, b} σs.
 Proof.
   move => HP κs n' Hn /= Hi.
@@ -620,12 +620,12 @@ Proof.
   apply: thas_trace_under_tall; [done..|] => {Hi HP Hd} {}κs /= [?|]. { tend. }
   move => [?[?[?[?[?[[b'[? [HP [? HG']]]][<-[??]]]]]]]]. move: HP => /HG'[?[? Hs]].
   apply: Hs. 2: naive_solver.
-  etrans; [|done]. etrans; [ apply tiS_maybe_orb|]. apply tiS_maybe_mono; [done|].
+  etrans; [|done]. rewrite orb_comm. etrans; [ apply tiS_maybe_orb|]. apply tiS_maybe_mono; [done|].
   etrans; [|done]. by apply tiS_maybe_mono.
 Qed.
 
 Lemma tsim_tstep_both {EV} (mi : module EV) σi P `{!TStepI mi σi P} ms σs n b:
-  P (λ b' κ Pσ, σs ~{ms, option_trace κ}~>ₜ (λ σs', Pσ (λ σi', σi' ⪯{mi, ms, n, b || b', tnil} σs'))) →
+  P (λ b' κ Pσ, σs ~{ms, option_trace κ}~>ₜ (λ σs', Pσ (λ σi', σi' ⪯{mi, ms, n, b' || b, tnil} σs'))) →
   σi ⪯{mi, ms, n, b} σs.
 Proof.
   move => HP κs n' Hn Hi /=.
@@ -634,7 +634,7 @@ Proof.
   move => [?[?[?[?[?[[?[?[?[? HG']]]][<-[??]]]]]]]].
   apply: thas_trace_trans; [done|] => ? /HG' [σi' [? {}Ht]].
   apply: Ht; [|naive_solver].
-  etrans; [|done]. etrans; [ apply tiS_maybe_orb|]. apply tiS_maybe_mono; [done|].
+  etrans; [|done]. rewrite orb_comm. etrans; [ apply tiS_maybe_orb|]. apply tiS_maybe_mono; [done|].
   etrans; [|done]. by apply tiS_maybe_mono.
 Qed.
 

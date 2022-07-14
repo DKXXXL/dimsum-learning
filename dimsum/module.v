@@ -1,10 +1,6 @@
 From dimsum.core Require Export base.
 
-Inductive event (EV : Type) : Type :=
-| Nb | Ub | Vis (e : EV).
-Arguments Ub {_}.
-Arguments Nb {_}.
-Arguments Vis {_}.
+(** * Definition of [module] *)
 
 Record module (EV : Type) : Type := Mod {
   m_state : Type;
@@ -26,8 +22,12 @@ Add Printing Constructor mod_state.
 
 Coercion ms_module : mod_state >-> module.
 
+(** [VisNoAll m] encodes that the module [m] only does trivial angelic choices
+on visible events. *)
 Class VisNoAll {EV} (m : module EV) : Prop :=
   vis_no_all σ κ Pσ : m.(m_step) σ (Some κ) Pσ → ∃ σ', ∀ σ'', Pσ σ'' ↔ σ'' = σ'.
+
+(** * Auxiliary definitions *)
 
 Inductive io_type : Set :=
 | Incoming | Outgoing.

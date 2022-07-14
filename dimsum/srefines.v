@@ -1,5 +1,11 @@
 From dimsum.core Require Export module.
 
+Inductive event (EV : Type) : Type :=
+| Nb | Ub | Vis (e : EV).
+Arguments Ub {_}.
+Arguments Nb {_}.
+Arguments Vis {_}.
+
 (* It is important to use (list (event EV) → Prop) instead of (list EV
 → Prop) since we want to distinguish the program that
 non-deterministically generates all events and the program that has

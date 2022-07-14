@@ -1256,7 +1256,7 @@ Proof.
     + tstep_both. split; [|naive_solver].
       move => ??. have [?[??]]:= (Hlen _ _ ltac:(done)). tstep_s. left. split! => ?. tend.
       iSatStart. iIntros!. iDestruct (big_sepL2_length with "[$]") as %?. iSatStop.
-      split; [lia|]. rewrite orb_true_r.
+      split; [lia|].
       apply: IH; [done|]. move => ??.
       split! => //; [lia|..]. { iSatMono. iFrame. iAccu. }
       move => *. apply: tsim_mono_to_true; [naive_solver|]. etrans; [|done]. by econs.

@@ -496,7 +496,6 @@ Proof.
   iIntros (??? Hins) "Hrf Hinv". iSatStop.
   tstep_i => ??. simplify_map_eq'.
   move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
-  rewrite orb_true_r.
   tstep_i.
   tstep_i. simplify_map_eq'.
   iSatStart. iApply ("Hcont" with "[] Hrf"). { by simplify_map_eq'. }
@@ -514,7 +513,6 @@ Proof.
   iIntros (??? Hins) "Hrf Hinv". iSatStop.
   tstep_i => ??. simplify_map_eq'.
   move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
-  rewrite orb_true_r.
   tstep_i.
   tstep_i. simplify_map_eq'.
   iSatStart. iApply ("Hcont" with "[] Hrf"). { by simplify_map_eq'. }
@@ -533,7 +531,6 @@ Proof.
   iIntros (??? Hins) "Hrf Hinv". iSatStop.
   tstep_i => ??. simplify_map_eq'.
   move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
-  rewrite orb_true_r.
   iSatStart.
   iDestruct "Hinv" as "(%&?&?&?)".
   iDestruct (i2a_mem_lookup with "[$] [$]") as %?.
@@ -567,7 +564,6 @@ Proof.
   iSatStop.
   tstep_i => ??. simplify_map_eq'.
   move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
-  rewrite orb_true_r.
   tstep_i.
   tstep_i.
   iSatStart.
@@ -595,7 +591,6 @@ Proof.
   iSatStop.
   tstep_i => ??. simplify_map_eq'.
   move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
-  rewrite orb_true_r.
   iSatStart.
   iDestruct (i2a_mem_exists (Z.of_N sz) with "[$]") as %[??]; [lia|].
   iSatStop.
@@ -643,7 +638,6 @@ Proof.
   iIntros (??? Hins) "Hrf (%&Hmem&Hheap&Hregs)". iSatStop.
   tstep_i => ??. simplify_map_eq'.
   move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
-  rewrite orb_true_r.
   iSatStart.
   iDestruct (stack_slot_lookup with "[$] [$]") as %?.
   iSatStop.

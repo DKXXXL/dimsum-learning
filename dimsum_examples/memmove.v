@@ -292,7 +292,7 @@ Lemma memcpy_spec n0 d s d' s' n o K e h m σ1 σ2 b cs hvs `{!ImpExprFill e K
   σ2.
 Proof.
   elim/ti_lt_ind: n0 b d d' s s' n h hvs e K ImpExprFill0 => n1 IH b d d' s s' n h hvs e K [->] ? Ho ?? Hle Hhvs Halive Hcont. subst.
-  tstep_i. split! => *. simplify_map_eq. split!. rewrite orb_true_r.
+  tstep_i. split! => *. simplify_map_eq. split!.
   tstep_i. move => ?? [??]. simplify_eq. split!.
   tstep_i. split!.
   tstep_i. case_bool_decide (_ < _). 2: {

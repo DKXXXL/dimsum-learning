@@ -69,6 +69,9 @@ Arguments EExist {_ _}.
 Arguments EGet {_ _}.
 Arguments EPut {_ _}.
 
+(* Idea: don't allow Tau steps but instead make all step rules use ≈.
+(Silent steps are still possible via trivial choices.) *)
+
 Inductive mod_itree_step EV S : (itree (moduleE EV S) unit * S) → option EV → ((itree (moduleE EV S) unit * S) → Prop) → Prop :=
 | ITauS t t' s:
   observe t = TauF t' →

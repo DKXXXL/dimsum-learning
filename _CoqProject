@@ -15,9 +15,10 @@ dimsum/axioms.v
 dimsum/trace_index.v
 dimsum/satisfiable.v
 dimsum/module.v
-dimsum/example_modules.v
+dimsum/trefines.v
 dimsum/srefines.v
 dimsum/lrefines.v
+dimsum/example_modules.v
 dimsum/filter.v
 dimsum/product.v
 dimsum/seq_product.v
@@ -25,7 +26,6 @@ dimsum/state_transform.v
 dimsum/link.v
 dimsum/prepost.v
 dimsum/dem_module.v
-dimsum/trefines.v
 dimsum/refines_meta.v
 dimsum/proof_techniques.v
 dimsum/itree.v

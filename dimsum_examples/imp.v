@@ -1610,10 +1610,9 @@ Proof.
       have [fn2' ?] : is_Some (fns2 !! f'). { apply not_eq_None_Some. naive_solver. }
       have ? : length (fd_args fn1') = length (fd_args fn2').
       { move: (Hc n0 [] [] f' fn1' [] h). naive_solver. }
-      split! => ?. tend. split; [lia|]. rewrite orb_true_r.
+      split! => ?. tend. split; [lia|].
       apply IH2; [done|]. split!; [done..|lia|done].
     + move => ?. tstep_s. right. split!; [naive_solver|done|]. tend.
-      rewrite orb_true_r.
       apply IH; [etrans; [done|]; etrans; [|done]; apply ti_le_S|]. split!; [done..|].
       naive_solver.
   - move => *. subst. apply: tsim_mono; [|done]. apply tsim_mono_b_false. naive_solver.
@@ -1712,7 +1711,7 @@ Proof.
     + move => n' f K1' K2' es1 es2 vs1' vs2' ???????? Hall1 Hall2 ?.
       have ?: es1 = Val <$> vs1'. { clear -Hall1. elim: Hall1; naive_solver. } subst.
       have ?: es2 = Val <$> vs2'. { clear -Hall2. elim: Hall2; naive_solver. } subst.
-      tstep_i. split => *; simplify_eq. rewrite orb_true_r. tstep_s. right. split!.
+      tstep_i. split => *; simplify_eq. tstep_s. right. split!.
       tstep_s. apply: pp_to_ex_mono; [done|].
       move => [??] ? /= [?[?[?[??]]]]. simplify_eq. split!; [done|].
       apply Hcall; [done| |]. { split!; [done..|]. by etrans. }
@@ -1724,7 +1723,7 @@ Proof.
       tstep_s. right. split!.
       repeat match goal with | H : expr_fill _ _ = expr_fill _ _ |- _ => apply expr_fill_Waiting_inj in H end.
       destruct!. done.
-    + move => *. tstep_s. tstep_i. rewrite orb_true_r. tstep_s. apply: pp_to_ex_mono; [done|].
+    + move => *. tstep_s. tstep_i. tstep_s. apply: pp_to_ex_mono; [done|].
       move => [??] ? [?[?[??]]] /=. subst. split!; [done|]. apply: tsim_mono; [|done].
       apply: Hstay; [done|]. split!; [done..|]. naive_solver.
   - tstep_s. split!.

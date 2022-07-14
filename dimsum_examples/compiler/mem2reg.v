@@ -397,7 +397,7 @@ Proof.
       { iSatMono. iIntros "($ & $ & $ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
       simpl. clear Hsat. intros w1 w2 Hdef. intros n' v1 v2 h1' h2' rf' b Hsub Hsat.
       simpl. tstep_s. tstep_i.
-      rewrite -!subst_subst_map_delete orb_true_r.
+      rewrite -!subst_subst_map_delete.
       apply: imp_heap_bij_sim_refl_static; simpl; eauto.
       { set_solver. }
       { eapply lexpr_is_static. }
@@ -411,7 +411,7 @@ Proof.
       { iSatMono. iIntros "($ & $ & $ & #H & r & $)". iFrame "H". iCombine "H r" as "r". iExact "r". }
       simpl. clear Hsat. intros w1 w2 Hdef. intros n' v1 v2 h1' h2' rf' b Hsub Hsat.
       simpl. tstep_s. tstep_i.
-      rewrite -!subst_subst_map_delete orb_true_r.
+      rewrite -!subst_subst_map_delete.
       eapply LLetM_sim.
       { rewrite lookup_insert_ne //. }
       { destruct o; last done.
@@ -441,7 +441,7 @@ Proof.
     assert (v1 = ValBool bb) as ->.
     { iSatStart. iIntros "(? & Hval & ? & ?)". destruct v1; eauto.
       iDestruct "Hval" as "%". subst. iSatStop. done. }
-    tstep_i. rewrite orb_true_r.
+    tstep_i.
     destruct bb; eapply LLetM_sim; eauto.
     + eapply IH1; eauto using imp_heap_bij_call_mono; first last.
       { iSatMono. iIntros "($ & Hv & ([Hall r] & $ & $) & $)".
@@ -670,7 +670,6 @@ Proof.
       iMod "Hw" as "(%hi' & %Hfree' & Hbij)". iModIntro.
       iSatStop. eexists _; split.
       { rewrite list_fmap_delete //. }
-      rewrite orb_true_r.
       eapply Hcont; first done.
       iSatMono. iFrame.
     + eapply elem_of_list_to_map_1.

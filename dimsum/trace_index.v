@@ -1,5 +1,9 @@
 From dimsum.core Require Import base axioms.
 
+(** * [trace_index] *)
+(** This file defines the [trace_index] type, which is a form of
+ordinal and used as a step index. *)
+
 Inductive trace_index : Type :=
 | tiO | tiS (n : trace_index) | tiChoice (T : Type) (f : T → trace_index).
 

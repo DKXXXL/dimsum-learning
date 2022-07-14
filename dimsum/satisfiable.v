@@ -3,6 +3,16 @@ From iris.base_logic Require Export base_logic.
 From iris.proofmode Require Export proofmode.
 From iris.proofmode Require Import environments reduction.
 
+Local Set Default Proof Using "Type".
+
+(** * [satisfiable] *)
+(** This file defines [satisfiable], which turns a separation logic
+proposition into a Coq proposition by asserting that there exist
+resources which satisfiable the separation logic proposition.
+
+This file is inspired by https://gitlab.mpi-sws.org/iris/simuliris/-/blob/master/theories/logic/satisfiable.v
+*)
+
 Section satisfiable.
   Context {M : ucmra}.
 
@@ -126,6 +136,7 @@ Section satisfiable.
 
 End satisfiable.
 
+(** ** Tactics for working with [satisfiable] *)
 
 Section tactics.
   Context {M : ucmra}.

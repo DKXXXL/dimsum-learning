@@ -1,7 +1,11 @@
 From dimsum.core Require Export module trace_index.
 From dimsum.core Require Import axioms.
 
-(** [trefines] is a weaker notion of refinement that does not allow commuting choices and externally visible events*)
+(** * [trefines] *)
+(** [trefines] is the main notion of refinement used by this
+development. It is equivalent to a simulation relation, but defined by
+giving behaviors to modules and then comparing them via set inclusion.
+Its many feature is that it does not allow commuting choices and visible events. *)
 
 (** * tree traces *)
 Inductive trace (EV : Type) : Type :=
@@ -186,7 +190,8 @@ Lemma tex_unit EV (f : _ → trace EV):
   tex () f ≡ f tt.
 Proof. split; econstructor; [case|]; done. Qed.
 
-(** * under_tall *)
+(** * [under_tall] *)
+(** [under_tall κs P] behaves like P except that one can eliminate [tall] at the beginning of [κs]. *)
 Inductive under_tall {EV} : trace EV → (trace EV → Prop) → Prop :=
 | UTEnd κs (P : _ → Prop):
   P κs →
@@ -247,7 +252,7 @@ Proof.
   - move => ????????. etrans; [|done]. econs => ?. naive_solver.
 Qed.
 
-(** * trefines *)
+(** * [trefines] *)
 
 Inductive thas_trace {EV} (m : module EV) : m.(m_state) → trace EV → (m.(m_state) → Prop) → Prop :=
 | TTraceEnd σ (Pσ : _ → Prop) κs:
@@ -509,7 +514,7 @@ Proof.
     apply: thas_trace_all. naive_solver.
 Qed.
 
-Lemma has_trace_inv {EV} κs (m : module EV) σ1 Pσ2:
+Lemma thas_trace_post {EV} κs (m : module EV) σ1 Pσ2:
   σ1 ~{ m, κs }~>ₜ Pσ2 →
   σ1 ~{ m, κs }~>ₜ (λ _, False) ∨ ∃ σ, Pσ2 σ.
 Proof.
@@ -742,8 +747,9 @@ Lemma steps_spec_step_trans {EV} (m : module EV) σ κ (Pσ : _ → Prop):
   σ -{ m, None }->ₛ (λ σ', σ' -{ m, κ }->ₛ Pσ) →
   σ -{ m, κ }->ₛ Pσ.
 Proof. move => ?. by apply: steps_spec_step_trans'. Qed.
+
 (** ** steps_impl *)
-(* We need to define steps_spec like this to get a strong induction
+(* We need to define steps_impl like this to get a strong induction
 principle for free (which is necessary to prove rewriting with
 eutt) *)
 Definition steps_impl_rec {EV} (m : module EV) (R : (m.(m_state) * (bool → option EV → (m.(m_state) → Prop) → Prop)) → Prop)
