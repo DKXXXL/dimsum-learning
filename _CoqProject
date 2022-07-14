@@ -1,4 +1,4 @@
--Q theories dimsum
+-Q dimsum dimsum
 # We sometimes want to locally override notation (e.g. in proofmode/base.v, bi/embedding.v), and there
 # is no good way to do that with scopes.
 -arg -w -arg -notation-overridden
@@ -9,44 +9,44 @@
 # "Declare Scope" does not exist yet in 8.9.
 -arg -w -arg -undeclared-scope
 
-theories/base.v
-theories/axioms.v
-theories/trace_index.v
-theories/satisfiable.v
-theories/module.v
-theories/example_modules.v
-theories/srefines.v
-theories/lrefines.v
-theories/filter.v
-theories/product.v
-theories/seq_product.v
-theories/state_transform.v
-theories/link.v
-theories/prepost.v
-theories/dem_module.v
-theories/trefines.v
-theories/refines_meta.v
-theories/proof_techniques.v
-theories/asm.v
-theories/imp.v
-theories/imp_heap_bij.v
-theories/imp_heap_bij_own.v
-theories/imp_to_asm.v
-theories/i2a_bij_vertical.v
-theories/coroutine.v
-theories/imp_to_asm_examples.v
-theories/int_ptr_cast.v
-theories/print.v
-theories/memmove.v
-theories/coroutine_example.v
-theories/compiler/monad.v
-theories/compiler/linear_imp.v
-theories/compiler/ssa.v
-theories/compiler/linearize.v
-theories/compiler/codegen.v
-theories/compiler/mem2reg.v
-theories/compiler/compiler.v
-theories/itree.v
-theories/iris/wp.v
-theories/iris/mono_ord.v
-theories/iris/ord_later.v
+dimsum/base.v
+dimsum/axioms.v
+dimsum/trace_index.v
+dimsum/satisfiable.v
+dimsum/module.v
+dimsum/example_modules.v
+dimsum/srefines.v
+dimsum/lrefines.v
+dimsum/filter.v
+dimsum/product.v
+dimsum/seq_product.v
+dimsum/state_transform.v
+dimsum/link.v
+dimsum/prepost.v
+dimsum/dem_module.v
+dimsum/trefines.v
+dimsum/refines_meta.v
+dimsum/proof_techniques.v
+dimsum/asm.v
+dimsum/imp.v
+dimsum/imp_heap_bij.v
+dimsum/imp_heap_bij_own.v
+dimsum/imp_to_asm.v
+dimsum/i2a_bij_vertical.v
+dimsum/coroutine.v
+dimsum/imp_to_asm_examples.v
+dimsum/int_ptr_cast.v
+dimsum/print.v
+dimsum/memmove.v
+dimsum/coroutine_example.v
+dimsum/compiler/monad.v
+dimsum/compiler/linear_imp.v
+dimsum/compiler/ssa.v
+dimsum/compiler/linearize.v
+dimsum/compiler/codegen.v
+dimsum/compiler/mem2reg.v
+dimsum/compiler/compiler.v
+dimsum/itree.v
+dimsum/iris/wp.v
+dimsum/iris/mono_ord.v
+dimsum/iris/ord_later.v

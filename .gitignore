@@ -20,5 +20,5 @@ html/
 builddep/
 _opam
 *.o
-theories/coro/gttest
-theories/old
+dimsum/coro/gttest
+dimsum/old
