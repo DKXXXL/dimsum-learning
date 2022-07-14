@@ -313,7 +313,7 @@ Proof.
     tstep_i.
     tstep_i.
     have ->: (S (length hvs) + -1) = (length hvs) by lia.
-    apply: tsim_mono_to_tiS => ??. apply: IH; [done|eauto_tstep|done|by left|done|done|..].
+    apply: tsim_mono_to_tiS => ??. apply: IH; [done|done|by left|done|done|..].
     { move => /=. lia. }
     { move => i v' ? /=. rewrite -shift_loc_S.
       rewrite lookup_alter_ne; [by apply: Hhvs|].
@@ -357,7 +357,7 @@ Proof.
     tstep_i.
     tstep_i.
     have ->: ((length hvs' + 1)%nat + -1) = length hvs' by lia.
-    apply: tsim_mono_to_tiS => ??. apply: IH; [done|eauto_tstep|done|by right|..].
+    apply: tsim_mono_to_tiS => ??. apply: IH; [done|done|by right|..].
     { have ->: d +ₗ -1 +ₗ (- length hvs' + 1) = d +ₗ (- length hvs'); [|done].
       rewrite /shift_loc /=. f_equal. lia. }
     { have ->: s +ₗ -1 +ₗ (- length hvs' + 1) = s +ₗ (- length hvs'); [|done].
@@ -434,7 +434,7 @@ Proof.
   tstep_i. split!. move => *. simplify_eq.
   tstep_i.
   destruct b.
-  - apply: memcpy_spec; [eauto_tstep|done|by left|by rewrite bool_decide_true|by rewrite bool_decide_true| |done|done|..].
+  - apply: memcpy_spec; [done|by left|by rewrite bool_decide_true|by rewrite bool_decide_true| |done|done|..].
     { rewrite bool_decide_true //. case_bool_decide; lia. }
     simpl. tstep_i. split!.
     tstep_i. move => *. destruct!/=.
@@ -446,7 +446,7 @@ Proof.
     tstep_i.
     tstep_i.
     tstep_i.
-    apply: memcpy_spec; [eauto_tstep|done|by right|..].
+    apply: memcpy_spec; [done|by right|..].
     { rewrite bool_decide_false; [|done]. rewrite shift_loc_add_sub; [done|lia]. }
     { rewrite bool_decide_false; [|done]. rewrite shift_loc_add_sub; [done|lia]. }
     { rewrite bool_decide_false //=. case_bool_decide; lia. }

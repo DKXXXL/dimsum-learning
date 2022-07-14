@@ -742,7 +742,7 @@ Qed.
 Class ITreeEq {E R} (b : bool) (t t' : itree E R) := {
   itree_eq_proof : eqit eq true b t t'
 }.
-Global Hint Mode ITreeEq + + + ! - : tstep.
+Global Hint Mode ITreeEq + + + ! - : typeclass_instances.
 Lemma ITreeEq_refl {E R} b (t : itree E R) :
   ITreeEq b t t.
 Proof. done. Qed.
@@ -755,14 +755,14 @@ Lemma ITreeEq_false {E R} b1 (t t' : itree E R) :
   ITreeEq false t t'.
 Proof. move => ?. constructor. by apply: eqit_mon; [..|done]. Qed.
 
-Global Hint Extern 5 (ITreeEq _ ?t _) => (assert_fails (is_var t); by apply ITreeEq_refl) : tstep.
-Global Hint Extern 10 (ITreeEq true _ _) => (refine (ITreeEq_true _ _ _ _ _); eassumption) : tstep.
-Global Hint Extern 10 (ITreeEq false _ _) => (refine (ITreeEq_false _ _ _ _); eassumption) : tstep.
+Global Hint Extern 5 (ITreeEq _ ?t _) => (assert_fails (is_var t); by apply ITreeEq_refl) : typeclass_instances.
+Global Hint Extern 10 (ITreeEq true _ _) => (refine (ITreeEq_true _ _ _ _ _); eassumption) : typeclass_instances.
+Global Hint Extern 10 (ITreeEq false _ _) => (refine (ITreeEq_false _ _ _ _); eassumption) : typeclass_instances.
 
 Class ITreeTStep {EV S} (cont b : bool) (t t' : itree (moduleE EV S) unit) := {
   itree_tstep_proof : eqit eq true b t t'
 }.
-Global Hint Mode ITreeTStep + + + + ! - : tstep.
+Global Hint Mode ITreeTStep + + + + ! - : typeclass_instances.
 
 Class ITreeTStepS {EV S} (t : itree (moduleE EV S) unit) (s : S) (κ : option EV)
   (P : (itree (moduleE EV S) () → S → Prop) → Prop) := {
@@ -770,18 +770,18 @@ Class ITreeTStepS {EV S} (t : itree (moduleE EV S) unit) (s : S) (κ : option EV
     P (λ t' s', itree_rel true G (t', s')) →
     (t, s) -{ mod_itree EV S, κ }->ₛ itree_rel true G
 }.
-Global Hint Mode ITreeTStepS + + ! ! - - : tstep.
+Global Hint Mode ITreeTStepS + + ! ! - - : typeclass_instances.
 
 Lemma itree_step_s_itree_step_cont EV S t t' (s : S) (κ : option EV) P `{!ITreeTStep true true t t'}
       `{!ITreeTStepS t' s κ P} :
   ITreeTStepS t s κ P.
 Proof. constructor => ??. move: ITreeTStep0 => [->]. by apply itree_tsteps_proof. Qed.
-Global Hint Resolve itree_step_s_itree_step_cont | 50 : tstep.
+Global Hint Resolve itree_step_s_itree_step_cont | 50 : typeclass_instances.
 
 Lemma itree_step_s_itree_step_no_cont EV S t t' (s : S) `{!ITreeTStep false true t t'}:
   ITreeTStepS t s (@None EV) (λ G, G t' s).
 Proof. constructor => ??. move: ITreeTStep0 => [->]. by apply steps_spec_end. Qed.
-Global Hint Resolve itree_step_s_itree_step_no_cont | 100 : tstep.
+Global Hint Resolve itree_step_s_itree_step_no_cont | 100 : typeclass_instances.
 
 Lemma itree_tstep_s {EV S} s t t' κ `{!ITreeEq true t t'} `{!ITreeTStepS t' s κ P}:
   TStepS (mod_itree EV S) (t, s) (λ G, G κ (λ G', P (λ t'' s', itree_rel true G' (t'', s')))).
@@ -789,7 +789,7 @@ Proof.
   constructor => G HG. eexists _, _. split; [done|] => ? /= ?.
   apply itree_rel_spec_intro. move: ITreeEq0 => [->]. by apply: itree_tsteps_proof.
 Qed.
-Global Hint Resolve itree_tstep_s : tstep.
+Global Hint Resolve itree_tstep_s : typeclass_instances.
 
 Class ITreeTStepI {EV S} (t : itree (moduleE EV S) unit) (s : S)
       (P : (bool → option EV → ((itree (moduleE EV S) () → S → Prop) → Prop) → Prop) → Prop) := {
@@ -797,7 +797,7 @@ Class ITreeTStepI {EV S} (t : itree (moduleE EV S) unit) (s : S)
     P G →
     (t, s) -{ mod_itree EV S }-> (λ b κ Pσ, ∃ (b' : bool) P', G b' κ P' ∧ (b' → b) ∧ ∀ G', P' G' → ∃ t t' s, Pσ (t, s) ∧ eqit eq true false t t' ∧ G' t' s)
 }.
-Global Hint Mode ITreeTStepI + + ! ! - : tstep.
+Global Hint Mode ITreeTStepI + + ! ! - : typeclass_instances.
 
 Lemma itree_step_i_itree_step_cont EV S t t' (s : S) P `{!ITreeTStep true false t t'}
       `{!ITreeTStepI t' s P} :
@@ -810,16 +810,16 @@ Proof.
   move => ? /H2[?[?[? [/HP[?[??]] [? HG]]]]]. eexists _, _, _. split_and!; [done| |done].
   etrans; [|done]. apply eqit_flip. by apply: eqit_mon; [..|done].
 Qed.
-Global Hint Resolve itree_step_i_itree_step_cont | 50 : tstep.
+Global Hint Resolve itree_step_i_itree_step_cont | 50 : typeclass_instances.
 
 Lemma itree_step_i_itree_step_no_cont EV S t t' (s : S) `{!ITreeTStep false false t t'} :
   ITreeTStepI (EV:=EV) t s (λ G, G false None (λ G', G' t' s)).
 Proof.
   constructor => ??. apply steps_impl_end. eexists _, _. split_and!; [done..|].
   move => /=??. eexists _, _, _. split_and!; [done| |done].
-  apply itree_tstep_proof.
+  by apply: itree_tstep_proof.
 Qed.
-Global Hint Resolve itree_step_i_itree_step_no_cont | 100 : tstep.
+Global Hint Resolve itree_step_i_itree_step_no_cont | 100 : typeclass_instances.
 
 Lemma itree_tstep_i {EV S} s t t' `{!ITreeEq false t t'} `{!ITreeTStepI t' s P}:
   TStepI (mod_itree EV S) (t, s) (λ G, P (λ b κ P', G b κ (λ G', P' (λ t'' s', itree_rel false G' (t'', s'))))).
@@ -831,18 +831,18 @@ Proof.
   move => ? /H2[?[?[? [/HP[?[??]] [? HG]]]]]. eexists (_, _). split; [done|]. apply HG. etrans; [|done].
   apply eqit_flip. by apply: eqit_mon; [..|done].
 Qed.
-Global Hint Resolve itree_tstep_i : tstep.
+Global Hint Resolve itree_tstep_i : typeclass_instances.
 
 (** ** instances *)
 Lemma itree_tstep_bind {EV S} A B h (k : A → itree _ B) (t : itree (moduleE EV S) _) cont b:
   ITreeTStep cont b (ITree.bind (ITree.bind t k) h) (ITree.bind t (fun r => ITree.bind (k r) h)).
 Proof. constructor. by rewrite bind_bind. Qed.
-Global Hint Resolve itree_tstep_bind : tstep.
+Global Hint Resolve itree_tstep_bind : typeclass_instances.
 
 Lemma itree_tstep_ret {EV S} A h (x : A) cont b:
   ITreeTStep (EV:=EV) (S:=S) cont b (ITree.bind (Ret x) h) (h x).
 Proof. constructor. by rewrite bind_ret_l. Qed.
-Global Hint Resolve itree_tstep_ret : tstep.
+Global Hint Resolve itree_tstep_ret : typeclass_instances.
 
 Lemma itree_tstep_forever EV S R (t : itree (moduleE EV S) R) b:
   ITreeTStep false b (ITree.forever t) (t;;;; ITree.forever t).
@@ -851,47 +851,47 @@ Proof.
   apply: eqit_bind'; [done|]. move => ???.
   by apply eqit_Tau_l.
 Qed.
-Global Hint Resolve itree_tstep_forever : tstep.
+Global Hint Resolve itree_tstep_forever : typeclass_instances.
 
 Lemma itree_step_recursive_bind_bind_s EV S R A B C D (f : A → itree (callE A B +' _) _) t (j : C → _) (k : D → _) (h : R → _) cont b:
   ITreeTStep (EV:=EV) (S:=S) cont b (x ← interp (recursive f) (y ← (z ← t;;; j z);;; k y);;; h x)
                     (x ← interp (recursive f) (z ← t ;;;y ← j z;;; k y);;; h x).
 Proof. constructor. by rewrite bind_bind. Qed.
-Global Hint Resolve itree_step_recursive_bind_bind_s : tstep.
+Global Hint Resolve itree_step_recursive_bind_bind_s : typeclass_instances.
 
 Lemma itree_step_recursive_bind_ret_s EV S R A B D (f : A → itree (callE A B +' _) _) t (k : D → _) (h : R → _) cont b:
   ITreeTStep (EV:=EV) (S:=S) cont b (x ← interp (recursive f) (y ← Ret t;;; k y);;; h x)
                     (x ← interp (recursive f) (k t);;; h x).
 Proof. constructor. by rewrite bind_ret_l. Qed.
-Global Hint Resolve itree_step_recursive_bind_ret_s : tstep.
+Global Hint Resolve itree_step_recursive_bind_ret_s : typeclass_instances.
 
 Lemma itree_step_recursive_bind_translate_s EV S R Q A B (f : A → itree (callE A B +' _) _) (t : itree (moduleE EV S) R) (k : R → itree (_ +' moduleE EV S) Q) cont h:
   ITreeTStep (EV:=EV) (S:=S) cont true (x ← interp (recursive f) (ITree.bind (translate inr_ t) k);;; h x)
                     (ITree.bind t (fun r => x ← interp (recursive f) (k r);;; h x)).
 Proof. constructor. rewrite interp_bind bind_bind interp_translate /=/= interp_trigger_h. done. Qed.
-Global Hint Resolve itree_step_recursive_bind_translate_s : tstep.
+Global Hint Resolve itree_step_recursive_bind_translate_s : typeclass_instances.
 
 Lemma itree_step_recursive_translate_s EV S R A B (f : A → itree (callE A B +' _) _) (t : itree (moduleE EV S) R) h cont:
   ITreeTStep (EV:=EV) (S:=S) cont true (x ← interp (recursive f) (translate inr_ t);;; h x)
                     (x ← t;;; h x).
 Proof. constructor. by rewrite interp_translate /= interp_trigger_h. Qed.
-Global Hint Resolve itree_step_recursive_translate_s : tstep.
+Global Hint Resolve itree_step_recursive_translate_s : typeclass_instances.
 
 Lemma itree_step_recursive_call_s EV S R A B (f : A → itree (callE A B +' _) _) k (h : R → _) a:
   ITreeTStep (EV:=EV) (S:=S) false true (x ← interp (recursive f) (y ← call a;;; k y);;; h x)
                     (y ← rec f a;;; x ← interp (recursive f) (k y);;; h x).
 Proof. constructor. by rewrite interp_bind interp_recursive_call bind_bind. Qed.
-Global Hint Resolve itree_step_recursive_call_s : tstep.
+Global Hint Resolve itree_step_recursive_call_s : typeclass_instances.
 
 Lemma itree_step_interp_ret_s EV S R E  (f : E ~> itree (moduleE EV S)) (a : R) h cont:
   ITreeTStep (EV:=EV) (S:=S) cont true (x ← interp f (Ret a);;; h x) (h a).
 Proof. constructor. by rewrite interp_ret bind_ret_l. Qed.
-Global Hint Resolve itree_step_interp_ret_s : tstep.
+Global Hint Resolve itree_step_interp_ret_s : typeclass_instances.
 
 Lemma itree_tstep_Tau_s {EV S} t cont:
   ITreeTStep (EV:=EV) (S:=S) cont true (Tau t) t.
 Proof. constructor. by rewrite tau_eutt. Qed.
-Global Hint Resolve itree_tstep_Tau_s : tstep.
+Global Hint Resolve itree_tstep_Tau_s : typeclass_instances.
 
 Lemma itree_step_Tau_i EV S t s:
   ITreeTStepI (EV:=EV) (S:=S) (Tau t) s (λ G, G true None (λ G', G' t s)).
@@ -899,7 +899,7 @@ Proof.
   constructor => ??. apply: steps_impl_step_end => ???.
   inv_all @m_step; simplify_eq/=. naive_solver.
 Qed.
-Global Hint Resolve itree_step_Tau_i : tstep.
+Global Hint Resolve itree_step_Tau_i : typeclass_instances.
 
 Lemma itree_step_Vis_s EV S k (s : S) (e : EV):
   ITreeTStepS (r ← TVis e;;; k r) s (Some e) (λ G, G (k tt) s).
@@ -907,7 +907,7 @@ Proof.
   constructor => ??. rewrite bind_trigger.
   apply: steps_spec_step_end. { by econs. } naive_solver.
 Qed.
-Global Hint Resolve itree_step_Vis_s : tstep.
+Global Hint Resolve itree_step_Vis_s : typeclass_instances.
 
 Lemma itree_step_Vis_i EV S k s e:
   ITreeTStepI (EV:=EV) (S:=S) (r ← TVis e;;; k r) s (λ G, G true (Some e) (λ G', G' (k tt) s)).
@@ -917,7 +917,7 @@ Proof.
   eexists _, _. split_and!; [done..|]. move => /= ? HG. eexists _, _, _. split_and!; [done| |done].
   by setoid_rewrite bind_ret_l.
 Qed.
-Global Hint Resolve itree_step_Vis_i : tstep.
+Global Hint Resolve itree_step_Vis_i : typeclass_instances.
 
 Lemma itree_step_Get_s EV S k s:
   ITreeTStepS (EV:=EV) (S:=S) (x ← TGet;;; k x) s None (λ G, G (k s) s).
@@ -925,7 +925,7 @@ Proof.
   constructor => ??. rewrite bind_trigger.
   apply: steps_spec_step_end. { by econs. } naive_solver.
 Qed.
-Global Hint Resolve itree_step_Get_s : tstep.
+Global Hint Resolve itree_step_Get_s : typeclass_instances.
 
 Lemma itree_step_Get_i EV S k s:
   ITreeTStepI (EV:=EV) (S:=S) (x ← TGet;;; k x) s (λ G, G true None (λ G', G' (k s) s)).
@@ -935,7 +935,7 @@ Proof.
   eexists _, _. split_and!; [done..|]. move => /= ? HG. eexists _, _, _. split_and!; [done| |done].
   by setoid_rewrite bind_ret_l.
 Qed.
-Global Hint Resolve itree_step_Get_i : tstep.
+Global Hint Resolve itree_step_Get_i : typeclass_instances.
 
 Lemma itree_step_Put_s EV S k s s':
   ITreeTStepS (EV:=EV) (S:=S) (x ← TPut s';;; k x) s None (λ G, G (k tt) s').
@@ -943,7 +943,7 @@ Proof.
   constructor => ??. rewrite bind_trigger.
   apply: steps_spec_step_end. { by econs. } naive_solver.
 Qed.
-Global Hint Resolve itree_step_Put_s : tstep.
+Global Hint Resolve itree_step_Put_s : typeclass_instances.
 
 Lemma itree_step_Put_i EV S k s s':
   ITreeTStepI (EV:=EV) (S:=S) (x ← TPut s';;; k x) s (λ G, G true None (λ G', G' (k tt) s')).
@@ -953,7 +953,7 @@ Proof.
   eexists _, _. split_and!; [done..|]. move => /= ? HG. eexists _, _, _. split_and!; [done| |done].
   by setoid_rewrite bind_ret_l.
 Qed.
-Global Hint Resolve itree_step_Put_i : tstep.
+Global Hint Resolve itree_step_Put_i : typeclass_instances.
 
 Lemma itree_step_All_s EV S T k s:
   ITreeTStepS (EV:=EV) (S:=S) (x ← TAll T;;; k x) s None (λ G, ∀ x, G (k x) s).
@@ -961,7 +961,7 @@ Proof.
   constructor => ??. rewrite bind_trigger.
   apply: steps_spec_step_end. { by econs. } naive_solver.
 Qed.
-Global Hint Resolve itree_step_All_s : tstep.
+Global Hint Resolve itree_step_All_s : typeclass_instances.
 
 Lemma itree_step_All_i EV S T k s:
   ITreeTStepI (EV:=EV) (S:=S) (x ← TAll T;;; k x) s (λ G, G true None (λ G', ∃ x, G' (k x) s)).
@@ -971,7 +971,7 @@ Proof.
   eexists _, _. split_and!; [done..|]. move => /= ? [? HG]. eexists _, _, _. split_and!; [naive_solver| |done].
   by setoid_rewrite bind_ret_l.
 Qed.
-Global Hint Resolve itree_step_All_i : tstep.
+Global Hint Resolve itree_step_All_i : typeclass_instances.
 
 Lemma itree_step_Exist_s EV S T k s:
   ITreeTStepS (EV:=EV) (S:=S) (x ← TExist T;;; k x) s None (λ G, ∃ x, G (k x) s).
@@ -979,7 +979,7 @@ Proof.
   constructor => ? [??]. rewrite bind_trigger.
   apply: steps_spec_step_end. { by econs. } naive_solver.
 Qed.
-Global Hint Resolve itree_step_Exist_s : tstep.
+Global Hint Resolve itree_step_Exist_s : typeclass_instances.
 
 Lemma itree_step_Exist_i EV S T k s:
   ITreeTStepI (EV:=EV) (S:=S) (x ← TExist T;;; k x) s (λ G, ∀ x, G true None (λ G', G' (k x) s)).
@@ -989,7 +989,7 @@ Proof.
   eexists _, _. split_and!; [done..|]. move => /= ? HG. eexists _, _, _. split_and!; [naive_solver| |done].
   by setoid_rewrite bind_ret_l.
 Qed.
-Global Hint Resolve itree_step_Exist_i : tstep.
+Global Hint Resolve itree_step_Exist_i : typeclass_instances.
 
 Lemma itree_step_Ub_s EV S T (k : T → _) s:
   ITreeTStepS (EV:=EV) (S:=S) (x ← TUb;;; k x) s None (λ G, True).
@@ -997,7 +997,7 @@ Proof.
   constructor => ??. rewrite /TUb bind_bind bind_trigger.
   apply: steps_spec_step_end. { by econs. } move => /=? [[]?].
 Qed.
-Global Hint Resolve itree_step_Ub_s : tstep.
+Global Hint Resolve itree_step_Ub_s : typeclass_instances.
 
 Lemma itree_step_Ub_end_s EV S s:
   ITreeTStepS (EV:=EV) (S:=S) TUb s None (λ G, True).
@@ -1005,7 +1005,7 @@ Proof.
   constructor => ??. rewrite /TUb bind_trigger.
   apply: steps_spec_step_end. { by econs. } move => /=? [[]?].
 Qed.
-Global Hint Resolve itree_step_Ub_end_s : tstep.
+Global Hint Resolve itree_step_Ub_end_s : typeclass_instances.
 
 Lemma itree_step_Nb_i EV S T (k : T → _) s:
   ITreeTStepI (EV:=EV) (S:=S) (x ← TNb;;; k x) s (λ G, G true None (λ G', True)).
@@ -1013,7 +1013,7 @@ Proof.
   constructor => ??. apply: steps_impl_step_end => ???.
   inv_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K. destruct x.
 Qed.
-Global Hint Resolve itree_step_Nb_i : tstep.
+Global Hint Resolve itree_step_Nb_i : typeclass_instances.
 
 Lemma itree_step_Nb_end_i EV S s:
   ITreeTStepI (EV:=EV) (S:=S) TNb s (λ G, G true None (λ G', True)).
@@ -1021,7 +1021,7 @@ Proof.
   constructor => ??. apply: steps_impl_step_end => ???.
   inv_all @m_step; simplify_eq/=. cbn in H3; simplify_eq; simplify_K. destruct x.
 Qed.
-Global Hint Resolve itree_step_Nb_end_i : tstep.
+Global Hint Resolve itree_step_Nb_end_i : typeclass_instances.
 
 Lemma itree_step_Assume_s EV S P k s:
   ITreeTStepS (EV:=EV) (S:=S) (x ← TAssume P;;; k x) s None (λ G, P → G (k tt) s).
@@ -1029,7 +1029,7 @@ Proof.
   constructor => ??. rewrite bind_bind bind_trigger. setoid_rewrite bind_ret_l.
   apply: steps_spec_step_end. { by econs. } move => ? [[]]. naive_solver.
 Qed.
-Global Hint Resolve itree_step_Assume_s : tstep.
+Global Hint Resolve itree_step_Assume_s : typeclass_instances.
 
 Lemma itree_step_Assume_i EV S P k s:
   ITreeTStepI (EV:=EV) (S:=S) (x ← TAssume P;;; k x) s (λ G, G true None (λ G', P ∧ G' (k tt) s)).
@@ -1040,7 +1040,7 @@ Proof.
   setoid_rewrite bind_ret_l. by setoid_rewrite bind_ret_l.
   Unshelve. done.
 Qed.
-Global Hint Resolve itree_step_Assume_i : tstep.
+Global Hint Resolve itree_step_Assume_i : typeclass_instances.
 
 Lemma itree_step_Assert_s EV S P k s:
   ITreeTStepS (EV:=EV) (S:=S) (x ← TAssert P;;; k x) s None (λ G, P ∧ G (k tt) s).
@@ -1049,7 +1049,7 @@ Proof.
   apply: steps_spec_step_end. { by econs. } naive_solver.
   Unshelve. done.
 Qed.
-Global Hint Resolve itree_step_Assert_s : tstep.
+Global Hint Resolve itree_step_Assert_s : typeclass_instances.
 
 Lemma itree_step_Assert_i EV S P k s:
   ITreeTStepI (EV:=EV) (S:=S) (x ← TAssert P;;; k x) s (λ G, P → G true None (λ G', G' (k tt) s)).
@@ -1060,7 +1060,7 @@ Proof.
   move => /= ??. eexists _, _, _. split_and!; [naive_solver| |done].
   setoid_rewrite bind_ret_l. by setoid_rewrite bind_ret_l.
 Qed.
-Global Hint Resolve itree_step_Assert_i : tstep.
+Global Hint Resolve itree_step_Assert_i : typeclass_instances.
 
 Lemma itree_step_AssumeOpt_s EV S T (o : option T) k s:
   ITreeTStepS (EV:=EV) (S:=S) (x ← TAssumeOpt o;;; k x) s None (λ G, ∀ x, o = Some x → G (k x) s).
@@ -1068,7 +1068,7 @@ Proof.
   constructor => ??. rewrite bind_bind bind_trigger. setoid_rewrite bind_ret_l.
   apply: steps_spec_step_end. { by econs. } move => ? [[]]. naive_solver.
 Qed.
-Global Hint Resolve itree_step_AssumeOpt_s : tstep.
+Global Hint Resolve itree_step_AssumeOpt_s : typeclass_instances.
 
 Lemma itree_step_AssumeOpt_i EV S T (o : option T) k s:
   ITreeTStepI (EV:=EV) (S:=S) (x ← TAssumeOpt o;;; k x) s (λ G, G true None (λ G', ∃ x, o = Some x ∧ G' (k x) s)).
@@ -1080,7 +1080,7 @@ Proof.
   setoid_rewrite bind_ret_l.
   Unshelve. 2: { by econstructor. } by setoid_rewrite bind_ret_l.
 Qed.
-Global Hint Resolve itree_step_AssumeOpt_i : tstep.
+Global Hint Resolve itree_step_AssumeOpt_i : typeclass_instances.
 
 Lemma itree_step_AssertOpt_s EV S T (o : option T) k s:
   ITreeTStepS (EV:=EV) (S:=S) (x ← TAssertOpt o;;; k x) s None (λ G, ∃ x, o = Some x ∧ G (k x) s).
@@ -1088,7 +1088,7 @@ Proof.
   constructor => ?[?[??]]. rewrite bind_bind bind_trigger. setoid_rewrite bind_ret_l.
   apply: steps_spec_step_end. { by econs. } Unshelve. 2: by econstructor. move => [??] [??]; simplify_eq. done.
 Qed.
-Global Hint Resolve itree_step_AssertOpt_s : tstep.
+Global Hint Resolve itree_step_AssertOpt_s : typeclass_instances.
 
 Lemma itree_step_AssertOpt_i EV S T (o : option T) k s:
   ITreeTStepI (EV:=EV) (S:=S) (x ← TAssertOpt o;;; k x) s (λ G, ∀ x, o = Some x → G true None (λ G', G' (k x) s)).
@@ -1099,9 +1099,9 @@ Proof.
   move => /= ??. eexists _, _, _. split_and!; [naive_solver| |done].
   setoid_rewrite bind_ret_l. by setoid_rewrite bind_ret_l.
 Qed.
-Global Hint Resolve itree_step_AssertOpt_i : tstep.
+Global Hint Resolve itree_step_AssertOpt_i : typeclass_instances.
 
-Global Hint Opaque TVis TAll TExist TUb TNb TAssume TAssert TAssumeOpt TAssertOpt TGet TPut : tstep.
+Global Hint Opaque TVis TAll TExist TUb TNb TAssume TAssert TAssumeOpt TAssertOpt TGet TPut : typeclass_instances.
 
 Module itree_test.
 Local Definition test_itree : itree (moduleE _ _) ()

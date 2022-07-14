@@ -663,7 +663,7 @@ Lemma mod_map_step_i {EV1 EV2 S} m (f : mod_map_fn EV1 EV2 S) σ σf P `{!TStepI
    ∀ κ' σf' ok, (if κ is Some e then f σf e κ' σf' ok else κ' = None ∧ σf' = σf ∧ ok = true) →
                G b κ' (λ G', P' (λ x, G' (x, (σf', ok)))))).
 Proof.
-  constructor => G /tstepi_proof HP.
+  constructor => G /(@tstepi_proof _ _ _ _ ltac:(done)) HP.
   apply: (steps_impl_submodule _ (mod_map _ _) (λ x, (x, (σf, true)))); [done| |].
   - move => ?? /= [?[?[HG [? HG']]]]. eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
   - move => ????. inv_all/= @m_step; eexists _, _.
@@ -672,21 +672,22 @@ Proof.
       eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
     + move => [?[?[HG [? HG']]]]. eexists _,_. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
 Qed.
-Global Hint Resolve mod_map_step_i : tstep.
+Global Hint Resolve mod_map_step_i : typeclass_instances.
 
 Lemma mod_map_step_s {EV1 EV2 S} m (f : mod_map_fn EV1 EV2 S) σ σf P `{!TStepS m σ P} :
   TStepS (mod_map m f) (σ, (σf, true)) (λ G, P (λ κ P',
    ∃ κ' σf' ok, (if κ is Some e then f σf e κ' σf' ok else κ' = None ∧ σf' = σf ∧ ok = true) ∧
                G κ' (λ G', P' (λ x, G' (x, (σf', ok)))))).
 Proof.
-  constructor => G /tsteps_proof [κ [? [[? [κ' [?[??]]]] HG']]]. eexists _, _. split; [done|].
+  constructor => G /(@tsteps_proof _ _ _ _ ltac:(done)) [κ [? [[? [κ' [?[??]]]] HG']]].
+  eexists _, _. split; [done|].
   move => ? /HG'. move => /steps_spec_has_trace_1 Ht. apply steps_spec_has_trace_elim.
   apply: mod_map_nil; [done|] => ?/=?. tend. destruct κ; destruct!/=.
   - apply: steps_spec_step_end. { econs. { apply: ProductStepBoth; [done|]. by econs. } done. }
     move => [??]/=?. naive_solver.
   - by apply steps_spec_end.
 Qed.
-Global Hint Resolve mod_map_step_s : tstep.
+Global Hint Resolve mod_map_step_s : typeclass_instances.
 
 Lemma mod_map_ub_s {EV1 EV2 S} m (f : mod_map_fn EV1 EV2 S) σ σf:
   TStepS (mod_map m f) (σ, (σf, false)) (λ G, G None (λ G', True)).
@@ -696,4 +697,4 @@ Proof.
   apply: steps_spec_step_end. { econs. { by apply: ProductStepR; econs. } done. }
   move => [??]. naive_solver.
 Qed.
-Global Hint Resolve mod_map_ub_s : tstep.
+Global Hint Resolve mod_map_ub_s : typeclass_instances.

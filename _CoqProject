@@ -21,6 +21,7 @@ dimsum/lrefines.v
 dimsum/dem_module.v
 dimsum/refinement_examples.v
 dimsum/refines_meta.v
+dimsum/proof_techniques.v
 dimsum/filter.v
 dimsum/filter_srefines.v
 dimsum/product.v
@@ -28,7 +29,6 @@ dimsum/seq_product.v
 dimsum/state_transform.v
 dimsum/link.v
 dimsum/prepost.v
-dimsum/proof_techniques.v
 dimsum/itree.v
 dimsum_examples/asm.v
 dimsum_examples/imp.v

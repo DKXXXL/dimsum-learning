@@ -69,10 +69,11 @@ Qed.
 Lemma mod_state_transform_tstep_s {EV S} (m : module EV) (f : S → m.(m_state)) σ P `{!TStepS m (f σ) P} :
   TStepS (mod_state_transform m (λ σ σ', σ' = f σ)) σ (λ G, P (λ κ P', G κ (λ G', P' (λ σ', ∀ σ, σ' = f σ → G' σ)))).
 Proof.
-  constructor => G /tsteps_proof [κ [? [? HG']]]. split!; [done|] => ? /= /HG'/steps_spec_has_trace_1 Ht.
+  move: TStepS0 => [HStep].
+  constructor => G /HStep [κ [? [? HG']]]. split!; [done|] => ? /= /HG'/steps_spec_has_trace_1 Ht.
   apply steps_spec_has_trace_elim. apply: mod_state_transform_nil; [done..|].
   move => ?? /= ??; subst. case_match; destruct!.
   - apply: steps_spec_step_end; [by econs|] => /= ? [?[??]]. naive_solver.
   - apply: steps_spec_end. naive_solver.
 Qed.
-Global Hint Resolve mod_state_transform_tstep_s | 20 : tstep.
+Global Hint Resolve mod_state_transform_tstep_s | 20 : typeclass_instances.

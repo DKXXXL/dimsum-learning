@@ -1129,84 +1129,84 @@ Proof. apply fndef_eq. split_and!; [done..|] => /=. apply static_expr_to_expr_to
 Class AsVals (es : list expr) (vs : list val) := {
   as_vals : es = Val <$> vs
 }.
-Global Hint Mode AsVals ! - : tstep.
+Global Hint Mode AsVals ! - : typeclass_instances.
 
 Lemma as_vals_nil :
   AsVals [] [].
 Proof. done. Qed.
-Global Hint Resolve as_vals_nil : tstep.
+Global Hint Resolve as_vals_nil : typeclass_instances.
 
 Lemma as_vals_cons v es vs :
   AsVals es vs → AsVals (Val v :: es) (v :: vs).
 Proof. move => [->]. done. Qed.
-Global Hint Resolve as_vals_cons : tstep.
+Global Hint Resolve as_vals_cons : typeclass_instances.
 
 Lemma as_vals_fmap vs :
   AsVals (Val <$> vs) vs.
 Proof. done. Qed.
-Global Hint Resolve as_vals_fmap : tstep.
+Global Hint Resolve as_vals_fmap : typeclass_instances.
 
 
 (** ** ImpExprFill *)
 Class ImpExprFill (e : expr) (K : list expr_ectx) (e' : expr) := {
     imp_expr_fill_proof : e = expr_fill K e'
 }.
-Global Hint Mode ImpExprFill ! - - : tstep.
+Global Hint Mode ImpExprFill ! - - : typeclass_instances.
 
 Lemma imp_expr_fill_end e :
   ImpExprFill e [] e.
 Proof. done. Qed.
-Global Hint Resolve imp_expr_fill_end | 100 : tstep.
+Global Hint Resolve imp_expr_fill_end | 100 : typeclass_instances.
 
 Lemma imp_expr_fill_expr_fill e K K' e' `{!ImpExprFill e K' e'} :
   ImpExprFill (expr_fill K e) (K' ++ K) e'.
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_expr_fill : tstep.
+Global Hint Resolve imp_expr_fill_expr_fill : typeclass_instances.
 
 Lemma imp_expr_fill_BinOpL e1 e2 op K e' `{!ImpExprFill e1 K e'} :
   ImpExprFill (BinOp e1 op e2) (K ++ [BinOpLCtx op e2]) e'.
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_BinOpL : tstep.
+Global Hint Resolve imp_expr_fill_BinOpL : typeclass_instances.
 
 Lemma imp_expr_fill_BinOpR (v1 : val) e2 op K e' `{!ImpExprFill e2 K e'} :
   ImpExprFill (BinOp (Val v1) op e2) (K ++ [BinOpRCtx v1 op]) e'.
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_BinOpR : tstep.
+Global Hint Resolve imp_expr_fill_BinOpR : typeclass_instances.
 
 Lemma imp_expr_fill_Load e1 K e' `{!ImpExprFill e1 K e'} :
   ImpExprFill (Load e1) (K ++ [LoadCtx]) e'.
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_Load : tstep.
+Global Hint Resolve imp_expr_fill_Load : typeclass_instances.
 
 Lemma imp_expr_fill_StoreL e1 e2 K e' `{!ImpExprFill e1 K e'} :
   ImpExprFill (Store e1 e2) (K ++ [StoreLCtx e2]) e'.
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_StoreL : tstep.
+Global Hint Resolve imp_expr_fill_StoreL : typeclass_instances.
 
 Lemma imp_expr_fill_StoreR (v1 : val) e2 K e' `{!ImpExprFill e2 K e'} :
   ImpExprFill (Store (Val v1) e2) (K ++ [StoreRCtx v1]) e'.
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_StoreR : tstep.
+Global Hint Resolve imp_expr_fill_StoreR : typeclass_instances.
 
 Lemma imp_expr_fill_FreeA e1 K e' ls `{!ImpExprFill e1 K e'} :
   ImpExprFill (FreeA ls e1) (K ++ [FreeACtx ls]) e'.
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_FreeA : tstep.
+Global Hint Resolve imp_expr_fill_FreeA : typeclass_instances.
 
 Lemma imp_expr_fill_If e e2 e3 K e' `{!ImpExprFill e K e'} :
   ImpExprFill (If e e2 e3) (K ++ [IfCtx e2 e3]) e'.
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_If : tstep.
+Global Hint Resolve imp_expr_fill_If : typeclass_instances.
 
 Lemma imp_expr_fill_LetE v e1 e2 K e' `{!ImpExprFill e1 K e'} :
   ImpExprFill (LetE v e1 e2) (K ++ [LetECtx v e2]) e'.
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_LetE : tstep.
+Global Hint Resolve imp_expr_fill_LetE : typeclass_instances.
 
 Lemma imp_expr_fill_ReturnExt b e K e' `{!ImpExprFill e K e'} :
   ImpExprFill (ReturnExt b e) (K ++ [ReturnExtCtx b]) e'.
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_ReturnExt : tstep.
+Global Hint Resolve imp_expr_fill_ReturnExt : typeclass_instances.
 
 (** ** instances *)
 (* This pattern of using ImpExprFill at each rule is quite expensive
@@ -1218,7 +1218,7 @@ Proof.
   constructor => ? HG. eexists _, _. split; [done|] => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?. naive_solver.
 Qed.
-Global Hint Resolve imp_step_Var_s : tstep.
+Global Hint Resolve imp_step_Var_s : typeclass_instances.
 
 Lemma imp_step_Waiting_i fns h K e b `{!ImpExprFill e K (Waiting b)}:
   TStepI imp_module (Imp e h fns) (λ G,
@@ -1235,7 +1235,7 @@ Proof.
   - naive_solver.
   - naive_solver.
 Qed.
-Global Hint Resolve imp_step_Waiting_i : tstep.
+Global Hint Resolve imp_step_Waiting_i : typeclass_instances.
 
 Lemma imp_step_Waiting_s fns h e K b `{!ImpExprFill e K (Waiting b)}:
   TStepS imp_module (Imp e h fns) (λ G,
@@ -1249,7 +1249,7 @@ Proof.
   constructor => ? HG. destruct!; (split!; [done|]) => /= ??. 2: destruct b => //.
   all: apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?; destruct!; done.
 Qed.
-Global Hint Resolve imp_step_Waiting_s : tstep.
+Global Hint Resolve imp_step_Waiting_s : typeclass_instances.
 
 Lemma imp_step_ReturnExt_i fns h e K b (v : val) `{!ImpExprFill e K (ReturnExt b (Val v))}:
   TStepI imp_module (Imp e h fns) (λ G,
@@ -1261,7 +1261,7 @@ Proof.
   inv_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_ReturnExt_i : tstep.
+Global Hint Resolve imp_step_ReturnExt_i : typeclass_instances.
 
 Lemma imp_step_ReturnExt_s fns h e K b (v : val) `{!ImpExprFill e K (ReturnExt b (Val v))}:
   TStepS imp_module (Imp e h fns) (λ G,
@@ -1272,7 +1272,7 @@ Proof.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct!. done.
 Qed.
-Global Hint Resolve imp_step_ReturnExt_s : tstep.
+Global Hint Resolve imp_step_ReturnExt_s : typeclass_instances.
 
 Lemma imp_step_Call_i fns h e K f vs es `{!ImpExprFill e K (imp.Call f es)} `{!AsVals es vs}:
   TStepI imp_module (Imp e h fns) (λ G,
@@ -1290,7 +1290,7 @@ Proof.
   - naive_solver.
   - naive_solver.
 Qed.
-Global Hint Resolve imp_step_Call_i : tstep.
+Global Hint Resolve imp_step_Call_i : typeclass_instances.
 
 Lemma imp_step_Call_s fns h e K f vs `{!ImpExprFill e K (imp.Call f es)} `{!AsVals es vs}:
   TStepS imp_module (Imp e h fns) (λ G,
@@ -1304,7 +1304,7 @@ Proof.
   all: apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   all: destruct!; naive_solver.
 Qed.
-Global Hint Resolve imp_step_Call_s : tstep.
+Global Hint Resolve imp_step_Call_s : typeclass_instances.
 
 Lemma imp_step_Binop_i fns h e K (v1 v2 : val) op `{!ImpExprFill e K (BinOp (Val v1) op (Val v2))}:
   TStepI imp_module (Imp e h fns) (λ G,
@@ -1316,7 +1316,7 @@ Proof.
   inv_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_Binop_i | 10 : tstep.
+Global Hint Resolve imp_step_Binop_i | 10 : typeclass_instances.
 
 Lemma imp_step_Binop_s fns h e K (v1 v2 : val) op `{!ImpExprFill e K (BinOp (Val v1) op (Val v2))}:
   TStepS imp_module (Imp e h fns) (λ G,
@@ -1327,7 +1327,7 @@ Proof.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct!. naive_solver.
 Qed.
-Global Hint Resolve imp_step_Binop_s | 10 : tstep.
+Global Hint Resolve imp_step_Binop_s | 10 : typeclass_instances.
 
 Lemma imp_step_BinopAdd_i fns h e K n1 n2 `{!ImpExprFill e K (BinOp (Val (ValNum n1)) AddOp (Val (ValNum n2)))}:
   TStepI imp_module (Imp e h fns) (λ G,
@@ -1336,7 +1336,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. tstep_i => ???. split! => ?. naive_solver.
 Qed.
-Global Hint Resolve imp_step_BinopAdd_i | 5 : tstep.
+Global Hint Resolve imp_step_BinopAdd_i | 5 : typeclass_instances.
 
 Lemma imp_step_BinopAdd_s fns h e K (v1 v2 : val) `{!ImpExprFill e K (BinOp (Val v1) AddOp (Val v2))}:
   TStepS imp_module (Imp e h fns) (λ G,
@@ -1346,7 +1346,7 @@ Proof.
   constructor => ? HG. split!; [done|]. move => /= ??. tstep_s. split! => ? /bind_Some[?[? /bind_Some[?[??]]]].
   destruct v1, v2 => //. simplify_eq/=. naive_solver.
 Qed.
-Global Hint Resolve imp_step_BinopAdd_s | 5 : tstep.
+Global Hint Resolve imp_step_BinopAdd_s | 5 : typeclass_instances.
 
 Lemma imp_step_BinopShift_i fns h e K l z `{!ImpExprFill e K (BinOp (Val (ValLoc l)) ShiftOp (Val (ValNum z)))}:
   TStepI imp_module (Imp e h fns) (λ G,
@@ -1355,7 +1355,7 @@ Proof.
   destruct ImpExprFill0; subst.
   constructor => ? HG. tstep_i => ???. split! => ?. naive_solver.
 Qed.
-Global Hint Resolve imp_step_BinopShift_i | 5 : tstep.
+Global Hint Resolve imp_step_BinopShift_i | 5 : typeclass_instances.
 
 Lemma imp_step_BinopShift_s fns h e K (v1 v2 : val) `{!ImpExprFill e K (BinOp (Val v1) ShiftOp (Val v2))}:
   TStepS imp_module (Imp e h fns) (λ G,
@@ -1365,7 +1365,7 @@ Proof.
   constructor => ? HG. split!; [done|]. move => /= ??. tstep_s. split! => ? /bind_Some[?[? /bind_Some[?[??]]]].
   destruct v1, v2 => //. simplify_eq/=. naive_solver.
 Qed.
-Global Hint Resolve imp_step_BinopShift_s | 5 : tstep.
+Global Hint Resolve imp_step_BinopShift_s | 5 : typeclass_instances.
 
 Lemma imp_step_Load_i fns h e K l `{!ImpExprFill e K (Load (Val (ValLoc l)))}:
   TStepI imp_module (Imp e h fns) (λ G,
@@ -1377,7 +1377,7 @@ Proof.
   inv_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_Load_i : tstep.
+Global Hint Resolve imp_step_Load_i : typeclass_instances.
 
 Lemma imp_step_Load_s fns h e K v `{!ImpExprFill e K (Load (Val v))}:
   TStepS imp_module (Imp e h fns) (λ G,
@@ -1388,7 +1388,7 @@ Proof.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct!. naive_solver.
 Qed.
-Global Hint Resolve imp_step_Load_s : tstep.
+Global Hint Resolve imp_step_Load_s : typeclass_instances.
 
 Lemma imp_step_Store_i fns h e K l v `{!ImpExprFill e K (Store (Val (ValLoc l)) (Val v))}:
   TStepI imp_module (Imp e h fns) (λ G,
@@ -1400,7 +1400,7 @@ Proof.
   inv_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_Store_i : tstep.
+Global Hint Resolve imp_step_Store_i : typeclass_instances.
 
 Lemma imp_step_Store_s fns h e K v1 v `{!ImpExprFill e K (Store (Val v1) (Val v))}:
   TStepS imp_module (Imp e h fns) (λ G,
@@ -1412,7 +1412,7 @@ Proof.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct!. naive_solver.
 Qed.
-Global Hint Resolve imp_step_Store_s : tstep.
+Global Hint Resolve imp_step_Store_s : typeclass_instances.
 
 Lemma imp_step_AllocA_i fns h e K e' vs `{!ImpExprFill e K (AllocA vs e')}:
   TStepI imp_module (Imp e h fns) (λ G, ∀ ls h', heap_alloc_list vs.*2 ls h h' →
@@ -1425,7 +1425,7 @@ Proof.
   inv_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_AllocA_i : tstep.
+Global Hint Resolve imp_step_AllocA_i : typeclass_instances.
 
 Lemma imp_step_Alloc_s fns h e e' K vs `{!ImpExprFill e K (AllocA vs e')}:
   TStepS imp_module (Imp e h fns) (λ G,
@@ -1437,7 +1437,7 @@ Proof.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct!. naive_solver.
 Qed.
-Global Hint Resolve imp_step_Alloc_s : tstep.
+Global Hint Resolve imp_step_Alloc_s : typeclass_instances.
 
 Lemma imp_step_FreeA_i fns h e K v ls `{!ImpExprFill e K (FreeA ls (Val v))}:
   TStepI imp_module (Imp e h fns) (λ G,
@@ -1449,7 +1449,7 @@ Proof.
   inv_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_FreeA_i : tstep.
+Global Hint Resolve imp_step_FreeA_i : typeclass_instances.
 
 Lemma imp_step_FreeA_s fns h e K ls v `{!ImpExprFill e K (FreeA ls (Val v))}:
   TStepS imp_module (Imp e h fns) (λ G,
@@ -1460,7 +1460,7 @@ Proof.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct!. naive_solver.
 Qed.
-Global Hint Resolve imp_step_FreeA_s : tstep.
+Global Hint Resolve imp_step_FreeA_s : typeclass_instances.
 
 Lemma imp_step_LetE_i fns h e K x v e1 `{!ImpExprFill e K (LetE x (Val v) e1)}:
   TStepI imp_module (Imp e h fns) (λ G,
@@ -1472,7 +1472,7 @@ Proof.
   inv_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_LetE_i : tstep.
+Global Hint Resolve imp_step_LetE_i : typeclass_instances.
 
 Lemma imp_step_LetE_s fns h e K x v e1 `{!ImpExprFill e K (LetE x (Val v) e1)}:
   TStepS imp_module (Imp e h fns) (λ G,
@@ -1483,7 +1483,7 @@ Proof.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct!. naive_solver.
 Qed.
-Global Hint Resolve imp_step_LetE_s : tstep.
+Global Hint Resolve imp_step_LetE_s : typeclass_instances.
 
 Lemma imp_step_If_i fns h b K e1 e2 `{!ImpExprFill e K (If (Val (ValBool b)) e1 e2)}:
   TStepI imp_module (Imp e h fns) (λ G,
@@ -1495,7 +1495,7 @@ Proof.
   inv_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_If_i | 10 : tstep.
+Global Hint Resolve imp_step_If_i | 10 : typeclass_instances.
 
 Lemma imp_step_If_s fns h v K e1 e2 `{!ImpExprFill e K (If (Val v) e1 e2)}:
   TStepS imp_module (Imp e h fns) (λ G,
@@ -1506,7 +1506,7 @@ Proof.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct!. destruct v => //. naive_solver.
 Qed.
-Global Hint Resolve imp_step_If_s | 10 : tstep.
+Global Hint Resolve imp_step_If_s | 10 : typeclass_instances.
 
 (** * proof techniques for prepost *)
 Definition imp_proof_call (n : trace_index) (fns1 fns2 : gmap string fndef) :=

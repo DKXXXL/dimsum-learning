@@ -1240,11 +1240,9 @@ Proof.
        t1 = PPInside ∧
        satisfiable (heap_bij_inv h1 h2 ∗ ([∗ list] v1;v2∈vs1;vs2, val_in_bij v1 v2) ∗ r ∗ rf') ∧
        imp_heap_bij_return n' fns1 fns2 K1 K2 r). }
-  { move => /=. split! => //; [lia|..]. { iSatMono. iFrame. iAccu. } iSatClear.
-    move => ?????????. apply: Hret; [done|]. eexists [_]. split!.
+  { move => /= ??. split! => //; [lia|..]. { iSatMono. iFrame. iAccu. } iSatClear.
+    move => ?????????. apply: tsim_mono; [|done]. apply: Hret; [done|]. eexists [_]. split!.
     iSatMono. iIntros!. iFrame. }
-  { iSatClear. move => n' n'' [e1 {}h1 ?] [[σfs [e2 {}h2 ?]] [[??]?]] ??. destruct!. split! => //.
-    by apply: imp_heap_bij_return_mono. }
   iSatClear. move => n' /= ? IH [e1 {}h1 ?] [[σfs [e2 {}h2 ?]] [[?[]]?]] ?. destruct!. simplify_eq/=.
   have [?[??]]:= (Hlen _ _ ltac:(done)).
   iSatStart. iIntros!. iDestruct (big_sepL2_length with "[$]") as %?. iSatStop.
@@ -1402,10 +1400,10 @@ Proof.
   - simpl. eapply Hcont; first done.
     iSatMono. iIntros "($ & Hm & $)". destruct v; done.
   - simpl. simpl in Hstatic. eapply andb_True in Hstatic as [Hstatic1 Hstat2].
-    apply: IH1; [eauto_tstep|eauto_tstep|..]; simpl; [eauto..|]; last first.
+    apply: IH1; simpl; [eauto..|]; last first.
     { iSatMono. iIntros "($ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
     iSatClear. intros n' vi vs hi' hs' rf' b' Hn' Hsat; simpl.
-    apply: IH2; [eauto_tstep|eauto_tstep|..]; simpl; eauto; last first.
+    apply: IH2; simpl; eauto; last first.
     { iSatMono. iIntros "($ & #Hv & [#Hm r] & $)". iFrame "Hm". iCombine "Hm Hv r " as "r". iExact "r". }
     2: { by apply: imp_heap_bij_call_mono. }
     iSatClear. intros n'' wi ws hi'' hs'' rf'' b'' Hn'' Hsat; simpl.
@@ -1415,7 +1413,7 @@ Proof.
     iSatStop. tstep_i. split!. eapply Hcont; first by etrans.
     iSatMono. iFrame.
   - simpl. simpl in Hstatic.
-    apply: IH; [eauto_tstep|eauto_tstep|..]; simpl; [eauto..|]; last first.
+    apply: IH; simpl; [eauto..|]; last first.
     { iSatMono. iIntros "($ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
     iSatClear. intros n' vi vs hi' hs' rf' b' Hn' Hsat; simpl.
     tstep_s. intros l v' -> Hlook. iSatStart.
@@ -1425,10 +1423,10 @@ Proof.
     iSatStop. tstep_i. split!. eapply Hcont; first by etrans.
     iSatMono. iFrame. iFrame "Hw".
   - simpl. simpl in Hstatic. eapply andb_True in Hstatic as [Hstatic1 Hstat2].
-    apply: IH1; [eauto_tstep|eauto_tstep|..]; simpl; [eauto..|]; last first.
+    apply: IH1; simpl; [eauto..|]; last first.
     { iSatMono. iIntros "($ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
       iSatClear. intros n' vi vs hi' hs' rf' b' Hn' Hsat; simpl.
-    apply: IH2; [eauto_tstep|eauto_tstep|..]; simpl; [eauto..|]; last first.
+    apply: IH2; simpl; [eauto..|]; last first.
     { iSatMono. iIntros "($ & #Hv & [#Hm r] & $)". iFrame "Hm". iCombine "Hm Hv r " as "r". iExact "r". }
     2: { by apply: imp_heap_bij_call_mono. }
     iSatClear. intros n'' wi ws hi'' hs'' rf'' b'' Hn'' Hsat; simpl.
@@ -1441,36 +1439,36 @@ Proof.
     iSatMono. iFrame. iFrame "Hw".
   - simpl. simpl in Hstatic. eapply andb_True in Hstatic as [Hstatic Hstatic2].
     eapply andb_True in Hstatic as [Hstatic Hstatic1].
-    apply: IH; [eauto_tstep|eauto_tstep|..]; simpl; [eauto..|]; last first.
+    apply: IH; simpl; [eauto..|]; last first.
     { iSatMono. iIntros "($ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
     iSatClear. intros n' vi vs hi' hs' rf' b' Hn' Hsat; simpl.
     tstep_s. intros cond ->. iSatStart.
     iIntros "(Hinv & Hv & (Hsub & r) & rf)".
     destruct vi; try done; simpl. iDestruct "Hv" as "->". iSatStop.
     tstep_i. destruct cond.
-    + apply: IH1; [eauto_tstep|eauto_tstep|..]; simpl; eauto.
+    + apply: IH1; simpl; eauto.
       { by apply: imp_heap_bij_call_mono. }
       { by apply: imp_heap_bij_return_mono. }
       iSatMono. iFrame.
-    + apply: IH2; [eauto_tstep|eauto_tstep|..]; simpl; eauto.
+    + apply: IH2; simpl; eauto.
       { by apply: imp_heap_bij_call_mono. }
       { by apply: imp_heap_bij_return_mono. }
       iSatMono. iFrame.
   - simpl. simpl in Hstatic. eapply andb_True in Hstatic as [Hstatic1 Hstatic2].
-    apply: IH1; [eauto_tstep|eauto_tstep|..]; simpl; [eauto..|]; last first.
+    apply: IH1; simpl; [eauto..|]; last first.
     { iSatMono. iIntros "($ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
     iSatClear. intros n' vi vs hi' hs' rf' b' Hn' Hsat; simpl.
     tstep_s. tstep_i. rewrite -!subst_subst_map_delete.
-    apply: IH2; [eauto_tstep|eauto_tstep|..]; simpl; eauto.
+    apply: IH2; simpl; eauto.
     { set_solver. }
     { by apply: imp_heap_bij_call_mono. }
     { by apply: imp_heap_bij_return_mono. }
     iSatMono. iIntros "(Hinv & Hv & (Hsub & r) & rf)". iFrame.
     iApply (big_sepM2_insert_2 with "[Hv]"); by iFrame.
-  - simpl. apply: (imp_heap_bij_sim_call_bind args nil nil); [eauto_tstep|eauto_tstep|..];simpl; eauto.
+  - simpl. apply: (imp_heap_bij_sim_call_bind args nil nil);simpl; eauto.
     + iSatMono. iIntros "($ & $ & $)".
     + clear Hsat. intros vs ws hi' hs' b' n' rf' Hn' Hsat'.
-      apply: Hcall; [eauto_tstep|eauto_tstep|..]; simpl; eauto.
+      apply: Hcall; simpl; eauto.
       { by eapply Forall2_fmap_l, Forall_Forall2_diag, Forall_forall. }
       { by eapply Forall2_fmap_l, Forall_Forall2_diag, Forall_forall. }
       iSatMono. iIntros "($ & ? & $ & $)".
@@ -1499,7 +1497,7 @@ Proof.
   have Hlen2 := (heap_alloc_list_length _ _ _ _ ltac:(done)).
   rewrite fmap_length in Hlen1, Hlen2.
   rewrite !subst_l_subst_map ?fmap_length -?subst_map_subst_map //.
-  apply: imp_heap_bij_sim_refl_static; [eauto_tstep|eauto_tstep|..]; last first.
+  apply: imp_heap_bij_sim_refl_static; last first.
   - iSatMonoBupd. iIntros "(? & Hvs & ? & ?)".
     iMod (heap_bij_inv_alloc_list with "[$]") as "[$ ?]"; [done..|]. iModIntro. iFrame.
     iSplit; [|iAccu].
@@ -1643,7 +1641,7 @@ Proof.
   tstep_i => ??[??]. simplify_eq. split!.
   tstep_s => ???. simplify_eq.
   tstep_s.
-  apply: Hcall; [typeclasses eauto with tstep|typeclasses eauto with tstep|done|econs|econs|..].
+  apply: Hcall; [done|econs|econs|..].
   { iSatMonoBupd. iIntros!. iFrame.
     iMod (heap_bij_inv_alloc_s with "[$]") as "[? ?]"; [apply (heap_fresh_is_fresh ∅)|].
     iMod (heap_bij_inv_update_s with "[$] [$]") as "[$ ?]". iModIntro. iAccu. }

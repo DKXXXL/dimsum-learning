@@ -282,35 +282,35 @@ Proof.
   constructor => G HG. apply: steps_impl_step_end => ???. inv_all @m_step.
   eexists _, _. split_and!; [done..|]. naive_solver.
 Qed.
-Global Hint Resolve mod_seq_product_step_None_i : tstep.
+Global Hint Resolve mod_seq_product_step_None_i : typeclass_instances.
 
 Lemma mod_seq_product_step_l_i {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2 P `{!TStepI m1 σ1 P}:
   TStepI (mod_seq_product m1 m2) (SPLeft, σ1, σ2) (λ G, P (λ b κ P',
     ∀ s', (if κ is None then s' = SPLeft else True) →
      G b ((λ e, SPELeft e s') <$> κ) (λ G', P' (λ x, G' (s', x, σ2))))).
 Proof.
-  constructor => G /tstepi_proof HP.
+  constructor => G /(@tstepi_proof _ _ _ _ ltac:(done)) HP.
   apply: (steps_impl_submodule _ (mod_seq_product _ _) (λ x, (SPLeft, x, σ2))); [done| |].
   - move => ?? /= [?[?[HG[? HG']]]]. eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
   - move => ????. inv_all/= @m_step; eexists _, _.
     split_and!; [done| |naive_solver].
     move => [?[?[HG [? HG']]]]. eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
 Qed.
-Global Hint Resolve mod_seq_product_step_l_i : tstep.
+Global Hint Resolve mod_seq_product_step_l_i : typeclass_instances.
 
 Lemma mod_seq_product_step_r_i {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2 P `{!TStepI m2 σ2 P}:
   TStepI (mod_seq_product m1 m2) (SPRight, σ1, σ2) (λ G, P (λ b κ P',
     ∀ s', (if κ is None then s' = SPRight else True) →
      G b ((λ e, SPERight e s') <$> κ) (λ G', P' (λ x, G' (s', σ1, x))))).
 Proof.
-  constructor => G /tstepi_proof HP.
+  constructor => G /(@tstepi_proof _ _ _ _ ltac:(done)) HP.
   apply: (steps_impl_submodule _ (mod_seq_product _ _) (λ x, (SPRight, σ1, x))); [done| |].
   - move => ?? /= [?[?[HG [? HG']]]]. eexists _,_. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
   - move => ????. inv_all/= @m_step; eexists _, _.
     split_and!; [done| |naive_solver].
     move => [?[?[HG [? HG']]]]. eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
 Qed.
-Global Hint Resolve mod_seq_product_step_r_i : tstep.
+Global Hint Resolve mod_seq_product_step_r_i : typeclass_instances.
 
 Lemma mod_seq_product_step_None_s {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2:
   TStepS (mod_seq_product m1 m2) (SPNone, σ1, σ2) (λ G, ∃ s, G (Some (SPENone s)) (λ G', G' (s, σ1, σ2))).
@@ -319,14 +319,14 @@ Proof.
   apply: steps_spec_step_end. { econs. }
   move => *. by simplify_eq/=.
 Qed.
-Global Hint Resolve mod_seq_product_step_None_s : tstep.
+Global Hint Resolve mod_seq_product_step_None_s : typeclass_instances.
 
 Lemma mod_seq_product_step_l_s {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2 P `{!TStepS m1 σ1 P}:
   TStepS (mod_seq_product m1 m2) (SPLeft, σ1, σ2) (λ G, P (λ κ P',
     ∃ s', (if κ is None then s' = SPLeft else True) ∧ G ((λ e, SPELeft e s') <$> κ) (λ G',
        P' (λ σ, G' (s', σ, σ2))))).
 Proof.
-  constructor => G /tsteps_proof[?[?[? HG']]]. destruct!.
+  constructor => G /(@tsteps_proof _ _ _ _ ltac:(done))[?[?[? HG']]]. destruct!.
   eexists _, _. split; [done|] => ?/= /HG' /steps_spec_has_trace_1 Ht.
   apply steps_spec_has_trace_elim.
   apply: thas_trace_mono; [ by apply: seq_product_nil_l |done|] => /= [[[??]?]?].
@@ -334,14 +334,14 @@ Proof.
   apply: steps_spec_step_end. { by eapply (SPLeftS _ _ (Some _)). }
   move => [[??]?]? /=. naive_solver.
 Qed.
-Global Hint Resolve mod_seq_product_step_l_s : tstep.
+Global Hint Resolve mod_seq_product_step_l_s : typeclass_instances.
 
 Lemma mod_seq_product_step_r_s {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2 P `{!TStepS m2 σ2 P}:
   TStepS (mod_seq_product m1 m2) (SPRight, σ1, σ2) (λ G, P (λ κ P',
     ∃ s', (if κ is None then s' = SPRight else True) ∧ G ((λ e, SPERight e s') <$> κ) (λ G',
        P' (λ σ, G' (s', σ1, σ))))).
 Proof.
-  constructor => G /tsteps_proof[?[?[? HG']]]. destruct!.
+  constructor => G /(@tsteps_proof _ _ _ _ ltac:(done))[?[?[? HG']]]. destruct!.
   eexists _, _. split; [done|] => ?/= /HG' /steps_spec_has_trace_1 Ht.
   apply steps_spec_has_trace_elim.
   apply: thas_trace_mono; [ by apply: seq_product_nil_r |done|] => /= [[[??]?]?].
@@ -349,7 +349,7 @@ Proof.
   apply: steps_spec_step_end. { by eapply (SPRightS _ _ (Some _)). }
   move => [[??]?]? /=. naive_solver.
 Qed.
-Global Hint Resolve mod_seq_product_step_r_s : tstep.
+Global Hint Resolve mod_seq_product_step_r_s : typeclass_instances.
 
 (*** [mod_seq_map] *)
 Inductive mod_seq_map_state {EV1 : Type} :=
@@ -451,7 +451,7 @@ Lemma mod_seq_map_step_filter_i {EV1 EV2} m (f : module (sm_event EV1 EV2)) σ �
     | _ => True
     end)).
 Proof.
-  constructor => G /tstepi_proof?. clear TStepI0.
+  constructor => G /(@tstepi_proof _ _ _ _ ltac:(done))?. clear TStepI0.
   (* Set Typeclasses Debug. *)
   (* tstep_i. *)
   (* apply: steps_impl_mono; [done|]. *)
@@ -463,14 +463,14 @@ Proof.
     + case_match; simplify_eq. naive_solver.
     + case_match; simplify_eq. inv_all @mod_seq_map_filter; try destruct e; naive_solver.
 Qed.
-Global Hint Resolve mod_seq_map_step_filter_i | 4 : tstep.
+Global Hint Resolve mod_seq_map_step_filter_i | 4 : typeclass_instances.
 
 Lemma mod_seq_map_step_filter_recv_i {EV1 EV2} m (f : module (sm_event EV1 EV2)) σ σf P `{!TStepI f σf P} e :
   TStepI (mod_seq_map m f) (SMFilterRecv e, σ, σf) (λ G, P (λ b κ P',
        if κ is Some e' then SMERecv e = e' → G b None (λ G', P' (λ x, G' (SMFilter, σ, x)))
        else G b None (λ G', P' (λ x, G' (SMFilterRecv e, σ, x))))).
 Proof.
-  constructor => G /tstepi_proof?.
+  constructor => G /(@tstepi_proof _ _ _ _ ltac:(done))?.
   apply: (steps_impl_submodule _ (mod_seq_map _ _) (λ x, (SMFilterRecv e, σ, x))); [done| |].
   - naive_solver.
   - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
@@ -481,14 +481,14 @@ Proof.
       inv_all @mod_seq_map_filter. destruct!. eexists _, _. split_and!;[naive_solver..|].
       move => ? /H2[?[??]]. eexists (_, _, _). split!; [|done] => /=. done.
 Qed.
-Global Hint Resolve mod_seq_map_step_filter_recv_i | 4 : tstep.
+Global Hint Resolve mod_seq_map_step_filter_recv_i | 4 : typeclass_instances.
 
 Lemma mod_seq_map_step_prog_i {EV1 EV2} m (f : module (sm_event EV1 EV2)) σ σf P `{!TStepI m σ P}:
   TStepI (mod_seq_map m f) (SMProg, σ, σf) (λ G, P (λ b κ P',
    G b None (λ G', P' (λ x, if κ is Some e then G' (SMFilterRecv e, x, σf)
                             else G' (SMProg, x, σf))))).
 Proof.
-  constructor => G /tstepi_proof?.
+  constructor => G /(@tstepi_proof _ _ _ _ ltac:(done))?.
   apply: (steps_impl_submodule _ (mod_seq_map _ _) (λ x, (SMProg, x, σf))); [done| |].
   - naive_solver.
   - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
@@ -499,14 +499,14 @@ Proof.
       inv_all @mod_seq_map_filter. destruct!. eexists _, _. split_and!;[naive_solver..|].
       move => ? /H2[?[??]]. eexists (_, _, _). split!; [|done] => /=. done.
 Qed.
-Global Hint Resolve mod_seq_map_step_prog_i | 4 : tstep.
+Global Hint Resolve mod_seq_map_step_prog_i | 4 : typeclass_instances.
 
 Lemma mod_seq_map_step_prog_recv_i {EV1 EV2} m (f : module (sm_event EV1 EV2)) σ σf P `{!TStepI m σ P} e:
   TStepI (mod_seq_map m f) (SMProgRecv e, σ, σf) (λ G, P (λ b κ P',
    if κ is Some e' then e = e' → G b None (λ G', P' (λ x, G' (SMProg, x, σf)))
                  else G b None (λ G', P' (λ x, G' (SMProgRecv e, x, σf))))).
 Proof.
-  constructor => G /tstepi_proof?.
+  constructor => G /(@tstepi_proof _ _ _ _ ltac:(done))?.
   apply: (steps_impl_submodule _ (mod_seq_map _ _) (λ x, (SMProgRecv e, x, σf))); [done| |].
   - naive_solver.
   - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
@@ -517,7 +517,7 @@ Proof.
       inv_all @mod_seq_map_filter. destruct!. eexists _, _. split_and!;[naive_solver..|].
       move => ? /H2[?[??]]. eexists (_, _, _). split!; [|done] => /=. done.
 Qed.
-Global Hint Resolve mod_seq_map_step_prog_recv_i | 4 : tstep.
+Global Hint Resolve mod_seq_map_step_prog_recv_i | 4 : typeclass_instances.
 
 Lemma mod_seq_map_step_filter_s {EV1 EV2} m (f : module (sm_event EV1 EV2)) σ σf P `{!TStepS f σf P} :
   TStepS (mod_seq_map m f) (SMFilter, σ, σf) (λ G, P (λ κ P',
@@ -528,7 +528,7 @@ Lemma mod_seq_map_step_filter_s {EV1 EV2} m (f : module (sm_event EV1 EV2)) σ �
     | _ => False
     end)).
 Proof.
-  constructor => G /tsteps_proof [κ [? [? HG']]]. clear TStepS0.
+  constructor => G /(@tsteps_proof _ _ _ _ ltac:(done)) [κ [? [? HG']]]. clear TStepS0.
   destruct κ as [[e|e|e]|]. 1: done. all: eexists _, _; split; [done|] => G' /= /HG'?; tstep_s.
   - eexists (Some (SMEEmit e)), _. split; [done|]. eexists _,_, _ => /=. split_and!; [econs|done|].
     apply: steps_spec_mono; [done|] => /= ? ? [[[|||]]]/=; naive_solver.
@@ -537,14 +537,14 @@ Proof.
   - eexists None, _. split; [done|]. eexists _, _,_ => /=. split_and!; [done..|].
     apply: steps_spec_mono; [done|] => /= ? ? [[[|||]]]/=; naive_solver.
 Qed.
-Global Hint Resolve mod_seq_map_step_filter_s | 4 : tstep.
+Global Hint Resolve mod_seq_map_step_filter_s | 4 : typeclass_instances.
 
 Lemma mod_seq_map_step_filter_recv_s {EV1 EV2} m (f : module (sm_event EV1 EV2)) σ σf P `{!TStepS f σf P} e:
   TStepS (mod_seq_map m f) (SMFilterRecv e, σ, σf) (λ G, P (λ κ P',
    G None (λ G', if κ is Some e' then SMERecv e = e' ∧ P' (λ x, G' (SMFilter, σ, x))
                  else P' (λ x, G' (SMFilterRecv e, σ, x))))).
 Proof.
-  constructor => G /tsteps_proof [κ [? [? HG']]]. eexists _, _. split; [done|].
+  constructor => G /(@tsteps_proof _ _ _ _ ltac:(done)) [κ [? [? HG']]]. eexists _, _. split; [done|].
   move => ? /=?. clear TStepS0. tstep_s. eexists κ, _. split; [by case_match|].
   case_match; destruct!; eexists _, _, _ => /=.
   - split_and!; [econs|done|].
@@ -552,14 +552,14 @@ Proof.
   - split_and!; [done..|].
     apply: steps_spec_mono; [naive_solver|] => /= ? ? [[[|||]]]/=; naive_solver.
 Qed.
-Global Hint Resolve mod_seq_map_step_filter_recv_s | 4 : tstep.
+Global Hint Resolve mod_seq_map_step_filter_recv_s | 4 : typeclass_instances.
 
 Lemma mod_seq_map_step_prog_s {EV1 EV2} m (f : module (sm_event EV1 EV2)) σ σf P `{!TStepS m σ P}:
   TStepS (mod_seq_map m f) (SMProg, σ, σf) (λ G, P (λ κ P',
    G None (λ G', P' (λ x, if κ is Some e then G' (SMFilterRecv e, x, σf)
                           else G' (SMProg, x, σf))))).
 Proof.
-  constructor => G /tsteps_proof [κ [? [? HG']]]. eexists _, _. split; [done|].
+  constructor => G /(@tsteps_proof _ _ _ _ ltac:(done)) [κ [? [? HG']]]. eexists _, _. split; [done|].
   move => ? /=?. clear TStepS0. tstep_s.
   eexists κ; case_match; eexists _; (split; [done|]); eexists _, _, _ => /=.
   - split_and!; [econs|done|].
@@ -567,14 +567,14 @@ Proof.
   - split_and!; [done..|].
     apply: steps_spec_mono; [naive_solver|] => /= ? ? [[[|||]]]/=; naive_solver.
 Qed.
-Global Hint Resolve mod_seq_map_step_prog_s | 4 : tstep.
+Global Hint Resolve mod_seq_map_step_prog_s | 4 : typeclass_instances.
 
 Lemma mod_seq_map_step_prog_recv_s {EV1 EV2} m (f : module (sm_event EV1 EV2)) σ σf P `{!TStepS m σ P} e:
   TStepS (mod_seq_map m f) (SMProgRecv e, σ, σf) (λ G, P (λ κ P',
    G None (λ G', if κ is Some e' then e = e' ∧ P' (λ x, G' (SMProg, x, σf))
                  else P' (λ x, G' (SMProgRecv e, x, σf))))).
 Proof.
-  constructor => G /tsteps_proof [κ [? [? HG']]]. eexists _, _. split; [done|].
+  constructor => G /(@tsteps_proof _ _ _ _ ltac:(done)) [κ [? [? HG']]]. eexists _, _. split; [done|].
   move => ? /=?. clear TStepS0. tstep_s. eexists κ, _. split; [by case_match|].
   case_match; destruct!; eexists _, _, _ => /=.
   - split_and!; [econs|done|].
@@ -582,4 +582,4 @@ Proof.
   - split_and!; [done..|].
     apply: steps_spec_mono; [naive_solver|] => /= ? ? [[[|||]]]/=; naive_solver.
 Qed.
-Global Hint Resolve mod_seq_map_step_prog_recv_s | 4 : tstep.
+Global Hint Resolve mod_seq_map_step_prog_recv_s | 4 : typeclass_instances.

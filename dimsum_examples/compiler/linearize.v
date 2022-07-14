@@ -177,9 +177,9 @@ Proof.
     apply Hcont; [done|by eapply lookup_weaken|done|naive_solver].
   - move => ?????????????????? Hcont. prepare_goal. apply Hcont; [done|done|done|naive_solver].
   - move => /= ??? IH1 IH2 ????????????????? Hcont. prepare_goal.
-    eapply IH1; [eauto_tstep|done|done|done|set_solver|set_solver|done|].
+    apply: IH1; [done|done|done|set_solver|set_solver|done|].
     move => ?????? Hvsi'/=.
-    eapply IH2; [eauto_tstep|done|by etrans|done|set_solver|set_unfold; naive_solver lia|set_unfold; naive_solver lia|].
+    apply: IH2; [done|by etrans|done|set_solver|set_unfold; naive_solver lia|set_unfold; naive_solver lia|].
     move => ?????? Hvsi'' /=.
     erewrite lookup_var_val_to_expr; [|by apply: lookup_var_val_mono].
     erewrite lookup_var_val_to_expr; [|done].
@@ -195,7 +195,7 @@ Proof.
       move => /Hvsi'' [|[?|?]]; [ |set_unfold; naive_solver lia..].
       move => /Hvsi'; set_unfold; naive_solver lia.
   - move => /= ? IH ????????????????? Hcont. prepare_goal.
-    eapply IH; [eauto_tstep|done|done|done|set_solver|set_solver|done|].
+    apply: IH; [done|done|done|set_solver|set_solver|done|].
     move => ?????? Hvsi'/=.
     erewrite lookup_var_val_to_expr; [|done].
     tstep_s => ????. subst.
@@ -209,9 +209,9 @@ Proof.
     + move => ? /lookup_insert_is_Some'[|]; [naive_solver lia|].
       move => /Hvsi'; set_unfold; naive_solver lia.
   - move => /= ?? IH1 IH2 ????????????????? Hcont. prepare_goal.
-    eapply IH1; [eauto_tstep|done|done|done|set_solver|set_solver|done|].
+    apply: IH1; [done|done|done|set_solver|set_solver|done|].
     move => ?????? Hvsi'/=.
-    eapply IH2; [eauto_tstep|done|by etrans|done|set_solver|set_unfold; naive_solver lia|set_unfold; naive_solver lia|].
+    apply: IH2; [done|by etrans|done|set_solver|set_unfold; naive_solver lia|set_unfold; naive_solver lia|].
     move => ?????? Hvsi'' /=.
     erewrite lookup_var_val_to_expr; [|by apply: lookup_var_val_mono].
     erewrite lookup_var_val_to_expr; [|done].
@@ -227,12 +227,12 @@ Proof.
       move => /Hvsi'' [|[?|?]]; [ |set_unfold; naive_solver lia..].
       move => /Hvsi'; set_unfold; naive_solver lia.
   - move => ??? IH1 IH2 IH3 > ?????? Hcont. prepare_goal.
-    eapply IH1; [eauto_tstep|done|done|done|set_solver|set_solver|done|].
+    apply: IH1; [done|done|done|set_solver|set_solver|done|].
     move => ?????? Hvsi'/=.
     erewrite lookup_var_val_to_expr; [|done].
     tstep_s => ??. subst.
     tstep_i. apply tsim_mono_b_false. case_match.
-    + eapply IH2; [eauto_tstep|done|by etrans|done|set_solver|set_unfold; naive_solver lia|set_unfold; naive_solver lia|].
+    + apply: IH2; [done|by etrans|done|set_solver|set_unfold; naive_solver lia|set_unfold; naive_solver lia|].
     move => ?????? Hvsi''/=.
     erewrite lookup_var_val_to_expr; [|by apply: lookup_var_val_mono].
     tstep_i. rewrite -subst_subst_map_delete.
@@ -244,7 +244,7 @@ Proof.
     * move => ? /lookup_insert_is_Some'[|]; [naive_solver lia|].
       move => /Hvsi'' [|[?|?]]; [ |set_unfold; naive_solver lia..].
       move => /Hvsi'; set_unfold; naive_solver lia.
-    + eapply IH3; [eauto_tstep|done|by etrans|done|set_solver|set_unfold; naive_solver lia|set_unfold; naive_solver lia|].
+    + apply: IH3; [done|by etrans|done|set_solver|set_unfold; naive_solver lia|set_unfold; naive_solver lia|].
       move => ?????? Hvsi''/=.
       erewrite lookup_var_val_to_expr; [|by apply: lookup_var_val_mono].
       tstep_i. rewrite -subst_subst_map_delete.
@@ -257,10 +257,10 @@ Proof.
         move => /Hvsi'' [|[?|?]]; [ |set_unfold; naive_solver lia..].
         move => /Hvsi'; set_unfold; naive_solver lia.
   - move => ??? IH1 IH2 ????????????????? Hcont. prepare_goal.
-    eapply IH1; [eauto_tstep|done|done|done|set_solver|set_solver|done|].
+    apply: IH1; [done|done|done|set_solver|set_solver|done|].
     move => ?????? Hvsi'/=. erewrite lookup_var_val_to_expr; [|done].
     tstep_s. tstep_i. rewrite -!subst_subst_map_delete. apply tsim_mono_b_false.
-    eapply IH2; [eauto_tstep|done| |done|set_solver| | |].
+    apply: IH2; [done| |done|set_solver| | |].
     { by apply insert_mono; etrans. }
     { move => ?/lookup_insert_is_Some'. set_solver. }
     { move => ?/lookup_insert_is_Some'. set_unfold; naive_solver lia. }
@@ -281,7 +281,7 @@ Proof.
     elim: IH m p'' v'' s s'' vsi vr'' va'' h Hrun Hsub Hvsi1 Hvsi2 Hnodup Htmp Hall Hcont.
     + move => /= ??????????????? /lookup_var_val_to_expr_fmap Hall Hcont. simplify_crun_eq. rewrite !app_nil_r.
       rewrite Hall.
-      apply: Hcall; [eauto_tstep|eauto_tstep|done| | |done|done|..].
+      apply: Hcall; [done| | |done|done|..].
       { apply Forall2_fmap_l. apply Forall_Forall2_diag. by apply Forall_true. }
       { apply Forall2_fmap_l. apply Forall_Forall2_diag. by apply Forall_true. }
       move => ?? /=.
@@ -350,7 +350,7 @@ Proof.
   rewrite !subst_l_subst_map; [|rewrite ?fmap_length; lia..]. rewrite -!subst_map_subst_map.
   apply tsim_mono_b_false.
   have ->: ∀ K ls e, expr_fill K (FreeA ls e) = expr_fill (FreeACtx ls :: K) e by [].
-  apply: pass_correct; [eauto_tstep|done|done|done|done|set_solver|..].
+  apply: pass_correct; [done|done|done|done|set_solver|..].
   { move => ?. rewrite lookup_union_is_Some !list_to_map_lookup_is_Some.
     move => [|] [? /(elem_of_zip_l _ _ _)]; set_solver. }
   { move => ?. rewrite lookup_union_is_Some !list_to_map_lookup_is_Some.

@@ -118,7 +118,7 @@ Proof.
   inv_all @m_step. eexists _, _. split_and!; [done|done|].
   move => ? /=. naive_solver.
 Qed.
-Global Hint Resolve asm_step_WriteReg_i : tstep.
+Global Hint Resolve asm_step_WriteReg_i : typeclass_instances.
 
 Lemma asm_step_WriteReg_s r f es rs ins mem:
   TStepS asm_module (AsmState (ARunning (WriteReg r f::es)) rs mem ins)
@@ -128,7 +128,7 @@ Proof.
   apply: steps_spec_step_end. { econs. }
   move => ? /= ?. naive_solver.
 Qed.
-Global Hint Resolve asm_step_WriteReg_s : tstep.
+Global Hint Resolve asm_step_WriteReg_s : typeclass_instances.
 
 Lemma asm_step_ReadMem_i r1 r2 f es rs ins mem:
   TStepI asm_module (AsmState (ARunning (ReadMem r1 r2 f::es)) rs mem ins)
@@ -144,7 +144,7 @@ Proof.
   inv_all @m_step. eexists _, _. split_and!; [done|done|].
   move => ? /=. naive_solver.
 Qed.
-Global Hint Resolve asm_step_ReadMem_i : tstep.
+Global Hint Resolve asm_step_ReadMem_i : typeclass_instances.
 
 Lemma asm_step_ReadMem_s r1 r2 f es rs ins mem:
   TStepS asm_module (AsmState (ARunning (ReadMem r1 r2 f::es)) rs mem ins)
@@ -158,7 +158,7 @@ Proof.
   apply: steps_spec_step_end. { econs. }
   move => ? /= ?. naive_solver.
 Qed.
-Global Hint Resolve asm_step_ReadMem_s : tstep.
+Global Hint Resolve asm_step_ReadMem_s : typeclass_instances.
 
 Lemma asm_step_WriteMem_i r1 r2 f es rs ins mem:
   TStepI asm_module (AsmState (ARunning (WriteMem r1 r2 f::es)) rs mem ins)
@@ -173,7 +173,7 @@ Proof.
   inv_all @m_step. eexists _, _. split_and!; [done|done|].
   move => ? /=. naive_solver.
 Qed.
-Global Hint Resolve asm_step_WriteMem_i : tstep.
+Global Hint Resolve asm_step_WriteMem_i : typeclass_instances.
 
 Lemma asm_step_WriteMem_s r1 r2 f es rs ins mem:
   TStepS asm_module (AsmState (ARunning (WriteMem r1 r2 f::es)) rs mem ins)
@@ -187,7 +187,7 @@ Proof.
   apply: steps_spec_step_end. { econs. }
   move => ? /= ?. naive_solver.
 Qed.
-Global Hint Resolve asm_step_WriteMem_s : tstep.
+Global Hint Resolve asm_step_WriteMem_s : typeclass_instances.
 
 Lemma asm_step_Syscall_call_i es rs ins mem:
   TStepI asm_module (AsmState (ARunning (Syscall::es)) rs mem ins)
@@ -198,7 +198,7 @@ Proof.
   inv_all @m_step. eexists _, _. split_and!; [done|done|].
   move => ? /=. naive_solver.
 Qed.
-Global Hint Resolve asm_step_Syscall_call_i : tstep.
+Global Hint Resolve asm_step_Syscall_call_i : typeclass_instances.
 
 Lemma asm_step_Syscall_call_s es rs ins mem:
   TStepS asm_module (AsmState (ARunning (Syscall :: es)) rs mem ins)
@@ -208,7 +208,7 @@ Proof.
   constructor => ??. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { econs. } naive_solver.
 Qed.
-Global Hint Resolve asm_step_Syscall_call_s : tstep.
+Global Hint Resolve asm_step_Syscall_call_s : typeclass_instances.
 
 Lemma asm_step_Syscall_ret_i es rs ins mem:
   TStepI asm_module (AsmState (AWaitingSyscall es) rs mem ins)
@@ -219,7 +219,7 @@ Proof.
   inv_all @m_step. eexists _, _. split_and!; [naive_solver|done|].
   move => ? /=. naive_solver.
 Qed.
-Global Hint Resolve asm_step_Syscall_ret_i : tstep.
+Global Hint Resolve asm_step_Syscall_ret_i : typeclass_instances.
 
 Lemma asm_step_Syscall_ret_s es rs ins mem:
   TStepS asm_module (AsmState (AWaitingSyscall es) rs mem ins)
@@ -229,7 +229,7 @@ Proof.
   constructor => ? [?[??]]. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { econs. } naive_solver.
 Qed.
-Global Hint Resolve asm_step_Syscall_ret_s : tstep.
+Global Hint Resolve asm_step_Syscall_ret_s : typeclass_instances.
 
 Lemma asm_step_Jump_i rs ins mem:
   TStepI asm_module (AsmState (ARunning []) rs mem ins) (λ G,
@@ -244,7 +244,7 @@ Proof.
   inv_all/= @m_step; specialize_hyps; simplify_option_eq.
   all: eexists _, _; split_and!; [done..|]; naive_solver.
 Qed.
-Global Hint Resolve asm_step_Jump_i : tstep.
+Global Hint Resolve asm_step_Jump_i : typeclass_instances.
 
 Lemma asm_step_Jump_s rs ins mem:
   TStepS asm_module (AsmState (ARunning []) rs mem ins) (λ G,
@@ -258,7 +258,7 @@ Proof.
   all: eexists _, _; split; [done|] => ? /= ?.
   all: apply: steps_spec_step_end; [ by econs |] => ? ->; done.
 Qed.
-Global Hint Resolve asm_step_Jump_s : tstep.
+Global Hint Resolve asm_step_Jump_s : typeclass_instances.
 
 Lemma asm_step_AWaiting_i rs ins mem:
   TStepI asm_module (AsmState AWaiting rs mem ins) (λ G,
@@ -271,7 +271,7 @@ Proof.
   constructor => ? HG. apply steps_impl_step_end => ???.
   inv_all @m_step. eexists _, _. split_and!; [naive_solver..|]. naive_solver.
 Qed.
-Global Hint Resolve asm_step_AWaiting_i : tstep.
+Global Hint Resolve asm_step_AWaiting_i : typeclass_instances.
 
 Lemma asm_step_AWaiting_s rs mem ins:
   TStepS asm_module (AsmState AWaiting rs mem ins) (λ G,
@@ -282,7 +282,7 @@ Proof.
   constructor => ??. destruct!. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { by econs. } naive_solver.
 Qed.
-Global Hint Resolve asm_step_AWaiting_s : tstep.
+Global Hint Resolve asm_step_AWaiting_s : typeclass_instances.
 
 Lemma asm_step_APagefaulting_i rs ins mem a:
   TStepI asm_module (AsmState (APagefaulting a) rs mem ins) (λ G,
@@ -292,7 +292,7 @@ Proof.
   constructor => ? HG. apply steps_impl_step_end => ???.
   inv_all @m_step. eexists _, _. split_and!; [naive_solver..|]. naive_solver.
 Qed.
-Global Hint Resolve asm_step_APagefaulting_i : tstep.
+Global Hint Resolve asm_step_APagefaulting_i : typeclass_instances.
 
 Lemma asm_step_APagefaulting_s rs mem ins a:
   TStepS asm_module (AsmState (APagefaulting a) rs mem ins) (λ G,
@@ -301,14 +301,14 @@ Proof.
   constructor => ??. eexists _, _. split; [done|] => ? /= ?.
   apply: steps_spec_step_end. { by econs. } naive_solver.
 Qed.
-Global Hint Resolve asm_step_APagefaulting_s : tstep.
+Global Hint Resolve asm_step_APagefaulting_s : typeclass_instances.
 
 Lemma asm_step_AHalted_i rs ins mem:
   TStepI asm_module (AsmState AHalted rs mem ins) (λ G, True).
 Proof.
   constructor => ? HG. apply steps_impl_step_end => ???. inv_all @m_step.
 Qed.
-Global Hint Resolve asm_step_AHalted_i : tstep.
+Global Hint Resolve asm_step_AHalted_i : typeclass_instances.
 
 (** * closing *)
 Inductive asm_closed_event : Type :=

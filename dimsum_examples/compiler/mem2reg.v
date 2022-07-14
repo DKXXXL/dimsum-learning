@@ -236,17 +236,6 @@ Proof.
       rewrite !app_assoc //.
 Qed.
 
-(* TODO: get rid of the tstep database to make this unnecessary *)
-Local Existing Instance imp_expr_fill_end.
-Local Existing Instance imp_expr_fill_expr_fill.
-Local Existing Instance imp_expr_fill_BinOpL.
-Local Existing Instance imp_expr_fill_BinOpR.
-Local Existing Instance imp_expr_fill_Load.
-Local Existing Instance imp_expr_fill_StoreR.
-Local Existing Instance imp_expr_fill_StoreL.
-Local Existing Instance imp_expr_fill_LetE.
-Local Existing Instance imp_expr_fill_If.
-
 Local Hint Resolve imp_heap_bij_call_mono : core.
 Local Hint Resolve imp_heap_bij_return_mono : core.
 

@@ -213,7 +213,7 @@ Global Hint Resolve
        mod_prepost_step_Outside_s
        mod_prepost_step_Recv1_s
        mod_prepost_step_Inside_s
- | 3 : tstep.
+ | 3 : typeclass_instances.
 
 Definition prepost_id {EV} : EV → unit → prepost (EV * unit) unitUR :=
   λ x _, pp_end (x, tt).

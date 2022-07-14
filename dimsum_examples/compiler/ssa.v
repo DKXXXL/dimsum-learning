@@ -115,21 +115,21 @@ Proof.
   - destruct (vss !! x) eqn: Hx. 2: by tstep_s.
     move: Hx => /Hvs[?[-> ->]]. done.
   - done.
-  - apply: IHes'1; [eauto_tstep|eauto_tstep|done|done|] => /= ??.
-    apply: IHes'2; [eauto_tstep|eauto_tstep|done|rewrite pass_state;naive_solver lia|] => /= ??.
+  - apply: IHes'1; [done|done|] => /= ??.
+    apply: IHes'2; [done|rewrite pass_state;naive_solver lia|] => /= ??.
     tstep_s => ??. tstep_i. split!. by apply tsim_mono_b_false.
-  - apply: IHes'; [eauto_tstep|eauto_tstep|done|done|] => /= ??.
+  - apply: IHes'; [done|done|] => /= ??.
     tstep_s => *. subst. tstep_i. split!. by apply tsim_mono_b_false.
-  - apply: IHes'1; [eauto_tstep|eauto_tstep|done|done|] => /= ??.
-    apply: IHes'2; [eauto_tstep|eauto_tstep|done|rewrite pass_state;naive_solver lia|] => /= ??.
+  - apply: IHes'1; [done|done|] => /= ??.
+    apply: IHes'2; [done|rewrite pass_state;naive_solver lia|] => /= ??.
     tstep_s => *. subst. tstep_i. split!. by apply tsim_mono_b_false.
-  - apply: IHes'1; [eauto_tstep|eauto_tstep|done|done|] => /= ??.
+  - apply: IHes'1; [done|done|] => /= ??.
     tstep_s => *. subst. tstep_i. apply tsim_mono_b_false. case_match.
-    + apply: IHes'2; [eauto_tstep|eauto_tstep|done|rewrite pass_state;naive_solver lia|] => /= ??. done.
-    + apply: IHes'3; [eauto_tstep|eauto_tstep|done|rewrite !pass_state;naive_solver lia|] => /= ??. done.
-  - apply: IHes'1; [eauto_tstep|eauto_tstep|done|naive_solver lia|] => /= ??.
+    + apply: IHes'2; [done|rewrite pass_state;naive_solver lia|] => /= ??. done.
+    + apply: IHes'3; [done|rewrite !pass_state;naive_solver lia|] => /= ??. done.
+  - apply: IHes'1; [done|naive_solver lia|] => /= ??.
     tstep_i. tstep_s. rewrite -!subst_subst_map_delete. apply tsim_mono_b_false.
-    apply: IHes'2; [eauto_tstep|eauto_tstep| | |done].
+    apply: IHes'2; [ | |done].
     + move => ?? /lookup_insert_Some[[??]|[?/Hvs[?[? Hvsi]]]]; simplify_eq.
       { eexists _. by simplify_map_eq. }
       eexists _. rewrite lookup_insert_ne //. split; [done|].
@@ -140,7 +140,7 @@ Proof.
     change ([]) with (Val <$> []). move: [] => vs. move: s vs h Hvars.
     revert select (Forall _ _). elim.
     + move => ???? /=. rewrite app_nil_r.
-      apply: Hcall; [eauto_tstep|eauto_tstep|done| | |done|done|done].
+      apply: Hcall; [done| | |done|done|done].
       { apply Forall2_fmap_l. apply Forall_Forall2_diag. by apply Forall_true. }
       { apply Forall2_fmap_l. apply Forall_Forall2_diag. by apply Forall_true. }
     + move => ?? IH _ IH2 s vs h Hvars. csimpl.
@@ -194,7 +194,7 @@ Proof.
   efeed pose proof heap_alloc_list_length as Hlen; [done|]. rewrite fmap_length in Hlen.
   rewrite !subst_l_subst_map; [|rewrite ?fmap_length ?imap_length; lia..].
   rewrite -!subst_map_subst_map. apply tsim_mono_b_false.
-  apply: pass_correct; [eauto_tstep|eauto_tstep|done|..].
+  apply: pass_correct; [done|..].
   - move => i v /lookup_union_Some_raw.
     setoid_rewrite lookup_union_Some_raw.
     setoid_rewrite list_to_map_lookup_Some.

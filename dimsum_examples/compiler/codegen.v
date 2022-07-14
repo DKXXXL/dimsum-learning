@@ -819,7 +819,7 @@ Proof.
   destruct ImpExprFill0; subst.
   iIntros (?[??]) "Hp Hcont".
   destruct e; simplify_crun_eq.
-  - case_match; [|iApply sim_Var; typeclasses eauto with tstep].
+  - case_match; [|by iApply sim_Var].
     iApply (read_var_correct with "Hp"); [done..|].
     iIntros (???) "?". by iApply "Hcont".
   - iApply sim_Amov.
@@ -1061,7 +1061,7 @@ Proof.
   iIntros (??) "Hp Hcont". iIntros (????) "Hrf ?". iSatStop. tstep_s.
   have [??]:= heap_alloc_list_fresh vars.*2 ∅ h. split!; [done|]. move => ?. iSatStart.
   iApply (initialize_locals_correct_inv with "Hp [Hcont] [//] [Hrf]");
-    [typeclasses eauto with tstep|done|done|done|done| |done|done].
+    [done|done|done|done| |done|done].
   iIntros (??????) "??" => /=. iApply ("Hcont" with "[//] [//] [//] [//] [$] [$]").
 Qed.
 
@@ -1136,13 +1136,13 @@ Proof.
   destruct ImpExprFill0; subst.
   iIntros (? Hcall [??]) "Hp Hcont".
   destruct e; simplify_crun_eq.
-  - iApply (read_var_val_correct with "Hp"); [typeclasses eauto with tstep|done|compute_done|].
+  - iApply (read_var_val_correct with "Hp"); [done|compute_done|].
     iIntros (????) "? Hp".
     iApply ("Hcont" with "[] [//] [$] Hp"). by simplify_map_eq'.
   - rewrite -!app_assoc.
-    iApply (read_var_val_correct with "Hp"); [typeclasses eauto with tstep|done|compute_done|].
+    iApply (read_var_val_correct with "Hp"); [done|compute_done|].
     iIntros (?? v1' ?) "? Hp". simplify_eq/=.
-    iApply (read_var_val_correct with "Hp"); [typeclasses eauto with tstep|done|compute_done|].
+    iApply (read_var_val_correct with "Hp"); [done|compute_done|].
     iIntros (?? v2' ?) "? Hp". simplify_eq/=.
     iIntros (??? Hins) "Hrf Hinv".
     iSatStop. tstep_s => ??.
@@ -1169,7 +1169,7 @@ Proof.
     + done.
     + done.
   - rewrite -!app_assoc.
-    iApply (read_var_val_correct with "Hp"); [typeclasses eauto with tstep|done|compute_done|].
+    iApply (read_var_val_correct with "Hp"); [done|compute_done|].
     iIntros (?? v' ?) "Hv Hp". simplify_eq/=.
     iIntros (??? Hins) "Hrf Hinv". iSatStop.
     tstep_s => ????. subst.
@@ -1191,9 +1191,9 @@ Proof.
       iApply ci2a_regs_inv_mono_insert; [compute_done|].
       by iApply ci2a_regs_inv_mono_insert; [compute_done|].
   - rewrite -!app_assoc.
-    iApply (read_var_val_correct with "Hp"); [typeclasses eauto with tstep|done|compute_done|].
+    iApply (read_var_val_correct with "Hp"); [done|compute_done|].
     iIntros (?? v1' ?) "Hv1 Hp". simplify_eq/=.
-    iApply (read_var_val_correct with "Hp"); [typeclasses eauto with tstep|done|compute_done|].
+    iApply (read_var_val_correct with "Hp"); [done|compute_done|].
     iIntros (?? v2' ?) "#Hv2 Hp". simplify_eq/=.
     iIntros (??? Hins) "Hrf Hinv". iSatStop.
     tstep_s => ?? Halive. subst. move: (Halive) => [??].
@@ -1238,14 +1238,14 @@ Proof.
   destruct ImpExprFill0; subst.
   iIntros (Hrun ?) "Hp Hcont".
   iInduction e as [] "IH" forall (vs s' p p' rs h Hrun); simplify_crun_eq; rewrite -?app_assoc.
-  - iApply (translate_lexpr_op_correct with "Hp"); [typeclasses eauto with tstep|done..|eauto using suffix_app_r|].
+  - iApply (translate_lexpr_op_correct with "Hp"); [done..|eauto using suffix_app_r|].
     iIntros (??????) "Hv Hp" => /=. subst.
     iIntros (????) "Hrf Hs". iSatStop. tstep_s. iSatStart. iRevert "Hrf Hs". iApply (to_sim with "[-]"); [|done].
     iApply (write_var_correct with "Hp Hv"); [done..|].
     iIntros (???) "Hp". subst.
     rewrite -subst_subst_map_delete.
     by iApply ("IH" with "[//] Hp").
-  - iApply (translate_lexpr_op_correct with "Hp"); [typeclasses eauto with tstep|done..|eauto using suffix_app_r|].
+  - iApply (translate_lexpr_op_correct with "Hp"); [done..|eauto using suffix_app_r|].
     iIntros (??????) "Hv Hp" => /=. repeat (destruct!; simplify_crun_eq).
     rewrite -?app_assoc.
 
@@ -1293,7 +1293,7 @@ Proof.
       }
       iIntros (???????) "Hv Hp". subst.
       by iApply ("Hcont" with "[] [//] [$] Hp").
-  - iApply (translate_lexpr_op_correct with "Hp"); [typeclasses eauto with tstep|done..|eauto using suffix_app_r|].
+  - iApply (translate_lexpr_op_correct with "Hp"); [done..|eauto using suffix_app_r|].
     iIntros (??????) "? ?" => /=. iApply ("Hcont" with "[//] [//] [$] [$]").
 Qed.
 
@@ -1409,7 +1409,7 @@ Proof.
     apply map_disjoint_list_to_map_l, Forall_forall => -[??]. move => /(elem_of_zip_l _ _ _)?/=.
     apply not_elem_of_list_to_map. move => /elem_of_list_fmap[[??][?/(elem_of_zip_l _ _ _) ?]]. naive_solver.
   }
-  iApply (translate_lexpr_correct with "[Hpl]"); [typeclasses eauto with tstep|done| | |]. {
+  iApply (translate_lexpr_correct with "[Hpl]"); [done| | |]. {
     clear Hins.
     iIntros (?????????) "Hvs Hp Hcont".
     iIntros (??? Hins) "Hrf (%&Hmem&Hh&(%Hsp1&%Hsp2&%&%))".

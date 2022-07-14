@@ -155,7 +155,7 @@ Section mod_link.
                                (λ G', P' (λ x, G' (mod_link_to_state ok p' e', s', x, σ2)))
       end)).
   Proof.
-    constructor => G /tstepi_proof?. clear TStepI0.
+    constructor => G /(@tstepi_proof _ _ _ _ ltac:(done))?. clear TStepI0.
     apply: (steps_impl_submodule _ (mod_link _ _ _) (λ x, (MLFLeft, s, x, σ2))); [done| |].
     - naive_solver.
     - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
@@ -175,7 +175,7 @@ Section mod_link.
                                (λ G', P' (λ x, G' (mod_link_to_state ok p' e', s', σ1, x)))
       end)).
   Proof.
-    constructor => G /tstepi_proof?. clear TStepI0.
+    constructor => G /(@tstepi_proof _ _ _ _ ltac:(done))?. clear TStepI0.
     apply: (steps_impl_submodule _ (mod_link _ _ _) (λ x, (MLFRight, s, σ1, x))); [done| |].
     - naive_solver.
     - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
@@ -193,7 +193,7 @@ Section mod_link.
       | Some κ' => κ' = (Incoming, e) → G b None (λ G', P' (λ x, G' (MLFLeft, s, x, σ2)))
       end)).
   Proof.
-    constructor => G /tstepi_proof?. clear TStepI0.
+    constructor => G /(@tstepi_proof _ _ _ _ ltac:(done))?. clear TStepI0.
     apply: (steps_impl_submodule _ (mod_link _ _ _) (λ x, (MLFRecvL e, s, x, σ2))); [done| |].
     - naive_solver.
     - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
@@ -208,7 +208,7 @@ Section mod_link.
       | Some κ' => κ' = (Incoming, e) → G b None (λ G', P' (λ x, G' (MLFRight, s, σ1, x)))
       end)).
   Proof.
-    constructor => G /tstepi_proof?. clear TStepI0.
+    constructor => G /(@tstepi_proof _ _ _ _ ltac:(done))?. clear TStepI0.
     apply: (steps_impl_submodule _ (mod_link _ _ _) (λ x, (MLFRecvR e, s, σ1, x))); [done| |].
     - naive_solver.
     - move => /= ??? Hs. inv_all @state_transform_step. inv_all/= @m_step.
@@ -235,7 +235,7 @@ Section mod_link.
       | Some _ => False
       end)).
   Proof.
-    constructor => G /tsteps_proof [κ [? [? HG']]]. clear TStepS0.
+    constructor => G /(@tsteps_proof _ _ _ _ ltac:(done)) [κ [? [? HG']]]. clear TStepS0.
     destruct κ as [[[] e]|] => //; destruct!.
     all: eexists _, _; split; [done|] => G' /= /HG'?; tstep_s.
     all: split!; [..|apply: steps_spec_mono; [done|]] => //=; try by econs.
@@ -252,7 +252,7 @@ Section mod_link.
       | Some _ => False
       end)).
   Proof.
-    constructor => G /tsteps_proof [κ [? [? HG']]]. clear TStepS0.
+    constructor => G /(@tsteps_proof _ _ _ _ ltac:(done)) [κ [? [? HG']]]. clear TStepS0.
     destruct κ as [[[] e]|] => //; destruct!.
     all: eexists _, _; split; [done|] => G' /= /HG'?; tstep_s.
     all: split!; [..|apply: steps_spec_mono; [done|]] => //=; try by econs.
@@ -267,7 +267,7 @@ Section mod_link.
       | Some _ => False
       end)).
   Proof.
-    constructor => G /tsteps_proof [κ [? [? HG']]]. clear TStepS0.
+    constructor => G /(@tsteps_proof _ _ _ _ ltac:(done)) [κ [? [? HG']]]. clear TStepS0.
     destruct κ as [[[] e']|] => //; destruct!.
     all: eexists _, _; split; [done|] => G' /=; try move => [?]; move => /HG'?; tstep_s; simplify_eq.
     all: split!; [..|apply: steps_spec_mono; [done|]] => //=; try by econs.
@@ -282,7 +282,7 @@ Section mod_link.
       | Some _ => False
       end)).
   Proof.
-    constructor => G /tsteps_proof [κ [? [? HG']]]. clear TStepS0.
+    constructor => G /(@tsteps_proof _ _ _ _ ltac:(done)) [κ [? [? HG']]]. clear TStepS0.
     destruct κ as [[[] e']|] => //; destruct!.
     all: eexists _, _; split; [done|] => G' /=; try move => [?]; move => /HG'?; tstep_s; simplify_eq.
     all: split!; [..|apply: steps_spec_mono; [done|]] => //=; try by econs.
@@ -326,7 +326,7 @@ Global Hint Resolve
        mod_link_step_right_recv_s
        mod_link_step_none_s
        mod_link_step_ub_s
-| 2 : tstep.
+| 2 : typeclass_instances.
 Global Hint Resolve
   mod_link_step_mod_link_to_state_s
-| 3 : tstep.
+| 3 : typeclass_instances.
