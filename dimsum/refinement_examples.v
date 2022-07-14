@@ -1,7 +1,10 @@
 From dimsum.core Require Export module.
-From dimsum.core Require Import srefines trefines.
+From dimsum.core Require Import srefines trefines lrefines.
 From dimsum.core Require Import axioms.
 
+(** * Examples of exercising the different notions of refinement  *)
+
+(** * Definition of modules and their behaviors  *)
 (*
     1
  0 --- 1
@@ -44,6 +47,10 @@ Proof.
     by tend.
 Qed.
 
+(*
+    1     2
+ 0 --- 1 --- 2
+*)
 Inductive mod2_step : nat → option nat → (nat → Prop) → Prop :=
 | T2S0: mod2_step 0 (Some 1) (λ σ', σ' = 1)
 | T2S1: mod2_step 1 (Some 2) (λ σ', σ' = 2)
@@ -76,6 +83,12 @@ Proof.
       by apply: STraceEnd.
 Qed.
 
+(*         2
+    1      /- 2
+ 0 --- 1 -∃
+           \- 3
+           3
+*)
 Inductive mod3_step : nat → option nat → (nat → Prop) → Prop :=
 | T3S0: mod3_step 0 (Some 1) (λ σ', σ' = 1)
 | T3S1: mod3_step 1 (Some 2) (λ σ', σ' = 2)
@@ -84,12 +97,36 @@ Inductive mod3_step : nat → option nat → (nat → Prop) → Prop :=
 
 Definition mod3 : module nat := Mod mod3_step.
 
+(*
+    3
+ 0 --- 1
+*)
 Inductive mod3'_step : nat → option nat → (nat → Prop) → Prop :=
 | T3'S0: mod3'_step 0 (Some 3) (λ σ', σ' = 1)
 .
 
 Definition mod3' : module nat := Mod mod3'_step.
 
+Lemma mod3'_straces Pκs:
+  0 ~{mod3', Pκs}~>ₛ (λ _, True) ↔
+  (Pκs [] ∧ Pκs [Nb]) ∨
+  (Pκs [] ∧ Pκs [Vis 3] ∧ Pκs [Vis 3; Nb]).
+Proof.
+  split.
+  - inversion 1; simplify_eq. 1: naive_solver.
+    inv_all @m_step => //. specialize_hyps.
+    inversion H1; simplify_eq. 1: naive_solver.
+    inv_all @m_step => //.
+  - move => [?|[??]]. 1: by apply: STraceEnd.
+    apply: STraceStep; [by constructor| | naive_solver ].
+    move => ??. simplify_eq.
+    by apply: STraceEnd.
+Qed.
+
+(*
+    1
+ 0 --- 1 -- UB
+*)
 Inductive mod1_ub_step : nat → option nat → (nat → Prop) → Prop :=
 | T1US0: mod1_ub_step 0 (Some 1) (λ σ', σ' = 1)
 | T1US1: mod1_ub_step 1 None (λ σ', False)
@@ -116,6 +153,9 @@ Proof.
       done.
 Qed.
 
+(*
+ 0 -- UB
+*)
 Inductive mod_ub_step {EV} : nat → option EV → (nat → Prop) → Prop :=
 | TUS0: mod_ub_step 0 None (λ σ', False)
 .
@@ -135,6 +175,9 @@ Proof.
     apply: STraceStep; [by constructor| |done]. done.
 Qed.
 
+(*
+ 0 -- NB
+*)
 Inductive mod_nb_step {EV} : nat → option EV → (nat → Prop) → Prop :=
 .
 
@@ -191,6 +234,8 @@ Proof.
         move => ? ->. apply: STraceEnd; [done| naive_solver].
 Qed.
 
+(** * Refinements *)
+(** NB refines visible events *)
 Lemma mod1_srefines_mod2 :
   srefines (MS mod1 0) (MS mod2 0).
 Proof.
@@ -203,6 +248,7 @@ Proof.
   inv_all @m_step => //.
 Qed.
 
+(** NB refines visible events (for trefines) *)
 Lemma mod1_trefines_mod2 :
   trefines (MS mod1 0) (MS mod2 0).
 Proof.
@@ -231,6 +277,7 @@ Proof.
   inv_all @m_step => //.
 Qed.
 
+(** visible events refine UB *)
 Lemma mod2_srefines_mod1_ub :
   srefines (MS mod2 0) (MS mod1_ub 0).
 Proof.
@@ -244,6 +291,7 @@ Proof.
   done.
 Qed.
 
+(** visible events do not refine NB *)
 Lemma mod2_srefines_mod1 :
   srefines (MS mod2 0) (MS mod1 0).
 Proof.
@@ -260,9 +308,9 @@ Proof.
   inv_all @m_step => //.
   apply: STraceStep; [| | ]. Fail constructor.
   (* Undo. Undo. apply: STraceEnd; [done|]. *)
-Abort.
+Abort. (* does not hold *)
 
-
+(** angelic choice can be resolved on the left side *)
 Lemma mod12_ang_srefines_mod1 :
   srefines (MS mod12_ang 0) (MS mod1 0).
 Proof.
@@ -278,23 +326,34 @@ Proof.
   move => ?->. by apply: STraceEnd.
 Qed.
 
-Lemma mod12_ang_srefines_mod3' :
-  srefines (MS mod12_ang 0) (MS mod3' 0).
+(** angelic choice does not allow coming up with arbitrary events (for srefines) *)
+Lemma mod12_ang_not_srefines_mod3' :
+  ¬ srefines (MS mod12_ang 0) (MS mod3' 0).
 Proof.
-  constructor => Pκs /= Hs.
-  inversion Hs; simplify_eq. 1: by apply: STraceEnd.
+  move => -[]/= /(_ (λ κs, κs = [] ∨ κs = [Vis 1] ∨ κs = [Vis 1; Nb] ∨ κs = [Vis 2] ∨ κs = [Vis 2; Nb])).
+  rewrite mod12_ang_straces mod3'_straces. naive_solver.
+Qed.
+
+(** But angelic choice leaking into events allows coming up with arbitrary events (for lrefines) *)
+Lemma mod12_ang_lrefines_mod3' :
+  lrefines (MS mod12_ang 0) (MS mod3' 0).
+Proof.
+  constructor => κs /= Hs.
+  inversion Hs; simplify_eq. 1: by apply: LTraceEnd.
   inv_all @m_step => //.
   have H := (H0 1 ltac:(naive_solver)).
-Abort.
-  (* inversion H; simplify_eq. *)
-  (* 2: inv_all @m_step => //. *)
-  (* have {}H := (H0 _ (Some 2) ltac:(naive_solver)). *)
-  (* inversion H; simplify_eq. *)
-  (* 2: inv_all @m_step => //. *)
-  (* exfalso. simplify_eq/=. *)
-  (* move: (H3 [2]). move: (H5 []). *)
-(* Abort. *)
+  inversion H; simplify_eq. 1: by apply: LTraceEnd.
+  inv_all @m_step => //. specialize_hyps.
+  inversion H2; simplify_eq.
+  2: inv_all @m_step => //.
 
+  have H3 := (H0 2 ltac:(naive_solver)).
+  inversion H3; simplify_eq.
+  inv_all @m_step => //.
+Qed.
+
+
+(** * Commuting angelic choices and events  *)
 (** Angelic choice commutes with events for srefines: *)
 
 (*               B

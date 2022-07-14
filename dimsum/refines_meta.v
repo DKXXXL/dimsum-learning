@@ -1,8 +1,10 @@
 From dimsum.core Require Export module.
-From dimsum.core Require Import srefines trefines lrefines dem_module example_modules.
+From dimsum.core Require Import srefines trefines lrefines dem_module refinement_examples.
 From dimsum.core Require Import axioms.
 
-(*** Proof that trefines implies srefines *)
+(** * Relating the different notions of refinement *)
+
+(** * Proof that trefines implies srefines *)
 Inductive thas_trace_rel {EV} : (list (event EV) → Prop) → (trace EV) → Prop :=
 | TRel_nil (Pκs : _ → Prop) κs:
    κs ⊆ tnil →
@@ -183,7 +185,7 @@ Proof.
   apply mod_ang_comm_sequiv.
 Qed.
 
-(*** Equivalence between refines and dem_refines *)
+(** * Equivalence between refines and dem_refines *)
 
 Inductive dem_trace_to_set {EV} : list (dem_event EV) → (list (event EV) → Prop) → Prop :=
 | DT2S_nil (Pκs : _ → Prop):
@@ -318,7 +320,41 @@ Proof.
   apply/dem_has_trace_shas_trace. naive_solver.
 Qed.
 
-(*** Proof that trefines implies lrefines *)
+(** * Proof that srefines implies lrefines *)
+
+Lemma lhas_trace_shas_trace {EV} (m : module EV) σ κs Pσ:
+  σ ~{m, κs}~>ₗ Pσ ↔ ∃ Pκs' : _ → Prop, (∀ κs', Pκs' κs' → events_to_set (DVis <$> κs) κs') ∧ σ ~{m, Pκs'}~>ₛ Pσ.
+Proof.
+  split.
+  - move => Ht. split!; [done|]. elim: Ht. { econs; [done|]. split!. }
+    move => ??? κ κs' ??? IH ?. subst. apply: STraceStep; [done| |].
+    + move => ??. apply: shas_trace_mono; [naive_solver| |done]. move => ??. destruct κ => //=. naive_solver.
+    + destruct κ; csimpl; split!; apply events_to_set_nil.
+  - move => [Pκs' [Hsub Ht]]. elim: Ht κs Hsub.
+    + move => ???? Hs1 κs Hs2. destruct κs; [by econs|naive_solver].
+    + move => ???? κ ?? IH Hs1 κs Hs2.
+      destruct κ; simplify_eq/=.
+      * destruct κs; [naive_solver|]; simplify_eq/=. econs; [done| |simpl; naive_solver]. naive_solver.
+      * econs; naive_solver.
+Qed.
+
+Lemma srefines_lrefines {EV} (m1 m2 : mod_state EV):
+  srefines m1 m2 → lrefines m1 m2.
+Proof.
+  move => [?]. constructor => ? /lhas_trace_shas_trace[?[??]].
+  apply/lhas_trace_shas_trace. naive_solver.
+Qed.
+
+(* Print Assumptions srefines_lrefines. *)
+
+Lemma lrefines_not_srefines:
+  ¬ (∀ EV (m1 m2 : mod_state EV), lrefines m1 m2 → srefines m1 m2).
+Proof.
+  move => Hr. apply: mod12_ang_not_srefines_mod3'. apply: Hr.
+  apply mod12_ang_lrefines_mod3'.
+Qed.
+
+(** * Proof that trefines implies lrefines *)
 Fixpoint list_to_trace {EV} (κs : list EV) : trace EV :=
   match κs with
   | [] => tnil
@@ -350,29 +386,6 @@ Qed.
 
 (* Print Assumptions trefines_lrefines. *)
 
-(*** Proof that srefines implies lrefines *)
-
-Lemma lhas_trace_shas_trace {EV} (m : module EV) σ κs Pσ:
-  σ ~{m, κs}~>ₗ Pσ ↔ ∃ Pκs' : _ → Prop, (∀ κs', Pκs' κs' → events_to_set (DVis <$> κs) κs') ∧ σ ~{m, Pκs'}~>ₛ Pσ.
-Proof.
-  split.
-  - move => Ht. split!; [done|]. elim: Ht. { econs; [done|]. split!. }
-    move => ??? κ κs' ??? IH ?. subst. apply: STraceStep; [done| |].
-    + move => ??. apply: shas_trace_mono; [naive_solver| |done]. move => ??. destruct κ => //=. naive_solver.
-    + destruct κ; csimpl; split!; apply events_to_set_nil.
-  - move => [Pκs' [Hsub Ht]]. elim: Ht κs Hsub.
-    + move => ???? Hs1 κs Hs2. destruct κs; [by econs|naive_solver].
-    + move => ???? κ ?? IH Hs1 κs Hs2.
-      destruct κ; simplify_eq/=.
-      * destruct κs; [naive_solver|]; simplify_eq/=. econs; [done| |simpl; naive_solver]. naive_solver.
-      * econs; naive_solver.
-Qed.
-
-Lemma srefines_lrefines {EV} (m1 m2 : mod_state EV):
-  srefines m1 m2 → lrefines m1 m2.
-Proof.
-  move => [?]. constructor => ? /lhas_trace_shas_trace[?[??]].
-  apply/lhas_trace_shas_trace. naive_solver.
-Qed.
-
-(* Print Assumptions srefines_lrefines. *)
+Lemma lrefines_not_trefines:
+  ¬ (∀ EV (m1 m2 : mod_state EV), lrefines m1 m2 → trefines m1 m2).
+Proof. move => Hr. apply lrefines_not_srefines => ????. apply trefines_srefines. naive_solver. Qed.

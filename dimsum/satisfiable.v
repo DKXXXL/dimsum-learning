@@ -136,7 +136,7 @@ Section satisfiable.
 
 End satisfiable.
 
-(** ** Tactics for working with [satisfiable] *)
+(** * Tactics for working with [satisfiable] *)
 
 Section tactics.
   Context {M : ucmra}.

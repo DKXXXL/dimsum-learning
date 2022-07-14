@@ -1,6 +1,8 @@
 From dimsum.core Require Export module.
 
-(*** Demonic module **)
+(** * Demonic module **)
+(** A demonic module is a module that allows only demonic choice and
+UB, but not more interesting angelic choices. *)
 Inductive dem_event (EV : Type) : Type :=
 | DUb | DVis (e : EV).
 Arguments DUb {_}.

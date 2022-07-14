@@ -1,7 +1,11 @@
 From dimsum.core Require Import module.
 
-(*
-Compare this to
+(** * [lrefines] *)
+(** [lrefines] is a notion of refinement that models behaviors as sets
+of lists and correponds (roughly) to trace refinement on alternating automata. *)
+
+(**
+Compare the definition below to
 https://swt.informatik.uni-freiburg.de/teaching/SS2013/AutomataTheory/Resources/Slides/alternatingfiniteautomata-seminarslides-pascalraiola.pdf
 
 The transition function g : Q × Σ × 2^Q → 2 is extended to a
@@ -31,7 +35,6 @@ assuming that σ -{a}-> Pσ is covariant in Pσ.
 Our formulation makes σ ~{ m , w }~>ₗ Pσ covariant even when σ -{a}-> Pσ is not which is nice for technical reasons.
 It is unclear how much this difference matters.
 Modulo this difference and the fact that we have silent steps whereas the reference has not, the two seems the same.
-
 Or compare to the definition in Section 2.3 of Alternating Automata and Program Verification.
 [σ ~{m, w}~>ₗ Pσ] could correspond to the notion of "run", i.e. labeled tree.
 (There are some difference, like all states in our setting are accepting and we only look at finite words.

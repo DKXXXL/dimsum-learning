@@ -10,6 +10,7 @@ Cleanup:
 - [ ] make combinators define mod_state instead of initial state
 - [ ] clean up disabled in _CoqProject
 - [ ] Rename mod_state? Rename module?
+- [ ] Use notation for trefines?
 
 Optional:
 - [ ] Add ghost state for f2i and add values of f2i to initial ownership (one persistent map)

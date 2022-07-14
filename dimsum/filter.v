@@ -1,5 +1,5 @@
 From dimsum.core Require Export proof_techniques.
-From dimsum.core Require Import srefines example_modules.
+From dimsum.core Require Import srefines refinement_examples.
 From dimsum.core Require Import axioms.
 
 Inductive filter_step {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) :
