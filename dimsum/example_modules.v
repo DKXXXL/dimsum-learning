@@ -1,5 +1,6 @@
-From dimsum Require Export module.
-From dimsum Require Import srefines trefines.
+From dimsum.core Require Export module.
+From dimsum.core Require Import srefines trefines.
+From dimsum.core Require Import axioms.
 
 (*
     1

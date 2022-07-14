@@ -1,16 +1,7 @@
-Require Export dimsum.module.
-Require Import dimsum.trefines.
-Require Import dimsum.filter.
-Require Import dimsum.product.
-Require Import dimsum.seq_product.
-Require Import dimsum.link.
-Require Import dimsum.proof_techniques.
-Require Import dimsum.prepost.
-Require Import dimsum.imp.
-Require Import dimsum.asm.
-Require Import dimsum.itree.
-Require Import dimsum.imp_to_asm.
-Require Import dimsum.compiler.compiler.
+From dimsum.core Require Export proof_techniques.
+From dimsum.core Require Import itree.
+From dimsum.examples Require Import imp asm imp_to_asm.
+From dimsum.examples.compiler Require Import compiler.
 
 Local Open Scope Z_scope.
 
@@ -210,7 +201,7 @@ Definition main_itree : itree (moduleE imp_event unit) unit :=
 Lemma main_int_to_ptr_refines_itree :
   trefines (MS (imp_prod (dom _ main_imp_prog) int_to_ptr_fns
                          imp_module (mod_itree _ _))
-               (MLFNone, [], initial_imp_state main_imp_prog, (int_to_ptr_itree, ∅)))
+               (initial_imp_prod_state imp_module (mod_itree _ _) (initial_imp_state main_imp_prog) (int_to_ptr_itree, ∅)))
            (MS (mod_itree _ _) (main_itree, tt)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
@@ -389,7 +380,7 @@ Lemma top_level_refines_itree :
                                      (dom _ main_imp_prog ∪ int_to_ptr_fns)
                                      main_f2i
                                      (mod_itree _ _)) (mod_itree _ _))
-               (MLFNone, None, initial_imp_to_asm_state ∅ (mod_itree _ _) (main_itree, tt), (exit_itree, tt)))
+               (initial_asm_prod_state (imp_to_asm _ _ _ _) (mod_itree _ _) (initial_imp_to_asm_state ∅ (mod_itree _ _) (main_itree, tt)) (exit_itree, tt)))
            (MS (mod_itree _ _) (top_level_itree, tt)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.

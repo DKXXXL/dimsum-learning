@@ -1,4 +1,5 @@
--Q dimsum dimsum
+-Q dimsum dimsum.core
+-Q dimsum_examples dimsum.examples
 # We sometimes want to locally override notation (e.g. in proofmode/base.v, bi/embedding.v), and there
 # is no good way to do that with scopes.
 -arg -w -arg -notation-overridden
@@ -27,26 +28,26 @@ dimsum/dem_module.v
 dimsum/trefines.v
 dimsum/refines_meta.v
 dimsum/proof_techniques.v
-dimsum/asm.v
-dimsum/imp.v
-dimsum/imp_heap_bij.v
-dimsum/imp_heap_bij_own.v
-dimsum/imp_to_asm.v
-dimsum/i2a_bij_vertical.v
-dimsum/coroutine.v
-dimsum/imp_to_asm_examples.v
-dimsum/int_ptr_cast.v
-dimsum/print.v
-dimsum/memmove.v
-dimsum/coroutine_example.v
-dimsum/compiler/monad.v
-dimsum/compiler/linear_imp.v
-dimsum/compiler/ssa.v
-dimsum/compiler/linearize.v
-dimsum/compiler/codegen.v
-dimsum/compiler/mem2reg.v
-dimsum/compiler/compiler.v
 dimsum/itree.v
+dimsum_examples/asm.v
+dimsum_examples/imp.v
+dimsum_examples/imp_heap_bij_pure.v
+dimsum_examples/imp_heap_bij.v
+dimsum_examples/imp_to_asm.v
+dimsum_examples/i2a_bij_vertical.v
+dimsum_examples/coroutine.v
+dimsum_examples/compiler/monad.v
+dimsum_examples/compiler/linear_imp.v
+dimsum_examples/compiler/ssa.v
+dimsum_examples/compiler/linearize.v
+dimsum_examples/compiler/mem2reg.v
+dimsum_examples/compiler/codegen.v
+dimsum_examples/compiler/compiler.v
+dimsum_examples/imp_to_asm_examples.v
+dimsum_examples/int_ptr_cast.v
+dimsum_examples/print.v
+dimsum_examples/memmove.v
+dimsum_examples/coroutine_example.v
 dimsum/iris/wp.v
 dimsum/iris/mono_ord.v
 dimsum/iris/ord_later.v

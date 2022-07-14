@@ -1,5 +1,5 @@
-Require Import dimsum.base.
-Require Import dimsum.axioms.
+From dimsum.core Require Export base.
+From dimsum.core Require Import axioms.
 
 Set Default Proof Using "Type".
 

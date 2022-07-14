@@ -2,7 +2,7 @@ From iris.algebra Require Import auth.
 From iris.bi Require Import fractional.
 From iris.base_logic Require Export lib.own.
 From iris.proofmode Require Export tactics.
-From dimsum.iris Require Export mono_ord.
+From dimsum.core.iris Require Export mono_ord.
 Set Default Proof Using "Type".
 
 Class ord_laterPreG Σ := OrdLaterPreG {

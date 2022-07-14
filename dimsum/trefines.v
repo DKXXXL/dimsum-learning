@@ -1,5 +1,5 @@
-Require Export dimsum.module.
-Require Export dimsum.trace_index.
+From dimsum.core Require Export module trace_index.
+From dimsum.core Require Import axioms.
 
 (** [trefines] is a weaker notion of refinement that does not allow commuting choices and externally visible events*)
 

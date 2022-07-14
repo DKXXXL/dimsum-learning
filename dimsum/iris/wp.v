@@ -2,9 +2,9 @@ From iris.bi Require Import bi fixpoint.
 From iris.proofmode Require Import base proofmode classes.
 From iris.base_logic.lib Require Export fancy_updates.
 From iris.bi Require Export weakestpre.
-Require Export dimsum.module.
-Require Import dimsum.trefines.
-Require Export dimsum.iris.ord_later.
+From dimsum.core Require Export module.
+From dimsum.core Require Import trefines.
+From dimsum.core.iris Require Export ord_later.
 Set Default Proof Using "Type".
 
 Structure language := Language {

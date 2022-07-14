@@ -1,10 +1,5 @@
-Require Export dimsum.module.
-Require Import dimsum.trefines.
-Require Import dimsum.filter.
-Require Import dimsum.product.
-Require Import dimsum.seq_product.
-Require Import dimsum.proof_techniques.
-Require Import dimsum.state_transform.
+From dimsum.core Require Export proof_techniques.
+From dimsum.core Require Import product seq_product state_transform.
 
 Set Default Proof Using "Type".
 

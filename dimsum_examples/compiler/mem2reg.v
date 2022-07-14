@@ -1,19 +1,6 @@
-Require Export dimsum.module.
-Require Import dimsum.trefines.
-Require Import dimsum.filter.
-Require Import dimsum.product.
-Require Import dimsum.seq_product.
-Require Import dimsum.link.
-Require Import stdpp.strings.
-Require Import stdpp.pretty.
-Require Import dimsum.prepost.
-Require Import dimsum.proof_techniques.
-Require Import dimsum.imp.
-Require Export dimsum.compiler.monad.
-Require Export dimsum.compiler.linear_imp.
-Require Export dimsum.compiler.linearize.
-Require Import dimsum.imp_heap_bij_own.
-
+From dimsum.core Require Export proof_techniques.
+From dimsum.examples Require Import imp_heap_bij.
+From dimsum.examples.compiler Require Import monad linear_imp linearize.
 
 Module ci2a_mem2reg.
 

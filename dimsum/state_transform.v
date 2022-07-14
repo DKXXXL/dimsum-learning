@@ -1,6 +1,4 @@
-Require Export dimsum.module.
-Require Import dimsum.trefines.
-Require Import dimsum.proof_techniques.
+From dimsum.core Require Export proof_techniques.
 
 (*** state transform *)
 Inductive state_transform_step {EV S} (m : module EV) (R : S → m.(m_state) → Prop) :

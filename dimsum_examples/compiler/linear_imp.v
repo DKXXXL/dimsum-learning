@@ -1,4 +1,4 @@
-Require Import dimsum.imp.
+From dimsum.examples Require Export imp.
 
 Inductive var_val :=
 | VVar (v : string)

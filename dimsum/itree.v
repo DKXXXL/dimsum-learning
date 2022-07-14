@@ -43,9 +43,8 @@ Constraint sum.u1 < gmap.u1.
 From Paco Require Import paco.
 From ITree Require Export ITree ITreeFacts.
 From ITree Require Export ITree.
-Require Export dimsum.module.
-Require Import dimsum.trefines.
-Require Import dimsum.proof_techniques.
+From dimsum.core Require Export proof_techniques.
+From dimsum.core Require Import axioms.
 
 Notation "' x ← y ;;; z" := (ITree.bind y (λ x : _, z))
   (at level 20, x pattern, y at level 100, z at level 200) : stdpp_scope.

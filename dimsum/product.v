@@ -1,9 +1,6 @@
-Require Export dimsum.module.
-Require Import dimsum.srefines.
-Require Import dimsum.trefines.
-Require Import dimsum.filter.
-Require Import dimsum.proof_techniques.
-
+From dimsum.core Require Export proof_techniques.
+From dimsum.core Require Import srefines filter.
+From dimsum.core Require Import axioms.
 
 (*** [product] *)
 Inductive product_step {EV1 EV2} (m1 : module EV1) (m2 : module EV2) :

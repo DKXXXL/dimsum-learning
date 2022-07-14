@@ -1,13 +1,8 @@
-Require Export iris.algebra.lib.gmap_view.
-Require Export dimsum.module.
-Require Import dimsum.trefines.
-Require Import dimsum.filter.
-Require Import dimsum.product.
-Require Import dimsum.seq_product.
-Require Import dimsum.link.
-Require Import dimsum.prepost.
-Require Import dimsum.proof_techniques.
-Require Import dimsum.imp.
+From iris.algebra.lib Require Import gmap_view.
+From dimsum.core Require Export proof_techniques prepost.
+From dimsum.core Require Import link.
+From dimsum.core Require Import axioms.
+From dimsum.examples Require Import imp.
 
 Set Default Proof Using "Type".
 
@@ -796,7 +791,7 @@ Definition heap_in_bij (bij : heap_bij) (h h' : heap_state) : uPred heap_bijUR :
   ⌜h'.(h_heap) !! (p2, o) = Some v2⌝ -∗
   val_in_bij v1 v2.
 
-Global Instance heap_in_bij_Persitent bij h h': Persistent (heap_in_bij bij h h').
+Global Instance heap_in_bij_Persistent bij h h': Persistent (heap_in_bij bij h h').
 Proof. apply _. Qed.
 
 Lemma heap_in_bij_mono_bij bij bij' h h':
@@ -1106,6 +1101,24 @@ Proof.
   iDestruct (heap_bij_inv_free with "[$] [$]") as "?".
   iDestruct ("IH" with "[//] [//] [$] [$]") as (??) "?". iExists _. iFrame.
   iPureIntro. split => //. revert select (li.2 = ls.2) => ->. done.
+Qed.
+
+Lemma heap_bij_init :
+ satisfiable (heap_bij_auth ∅).
+Proof.
+  apply: (satisfiable_init (_, _)). { split; by eapply (gmap_view_auth_dfrac_valid _ (DfracOwn 1)). }
+  rewrite pair_split uPred.ownM_op.
+  iIntros!. by iFrame.
+Qed.
+
+Lemma heap_bij_inv_init :
+ satisfiable (heap_bij_inv initial_heap_state initial_heap_state).
+Proof.
+  apply: satisfiable_mono; [apply heap_bij_init|].
+  iIntros "?".
+  iExists ∅. iFrame. iSplit!.
+  + by rewrite /hb_shared omap_empty big_sepM_empty.
+  + iIntros (????). set_solver.
 Qed.
 
 (** prepost  *)
@@ -1530,14 +1543,9 @@ Proof.
     tstep_s. eexists (Some (SMEReturn _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
     tstep_i => ??; simplify_eq/=.
     tstep_i. eexists (ValNum <$> vs), initial_heap_state. split!.
-    { apply: (satisfiable_init (_, _)). { split; by eapply (gmap_view_auth_dfrac_valid _ (DfracOwn 1)). }
-      rewrite pair_split uPred.ownM_op.
-      iIntros "[? ?]". iModIntro. iSplit!. iSplitL; [|iAccu]. iSplit!.
-      - iExists ∅. iFrame. iSplit!.
-        + by rewrite /hb_shared omap_empty big_sepM_empty.
-        + iIntros (????). set_solver.
-      - rewrite big_sepL2_fmap_l big_sepL2_fmap_r. iApply big_sepL2_intro; [done|].
-        iIntros "!>" (?????). by simplify_eq/=. }
+    { have ? := heap_bij_inv_init. iSatMono. iIntros!. iFrame. iSplitL; [|iAccu].
+      rewrite big_sepL2_fmap_l big_sepL2_fmap_r. iApply big_sepL2_intro; [done|].
+      iIntros "!>" (?????). by simplify_eq/=. }
     apply: Hloop; [done|]. split!.
   - tstep_both. apply steps_impl_step_end => κ ??. case_match => *; simplify_eq.
     + tstep_s.  eexists (Some _). split; [done|]. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].

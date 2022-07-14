@@ -1,13 +1,7 @@
-Require Export dimsum.module.
-Require Import dimsum.trefines.
-Require Import dimsum.filter.
-Require Import dimsum.product.
-Require Import dimsum.seq_product.
-Require Import dimsum.link.
-Require Import dimsum.prepost.
-Require Import dimsum.proof_techniques.
-Require Import dimsum.imp.
-
+From dimsum.core Require Export proof_techniques.
+From dimsum.core Require Import link prepost.
+From dimsum.core Require Import axioms.
+From dimsum.examples Require Import imp.
 
 Module pure_bij.
 Implicit Types (p : prov).

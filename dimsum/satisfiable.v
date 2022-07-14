@@ -1,9 +1,7 @@
-Require Export iris.algebra.cmra.
-Require Export iris.algebra.updates.
-Require Export iris.base_logic.base_logic.
-Require Export iris.proofmode.proofmode.
-Require Import iris.proofmode.environments.
-Require Import iris.proofmode.reduction.
+From iris.algebra Require Export cmra updates.
+From iris.base_logic Require Export base_logic.
+From iris.proofmode Require Export proofmode.
+From iris.proofmode Require Import environments reduction.
 
 Section satisfiable.
   Context {M : ucmra}.

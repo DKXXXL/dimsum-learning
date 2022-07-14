@@ -1,21 +1,6 @@
-Require Export dimsum.module.
-Require Import dimsum.trefines.
-Require Import dimsum.filter.
-Require Import dimsum.product.
-Require Import dimsum.seq_product.
-Require Import dimsum.link.
-Require Import dimsum.prepost.
-Require Import dimsum.proof_techniques.
-Require Import dimsum.imp.
-Require Import dimsum.asm.
-Require Import dimsum.imp_to_asm.
-Require Import dimsum.i2a_bij_vertical.
-Require Import dimsum.compiler.monad.
-Require Import dimsum.compiler.linear_imp.
-Require Import dimsum.compiler.ssa.
-Require Import dimsum.compiler.linearize.
-Require Import dimsum.compiler.mem2reg.
-Require Import dimsum.compiler.codegen.
+From dimsum.core Require Export proof_techniques.
+From dimsum.examples Require Import imp asm imp_to_asm i2a_bij_vertical.
+From dimsum.examples.compiler Require Import monad linear_imp ssa linearize mem2reg codegen.
 
 Local Open Scope Z_scope.
 Set Default Proof Using "Type".

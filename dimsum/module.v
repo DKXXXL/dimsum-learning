@@ -1,5 +1,4 @@
-Require Export dimsum.base.
-Require Export dimsum.axioms.
+From dimsum.core Require Export base.
 
 Inductive event (EV : Type) : Type :=
 | Nb | Ub | Vis (e : EV).

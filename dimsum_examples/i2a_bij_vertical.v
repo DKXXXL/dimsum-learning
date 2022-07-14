@@ -1,16 +1,6 @@
-Require Export iris.algebra.cmra.
-Require Export dimsum.module.
-Require Import dimsum.trefines.
-Require Import dimsum.filter.
-Require Import dimsum.product.
-Require Import dimsum.seq_product.
-Require Import dimsum.link.
-Require Import dimsum.prepost.
-Require Import dimsum.proof_techniques.
-Require Import dimsum.imp.
-Require Import dimsum.asm.
-Require Import dimsum.imp_to_asm.
-Require Import dimsum.imp_heap_bij_own.
+From dimsum.core Require Export proof_techniques.
+From dimsum.core Require Import prepost.
+From dimsum.examples Require Import imp asm imp_to_asm imp_heap_bij.
 
 Local Open Scope Z_scope.
 
@@ -779,8 +769,7 @@ Proof.
       iDestruct select (i2a_heap_inv _) as (ih Hsub ?) "(?&?&?)".
       have -> : ih = ∅; [|done]. apply map_eq => i. apply option_eq => ?. split => // ?.
       have : i ∈ h_provs initial_heap_state; [|done]. apply Hsub. by apply elem_of_dom.
-    - apply: (satisfiable_init (_, _)). { split; by eapply (gmap_view_auth_dfrac_valid _ (DfracOwn 1)). }
-      rewrite pair_split uPred.ownM_op. iIntros "[? ?]". iModIntro. iFrame.
+    - apply: satisfiable_mono; [apply heap_bij_init|]. iIntros "$".
       rewrite /hb_shared omap_empty !big_sepM_empty. iSplit!.
       iIntros (????). done.
     - eexists ∅. move => ?? /map_filter_lookup_Some. naive_solver.

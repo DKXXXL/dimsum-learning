@@ -1,5 +1,4 @@
-Require Export dimsum.module.
-Require Export dimsum.axioms.
+From dimsum.core Require Import module.
 
 (*
 Compare this to

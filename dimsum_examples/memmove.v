@@ -1,17 +1,7 @@
-Require Export dimsum.module.
-Require Import dimsum.trefines.
-Require Import dimsum.filter.
-Require Import dimsum.product.
-Require Import dimsum.seq_product.
-Require Import dimsum.link.
-Require Import dimsum.proof_techniques.
-Require Import dimsum.prepost.
-Require Import dimsum.imp.
-Require Import dimsum.asm.
-Require Import dimsum.itree.
-Require Import dimsum.imp_to_asm.
-Require Import dimsum.compiler.compiler.
-Require Import dimsum.print.
+From dimsum.core Require Export proof_techniques.
+From dimsum.core Require Import itree.
+From dimsum.examples Require Import imp asm imp_to_asm print.
+From dimsum.examples.compiler Require Import compiler.
 
 Local Open Scope Z_scope.
 

@@ -1,17 +1,6 @@
-Require Export iris.algebra.lib.gmap_view.
-Require Export dimsum.module.
-Require Import dimsum.trefines.
-Require Import dimsum.filter.
-Require Import dimsum.product.
-Require Import dimsum.seq_product.
-Require Import dimsum.link.
-Require Import dimsum.prepost.
-Require Import dimsum.proof_techniques.
-Require Import dimsum.imp.
-Require Import dimsum.asm.
-Require Import dimsum.imp_to_asm.
-Require Export dimsum.compiler.monad.
-Require Export dimsum.compiler.linear_imp.
+From dimsum.core Require Export proof_techniques.
+From dimsum.examples Require Import asm imp_to_asm.
+From dimsum.examples.compiler Require Import monad linear_imp.
 
 Local Open Scope Z_scope.
 

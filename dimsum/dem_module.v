@@ -1,5 +1,4 @@
-Require Export dimsum.module.
-Require Export dimsum.srefines.
+From dimsum.core Require Export module.
 
 (*** Demonic module **)
 Inductive dem_event (EV : Type) : Type :=

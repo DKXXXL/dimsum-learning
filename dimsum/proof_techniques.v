@@ -1,5 +1,5 @@
-Require Export dimsum.module.
-Require Import dimsum.trefines.
+From dimsum.core Require Export module trefines.
+From dimsum.core Require Import axioms.
 
 (*** Proving refinement *)
 

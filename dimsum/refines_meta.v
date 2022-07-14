@@ -1,9 +1,6 @@
-Require Export dimsum.module.
-Require Import dimsum.srefines.
-Require Import dimsum.trefines.
-Require Import dimsum.lrefines.
-Require Import dimsum.dem_module.
-Require Import dimsum.example_modules.
+From dimsum.core Require Export module.
+From dimsum.core Require Import srefines trefines lrefines dem_module example_modules.
+From dimsum.core Require Import axioms.
 
 (*** Proof that trefines implies srefines *)
 Inductive thas_trace_rel {EV} : (list (event EV) → Prop) → (trace EV) → Prop :=

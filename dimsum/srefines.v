@@ -1,5 +1,4 @@
-Require Export dimsum.module.
-Require Export dimsum.axioms.
+From dimsum.core Require Export module.
 
 (* It is important to use (list (event EV) → Prop) instead of (list EV
 → Prop) since we want to distinguish the program that

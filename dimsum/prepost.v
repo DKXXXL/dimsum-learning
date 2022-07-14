@@ -1,14 +1,5 @@
-Require Export iris.algebra.cmra.
-Require Export iris.algebra.updates.
-Require Export iris.base_logic.base_logic.
-Require Export iris.proofmode.proofmode.
-Require Export dimsum.module.
-Require Export dimsum.satisfiable.
-Require Import dimsum.trefines.
-Require Import dimsum.link.
-Require Import dimsum.seq_product.
-Require Import dimsum.state_transform.
-Require Import dimsum.proof_techniques.
+From dimsum.core Require Export proof_techniques satisfiable seq_product.
+From dimsum.core Require Import link.
 
 Set Default Proof Using "Type".
 

@@ -1,5 +1,4 @@
-Require Import dimsum.base.
-Require Import dimsum.axioms.
+From dimsum.core Require Import base axioms.
 
 Inductive trace_index : Type :=
 | tiO | tiS (n : trace_index) | tiChoice (T : Type) (f : T → trace_index).

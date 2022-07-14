@@ -1,5 +1,5 @@
 From Coq.Logic Require Import ChoiceFacts EqdepFacts.
-From dimsum Require Import base.
+From dimsum.core Require Import base.
 
 Module Ax : EqdepElimination.
 
