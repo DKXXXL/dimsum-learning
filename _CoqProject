@@ -22,6 +22,7 @@ dimsum/dem_module.v
 dimsum/refinement_examples.v
 dimsum/refines_meta.v
 dimsum/filter.v
+dimsum/filter_srefines.v
 dimsum/product.v
 dimsum/seq_product.v
 dimsum/state_transform.v

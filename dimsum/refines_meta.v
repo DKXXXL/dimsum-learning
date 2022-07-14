@@ -4,7 +4,7 @@ From dimsum.core Require Import axioms.
 
 (** * Relating the different notions of refinement *)
 
-(** * Proof that trefines implies srefines *)
+(** * Proof that trefines implies srefines (but not vice versa) *)
 Inductive thas_trace_rel {EV} : (list (event EV) → Prop) → (trace EV) → Prop :=
 | TRel_nil (Pκs : _ → Prop) κs:
    κs ⊆ tnil →
@@ -320,7 +320,7 @@ Proof.
   apply/dem_has_trace_shas_trace. naive_solver.
 Qed.
 
-(** * Proof that srefines implies lrefines *)
+(** * Proof that srefines implies lrefines (but not vice versa) *)
 
 Lemma lhas_trace_shas_trace {EV} (m : module EV) σ κs Pσ:
   σ ~{m, κs}~>ₗ Pσ ↔ ∃ Pκs' : _ → Prop, (∀ κs', Pκs' κs' → events_to_set (DVis <$> κs) κs') ∧ σ ~{m, Pκs'}~>ₛ Pσ.
@@ -354,7 +354,7 @@ Proof.
   apply mod12_ang_lrefines_mod3'.
 Qed.
 
-(** * Proof that trefines implies lrefines *)
+(** * Proof that trefines implies lrefines (but not vice versa) *)
 Fixpoint list_to_trace {EV} (κs : list EV) : trace EV :=
   match κs with
   | [] => tnil

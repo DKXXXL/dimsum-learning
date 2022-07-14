@@ -1,5 +1,5 @@
 From dimsum.core Require Export module.
-From dimsum.core Require Import srefines trefines lrefines.
+From dimsum.core Require Import srefines trefines lrefines filter.
 From dimsum.core Require Import axioms.
 
 (** * Examples of exercising the different notions of refinement  *)
