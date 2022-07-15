@@ -1,45 +1,3 @@
-(*
-(* Code to test universe errors: *)
-(* Global Unset Universe Minimization ToSet. *)
-From ExtLib Require Import
-     Data.Monads.OptionMonad
-     Data.Monads.EitherMonad.
-
-(* Require Import ExtLib.Structures.Monads. *)
-(* Local Open Scope monad_scope. *)
-
-(* Set Implicit Arguments. *)
-(* Set Strict Implicit. *)
-
-(* Global Instance Monad_option : Monad option := *)
-(* { ret  := @Some *)
-(* ; bind := fun _ _ c1 c2 => match c1 with *)
-(*                              | None => None *)
-(*                              | Some v => c2 v *)
-(*                            end *)
-(* }. *)
-
-(* Global Instance Zero_option : MonadZero option := *)
-(* { mzero := @None }. *)
-
-(* Global Instance Plus_option : MonadPlus option := *)
-(* { mplus _A _B aM bM := *)
-(*     match aM with *)
-(*     | None => liftM inr bM *)
-(*     | Some a => Some (inl a) *)
-(*     end *)
-(* }. *)
-
-(* From ExtLib Require Export MonadFix. *)
-(* From ITree Require Export Monad. *)
-Require Export stdpp.gmap.
-Set Printing Universes.
-Print gset.
-Print Universes Subgraph (gmap.u1 gmap_eq.u1 MRet.u0).
-Print Universes.
-Print gmap_eq.
-Constraint sum.u1 < gmap.u1.
-*)
 From Paco Require Import paco.
 From ITree Require Export ITree ITreeFacts.
 From ITree Require Export ITree.
@@ -54,7 +12,6 @@ Notation "y ;;;; z" := (ITree.bind y (λ _, z))
   (at level 100, z at level 200, right associativity) : stdpp_scope.
 Global Instance eqit_false_true_rewrite {R E} r : RewriteRelation (@eqit E R R r false true) := { }.
 Global Instance eqit_true_false_rewrite {R E} r : RewriteRelation (@eqit E R R r true false) := { }.
-
 
 Inductive moduleE (EV S : Type) : Type → Type :=
 | EVis (e : EV) : moduleE EV S unit
@@ -97,19 +54,6 @@ Definition mod_itree EV S := Mod (mod_itree_step EV S).
 
 Global Instance itree_vis_no_all EV S: VisNoAll (mod_itree EV S).
 Proof. move => *. inv_all @m_step; naive_solver. Qed.
-
-(* Section test. *)
-(* Polymorphic Universe u v w x y. *)
-(* Set Printing Universes. *)
-(*     Lemma itree_step_interp_translate_s EV S R (F : Type@{x} → Type@{y}) (E : Type@{v} → Type@{w}) (f : ∀ T : Type@{u}, E T -> F T) *)
-(*           (g : ∀ T: Type, F T → itree (moduleE EV S) T) (t : itree E R) s κs: *)
-(*       TSimStepS (mod_itree EV S) (interp f (translate g t), s) κs *)
-(*             (λ G, G κs ((interp (λ _ e, g _ (f _ e)), s), s)). *)
-(*     Proof. *)
-(*       constructor => ????. eexists tnil, _. split; [done|]. *)
-(*       apply itree_rel_intro. rewrite interp_bind bind_bind. tend => ? <-. done. *)
-(*     Qed. *)
-(*     Global Hint Resolve itree_step_interp_bind_s : tsim. *)
 
 (** [Tau] *)
 (* TODO: Are all these lemmas necessary? *)
@@ -615,12 +559,6 @@ Qed.
 
 Definition itree_rel {E R S} (b : bool) (P : itree E R * S → Prop) (t : itree E R * S) : Prop :=
   ∀ t', eqit eq true b t' t.1 → P (t', t.2).
-(* Global Instance itree_rel_proper E R S P b: *)
-(*   Proper ((prod_relation (eqit eq b b) (=) ==> iff)) (@itree_rel E R S b P). *)
-(* Proof. *)
-(*   move => [x ?] [y ?] [Heq ?]. simplify_eq/=. rewrite /itree_rel /=. *)
-(*   split => ??; [rewrite -Heq | rewrite Heq]; naive_solver. *)
-(* Qed. *)
 Global Instance itree_rel_proper' E R S P b1 b2:
   Proper ((prod_relation (eqit eq b1 b2) (=) ==> iff)) (@itree_rel E R S true P).
 Proof.

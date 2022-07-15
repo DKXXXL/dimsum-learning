@@ -1,6 +1,6 @@
 From dimsum.core Require Export proof_techniques.
 
-(*** state transform *)
+(** * state transform *)
 Inductive state_transform_step {EV S} (m : module EV) (R : S → m.(m_state) → Prop) :
   S → option EV → (S → Prop) → Prop :=
 | StateTransformStep σ σ' e Pσ:

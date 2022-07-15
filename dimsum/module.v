@@ -2,6 +2,20 @@ From dimsum.core Require Export base.
 
 (** * Definition of [module] *)
 
+(*
+Idea for naming scheme:
+
+|                     | Type      | naming    | example       |
+| event               | Type      | ..._event | product_event |
+| case                | Type      | ..._case  | product_case  | (e.g. currently seq_product_state)
+| state               | Type      | ..._state | product_state |
+| step relation       | ...       | ..._step  | product_step  |
+| state + step        | mod_trans | ..._trans | product_trans |
+| initial state       | ...       | ..._init  | product_init  |
+| init + state + step | module    | ..._mod   | product_mod   |
+
+ *)
+
 Record module (EV : Type) : Type := Mod {
   m_state : Type;
   m_step : m_state → option EV → (m_state → Prop) → Prop;
@@ -44,3 +58,9 @@ Definition opponent (p : player) : player :=
   | Prog => Env
   | Env => Prog
   end.
+
+(* Inductive player3 := *)
+(* | PLeft | PRight | PEnv. *)
+(* Global Instance player3_eq_dec : EqDecision player3. *)
+(* Proof. solve_decision. Qed. *)
+(* Global Instance player3_inhabited : Inhabited player3 := populate PEnv. *)

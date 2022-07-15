@@ -20,7 +20,7 @@ Global Instance filter_vis_no_all {EV1 EV2} (m : module EV1) (R : EV1 → option
   VisNoAll (mod_filter m R).
 Proof. move => *. inv_all/= @m_step; case_match; simplify_eq. by apply: vis_no_all. Qed.
 
-(** * trefines for [mod_filter] *)
+(** ** trefines for [mod_filter] *)
 Fixpoint trace_bind {EV1 EV2} (f : EV1 → trace EV2) (κs : trace EV1) : trace EV2 :=
   match κs with
   | tnil => tnil

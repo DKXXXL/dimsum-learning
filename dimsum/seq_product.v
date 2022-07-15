@@ -2,7 +2,7 @@ From dimsum.core Require Export proof_techniques.
 From dimsum.core Require Import product state_transform.
 From dimsum.core Require Import axioms.
 
-(*** [seq_product] *)
+(** * [seq_product] *)
 Inductive seq_product_state :=
 | SPLeft | SPRight | SPNone.
 
@@ -51,7 +51,7 @@ Proof.
   - have [??]:= vis_no_all _ _ _ ltac:(done). eexists (_, _, _) => -[[??]?]. naive_solver.
 Qed.
 
-(*** trefines for [seq_product] *)
+(** ** trefines for [seq_product] *)
 Inductive seq_product_rel {EV1 EV2} : seq_product_state → trace (seq_product_event EV1 EV2) → trace EV1 → trace EV2 → Prop :=
 | SPR_nil s κs :
   tnil ⊆ κs →
@@ -85,40 +85,7 @@ Inductive seq_product_rel {EV1 EV2} : seq_product_state → trace (seq_product_e
   (tall T f) ⊆ κs →
   seq_product_rel s κs κs1 κs2
 .
-                (*
-| MPR_nil κs :
-    tnil ⊆ κs →
-    mod_product_rel κs tnil tnil
-| MPR_ex1 T f κs κs2 :
-    (∀ x, mod_product_rel κs (f x) κs2) →
-    mod_product_rel κs (tex T f) κs2
-| MPR_ex2 T f κs κs2 :
-    (∀ x, mod_product_rel κs κs2 (f x)) →
-    mod_product_rel κs κs2 (tex T f)
-| MPR_all1 {T} x f κs κs2 :
-    mod_product_rel κs (f x) κs2 →
-    mod_product_rel κs (tall T f) κs2
-| MPR_all2 {T} x f κs κs2 :
-    mod_product_rel κs κs2 (f x) →
-    mod_product_rel κs κs2 (tall T f)
-| MPR_all T f κs κs1 κs2:
-    (∀ x, mod_product_rel (f x) κs1 κs2) →
-    (tall T f) ⊆ κs →
-    mod_product_rel κs κs1 κs2
-| MPR_cons_l κ κs κs' κs1' κs2 :
-    mod_product_rel κs' κs1' κs2 →
-    tcons (Some κ, None) κs' ⊆ κs →
-    mod_product_rel κs (tcons κ κs1') κs2
-| MPR_cons_r κ κs κs' κs1 κs2' :
-    mod_product_rel κs' κs1 κs2' →
-    tcons (None, Some κ) κs' ⊆ κs →
-    mod_product_rel κs κs1 (tcons κ κs2')
-| MPR_cons_both κ1 κ2 κs κs' κs1' κs2' :
-    mod_product_rel κs' κs1' κs2' →
-    tcons (Some κ1, Some κ2) κs' ⊆ κs →
-    mod_product_rel κs (tcons κ1 κs1') (tcons κ2 κs2')
-.
-*)
+
 
 Lemma seq_product_rel_mono {EV1 EV2} s κs κs' (κs1 : trace EV1) (κs2 : trace EV2) :
   seq_product_rel s κs κs1 κs2 →
@@ -136,20 +103,6 @@ Proof.
   - move => *. econs. naive_solver.
   - move => *. econs. naive_solver.
   - move => *. econs. 2: by etrans. naive_solver.
-  (*
-  - move => ????. constructor. by etrans.
-  - move => *. constructor. naive_solver.
-  - move => *. constructor. naive_solver.
-  - move => *. econstructor. naive_solver.
-  - move => *. econstructor; naive_solver.
-  - move => *. eapply MPR_all. 2: by etrans. naive_solver.
-  - move => ????? ?? IH ??.
-    apply: MPR_cons_l; [| by etrans]. naive_solver.
-  - move => ????? ?? IH ??.
-    apply: MPR_cons_r; [| by etrans]. naive_solver.
-  - move => *.
-    apply: MPR_cons_both; [| by etrans]. naive_solver.
-*)
 Qed.
 
 
@@ -275,7 +228,7 @@ Proof.
   by apply: mods_to_seq_product.
 Qed.
 
-(** * tstep *)
+(** ** tstep *)
 Lemma mod_seq_product_step_None_i {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2:
   TStepI (mod_seq_product m1 m2) (SPNone, σ1, σ2) (λ G, ∀ s, G true (Some (SPENone s)) (λ G', G' (s, σ1, σ2))).
 Proof.
@@ -351,7 +304,7 @@ Proof.
 Qed.
 Global Hint Resolve mod_seq_product_step_r_s : typeclass_instances.
 
-(*** [mod_seq_map] *)
+(** * [mod_seq_map] *)
 Inductive mod_seq_map_state {EV1 : Type} :=
 | SMProg
 | SMProgRecv (e : EV1)
@@ -442,6 +395,7 @@ Proof.
 Qed.
 *)
 
+(** ** [mod_seq_map] tstep *)
 Lemma mod_seq_map_step_filter_i {EV1 EV2} m (f : module (sm_event EV1 EV2)) σ σf P `{!TStepI f σf P} :
   TStepI (mod_seq_map m f) (SMFilter, σ, σf) (λ G, P (λ b κ P',
     match κ with

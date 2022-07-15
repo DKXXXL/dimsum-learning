@@ -2,7 +2,8 @@ From dimsum.core Require Export module trefines.
 From dimsum.core Require Import axioms.
 
 (** * Proving refinement *)
-(** This file contains various proof techniques for proving refinement. *)
+(** This file contains various proof techniques for proving
+refinement. The development uses mostly [tsim]. *)
 
 (** * [mod_to_trace] *)
 Fixpoint mod_to_trace {EV} (m : module EV) (n : trace_index) (σ : m.(m_state)) : trace EV :=

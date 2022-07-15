@@ -3,6 +3,8 @@ From dimsum.core Require Import link.
 
 Set Default Proof Using "Type".
 
+(** * [mod_prepost] *)
+
 (** * prepost *)
 Section prepost.
 Context {R : Type}.
@@ -79,7 +81,7 @@ End prepost.
 
 Arguments prepost : clear implicits.
 
-(** * mod_prepost *)
+(** * [mod_prepost] *)
 Section prepost.
   Context {EV1 EV2 S : Type}.
   Context {M : ucmra}.
@@ -215,6 +217,8 @@ Global Hint Resolve
        mod_prepost_step_Inside_s
  | 3 : typeclass_instances.
 
+(** * Lemmas for proving refinements of prepost  *)
+
 Definition prepost_id {EV} : EV → unit → prepost (EV * unit) unitUR :=
   λ x _, pp_end (x, tt).
 
@@ -258,12 +262,6 @@ Proof.
     tstep_i. split!; [done|].
     apply Hloop; [done|]. split!.
 Qed.
-
-(* Lemma prepost_id_l EV (m : module EV) σ s: *)
-(*   trefines (MS (mod_prepost prepost_id prepost_id m) (SMFilter, σ, (PPOutside, s))) (MS m σ). *)
-(* Proof. *)
-  (* apply tsim_implies_trefines => /= n. *)
-  (* tstep_i. *)
 
 
 Section prepost.

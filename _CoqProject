@@ -25,8 +25,9 @@ dimsum/proof_techniques.v
 dimsum/filter.v
 dimsum/filter_srefines.v
 dimsum/product.v
-dimsum/seq_product.v
+dimsum/product_srefines.v
 dimsum/state_transform.v
+dimsum/seq_product.v
 dimsum/link.v
 dimsum/prepost.v
 dimsum/itree.v

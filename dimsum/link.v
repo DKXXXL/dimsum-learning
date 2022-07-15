@@ -3,6 +3,8 @@ From dimsum.core Require Import product seq_product state_transform.
 
 Set Default Proof Using "Type".
 
+(** * [mod_link] *)
+
 Section mod_link.
   Context {EV : Type} {S : Type}.
   Implicit Types (R : seq_product_state → S → EV → seq_product_state → S → EV → bool → Prop).
