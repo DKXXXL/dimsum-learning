@@ -32,8 +32,7 @@ Definition stream_imp: fndef := {|
   fd_args := [("n")];
   fd_vars := [];
   fd_body := LetE "_" (imp.Call "yield" [Var "n"]) $
-             LetE "n'" (BinOp (Var "n") AddOp (Val $ ValNum 1)) $
-             (imp.Call "stream" [Var "n'"]);
+             (imp.Call "stream" [BinOp (Var "n") AddOp (Val $ ValNum 1)]);
   fd_static := I
 |}.
 Definition stream_prog : gmap string fndef :=
@@ -137,7 +136,6 @@ Proof.
   tstep_i. split! => *. destruct!.
   tstep_i.
   tstep_i.
-  tstep_i.
   tstep_i. split! => *. simplify_map_eq. split!.
   tstep_i => *. destruct!/=. split; [by econs|].
   tstep_i. split! => *. destruct!/=.
@@ -155,7 +153,6 @@ Proof.
   tstep_i.
   tstep_i. split! => *. destruct!.
   tstep_i. split! => *. destruct!.
-  tstep_i.
   tstep_i.
   tstep_i.
   tstep_i. split! => *. simplify_map_eq. split!.

@@ -1027,24 +1027,29 @@ Proof. apply fndef_eq. split_and!; [done..|] => /=. apply static_expr_to_expr_to
 
 (** * tstep *)
 (** ** AsVals *)
-Class AsVals (es : list expr) (vs : list val) := {
-  as_vals : es = Val <$> vs
+Class AsVals (es : list expr) (vs : list val) (es' : option (expr * list expr)) := {
+  as_vals : es = (Val <$> vs) ++ from_option (λ '(e, es), e :: es) [] es'
 }.
-Global Hint Mode AsVals ! - : typeclass_instances.
+Global Hint Mode AsVals ! - ! : typeclass_instances.
 
 Lemma as_vals_nil :
-  AsVals [] [].
+  AsVals [] [] None.
 Proof. done. Qed.
 Global Hint Resolve as_vals_nil : typeclass_instances.
 
-Lemma as_vals_cons v es vs :
-  AsVals es vs → AsVals (Val v :: es) (v :: vs).
+Lemma as_vals_cons v es vs es' :
+  AsVals es vs es' → AsVals (Val v :: es) (v :: vs) es'.
 Proof. move => [->]. done. Qed.
 Global Hint Resolve as_vals_cons : typeclass_instances.
 
-Lemma as_vals_fmap vs :
-  AsVals (Val <$> vs) vs.
+Lemma as_vals_expr_cons e es:
+  AsVals (e :: es) [] (Some (e, es)).
 Proof. done. Qed.
+Global Hint Resolve as_vals_expr_cons | 50 : typeclass_instances.
+
+Lemma as_vals_fmap vs :
+  AsVals (Val <$> vs) vs None.
+Proof. constructor. rewrite right_id_L. done. Qed.
 Global Hint Resolve as_vals_fmap : typeclass_instances.
 
 
@@ -1103,6 +1108,14 @@ Lemma imp_expr_fill_LetE v e1 e2 K e' `{!ImpExprFill e1 K e'} :
   ImpExprFill (LetE v e1 e2) (K ++ [LetECtx v e2]) e'.
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
 Global Hint Resolve imp_expr_fill_LetE : typeclass_instances.
+
+Lemma imp_expr_fill_Call e K e' f es vs es' `{!AsVals es vs (Some (e, es')) } `{!ImpExprFill e K e'} :
+  ImpExprFill (Call f es) (K ++ [CallCtx f vs es']) e'.
+Proof.
+  destruct AsVals0, ImpExprFill0. subst.
+  constructor => /=. rewrite expr_fill_app /=. done.
+Qed.
+Global Hint Resolve imp_expr_fill_Call : typeclass_instances.
 
 Lemma imp_expr_fill_ReturnExt b e K e' `{!ImpExprFill e K e'} :
   ImpExprFill (ReturnExt b e) (K ++ [ReturnExtCtx b]) e'.
@@ -1175,7 +1188,7 @@ Proof.
 Qed.
 Global Hint Resolve imp_step_ReturnExt_s : typeclass_instances.
 
-Lemma imp_step_Call_i fns h e K f vs es `{!ImpExprFill e K (imp.Call f es)} `{!AsVals es vs}:
+Lemma imp_step_Call_i fns h e K f vs es `{!ImpExprFill e K (imp.Call f es)} `{!AsVals es vs None}:
   TStepI imp_module (Imp e h fns) (λ G,
     (∀ fn, fns !! f = Some fn → G true None (λ G', length vs = length fn.(fd_args) ∧
          G' (Imp (expr_fill K (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))) h fns))) ∧
@@ -1183,24 +1196,24 @@ Lemma imp_step_Call_i fns h e K f vs es `{!ImpExprFill e K (imp.Call f es)} `{!A
            G' (Imp (expr_fill K (Waiting true)) h fns)))).
 Proof.
   destruct AsVals0, ImpExprFill0; subst.
-  constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]]. {
+  constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[Hstep ?]]. {
     apply sub_redexes_are_values_item; case; try naive_solver.
-    move => /= ??? e' [_ Heq]. by apply: list_expr_val_inv.
+    move => /= ??? e' [_ Heq]. rewrite right_id_L in Heq. by apply: list_expr_val_inv.
   } { done. } subst.
-  inv_all head_step.
+  rewrite right_id_L in Hstep. inv Hstep.
   - naive_solver.
   - naive_solver.
 Qed.
 Global Hint Resolve imp_step_Call_i : typeclass_instances.
 
-Lemma imp_step_Call_s fns h e K f vs `{!ImpExprFill e K (imp.Call f es)} `{!AsVals es vs}:
+Lemma imp_step_Call_s fns h e K f vs `{!ImpExprFill e K (imp.Call f es)} `{!AsVals es vs None}:
   TStepS imp_module (Imp e h fns) (λ G,
     (∃ fn, fns !! f = Some fn ∧ G None (λ G', length vs = length fn.(fd_args) → G'
              (Imp (expr_fill K (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))) h fns))) ∨
     (fns !! f = None ∧ G (Some (Outgoing, EICall f vs h)) (λ G',
            G' (Imp (expr_fill K (Waiting true)) h fns)))).
 Proof.
-  destruct AsVals0, ImpExprFill0; subst.
+  destruct AsVals0, ImpExprFill0; subst. rewrite right_id_L.
   constructor => ? HG. destruct!; (split!; [done|]); move => /= ??.
   all: apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   all: destruct!; naive_solver.

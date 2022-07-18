@@ -181,9 +181,9 @@ Definition memmove_imp : fndef := {|
   fd_vars := [];
   fd_body := If (imp.Call "locle" [Var "d"; Var "s"])
                 (imp.Call "memcpy" [Var "d"; Var "s"; Var "n"; Val $ ValNum 1])
-                (LetE "d'" (BinOp (Var "d") ShiftOp (BinOp (Var "n") AddOp (Val $ ValNum (-1)))) $
-                 LetE "s'" (BinOp (Var "s") ShiftOp (BinOp (Var "n") AddOp (Val $ ValNum (-1)))) $
-                 imp.Call "memcpy" [Var "d'"; Var "s'"; Var "n"; Val $ ValNum (-1)]);
+                (imp.Call "memcpy" [BinOp (Var "d") ShiftOp (BinOp (Var "n") AddOp (Val $ ValNum (-1)));
+                                    BinOp (Var "s") ShiftOp (BinOp (Var "n") AddOp (Val $ ValNum (-1)));
+                                    Var "n"; Val $ ValNum (-1)]);
   fd_static := I
 |}.
 Definition memmove_prog : gmap string fndef :=
@@ -195,10 +195,10 @@ Definition memcpy_imp : fndef := {|
   fd_vars := [];
   fd_body := If (BinOp (Val $ ValNum 0) LtOp (Var "n"))
                (LetE "_" (Store (Var "d") (Load (Var "s"))) $
-                LetE "d'" (BinOp (Var "d") ShiftOp (Var "o")) $
-                LetE "s'" (BinOp (Var "s") ShiftOp (Var "o")) $
-                LetE "n'" (BinOp (Var "n") AddOp (Val $ ValNum (-1))) $
-                imp.Call "memcpy" [Var "d'"; Var "s'"; Var "n'"; Var "o"])
+                imp.Call "memcpy" [BinOp (Var "d") ShiftOp (Var "o");
+                                   BinOp (Var "s") ShiftOp (Var "o");
+                                   BinOp (Var "n") AddOp (Val $ ValNum (-1));
+                                   Var "o"])
                (Val 0);
   fd_static := I
 |}.
@@ -209,17 +209,14 @@ Definition main_addr : Z := 50.
 
 Definition main_imp : fndef := {|
   fd_args := [];
-  (* fd_vars := [("x", 3); ("tmp0", 3); ("tmp1", 3)]; *)
   fd_vars := [("x", 3)];
   fd_body := LetE "_" (Store (BinOp (Var "x") ShiftOp (Val $ ValNum 0)) (Val $ ValNum 1)) $
              LetE "_" (Store (BinOp (Var "x") ShiftOp (Val $ ValNum 1)) (Val $ ValNum 2)) $
-             LetE "d" (BinOp (Var "x") ShiftOp (Val $ ValNum 1)) $
-             LetE "s" (BinOp (Var "x") ShiftOp (Val $ ValNum 0)) $
-             LetE "_" (imp.Call "memmove" [(Var "d"); (Var "s"); (Val $ ValNum 2)]) $
-             LetE "tmp0" (Load (BinOp (Var "x") ShiftOp (Val $ ValNum 1))) $
-             LetE "_" (imp.Call "print" [Var "tmp0"]) $
-             LetE "tmp0" (Load (BinOp (Var "x") ShiftOp (Val $ ValNum 2))) $
-             LetE "_" (imp.Call "print" [Var "tmp0"]) $
+             LetE "_" (imp.Call "memmove" [BinOp (Var "x") ShiftOp (Val $ ValNum 1);
+                                           BinOp (Var "x") ShiftOp (Val $ ValNum 0);
+                                           (Val $ ValNum 2)]) $
+             LetE "_" (imp.Call "print" [Load (BinOp (Var "x") ShiftOp (Val $ ValNum 1))]) $
+             LetE "_" (imp.Call "print" [Load (BinOp (Var "x") ShiftOp (Val $ ValNum 2))]) $
              (Val $ ValNum 0);
   fd_static := I
 |}.
@@ -309,9 +306,6 @@ Proof.
     tstep_i.
     tstep_i.
     tstep_i.
-    tstep_i.
-    tstep_i.
-    tstep_i.
     have ->: (S (length hvs) + -1) = (length hvs) by lia.
     apply: tsim_mono_to_tiS => ??. apply: IH; [done|done|by left|done|done|..].
     { move => /=. lia. }
@@ -349,9 +343,6 @@ Proof.
     rewrite lookup_app_r // -minus_n_n /= !shift_loc_add_sub; [|lia..]. move => ??.
     split!; [naive_solver|].
     tstep_i. split!; [naive_solver|].
-    tstep_i.
-    tstep_i.
-    tstep_i.
     tstep_i.
     tstep_i.
     tstep_i.
@@ -444,8 +435,6 @@ Proof.
     tstep_i.
     tstep_i.
     tstep_i.
-    tstep_i.
-    tstep_i.
     apply: memcpy_spec; [done|by right|..].
     { rewrite bool_decide_false; [|done]. rewrite shift_loc_add_sub; [done|lia]. }
     { rewrite bool_decide_false; [|done]. rewrite shift_loc_add_sub; [done|lia]. }
@@ -502,8 +491,6 @@ Proof.
   tstep_i.
   tstep_i.
   tstep_i.
-  tstep_i.
-  tstep_i.
   split! => *. destruct!/=.
   rewrite bool_decide_false; [|compute_done].
   rewrite bool_decide_true; [|compute_done].
@@ -548,9 +535,7 @@ Proof.
     2: { destruct l. rewrite /shift_loc /=. naive_solver lia. }
     by rewrite heap_alloc_h_lookup/=; [|lia..].
   }
-  tstep_i.
-  tstep_i.
-  split! => *. destruct!.
+  tstep_i. split! => *. destruct!.
   rewrite bool_decide_false; [|compute_done].
   go_s. split!. go.
   go_s. split!. go.
@@ -578,10 +563,7 @@ Proof.
     2: { destruct l. rewrite /shift_loc /=. naive_solver lia. }
     by rewrite heap_alloc_h_lookup/=; [|lia..].
   }
-  tstep_i.
-  tstep_i.
-  split!.
-  intros. destruct!.
+  tstep_i. split!. intros. destruct!.
   rewrite bool_decide_false; [|compute_done].
   go_s. split!. go.
   go_s. split!. go.

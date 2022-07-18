@@ -176,8 +176,7 @@ Definition main_imp : fndef := {|
              LetE "z" (imp.Call "cast_ptr_to_int" [(Var "l")]) $
              LetE "z'" (BinOp (BinOp (Var "z") AddOp (Val (-1))) AddOp (Val 1)) $
              LetE "l'" (imp.Call "cast_int_to_ptr" [(Var "z")]) $
-             LetE "r" (Load (Var "l'")) $
-             imp.Call "exit" [(Var "r")];
+             imp.Call "exit" [(Load (Var "l'"))];
   fd_static := I
 |}.
 
@@ -245,7 +244,6 @@ Proof.
   go_i. split!. move => *. simplify_eq.
   go_i.
   go_i. eexists _. simplify_map_eq. rewrite heap_alloc_h_lookup; [|lia..]. split. { by simplify_map_eq. }
-  go_i. change ([Val 1]) with (Val <$> [ValNum 1]).
   go_i. split. { move => *; simplify_map_eq. }
   move => ????. rewrite bool_decide_false; [|compute_done].
   move => *. destruct!/=.
