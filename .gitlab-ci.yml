@@ -9,13 +9,15 @@ variables:
 
 .template: &template
   stage: build
+  tags:
+  - fp
   script:
   - git clone https://gitlab.mpi-sws.org/iris/ci.git ci -b opam2
   - ci/buildjob
   cache:
     key: "$CI_JOB_NAME"
     paths:
-    - opamroot/
+    - _opam/
   except:
   - triggers
   - schedules
@@ -23,7 +25,19 @@ variables:
 
 ## Build jobs
 
-build-coq.8.15.0:
+build-coq.8.15.1:
   <<: *template
   variables:
-    OPAM_PINS: "coq version 8.15.0"
+    OPAM_PINS: "coq version 8.15.1"
+    DENY_WARNINGS: "1"
+
+# Nightly job
+trigger-iris.dev:
+  <<: *template
+  variables:
+    OPAM_PINS: "coq version 8.15.1   coq-stdpp.dev git git+https://gitlab.mpi-sws.org/iris/stdpp.git#$STDPP_REV   coq-iris.dev git git+https://gitlab.mpi-sws.org/iris/iris.git#$IRIS_REV"
+  except:
+  only:
+  - triggers
+  - schedules
+  - api
