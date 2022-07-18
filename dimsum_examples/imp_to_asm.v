@@ -1419,7 +1419,7 @@ Proof.
   all: move => [cs1 lr1] [cs2 lr2] [cs lr] x1 x2 x ? ics.
   - move => e ? e' /= ? ??.
     destruct!.
-    destruct e as [rs mem| | |]; destruct!/=.
+    destruct e as [rs mem| |]; destruct!/=.
     move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. split; [done|]. eexists b.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
     + move => ret f Hargs Hin Hf2i /not_elem_of_union[??] ? ??.
@@ -1439,7 +1439,7 @@ Proof.
       1: { setoid_subst. iSatMono. iIntros!. iFrame. }
   - move => e ? e' /= ? ??.
     destruct!.
-    destruct e as [rs mem| | |]; destruct!/=.
+    destruct e as [rs mem| |]; destruct!/=.
     move => b *. apply pp_to_all_forall => ra ya Hra xa Hxa. split; [done|]. eexists b.
     move: ra ya Hra xa Hxa. apply: pp_to_all_forall_2. destruct b => /=.
     + move => ret f Hargs Hin Hf2i /not_elem_of_union[??] ???.
