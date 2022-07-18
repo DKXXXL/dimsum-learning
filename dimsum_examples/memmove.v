@@ -639,7 +639,7 @@ Proof.
   go_s => -[?[??]]. go.
   rewrite bool_decide_true. 2: unfold main_asm_dom, memmove_asm_dom, memcpy_asm_dom; unlock; by vm_compute.
   tstep_i => ??. simplify_eq.
-  tstep_i. eexists true. split; [done|] => /=. eexists initial_heap_state, _, [], [], _, "main". split!.
+  tstep_i. eexists true. split; [done|] => /=. eexists ∅, _, [], [], _, "main". split!.
   { simplify_map_eq'. done. } 2: done. done.
   { apply: satisfiable_mono; [by eapply i2a_res_init|].
     iIntros!. iDestruct select (i2a_mem_auth _) as "$". rewrite /i2a_mem_map big_sepM_empty. iFrame.

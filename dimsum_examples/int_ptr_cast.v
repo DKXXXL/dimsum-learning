@@ -392,7 +392,7 @@ Proof.
   go_s => ?. go. destruct!. simplify_map_eq'.
   rewrite bool_decide_true; [|unfold main_asm_dom;unlock; compute_done].
   go_i => ??. simplify_eq.
-  go_i. eexists true => /=. split; [done|]. eexists initial_heap_state, _, [], [], (regs !!! "R30"), "main".
+  go_i. eexists true => /=. split; [done|]. eexists ∅, _, [], [], (regs !!! "R30"), "main".
   split!.
   { by simplify_map_eq'. }
   { apply: satisfiable_mono; [by eapply i2a_res_init|].

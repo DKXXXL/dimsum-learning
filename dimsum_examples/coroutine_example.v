@@ -225,7 +225,7 @@ Proof.
   go_s => -[?[?[??]]]. go.
   rewrite bool_decide_true. 2: unfold yield_asm_dom, yield_asm, main_asm_dom, stream_asm_dom; unlock; by vm_compute.
   tstep_i => ??. simplify_eq.
-  tstep_i. eexists true. split; [done|] => /=. eexists initial_heap_state, _, [], [], _, "main". split!.
+  tstep_i. eexists true. split; [done|] => /=. eexists ∅, _, [], [], _, "main". split!.
   { simplify_map_eq'. done. } 2: done. { rewrite !not_elem_of_union. naive_solver. }
   { apply: satisfiable_mono; [by eapply i2a_res_init|].
     iIntros!. iDestruct select (i2a_mem_auth _) as "$". iFrame.

@@ -759,7 +759,7 @@ Proof. by destruct e. Qed.
 Global Instance event_set_vals_heap_split_assume_inj e : SplitAssumeInj2 (=) (=) (=) (event_set_vals_heap e).
 Proof. done. Qed.
 
-(** ** step *)
+(** ** Operational semantics *)
 Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
   match op with
   | AddOp => z1 ← val_to_Z v1; z2 ← val_to_Z v2; Some (ValNum (z1 + z2))
@@ -774,10 +774,6 @@ Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
   | LtOp => z1 ← val_to_Z v1; z2 ← val_to_Z v2; Some (ValBool (bool_decide (z1 < z2)))
   end.
 
-(* TODO: alternative idea: Define semantics as state → itree moduleE state
-   Then put an itree forever around it after adding the evaluation context
-This way one can reuse infrastructure
-*)
 Inductive head_step : imp_state → option imp_event → (imp_state → Prop) → Prop :=
 | BinOpS v1 op v2 h fns:
   head_step (Imp (BinOp (Val v1) op (Val v2)) h fns) None (λ σ',
@@ -912,7 +908,7 @@ Definition imp_module := Mod prim_step.
 Global Instance imp_vis_no_all: VisNoAll imp_module.
 Proof. move => *. inv_all @m_step; inv_all head_step; naive_solver. Qed.
 
-(** * static expr *)
+(** * Deeply embedded static expressions  *)
 Inductive static_val := | StaticValNum (z : Z) | StaticValBool (b : bool).
 Global Instance static_val_eqdec : EqDecision static_val.
 Proof. solve_decision. Qed.
@@ -1030,6 +1026,7 @@ Lemma static_fndef_to_fndef_to_static_fndef fn :
 Proof. apply fndef_eq. split_and!; [done..|] => /=. apply static_expr_to_expr_to_static_expr. apply fd_static. Qed.
 
 (** * tstep *)
+(** ** AsVals *)
 Class AsVals (es : list expr) (vs : list val) := {
   as_vals : es = Val <$> vs
 }.

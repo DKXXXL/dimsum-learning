@@ -1681,7 +1681,7 @@ Proof.
     tstep_i. apply steps_impl_step_end => ???. invert_all @m_step. split!.
     tstep_s. eexists (Some (inl _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
     tstep_i => ??; simplify_eq/=.
-    tstep_i. eexists ∅, (ValNum <$> vs), initial_heap_state. split!.
+    tstep_i. eexists ∅, (ValNum <$> vs), ∅. split!.
     1: { apply Forall2_fmap. apply Forall_Forall2_diag. by apply Forall_true. }
     apply: Hloop; [done|]. split!.
   - tstep_both. apply steps_impl_step_end => κ ??. case_match => *; simplify_eq.
