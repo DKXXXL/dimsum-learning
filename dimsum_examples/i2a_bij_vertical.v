@@ -14,17 +14,11 @@ Definition val_through_bij (bij : heap_bij) (vs : val) : val :=
 Program Definition heap_through_bij (bij : heap_bij) (h : heap_state) : heap_state :=
   Heap (list_to_map $ omap (OMap:=list_omap) (λ '(l, v), if hb_bij bij !! l.1 is Some (HBShared p) then
          Some ((p, l.2), val_through_bij bij v) else None) (map_to_list (h_heap h)))
-       (gset_to_gmap tt $ hb_shared_i bij) _.
+       (hb_shared_i bij) _.
 Next Obligation.
-  move => ??. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]]. subst.
-  rewrite dom_gset_to_gmap.
-  rewrite list_to_map_lookup_is_Some => -[?]. rewrite elem_of_list_omap => -[[[??]?]]/=[??].
+  move => ???. rewrite list_to_map_lookup_is_Some => -[?]. rewrite elem_of_list_omap => -[[[??]?]]/=[??].
   repeat case_match; simplify_eq. rewrite elem_of_hb_shared_i. naive_solver.
 Qed.
-
-Lemma heap_through_bij_provs bij h :
-  h_provs (heap_through_bij bij h) = hb_shared_i bij.
-Proof. by rewrite /h_provs dom_gset_to_gmap. Qed.
 
 Lemma heap_through_bij_Some bij h pi o vi:
   h_heap (heap_through_bij bij h) !! (pi, o) = Some vi ↔
@@ -759,7 +753,7 @@ Proof.
           hob ⊆ i2a_ih_constant ih
 ). }
   { simpl. split_and!; [done..|].
-    eexists moinit, ∅, moinit, ∅, ∅, ∅, ∅, initial_heap_state, ∅, initial_heap_state. split!.
+    eexists moinit, ∅, moinit, ∅, ∅, ∅, ∅, ∅, ∅, ∅. split!.
     - by rewrite map_difference_diag.
     - rewrite map_difference_empty. compute_done.
     - iSplit; iIntros!; [|done]. iFrame.
@@ -768,7 +762,7 @@ Proof.
       rewrite i2a_ih_shared_empty /i2a_mem_map !big_sepM_empty. iSplit; [|done].
       iDestruct select (i2a_heap_inv _) as (ih Hsub ?) "(?&?&?)".
       have -> : ih = ∅; [|done]. apply map_eq => i. apply option_eq => ?. split => // ?.
-      have : i ∈ h_provs initial_heap_state; [|done]. apply Hsub. by apply elem_of_dom.
+      have : i ∈ h_provs ∅; [|done]. apply Hsub. by apply elem_of_dom.
     - apply: satisfiable_mono; [apply heap_bij_init|]. iIntros "$".
       rewrite /hb_shared omap_empty !big_sepM_empty. iSplit!.
       iIntros (????). done.
@@ -851,8 +845,7 @@ Proof.
       iDestruct select (i2a_heap_auth _) as "$".
 
       iSplit!.
-      * rewrite heap_merge_provs !heap_restrict_provs dom_union_L heap_through_bij_provs.
-        apply union_mono; [|done]. by rewrite dom_fmap_L.
+      * rewrite dom_union_L. apply union_mono; [|done]. by rewrite dom_fmap_L.
       * move => l ?. rewrite i2a_ih_constant_union // i2a_ih_constant_fmap_shared left_id_L.
         move => Hih /=.
         have ? : l.1 ∉ dom (ih' ∪ i2a_ih_shared iha). {
@@ -908,8 +901,7 @@ Proof.
       iFrame "Hs". iFrame. iSplit!.
       * iExists _. iFrame. repeat iSplit.
         -- iPureIntro. by etrans.
-        -- iPureIntro. rewrite heap_merge_provs !heap_restrict_provs heap_through_bij_provs.
-           move => ? /elem_of_hb_provs_i[[? Hin]|[??]]; apply elem_of_union.
+        -- iPureIntro. move => ? /elem_of_hb_provs_i[[? Hin]|[??]]; apply elem_of_union.
            ++ right. revert select (hb_provs_i bijb ⊆ h_provs hprev). apply.
               apply elem_of_hb_provs_i. rewrite Hpriveq. naive_solver.
            ++ left. apply elem_of_hb_shared_i. naive_solver.

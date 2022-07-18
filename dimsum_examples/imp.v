@@ -1,8 +1,10 @@
 From dimsum.core Require Export proof_techniques link prepost.
+From dimsum.core Require Import axioms.
 
 Local Open Scope Z_scope.
 
 (** * C-like language language *)
+(** ** Locations *)
 Declare Scope loc_scope.
 Delimit Scope loc_scope with L.
 Open Scope loc_scope.
@@ -37,6 +39,7 @@ Lemma shift_loc_add_sub l i j:
   l +ₗ i +ₗ j = l.
 Proof. destruct l. rewrite /shift_loc /= => ?. f_equal. lia. Qed.
 
+(** ** Syntax *)
 Inductive binop : Set :=
 | AddOp | ShiftOp | EqOp | LeOp | LtOp.
 
@@ -127,7 +130,7 @@ Fixpoint assigned_vars (e : expr) : list string :=
   | Waiting can_return => []
   end.
 
-(** substitution *)
+(** ** Substitution *)
 Fixpoint subst (x : string) (v : val) (e : expr) : expr :=
   match e with
   | Var y => if bool_decide (x = y) then Val v else Var y
@@ -215,7 +218,7 @@ Proof.
   move => ?? IH [|??] //= e [?]. by rewrite subst_map_subst IH.
 Qed.
 
-(** evaluation contexts *)
+(** ** Evaluation contexts *)
 Inductive expr_ectx :=
 | BinOpLCtx (op : binop) (e2 : expr)
 | BinOpRCtx (v1 : val) (op : binop)
@@ -303,7 +306,8 @@ Proof.
     naive_solver.
 Qed.
 
-(** is_static_expr *)
+(** ** Static expressions *)
+(** Static expressions correspond to the surface syntax of the language. *)
 Fixpoint is_static_expr (allow_loc : bool) (e : expr) : bool :=
   match e with
   | Var v => true
@@ -362,7 +366,7 @@ Proof.
   elim: IH => // *. decompose_Forall_hyps; naive_solver.
 Qed.
 
-(** * fndef *)
+(** ** fndef *)
 Record fndef : Type := {
   fd_args : list string;
   fd_vars : list (string * Z);
@@ -377,27 +381,18 @@ Proof. split; [naive_solver|]. destruct fn1, fn2 => /= -[?[??]]. subst. f_equal.
 (** ** heap *)
 Record heap_state : Set := Heap {
   h_heap : gmap loc val;
-  h_provs' : gmap prov unit; (* We need to use gmap because gset does not live in Set *)
-  heap_wf' : bool_decide (set_map fst (dom h_heap) ⊆ dom h_provs');
+  h_provs : gset prov;
+  heap_wf l : is_Some (h_heap !! l) → l.1 ∈ h_provs;
 }.
 Add Printing Constructor heap_state.
 
-Definition h_provs (h : heap_state) : gset prov := dom (h_provs' h).
-
 Lemma heap_state_eq h1 h2:
-  h1 = h2 ↔ h1.(h_heap) = h2.(h_heap) ∧ h1.(h_provs') = h2.(h_provs').
-Proof. split; [naive_solver|]. destruct h1, h2 => /= -[??]; subst. f_equal. apply proof_irrel. Qed.
+  h1 = h2 ↔ h1.(h_heap) = h2.(h_heap) ∧ h1.(h_provs) = h2.(h_provs).
+Proof. split; [naive_solver|]. destruct h1, h2 => /= -[??]; subst. f_equal. apply AxProofIrrelevance. Qed.
 
-Lemma heap_wf h l:
-  is_Some (h_heap h !! l) → l.1 ∈ h_provs h.
-Proof.
-  move => ?. have /bool_decide_unpack := heap_wf' h. apply.
-  apply elem_of_map. eexists l. split; [done|]. by apply elem_of_dom.
-Qed.
-
-Program Definition initial_heap_state : heap_state :=
+Global Program Instance heap_empty : Empty heap_state :=
   Heap ∅ ∅ _.
-Next Obligation. apply bool_decide_spec. set_solver. Qed.
+Next Obligation. move => ?. rewrite lookup_empty => -[??]. done. Qed.
 
 Definition h_block (h : heap_state) (p : prov) : gmap Z val :=
   gmap_curry (h_heap h) !!! p.
@@ -452,23 +447,12 @@ Definition heap_fresh (ps : gset prov) (h : heap_state) : loc :=
   (fresh (ps ∪ h_provs h), 0).
 
 Program Definition heap_update (h : heap_state) (l : loc) (v : val) : heap_state :=
-  Heap (alter (λ _, v) l h.(h_heap)) h.(h_provs') _.
-Next Obligation.
-  move => ???. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]].
-  rewrite lookup_alter_is_Some. subst. apply heap_wf.
-Qed.
-
-Lemma heap_update_provs h l v :
-  h_provs (heap_update h l v) = h_provs h.
-Proof. done. Qed.
+  Heap (alter (λ _, v) l h.(h_heap)) h.(h_provs) _.
+Next Obligation. move => ????. rewrite lookup_alter_is_Some. apply heap_wf. Qed.
 
 Program Definition heap_update_big (h : heap_state) (m : gmap loc val) : heap_state :=
-  Heap (map_union_weak m h.(h_heap)) (h.(h_provs')) _.
-Next Obligation.
-  move => ??. apply bool_decide_spec. move => ? /elem_of_map[l[?/elem_of_dom]]. subst => /=.
-  rewrite map_lookup_imap. move => [? /bind_Some[?[??]]].
-  by apply heap_wf.
-Qed.
+  Heap (map_union_weak m h.(h_heap)) (h.(h_provs)) _.
+Next Obligation. move => ???. rewrite map_lookup_imap. move => [? /bind_Some[?[??]]]. by apply heap_wf. Qed.
 
 Lemma heap_update_big_empty h :
   heap_update_big h ∅ = h.
@@ -515,60 +499,27 @@ Global Opaque heap_alloc_h.
 
 
 Program Definition heap_alloc (h : heap_state) (l : loc) (n : Z) : heap_state :=
-  Heap (heap_alloc_h h.(h_heap) l n) (gset_to_gmap tt ({[l.1]} ∪ h_provs h)) _.
+  Heap (heap_alloc_h h.(h_heap) l n) ({[l.1]} ∪ h_provs h) _.
 Next Obligation.
-  move => ???. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]]. subst.
-  rewrite dom_gset_to_gmap. move => [? /lookup_union_Some_raw[Hl|[? Hh]]]; apply elem_of_union; [left|right; by apply heap_wf].
+  move => ????. move => [? /lookup_union_Some_raw[Hl|[? Hh]]]; apply elem_of_union; [left|right; by apply heap_wf].
   move: Hl => /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap. set_solver.
 Qed.
 
-Lemma heap_alloc_provs h l n :
-  h_provs (heap_alloc h l n) = {[l.1]} ∪ h_provs h.
-Proof. by rewrite /h_provs /= dom_gset_to_gmap. Qed.
-
 Program Definition heap_free (h : heap_state) (l : loc) : heap_state :=
-  Heap (filter (λ '(l', v), l'.1 ≠ l.1) h.(h_heap)) h.(h_provs') _.
-Next Obligation.
-  move => ??. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]]. subst.
-  rewrite map_filter_lookup => -[?/bind_Some[?[??]]]. by apply heap_wf.
-Qed.
-
-Lemma heap_free_provs h l :
-  h_provs (heap_free h l) = h_provs h.
-Proof. done. Qed.
+  Heap (filter (λ '(l', v), l'.1 ≠ l.1) h.(h_heap)) h.(h_provs) _.
+Next Obligation. move => ???. rewrite map_filter_lookup => -[?/bind_Some[?[??]]]. by apply heap_wf. Qed.
 
 Program Definition heap_merge (h1 h2 : heap_state) : heap_state :=
-  Heap (h_heap h1 ∪ h_heap h2) (h_provs' h1 ∪ h_provs' h2) _.
-Next Obligation.
-  move => ??. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]]. subst.
-  move => /lookup_union_is_Some[/heap_wf?|/heap_wf?]; set_solver.
-Qed.
-
-Lemma heap_merge_provs h1 h2 :
-  h_provs (heap_merge h1 h2) = h_provs h1 ∪ h_provs h2.
-Proof. by rewrite /h_provs/= dom_union_L. Qed.
+  Heap (h_heap h1 ∪ h_heap h2) (h_provs h1 ∪ h_provs h2) _.
+Next Obligation. move => ???. move => /lookup_union_is_Some[/heap_wf?|/heap_wf?]; set_solver. Qed.
 
 Program Definition heap_restrict (h : heap_state) (P : prov → Prop) `{!∀ x, Decision (P x)} : heap_state :=
-  Heap (filter (λ x, P x.1.1) h.(h_heap)) h.(h_provs') _.
-Next Obligation.
-  move => ???. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]]. subst.
-  rewrite map_filter_lookup => -[?/bind_Some[?[??]]]. by apply heap_wf.
-Qed.
-
-Lemma heap_restrict_provs h (P : prov → Prop) `{!∀ x, Decision (P x)} :
-  h_provs (heap_restrict h P) = h_provs h.
-Proof. done. Qed.
+  Heap (filter (λ x, P x.1.1) h.(h_heap)) h.(h_provs) _.
+Next Obligation. move => ????. rewrite map_filter_lookup => -[?/bind_Some[?[??]]]. by apply heap_wf. Qed.
 
 Program Definition heap_add_provs (h : heap_state) (p : gset prov) : heap_state :=
-  Heap (h_heap h) (gset_to_gmap tt (p ∪ h_provs h)) _.
-Next Obligation.
-  move => ??. apply bool_decide_spec. move => ? /elem_of_map[?[?/elem_of_dom]] ?. subst.
-  rewrite dom_gset_to_gmap. apply: union_subseteq_r. by apply heap_wf.
-Qed.
-
-Lemma heap_add_provs_provs h p :
-  h_provs (heap_add_provs h p) = p ∪ h_provs h.
-Proof. by rewrite /h_provs/= dom_gset_to_gmap. Qed.
+  Heap (h_heap h) (p ∪ h_provs h) _.
+Next Obligation. move => ????. apply: union_subseteq_r. by apply heap_wf. Qed.
 
 Fixpoint heap_fresh_list (xs : list Z) (ps : gset prov) (h : heap_state) : list loc :=
   match xs with
@@ -763,14 +714,14 @@ Record imp_state := Imp {
 Add Printing Constructor imp_state.
 
 Definition initial_imp_state (fns : gmap string fndef) : imp_state :=
-  Imp (Waiting false) initial_heap_state fns.
+  Imp (Waiting false) ∅ fns.
 
 (** ** imp_event *)
 Inductive imp_ev : Type :=
 | EICall (fn : string) (args: list val) (h : heap_state)
 | EIReturn (ret: val) (h : heap_state).
 
-Global Instance imp_ev_inhabited : Inhabited imp_ev := populate (EIReturn inhabitant initial_heap_state).
+Global Instance imp_ev_inhabited : Inhabited imp_ev := populate (EIReturn inhabitant ∅).
 
 Definition imp_event := io_event imp_ev.
 
@@ -1717,7 +1668,7 @@ Inductive imp_closed_step :
   imp_closed_step ICStart (Some (SMEEmit (EICStart f vs))) (λ σ, σ = ICRecvStart f vs)
 | ICRecvStartS f vs:
   imp_closed_step (ICRecvStart f vs)
-                  (Some (SMEReturn (Some (Incoming, EICall f (ValNum <$> vs) initial_heap_state)))) (λ σ, σ = ICRunning)
+                  (Some (SMEReturn (Some (Incoming, EICall f (ValNum <$> vs) ∅)))) (λ σ, σ = ICRunning)
 | ICRunningS f vs h:
   imp_closed_step ICRunning (Some (SMERecv (Outgoing, EICall f vs h))) (λ σ, σ = ICRecvCall1 f vs h)
 | ICRecvCall1S f vs h:

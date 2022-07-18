@@ -8,6 +8,7 @@ Cleanup:
 - [ ] Use notation for trefines?
 - [ ] Make ImmediateOp and RegisterOp coercions
 - [ ] Update itree? (leads to universe problem)
+- [ ] rename imp to rec
 
 Optional:
 - [ ] Add ghost state for f2i and add values of f2i to initial ownership (one persistent map)

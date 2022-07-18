@@ -971,7 +971,7 @@ Proof.
   iDestruct (heap_bij_const_s_lookup with "[$] [$]") as %?.
   iMod (heap_bij_update_const_s with "[$]") as "[? $]". iModIntro.
   iExists _. iFrame. repeat iSplit; try iPureIntro.
-  - rewrite dom_insert_L heap_update_provs. apply union_least; [|done]. etrans; [|done].
+  - rewrite dom_insert_L. apply union_least; [|done]. etrans; [|done].
     apply singleton_subseteq_l. by apply elem_of_dom.
   - etrans; [apply hb_provs_i_update_const_s|]. done.
   - rewrite hb_priv_s_update_const_s. apply: heap_preserved_insert_const.
@@ -991,7 +991,7 @@ Proof.
   iIntros ([Hnotin ?])  "[% [%Hsub [% [% [% [? [Ha Hbij]]]]]]]".
   iMod (heap_bij_alloc_const_s with "[$]") as "[? $]"; [set_solver|]. iModIntro.
   iExists _. iFrame. repeat iSplit; try iPureIntro.
-  - rewrite dom_insert_L heap_alloc_provs. set_solver.
+  - rewrite dom_insert_L. set_solver.
   - etrans; [apply hb_provs_i_update_const_s|]. done.
   - rewrite hb_priv_s_update_const_s. apply: heap_preserved_insert_const.
     apply heap_preserved_alloc; [|by simplify_map_eq].
@@ -1013,8 +1013,8 @@ Proof.
   { move => ?. apply Hni1. apply Hsub. apply elem_of_hb_provs_i. naive_solver. }
   unshelve iMod (heap_bij_alloc_shared with "[$]") as "[Ha #$]"; [done|set_solver|].
   iModIntro. iSplit; [|iPureIntro; congruence]. iExists _. iFrame "Ha". iSplit!.
-  - rewrite heap_alloc_provs. rewrite dom_insert_L. set_solver.
-  - etrans; [apply hb_provs_i_share|]. rewrite heap_alloc_provs. set_solver.
+  - rewrite dom_insert_L. set_solver.
+  - etrans; [apply hb_provs_i_share|]. set_solver.
   - rewrite hb_priv_s_share. apply heap_preserved_alloc; [|by simplify_map_eq].
     apply: heap_preserved_mono; [done|]. apply delete_subseteq.
   - apply heap_preserved_alloc; [done|]. apply eq_None_ne_Some_2 => ??.
@@ -1057,7 +1057,7 @@ Proof.
   iDestruct (heap_bij_const_s_lookup with "[$] [$]") as %?.
   iMod (heap_bij_update_const_s with "[$]") as "[Ha ?]". iModIntro.
   iExists _. iFrame "Ha". iSplit!.
-  - rewrite dom_insert_L heap_free_provs. apply union_least; [|done]. etrans; [|done].
+  - rewrite dom_insert_L. apply union_least; [|done]. etrans; [|done].
     apply singleton_subseteq_l. by apply elem_of_dom.
   - etrans; [apply hb_provs_i_update_const_s|]. done.
   - rewrite hb_priv_s_update_const_s. apply: heap_preserved_insert_const.
@@ -1111,7 +1111,7 @@ Proof.
 Qed.
 
 Lemma heap_bij_inv_init :
- satisfiable (heap_bij_inv initial_heap_state initial_heap_state).
+ satisfiable (heap_bij_inv ∅ ∅).
 Proof.
   apply: satisfiable_mono; [apply heap_bij_init|].
   iIntros "?".
@@ -1539,7 +1539,7 @@ Proof.
     tstep_i. apply steps_impl_step_end => ???. inv_all @m_step. split!.
     tstep_s. eexists (Some (SMEReturn _)). split!. apply: steps_spec_step_end; [econs|] => ??. simplify_eq/=.
     tstep_i => ??; simplify_eq/=.
-    tstep_i. eexists (ValNum <$> vs), initial_heap_state. split!.
+    tstep_i. eexists (ValNum <$> vs), ∅. split!.
     { have ? := heap_bij_inv_init. iSatMono. iIntros!. iFrame. iSplitL; [|iAccu].
       rewrite big_sepL2_fmap_l big_sepL2_fmap_r. iApply big_sepL2_intro; [done|].
       iIntros "!>" (?????). by simplify_eq/=. }
