@@ -79,8 +79,7 @@ Lemma hb_shared_lookup_None bij ps :
 Proof. rewrite hb_shared_lookup. destruct (hb_bij bij !! ps) => //=. case_match; naive_solver. Qed.
 
 (** hb_shared_s *)
-Definition hb_shared_s (bij : heap_bij) : gset prov :=
-  (locked (dom _) (hb_shared bij)).
+Definition hb_shared_s (bij : heap_bij) : gset prov := dom (hb_shared bij).
 
 Lemma elem_of_hb_shared_s bij ps :
   ps ∈ hb_shared_s bij ↔ ∃ pi, hb_bij bij !! ps = Some (HBShared pi).
@@ -88,7 +87,7 @@ Proof. rewrite /hb_shared_s; unlock. rewrite elem_of_dom /is_Some. f_equiv => ?.
 
 (** hb_player_s *)
 Definition hb_player_s (pl : player) (bij : heap_bij) : gset prov :=
-  (locked (dom _) (filter (λ '(k, e), e = HBOwned pl) (hb_bij bij))).
+  dom (filter (λ '(k, e), e = HBOwned pl) (hb_bij bij)).
 
 Lemma elem_of_hb_player_s pl bij ps :
   ps ∈ hb_player_s pl bij ↔ hb_bij bij !! ps = Some (HBOwned pl).
@@ -107,7 +106,7 @@ Proof. rewrite set_eq. setoid_rewrite elem_of_hb_player_s. set_solver. Qed.
 
 (** hb_player_i *)
 Definition hb_player_i (pl : player) (bij : heap_bij) : gset prov :=
-  (locked (dom _) (filter (λ '(k, e), e = pl) (hb_players_i bij))).
+  dom (filter (λ '(k, e), e = pl) (hb_players_i bij)).
 
 Lemma elem_of_hb_player_i pl bij pi :
   pi ∈ hb_player_i pl bij ↔ hb_players_i bij !! pi = Some pl.
@@ -128,7 +127,7 @@ Proof. rewrite set_eq. setoid_rewrite elem_of_hb_player_i. set_solver. Qed.
 (* hb_provs_s is directly written as [dom _ (hb_bij bij)] *)
 
 Definition hb_provs_i (bij : heap_bij) : gset prov :=
-  dom _ (hb_players_i bij) ∪ hb_shared_i bij.
+  dom (hb_players_i bij) ∪ hb_shared_i bij.
 
 Lemma elem_of_hb_provs_i bij pi :
   pi ∈ hb_provs_i bij ↔ (∃ pl, hb_players_i bij !! pi = Some pl) ∨ ∃ ps, hb_bij bij !! ps = Some (HBShared pi).
@@ -310,7 +309,7 @@ Proof.
 Qed.
 
 Lemma heap_bij_merge_dom bijb bija :
-  dom (gset _) (hb_bij (heap_bij_merge bija bijb)) = dom _ (hb_bij bijb).
+  dom (hb_bij (heap_bij_merge bija bijb)) = dom (hb_bij bijb).
 Proof. apply set_eq => ?. by rewrite !elem_of_dom heap_bij_merge_lookup fmap_is_Some. Qed.
 
 Lemma heap_bij_merge_provs_i bija bijb pii:
@@ -837,7 +836,7 @@ Definition imp_heap_bij_pre (e : imp_event) (s : imp_heap_bij_state) : prepost (
   pp_quant $ λ vss,
   pp_quant $ λ hs,
   pp_prop (heap_bij_extend Env s.(ihb_bij) bij') $
-  pp_prop (dom _ (hb_bij bij') ⊆ h_provs hs) $
+  pp_prop (dom (hb_bij bij') ⊆ h_provs hs) $
   pp_prop (hb_provs_i bij' ⊆ h_provs hi) $
   pp_prop (Forall2 (val_in_bij bij') (vals_of_event e.2) vss) $
   pp_prop (heap_in_bij bij' hi hs) $
@@ -851,7 +850,7 @@ Definition imp_heap_bij_post (e : imp_event) (s : imp_heap_bij_state) : prepost 
   pp_quant $ λ vsi,
   pp_quant $ λ hi,
   pp_prop (heap_bij_extend Prog s.(ihb_bij) bij') $
-  pp_prop (dom _ (hb_bij bij') ⊆ h_provs hs) $
+  pp_prop (dom (hb_bij bij') ⊆ h_provs hs) $
   pp_prop (hb_provs_i bij' ⊆ h_provs hi) $
   pp_prop (Forall2 (val_in_bij bij') vsi (vals_of_event e.2)) $
   pp_prop (heap_in_bij bij' hi hs) $
@@ -1040,7 +1039,7 @@ Proof.
 Qed.
 
 Lemma heap_bij_splita_bij_bij X bijb bija bij' pi pii:
-  dom _ (hb_bij bija) ⊆ X →
+  dom (hb_bij bija) ⊆ X →
   heap_bij_splita_bij X bija bijb bij' !! pi = Some (HBShared pii) ↔
     hb_bij bija !! pi = Some (HBShared pii) ∨
     ∃ ps, fresh_map (hb_shared_s bij' ∖ hb_shared_s bijb) X !! ps = Some pi
@@ -1079,7 +1078,7 @@ Proof.
 Qed.
 
 Program Definition heap_bij_splita (X : gset prov) (bija bijb bij' : heap_bij)
-        (H1 : dom _ (hb_bij bija) ⊆ X)
+        (H1 : dom (hb_bij bija) ⊆ X)
         (H3 : heap_bij_extend Env (heap_bij_merge bija bijb) bij') :=
   HeapBij (heap_bij_splita_bij X bija bijb bij') (heap_bij_splita_players_i bija bij') _ _.
 Next Obligation.
@@ -1121,14 +1120,14 @@ Qed.
 Lemma heap_bij_merge_extend (X : gset prov) bijb bija bij':
   heap_bij_extend Env (heap_bij_merge bija bijb) bij' →
   hb_provs_i bijb ⊆ X →
-  dom (gset prov) (hb_bij bija) ⊆ X →
+  dom (hb_bij bija) ⊆ X →
   hb_player_s Env bija = ∅ →
   ∃ bijb' bija', bij' = heap_bij_merge bija' bijb'
     ∧ heap_bij_extend Env bija bija'
     ∧ hb_player_s Env bija' = ∅
     ∧ heap_bij_extend Env bijb bijb'
     ∧ hb_provs_i bijb' ⊆ hb_shared_i bijb' ∪ X
-    ∧ dom (gset prov) (hb_bij bija') ⊆ hb_shared_i bijb' ∪ X
+    ∧ dom (hb_bij bija') ⊆ hb_shared_i bijb' ∪ X
     ∧ (∀ pi pii, hb_bij bija' !! pi = Some (HBShared pii) →
          (∀ ps, hb_bij bijb' !! ps ≠ Some (HBShared pi)) →
          hb_bij bija !! pi = Some (HBShared pii))
@@ -1254,7 +1253,7 @@ Proof.
     if pl is Env then
       heap_in_bij bijb hsa hsb ∧
       heap_in_bij bija hia hib ∧
-      dom (gset prov) (hb_bij bija) ⊆ h_provs hsa ∧
+      dom (hb_bij bija) ⊆ h_provs hsa ∧
       hb_provs_i bijb ⊆ h_provs hsa
     else
       True

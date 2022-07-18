@@ -149,7 +149,7 @@ Theorem wp_adequacy Σ Λ `{!refirisPreG Σ} mspec σi σs :
   trefines (MS (lang_module Λ) σi) (MS mspec σs).
 Proof.
   intros Hwp. constructor => κs /thas_trace_n [n Htrace].
-  apply (step_fupdN_soundness _ 0) => ? /=. simpl in *.
+  apply (step_fupdN_soundness_no_lc _ 0 0) => ?? /=. simpl in *. iIntros "_".
   iMod (ord_later_alloc n) as (?) "Ha". iDestruct (ord_later_ctx_alloc with "Ha") as "#?".
   iMod Hwp as (stateI) "(Hσ & Hwp)". clear Hwp.
   iInduction Htrace as [????? Hκs|???????? Hstep ?? Hlt Hκs|????????? Hκs Hle] "IH" forall (σs).

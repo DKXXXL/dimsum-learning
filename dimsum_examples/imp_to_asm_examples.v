@@ -82,7 +82,7 @@ Local Ltac go_s := tstep_s; go.
 
 Lemma asm_add_refines_imp_add :
   trefines (MS asm_module (initial_asm_state asm_add))
-           (MS (imp_to_asm (dom _ asm_add) (dom _ imp_add_prog) (<["add" := 100]> ∅) imp_module) (initial_imp_to_asm_state ∅ imp_module (initial_imp_state imp_add_prog))).
+           (MS (imp_to_asm (dom asm_add) (dom imp_add_prog) (<["add" := 100]> ∅) imp_module) (initial_imp_to_asm_state ∅ imp_module (initial_imp_state imp_add_prog))).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
   move => n i rs mem K f fn vs h cs pc ret gp rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? ? Hcall Hret.
@@ -108,7 +108,7 @@ Qed.
 
 Lemma asm_add_client_refines_imp_add_client :
   trefines (MS asm_module (initial_asm_state asm_add_client))
-           (MS (imp_to_asm (dom _ asm_add_client) (dom _ imp_add_client_prog)
+           (MS (imp_to_asm (dom asm_add_client) (dom imp_add_client_prog)
                            (<["add_client" := 200]> $ <["add" := 100]> ∅) imp_module)
                (initial_imp_to_asm_state ∅ imp_module (initial_imp_state imp_add_client_prog) )).
 Proof.

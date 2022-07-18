@@ -423,7 +423,7 @@ Definition asm_link_prod_inv (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_module.(m
 Lemma asm_link_refines_prod ins1 ins2:
   ins1 ##ₘ ins2 →
   trefines (MS asm_module (initial_asm_state (asm_link ins1 ins2)))
-           (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module)
+           (MS (asm_prod (dom ins1) (dom ins2) asm_module asm_module)
                (initial_asm_prod_state asm_module asm_module (initial_asm_state ins1) (initial_asm_state ins2))).
 Proof.
   move => Hdisj.
@@ -478,7 +478,7 @@ Qed.
 
 Lemma asm_prod_refines_link ins1 ins2:
   ins1 ##ₘ ins2 →
-  trefines (MS (asm_prod (dom _ ins1) (dom _ ins2) asm_module asm_module)
+  trefines (MS (asm_prod (dom ins1) (dom ins2) asm_module asm_module)
                (initial_asm_prod_state asm_module asm_module (initial_asm_state ins1) (initial_asm_state ins2)))
            (MS asm_module (initial_asm_state (asm_link ins1 ins2))).
 Proof.
@@ -527,13 +527,13 @@ Proof.
   - tstep_i => -[] /= *; destruct!/=.
     tstep_s.
     repeat case_bool_decide => //.
-    all: revert select (_ ∈ dom _ _) => /elem_of_dom[? Hin];
+    all: revert select (_ ∈ dom _) => /elem_of_dom[? Hin];
            split!; [rewrite lookup_union_Some //;naive_solver|].
     all: tstep_i => *; simplify_eq; apply: Hloop; naive_solver.
 Qed.
 
 Lemma asm_trefines_implies_ctx_refines insi inss :
-  dom (gset _) insi = dom (gset _) inss →
+  dom insi = dom inss →
   trefines (MS asm_module (initial_asm_state insi)) (MS asm_module (initial_asm_state inss)) →
   asm_ctx_refines insi inss.
 Proof.

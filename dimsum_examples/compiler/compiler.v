@@ -40,7 +40,7 @@ Lemma compile_correct f2i f fn dins ins a:
   f2i !! f = Some a →
   map_Forall (λ f' i', ins !! i' = None ↔ f' ≠ f) f2i →
   trefines (MS asm_module (initial_asm_state ins))
-           (MS (imp_to_asm (dom _ ins) {[f]} f2i imp_module)
+           (MS (imp_to_asm (dom ins) {[f]} f2i imp_module)
                (initial_imp_to_asm_state ∅ imp_module (initial_imp_state (<[f := fn]> ∅)))).
 Proof.
   unfold compile.

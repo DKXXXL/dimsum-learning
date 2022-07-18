@@ -572,7 +572,7 @@ Lemma i2a_heap_update_all ihs ihc ih hob :
   hob ⊆ i2a_ih_constant ih →
   hob ⊆ ihc →
   i2a_ih_shared ih ⊆ ihs →
-  dom (gset _) ihs ## dom _ ihc →
+  dom ihs ## dom ihc →
   i2a_heap_auth ih -∗
   ([∗ map] p↦a∈i2a_ih_shared ih, i2a_heap_shared p a) -∗
   ([∗ map] p↦a∈i2a_ih_constant ih ∖ hob, i2a_heap_constant p a) ==∗
@@ -664,7 +664,7 @@ Definition i2a_heap_shared_agree (h : gmap loc val) (ih : gmap prov imp_to_asm_e
       True.
 
 Definition i2a_heap_inv (h : heap_state) : uPred imp_to_asmUR :=
-  ∃ ih, ⌜dom _ ih ⊆ h_provs h⌝ ∗ ⌜heap_preserved (i2a_ih_constant ih) h⌝ ∗
+  ∃ ih, ⌜dom ih ⊆ h_provs h⌝ ∗ ⌜heap_preserved (i2a_ih_constant ih) h⌝ ∗
          ([∗ map] p↦a ∈ i2a_ih_shared ih, i2a_heap_shared p a) ∗
          i2a_heap_shared_agree (h_heap h) ih ∗ i2a_heap_auth ih.
 
@@ -820,7 +820,7 @@ Proof.
 Qed.
 
 Lemma i2a_mem_update_big sp gp mem mo mo' :
-  dom (gset _) mo = dom _ mo' →
+  dom mo = dom mo' →
   i2a_mem_inv sp gp mem -∗
   i2a_mem_map mo ==∗
   i2a_mem_map mo' ∗ i2a_mem_inv sp gp (mo' ∪ mem).
@@ -1514,8 +1514,8 @@ Qed.
 
 
 Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
-  ins_dom = dom _ ins →
-  fns_dom = dom _ fns →
+  ins_dom = dom ins →
+  fns_dom = dom fns →
   (∀ n i rs mem K f fn vs h cs pc ret gp rf rc lr,
       rs !!! "PC" = pc →
       ins !! pc = Some i →
@@ -1627,7 +1627,7 @@ Proof.
                       i2a_val_rel v av ∗ r' ∗ rf') →
           i2a_regs_ret rs' rs1 av  →
           map_scramble touched_registers lr' rs' →
-          AsmState (ARunning []) rs' mem' ins ⪯{asm_module, imp_to_asm (dom _ ins) (dom _ fns) f2i imp_module, n, true}
+          AsmState (ARunning []) rs' mem' ins ⪯{asm_module, imp_to_asm (dom ins) (dom fns) f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K' (Val v)) h' fns, (PPInside, I2A cs1 lr', rf'))) ). }
     { eexists (ReturnExtCtx _:: _). split! => //. {
         iSatMono. iIntros!. iFrame.

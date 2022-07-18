@@ -440,7 +440,7 @@ Definition sim (n : trace_index) (b : bool) (dins : list deep_asm_instr) (e : ex
   rf -∗
   ci2a_inv s lr rs mem h' -∗
   iSat_end (AsmState (ARunning []) rs mem pf_ins
-             ⪯{asm_module, imp_to_asm (dom _ pf_ins) (dom _ pf_fns) s.(s_f2i) imp_module, n, b}
+             ⪯{asm_module, imp_to_asm (dom pf_ins) (dom pf_fns) s.(s_f2i) imp_module, n, b}
            (SMProg, Imp e h pf_fns, (PPInside, I2A pf_cs lr, rf))).
 
 Lemma to_sim n b dins e s rs h h' :
@@ -1341,8 +1341,8 @@ End proof.
 Lemma sim_intro s dins rs mem ins ins_dom fns_dom f2i n b e h fns cs lr rf P:
   let H := Build_ProofFixedValues (rs !!! "SP") ins fns cs rs f2i in
   deep_to_asm_instrs (rs !!! "PC") dins = ins →
-  ins_dom = dom _ ins →
-  fns_dom = dom _ fns →
+  ins_dom = dom ins →
+  fns_dom = dom fns →
   f2i = s.(s_f2i) →
   satisfiable (rf ∗ ci2a_inv s lr rs mem h ∗ P) →
   (P -∗ sim n b dins e s rs h h) →
@@ -1363,7 +1363,7 @@ Lemma pass_correct a f2i f s' dins ins fn:
   NoDup (fn.(lfd_args) ++ fn.(lfd_vars).*1) →
   (∀ f' i', f2i !! f' = Some i' → ins !! i' = None ↔ f' ≠ f) →
   trefines (MS asm_module (initial_asm_state ins))
-           (MS (imp_to_asm (dom _ ins) {[f]} f2i imp_module) (initial_imp_to_asm_state ∅ imp_module
+           (MS (imp_to_asm (dom ins) {[f]} f2i imp_module) (initial_imp_to_asm_state ∅ imp_module
              (initial_imp_lstate (<[f := fn]> ∅)))).
 Proof.
   move => Hrun ? Ha /NoDup_app[?[??]] Hf2i.
@@ -1440,7 +1440,7 @@ Proof.
     - apply map_scramble_insert_r_in; [compute_done|].
       apply map_scramble_insert_r_in; [compute_done|done].
     - iSatClear. move => ?????????? [? Hpre] ?. rewrite -expr_fill_app. subst.
-      assert ({[f']} = dom (gset string) (lfndef_to_fndef <$> (<[f':=fn]> ∅ : gmap _ _))) as ->.
+      assert ({[f']} = dom (lfndef_to_fndef <$> (<[f':=fn]> ∅ : gmap _ _))) as ->.
       { by rewrite dom_fmap_L dom_insert_L dom_empty_L right_id_L. }
       rewrite map_preserved_insert_l_not_in in Hpre; [|compute_done].
       rewrite map_preserved_insert_l_not_in in Hpre; [|compute_done].
@@ -1542,7 +1542,7 @@ Lemma pass_fn_correct a f2i f dins ins fn:
   NoDup (fn.(lfd_args) ++ fn.(lfd_vars).*1) →
   (∀ f' i', f2i !! f' = Some i' → ins !! i' = None ↔ f' ≠ f) →
   trefines (MS asm_module (initial_asm_state ins))
-           (MS (imp_to_asm (dom _ ins) {[f]} f2i imp_module) (initial_imp_to_asm_state ∅ imp_module
+           (MS (imp_to_asm (dom ins) {[f]} f2i imp_module) (initial_imp_to_asm_state ∅ imp_module
              (initial_imp_lstate (<[f := fn]> ∅)))).
 Proof.
   unfold pass_fn.

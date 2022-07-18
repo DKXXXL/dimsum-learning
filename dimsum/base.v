@@ -479,7 +479,7 @@ End map.
 
 Section fin_map_dom.
 Context `{FinMapDom K M D}.
-Lemma not_elem_of_dom_1 {A} (m : M A) i : i ∉ dom D m → m !! i = None.
+Lemma not_elem_of_dom_1 {A} (m : M A) i : i ∉ dom m → m !! i = None.
 Proof. apply not_elem_of_dom. Qed.
 End fin_map_dom.
 
@@ -633,7 +633,7 @@ Section theorems.
 Context `{FinMapDom K M D}.
 
 Lemma map_difference_empty_dom {A} (m1 m2 : M A):
-  dom D m1 ⊆ dom _ m2 →
+  dom m1 ⊆ dom m2 →
   m1 ∖ m2 = ∅.
 Proof.
   move => Hdom. apply map_eq => i. rewrite lookup_empty.
@@ -643,7 +643,7 @@ Proof.
 Qed.
 
 Lemma map_difference_eq_dom {A} (m m1 m2 : M A) :
-  dom D m1 ≡ dom D m2 →
+  dom m1 ≡ dom m2 →
   m ∖ m1 = m ∖ m2.
 Proof.
   move => Hdom.
@@ -654,7 +654,7 @@ Proof.
   destruct (m !! i), (m1 !! i) as [x'|] eqn: Heq1, (m2 !! i) eqn: Heq2 => /=; try intuition congruence.
 Qed.
 Lemma map_difference_eq_dom_L {A} (m m1 m2 : M A) `{!LeibnizEquiv D}:
-  dom D m1 = dom D m2 →
+  dom m1 = dom m2 →
   m ∖ m1 = m ∖ m2.
 Proof. unfold_leibniz. apply: map_difference_eq_dom. Qed.
 End theorems.
@@ -1026,7 +1026,7 @@ End least.
 (** * map_list operations *)
 (** ** Definitions *)
 Definition map_list_included {K A} `{Countable K} (ns : list K) (rs : gmap K A) :=
-  list_to_set ns ⊆ dom (gset _) rs.
+  list_to_set ns ⊆ dom rs.
 
 Definition map_scramble {K A} `{Countable K} `{!Inhabited A} (ns : list K) (rs rs' : gmap K A) :=
   ∀ i, i ∉ ns → rs !!! i = rs' !!! i.
@@ -1041,7 +1041,7 @@ Lemma map_list_included_nil {K A} `{Countable K} (m : gmap K A):
 Proof. unfold map_list_included. set_solver. Qed.
 
 Lemma map_list_included_cons {K A} `{Countable K} (m : gmap K A) n ns:
-  n ∈ dom (gset _) m →
+  n ∈ dom m →
   map_list_included ns m →
   map_list_included (n::ns) m.
 Proof. unfold map_list_included. set_solver. Qed.

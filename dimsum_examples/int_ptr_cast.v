@@ -80,7 +80,7 @@ Local Ltac go_i :=
 
 Lemma int_to_ptr_asm_refines_itree :
   trefines (MS asm_module (initial_asm_state int_to_ptr_asm))
-           (MS (imp_to_asm (dom _ int_to_ptr_asm) int_to_ptr_fns int_to_ptr_f2i
+           (MS (imp_to_asm (dom int_to_ptr_asm) int_to_ptr_fns int_to_ptr_f2i
                            (mod_itree imp_event (gmap prov Z)))
                (initial_imp_to_asm_state ∅ (mod_itree _ _) (int_to_ptr_itree, ∅))).
 Proof.
@@ -101,7 +101,7 @@ Proof.
   tstep_s. rewrite -/int_to_ptr_itree. go. go_s. eexists (_, _, _). go.
   go_s. split!. go. go_s.
   revert select (_ ⊢ _) => HP. unfold i2a_regs_call in *.
-  revert select (_ ∉ dom _ _) => /not_elem_of_dom?.
+  revert select (_ ∉ dom _) => /not_elem_of_dom?.
   unfold int_to_ptr_asm in Hi. unfold int_to_ptr_f2i in *. (repeat case_bool_decide); simplify_map_eq'.
   - tstep_i.
     go_s => ?. go.
@@ -199,7 +199,7 @@ Definition main_itree : itree (moduleE imp_event unit) unit :=
 *)
 
 Lemma main_int_to_ptr_refines_itree :
-  trefines (MS (imp_prod (dom _ main_imp_prog) int_to_ptr_fns
+  trefines (MS (imp_prod (dom main_imp_prog) int_to_ptr_fns
                          imp_module (mod_itree _ _))
                (initial_imp_prod_state imp_module (mod_itree _ _) (initial_imp_state main_imp_prog) (int_to_ptr_itree, ∅)))
            (MS (mod_itree _ _) (main_itree, tt)).
@@ -260,7 +260,7 @@ Definition main_asm : gmap Z asm_instr :=
   deep_to_asm_instrs 200 ltac:(i2a_compile main_f2i main_imp).
 
 (* We need to lock this, otherwise simpl goes crazy. *)
-Definition main_asm_dom : gset Z := locked (dom _) main_asm.
+Definition main_asm_dom : gset Z := locked dom main_asm.
 
 (*
   asm_module(main_asm) {asm_event}
@@ -270,7 +270,7 @@ Definition main_asm_dom : gset Z := locked (dom _) main_asm.
 
 Lemma main_asm_refines_imp :
   trefines (MS asm_module (initial_asm_state main_asm))
-           (MS (imp_to_asm (dom _ main_asm) {["main"]} main_f2i imp_module)
+           (MS (imp_to_asm (dom main_asm) {["main"]} main_f2i imp_module)
                (initial_imp_to_asm_state ∅ imp_module (initial_imp_state main_imp_prog))).
 Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
 
@@ -353,7 +353,7 @@ Qed.
 Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
   TAssume (rs !!! "PC" = 200);;;;
-  TAssume (rs !!! "R30" ∉ main_asm_dom ∪ dom (gset Z) int_to_ptr_asm);;;;
+  TAssume (rs !!! "R30" ∉ main_asm_dom ∪ dom int_to_ptr_asm);;;;
   TAssume (∃ gp, gp + GUARD_PAGE_SIZE ≤ rs !!! "SP" ∧
             (∀ a, gp ≤ a < gp + GUARD_PAGE_SIZE → mem !! a = Some None) ∧
             (∀ a, gp + GUARD_PAGE_SIZE ≤ a < rs !!! "SP" → ∃ v, mem !! a = Some (Some v)));;;;
@@ -375,9 +375,9 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
 *)
 
 Lemma top_level_refines_itree :
-  trefines (MS (asm_prod (main_asm_dom ∪ dom _ int_to_ptr_asm) (dom _ exit_asm)
-                         (imp_to_asm (main_asm_dom ∪ dom _ int_to_ptr_asm)
-                                     (dom _ main_imp_prog ∪ int_to_ptr_fns)
+  trefines (MS (asm_prod (main_asm_dom ∪ dom int_to_ptr_asm) (dom exit_asm)
+                         (imp_to_asm (main_asm_dom ∪ dom int_to_ptr_asm)
+                                     (dom main_imp_prog ∪ int_to_ptr_fns)
                                      main_f2i
                                      (mod_itree _ _)) (mod_itree _ _))
                (initial_asm_prod_state (imp_to_asm _ _ _ _) (mod_itree _ _) (initial_imp_to_asm_state ∅ (mod_itree _ _) (main_itree, tt)) (exit_itree, tt)))

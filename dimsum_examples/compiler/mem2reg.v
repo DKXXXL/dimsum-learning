@@ -168,7 +168,7 @@ Compute test_opt_fn test_fn_4.
 Lemma lexpr_tsim_var_val  v es ei Ks Ki vss vsi x n hi hs fns1 fns2 rf r
   `{Hfill1: !ImpExprFill es Ks (subst_map vss (var_val_to_expr v))}
   `{Hfill2: !ImpExprFill ei Ki (subst_map vsi (var_val_to_expr v))}:
-    dom (gset string) vss ⊆ dom (gset string) vsi →
+    dom vss ⊆ dom vsi →
     v ≠ VVar x →
     satisfiable (([∗ map] vi;vs ∈ (delete x vsi); (delete x vss), val_in_bij vi vs) ∗ r) →
     (∀ v' w',
@@ -205,7 +205,7 @@ Qed.
 Lemma lexpr_tsim_var_val_call vs' ws' ys es ei Ks Ki vss vsi x n hi hs fns1 fns2 rf f r
   `{Hfill2: !ImpExprFill ei Ki (Call f ((Val <$> vs') ++ (subst_map vsi <$> (var_val_to_expr <$> ys))))}
   `{Hfill1: !ImpExprFill es Ks (Call f ((Val <$> ws') ++ (subst_map vss <$> (var_val_to_expr <$> ys))))}:
-    dom (gset string) vss ⊆ dom (gset string) vsi →
+    dom vss ⊆ dom vsi →
     Forall (λ v, v ≠ VVar x) ys →
     satisfiable (([∗ map] vi;vs ∈ (delete x vsi); (delete x vss), val_in_bij vi vs) ∗ ([∗ list] v; w ∈ vs'; ws', val_in_bij v w) ∗ r) →
     (∀ vs ws,
@@ -253,7 +253,7 @@ Lemma pass_lexpr_op_correct ei' Ki ei Ks es es' x k (l: loc) n hi hs fns1 fns2 v
                    heap_bij_const_s l.1 (<[0%Z := ws]> (zero_block l k)) ∗ r ∗ rf) →
     vss !! x = Some (ValLoc l) →
     vsi !! x = Some wi →
-    dom (gset string) vss ⊆ dom (gset string) vsi →
+    dom vss ⊆ dom vsi →
     l.2 = 0 →
     crun () (lexpr_op_pass x es') = CResult () f (CSuccess ei') →
     Imp ei hi fns1
@@ -367,7 +367,7 @@ Lemma pass_correct  r rf ei' Ki ei Ks es es' x (l: loc) n k h h' fns1 fns2 vsi v
     (∀ w, imp_heap_bij_return n fns1 fns2 Ki Ks (r ∗ heap_bij_const_s l.1 (<[0%Z := w]> (zero_block l k)))) →
     vss !! x = Some (ValLoc l) →
     vsi !! x = Some vi →
-    dom (gset string) vss ⊆ dom (gset string) vsi →
+    dom vss ⊆ dom vsi →
     satisfiable (heap_bij_inv h h' ∗ heap_bij_const_s l.1 (<[0%Z := vs]> (zero_block l k)) ∗
                 val_in_bij vi vs ∗ ([∗ map] v1;v2 ∈ (delete x vsi);(delete x vss), val_in_bij v1 v2) ∗ r ∗ rf) →
     crun () (pass x es') = CResult () r_p (CSuccess ei') →

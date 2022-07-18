@@ -177,12 +177,12 @@ Implicit Types P Q : PROP.
 Lemma tac_sat_accu Δ P :
   sat_of_envs Δ = P →
   envs_entails Δ P.
-Proof. rewrite envs_entails_eq=><-. done. Qed.
+Proof. rewrite envs_entails_unseal=><-. done. Qed.
 
 Lemma tac_sat_start_proof Δ P :
   envs_entails Δ P →
   sat_of_envs Δ -∗ P.
-Proof. rewrite envs_entails_eq=><-. done. Qed.
+Proof. rewrite envs_entails_unseal=><-. done. Qed.
 
 End tactics.
 

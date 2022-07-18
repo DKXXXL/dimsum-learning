@@ -83,7 +83,7 @@ Proof.
 Qed.
 
 Lemma coro_regs_mem_dom rs rs':
-  dom (gset Z) (coro_regs_mem rs) = dom (gset Z) (coro_regs_mem rs').
+  dom (coro_regs_mem rs) = dom (coro_regs_mem rs').
 Proof.
   rewrite /coro_regs_mem/coro_get_regs. cbn. rewrite !dom_insert_L. done.
 Qed.
@@ -216,7 +216,7 @@ Definition yield_asm: gmap Z asm_instr := deep_to_asm_instrs yield_addr (
   Astore "R30" "R17" (Z.of_nat $ length saved_registers);
   Abranch true "R16"]).
 
-Definition yield_asm_dom : gset Z := locked (dom _) yield_asm.
+Definition yield_asm_dom : gset Z := locked dom yield_asm.
 
 Definition yield_itree : itree (moduleE asm_event (gmap string Z)) unit :=
   ITree.forever (

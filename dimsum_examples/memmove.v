@@ -45,7 +45,7 @@ Local Ltac go_i :=
 
 Lemma locle_asm_refines_itree_strong :
   trefines (MS asm_module (initial_asm_state locle_asm))
-           (MS (imp_to_asm (dom _ locle_asm) locle_fns locle_f2i
+           (MS (imp_to_asm (dom locle_asm) locle_fns locle_f2i
                            (mod_itree imp_event (gmap prov Z)))
                (initial_imp_to_asm_state ∅ (mod_itree _ _) (locle_itree_strong, ∅))).
 Proof.
@@ -67,7 +67,7 @@ Proof.
   go_s. split!. go.
   go_s => ?. go.
   revert select (_ ⊢ _) => HP. unfold i2a_regs_call in *.
-  revert select (_ ∉ dom _ _) => /not_elem_of_dom?.
+  revert select (_ ∉ dom _) => /not_elem_of_dom?.
   unfold locle_f2i in *. cbn in Hi. unfold Z.succ in Hi.
   simplify_map_eq'.
   tstep_i.
@@ -166,7 +166,7 @@ Qed.
 
 Lemma locle_asm_refines_itree :
   trefines (MS asm_module (initial_asm_state locle_asm))
-           (MS (imp_to_asm (dom _ locle_asm) locle_fns locle_f2i
+           (MS (imp_to_asm (dom locle_asm) locle_fns locle_f2i
                            (mod_itree imp_event unit))
                (initial_imp_to_asm_state ∅ (mod_itree _ _) (locle_itree, tt))).
 Proof.
@@ -242,9 +242,9 @@ Definition memmove_asm : gmap Z asm_instr :=
 Definition memcpy_asm : gmap Z asm_instr :=
   deep_to_asm_instrs 300 ltac:(i2a_compile main_f2i memcpy_imp).
 
-Definition main_asm_dom : gset Z := locked (dom _) main_asm.
-Definition memmove_asm_dom : gset Z := locked (dom _) memmove_asm.
-Definition memcpy_asm_dom : gset Z := locked (dom _) memcpy_asm.
+Definition main_asm_dom : gset Z := locked dom main_asm.
+Definition memmove_asm_dom : gset Z := locked dom memmove_asm.
+Definition memcpy_asm_dom : gset Z := locked dom memcpy_asm.
 
 Lemma main_asm_refines_imp :
   trefines (MS asm_module (initial_asm_state main_asm))
@@ -603,7 +603,7 @@ Qed.
 Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
   TAssume (rs !!! "PC" = main_addr);;;;
-  TAssume (rs !!! "R30" ∉ main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom _ locle_asm);;;;
+  TAssume (rs !!! "R30" ∉ main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm);;;;
   TAssume (∃ gp, gp + GUARD_PAGE_SIZE ≤ rs !!! "SP" ∧ i2a_mem_stack_mem (rs !!! "SP") gp ⊆ mem);;;;
   args ← TExist _;;;
   mem ← TExist _;;;
@@ -620,9 +620,9 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   TUb.
 
 Lemma top_level_refines_itree :
-  trefines (MS (asm_prod (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom _ locle_asm)
-                         (dom _ print_asm)
-                         (imp_to_asm (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom _ locle_asm)
+  trefines (MS (asm_prod (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm)
+                         (dom print_asm)
+                         (imp_to_asm (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm)
                                      {["main"; "memmove"; "memcpy"; "locle"]}
                                      main_f2i
                                      (mod_itree _ _)) (mod_itree _ _))
@@ -809,8 +809,8 @@ Proof.
       apply: imp_to_asm_trefines.
       apply: imp_prod_trefines; [done|].
       apply: imp_prod_trefines; [|done].
-      have -> : {["memmove"]} = dom (gset _) memmove_prog by compute_done.
-      have -> : {["memcpy"]} = dom (gset _) memcpy_prog by compute_done.
+      have -> : {["memmove"]} = dom memmove_prog by compute_done.
+      have -> : {["memcpy"]} = dom memcpy_prog by compute_done.
       apply: imp_prod_refines_link.
       compute_done.
     }

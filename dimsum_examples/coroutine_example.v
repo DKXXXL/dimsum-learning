@@ -65,18 +65,18 @@ Definition stream_asm : gmap Z asm_instr :=
 Definition main_asm : gmap Z asm_instr :=
   deep_to_asm_instrs main_addr ltac:(i2a_compile all_f2i main_imp).
 
-Definition stream_asm_dom : gset Z := locked (dom _) stream_asm.
-Definition main_asm_dom : gset Z := locked (dom _) main_asm.
+Definition stream_asm_dom : gset Z := locked dom stream_asm.
+Definition main_asm_dom : gset Z := locked dom main_asm.
 
 Lemma stream_asm_refines_imp :
   trefines (MS asm_module (initial_asm_state stream_asm))
-           (MS (imp_to_asm (dom _ stream_asm) {["stream"]} all_f2i imp_module)
+           (MS (imp_to_asm (dom stream_asm) {["stream"]} all_f2i imp_module)
                (initial_imp_to_asm_state ∅ imp_module (initial_imp_state (<["stream" := stream_imp]> ∅)))).
 Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
 
 Lemma main_asm_refines_imp :
   trefines (MS asm_module (initial_asm_state main_asm))
-           (MS (imp_to_asm (dom _ main_asm) {["main"]} all_f2i imp_module)
+           (MS (imp_to_asm (dom main_asm) {["main"]} all_f2i imp_module)
                (initial_imp_to_asm_state ∅ imp_module (initial_imp_state (<["main" := main_imp]> ∅)))).
 Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
 
@@ -178,7 +178,7 @@ Definition stream_regs_init : gmap string Z :=
 Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
   TAssume (rs !!! "PC" = main_addr);;;;
-  TAssume (rs !!! "R30" ∉ yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom ∪ dom _ print_asm);;;;
+  TAssume (rs !!! "R30" ∉ yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom ∪ dom print_asm);;;;
   TAssume (∃ gp, gp + GUARD_PAGE_SIZE ≤ rs !!! "SP" ∧
      (i2a_mem_stack_mem (rs !!! "SP") gp ##ₘ
        (i2a_mem_stack_mem (stream_regs_init !!! "SP") stream_gp ∪ coro_regs_mem stream_regs_init)) ∧
@@ -205,7 +205,7 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
 
 Lemma top_level_refines_itree :
   trefines (MS (asm_prod (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom)
-                         (dom _ print_asm)
+                         (dom print_asm)
                          (imp_to_asm (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom)
                                      {["yield"; "main"; "stream"]}
                                      all_f2i
@@ -378,7 +378,7 @@ Proof.
       }
       etrans. {
         rewrite dom_union_L.
-        have ->: dom (gset Z) yield_asm = yield_asm_dom by rewrite /yield_asm_dom; unlock.
+        have ->: dom yield_asm = yield_asm_dom by rewrite /yield_asm_dom; unlock.
         apply: (coro_spec "stream" stream_regs_init stream_gp).
         all: unfold yield_asm_dom, yield_asm, i2a_mem_stack_mem; unlock.
         all: compute_done.

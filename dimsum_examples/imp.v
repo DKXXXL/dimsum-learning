@@ -425,11 +425,11 @@ Proof. split; [naive_solver|]. destruct fn1, fn2 => /= -[?[??]]. subst. f_equal.
 Record heap_state : Set := Heap {
   h_heap : gmap loc val;
   h_provs' : gmap prov unit; (* We need to use gmap because gset does not live in Set *)
-  heap_wf' : bool_decide (set_map fst (dom (gset _) h_heap) ⊆ dom (gset _) h_provs');
+  heap_wf' : bool_decide (set_map fst (dom h_heap) ⊆ dom h_provs');
 }.
 Add Printing Constructor heap_state.
 
-Definition h_provs (h : heap_state) : gset prov := dom _ (h_provs' h).
+Definition h_provs (h : heap_state) : gset prov := dom (h_provs' h).
 
 Lemma heap_state_eq h1 h2:
   h1 = h2 ↔ h1.(h_heap) = h2.(h_heap) ∧ h1.(h_provs') = h2.(h_provs').
@@ -1889,7 +1889,7 @@ Definition imp_link_prod_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : 
 Lemma imp_link_refines_prod fns1 fns2:
   fns1 ##ₘ fns2 →
   trefines (MS imp_module (initial_imp_state (imp_link fns1 fns2)))
-           (MS (imp_prod (dom _ fns1) (dom _ fns2) imp_module imp_module)
+           (MS (imp_prod (dom fns1) (dom fns2) imp_module imp_module)
                (initial_imp_prod_state imp_module imp_module (initial_imp_state fns1) (initial_imp_state fns2))).
 Proof.
   move => Hdisj.
@@ -1899,7 +1899,7 @@ Proof.
   move => /= {}n _ Hloop [e1 h1 fns1'] [[[ipfs cs] [el hl fnsl]] [er hr fnsr]] [m [K [Kl [Kr ?]]]].
   have {}Hloop : ∀ σi σs,
             imp_link_prod_inv false fns1 fns2 σi σs
-            → σi ⪯{imp_module, imp_prod (dom (gset string) fns1) (dom (gset string) fns2) imp_module imp_module, n, true} σs. {
+            → σi ⪯{imp_module, imp_prod (dom fns1) (dom fns2) imp_module imp_module, n, true} σs. {
     clear -Hloop. move => [e1 h1 fns1'] [[[ipfs cs] [el hl fnsl]] [er hr fnsr]].
     move => [m [K [Kl [Kr [e1' [el' [er' [bl [br [?[?[?[HK[?[?[? Hm]]]]]]]]]]]]]]]]; simplify_eq.
     elim/lt_wf_ind: m ipfs h1 hl hr cs K Kl Kr e1' el' er' bl br HK Hm => m IHm.
@@ -2014,7 +2014,7 @@ Qed.
 
 Lemma imp_prod_refines_link fns1 fns2:
   fns1 ##ₘ fns2 →
-  trefines (MS (imp_prod (dom _ fns1) (dom _ fns2) imp_module imp_module)
+  trefines (MS (imp_prod (dom fns1) (dom fns2) imp_module imp_module)
                (initial_imp_prod_state imp_module imp_module (initial_imp_state fns1) (initial_imp_state fns2)))
            (MS imp_module (initial_imp_state (imp_link fns1 fns2))).
 Proof.
@@ -2114,7 +2114,7 @@ Proof.
   - tstep_i => *.
     repeat match goal with | x : imp_ev |- _ => destruct x end; simplify_eq/=; destruct!/=.
     + tstep_s. left. repeat case_bool_decide => //.
-      all: revert select (_ ∈ dom _ _) => /elem_of_dom[??]; split!;
+      all: revert select (_ ∈ dom _) => /elem_of_dom[??]; split!;
                [rewrite lookup_union_Some //; naive_solver |].
       * tstep_i. split => *; destruct!/=.
         apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_forallb.
@@ -2132,7 +2132,7 @@ Proof.
 Qed.
 
 Lemma imp_trefines_implies_ctx_refines fnsi fnss :
-  dom (gset _) fnsi = dom (gset _) fnss →
+  dom fnsi = dom fnss →
   trefines (MS imp_module (initial_imp_state fnsi)) (MS imp_module (initial_imp_state fnss)) →
   imp_ctx_refines fnsi fnss.
 Proof.

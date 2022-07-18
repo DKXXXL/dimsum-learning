@@ -104,8 +104,7 @@ Proof.
 Qed.
 
 (** hb_shared_s *)
-Definition hb_shared_s (bij : heap_bij) : gset prov :=
-  (locked (dom _) (hb_shared bij)).
+Definition hb_shared_s (bij : heap_bij) : gset prov := dom (hb_shared bij).
 
 Lemma elem_of_hb_shared_s bij ps :
   ps ∈ hb_shared_s bij ↔ ∃ pi, hb_bij bij !! ps = Some (HBShared pi).
@@ -146,7 +145,7 @@ Qed.
 (** hb_provs_i *)
 (* hb_provs_s is directly written as [dom _ (hb_bij bij)] *)
 Definition hb_provs_i (bij : heap_bij) : gset prov :=
-  dom _ (hb_priv_i bij) ∪ hb_shared_i bij.
+  dom (hb_priv_i bij) ∪ hb_shared_i bij.
 
 Lemma elem_of_hb_provs_i bij pi :
   pi ∈ hb_provs_i bij ↔ (∃ h, hb_priv_i bij !! pi = Some h) ∨ ∃ ps, hb_bij bij !! ps = Some (HBShared pi).
@@ -336,7 +335,7 @@ Definition heap_bij_const_i (p : prov) (h : gmap Z val) : uPred (heap_bijUR) :=
   uPred_ownM (heap_bijUR_i_inj $ gmap_view_frag p (DfracOwn 1) (HBIConstant h)).
 
 Lemma heap_bij_alloc_shared1 m p1 p2:
-  p2 ∉ dom (gset _) m →
+  p2 ∉ dom m →
   heap_bij_auth_bij m ==∗ heap_bij_auth_bij (<[p2:=HBShared p1]> m) ∗ heap_bij_shared p1 p2.
 Proof.
   iIntros (?) "?". iStopProof. rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
@@ -345,12 +344,12 @@ Proof.
 Qed.
 
 Lemma heap_bij_alloc_shared bij p1 p2 H:
-  p2 ∉ dom (gset _) (hb_bij bij) →
+  p2 ∉ dom (hb_bij bij) →
   heap_bij_auth bij ==∗ heap_bij_auth (hb_share p1 p2 bij H) ∗ heap_bij_shared p1 p2.
 Proof. iIntros (?) "[? $]". by iApply heap_bij_alloc_shared1. Qed.
 
 Lemma heap_bij_alloc_shared_big s bij H1 H2 :
-  dom (gset prov) s ## dom _ (hb_bij bij) →
+  dom s ## dom (hb_bij bij) →
   heap_bij_auth bij ==∗
   heap_bij_auth (hb_share_big s bij H1 H2) ∗ [∗ map] p2↦p1∈s, heap_bij_shared p1 p2.
 Proof.
@@ -393,7 +392,7 @@ Proof.
 Qed.
 
 Lemma heap_bij_alloc_const_s bij p h:
-  p ∉ dom (gset _) (hb_bij bij) →
+  p ∉ dom (hb_bij bij) →
   heap_bij_auth bij ==∗ heap_bij_auth (hb_update_const_s p h bij) ∗ heap_bij_const_s p h.
 Proof.
   iIntros (?) "[? $]". iStopProof. rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
@@ -402,7 +401,7 @@ Proof.
 Qed.
 
 Lemma heap_bij_alloc_const_s_big s bij :
-  dom (gset prov) s ## dom _ (hb_bij bij) →
+  dom s ## dom (hb_bij bij) →
   heap_bij_auth bij ==∗
   heap_bij_auth (hb_update_const_s_big s bij) ∗ ([∗ map] p↦h∈s, heap_bij_const_s p h).
 Proof.
@@ -909,7 +908,7 @@ Qed.
 
 (** heap_bij_inv *)
 Definition heap_bij_inv (hi hs : heap_state) : uPred heap_bijUR :=
-  ∃ bij, ⌜dom _ (hb_bij bij) ⊆ h_provs hs⌝ ∗
+  ∃ bij, ⌜dom (hb_bij bij) ⊆ h_provs hs⌝ ∗
          ⌜hb_provs_i bij ⊆ h_provs hi⌝ ∗
          ⌜heap_preserved (hb_priv_s bij) hs⌝ ∗
          ⌜heap_preserved (hb_priv_i bij) hi⌝ ∗
@@ -1194,7 +1193,7 @@ Proof.
 Qed.
 
 Lemma imp_heap_bij_proof fns1 fns2 :
-  dom (gset _) fns1 = dom _ fns2 →
+  dom fns1 = dom fns2 →
   (∀ f fn1, fns1 !! f = Some fn1 → ∃ fn2, fns2 !! f = Some fn2
                                           ∧ length (fd_args fn1) = length (fd_args fn2)) →
   (∀ n K1 K2 f fn1 fn2 vs1 vs2 h1 h2 r rf,
@@ -1326,7 +1325,7 @@ Lemma imp_heap_bij_sim_call_bind args vs' ws' es ei Ks Ki vss vsi n b hi hs fns1
   `{Hfill2: !ImpExprFill ei Ki (Call f ((Val <$> vs') ++ (subst_map vsi <$> args)))}
   `{Hfill1: !ImpExprFill es Ks (Call f ((Val <$> ws') ++ (subst_map vss <$> args)))}:
     satisfiable (heap_bij_inv hi hs ∗ ([∗ map] vi;vs ∈ vsi; vss, val_in_bij vi vs) ∗ ([∗ list] v; w ∈ vs'; ws', val_in_bij v w) ∗ r ∗ rf) →
-    dom (gset string) vss ⊆ dom (gset string) vsi →
+    dom vss ⊆ dom vsi →
     imp_heap_bij_call n fns1 fns2 →
     (∀ vs ws hi' hs' b' n' rf',
       n' ⊆ n →
@@ -1379,7 +1378,7 @@ Qed.
 Lemma imp_heap_bij_sim_refl_static vss vsi e es ei hi hs n b Ki Ks fns1 fns2 r rf
   `{Hfill1: !ImpExprFill es Ks (subst_map vss e)}
   `{Hfill2: !ImpExprFill ei Ki (subst_map vsi e)}:
-  dom (gset string) vss ⊆ dom (gset string) vsi →
+  dom vss ⊆ dom vsi →
   imp_heap_bij_call n fns1 fns2 →
   imp_heap_bij_return n fns1 fns2 Ki Ks r →
   is_static_expr false e →
@@ -1588,7 +1587,7 @@ Proof.
 Qed.
 
 Lemma imp_heap_bij_trefines_implies_ctx_refines fnsi fnss :
-  dom (gset _) fnsi = dom (gset _) fnss →
+  dom fnsi = dom fnss →
   trefines (MS imp_module (initial_imp_state fnsi))
            (MS (imp_heap_bij imp_module) (initial_imp_heap_bij_state imp_module (initial_imp_state fnss))) →
   imp_ctx_refines fnsi fnss.
