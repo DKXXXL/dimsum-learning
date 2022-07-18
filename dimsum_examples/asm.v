@@ -3,6 +3,9 @@ From dimsum.core Require Export proof_techniques link prepost.
 Local Open Scope Z_scope.
 
 (** * Assembly language *)
+
+(** * Language defnition using Islaris-like microinstructions *)
+
 (* see man 2 syscall (https://man7.org/linux/man-pages/man2/syscall.2.html),
   https://modexp.wordpress.com/2018/10/30/arm64-assembly/ or
   https://stackoverflow.com/questions/68711164/syscall-invoke-in-aarch64-assembly *)
@@ -11,6 +14,7 @@ Definition syscall_arg_regs : list string :=
 
 Definition extract_syscall_args (rs : gmap string Z) : list Z :=
   (λ r, rs !!! r) <$> syscall_arg_regs.
+
 
 Inductive asm_instr_elem :=
 | WriteReg (r : string) (f : gmap string Z → Z)
@@ -27,26 +31,28 @@ Inductive asm_run_state : Set :=
 | ARunning (i : asm_instr)
 | AWaiting
 | AWaitingSyscall (i : asm_instr)
-(* TODO: Should we use the following? *)
-| APagefaulting (a : Z)
 | AHalted
 .
 
 Inductive asm_state := AsmState {
   asm_cur_instr : asm_run_state;
+  (** [asm_regs] is a map from register names to values. It is always
+  used with !!! instead of !!, i.e. it is a total map. *)
   asm_regs : gmap string Z;
+  (** [asm_mem] is a map from addresses to values stored in memory.
+  Accessing memory with [asm_mem !! a = None] leads to UB.
+  Accessing memory with [asm_mem !! a = Some None] leads to NB. *)
   asm_mem : gmap Z (option Z);
   asm_instrs : gmap Z asm_instr;
 }.
 Add Printing Constructor asm_state.
 
-Definition initial_asm_state (instrs : gmap Z asm_instr) := AsmState AWaiting ∅ ∅ instrs.
+Definition initial_asm_state (ins : gmap Z asm_instr) := AsmState AWaiting ∅ ∅ ins.
 
 Inductive asm_ev :=
 | EAJump (regs : gmap string Z) (mem : gmap Z (option Z))
 | EASyscallCall (args : list Z) (mem : gmap Z (option Z))
 | EASyscallRet (ret : Z) (mem : gmap Z (option Z))
-| EAPagefault (a : Z)
 .
 
 Definition asm_event := io_event asm_ev.
@@ -61,17 +67,13 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
          σ' = if v is Some v' then
                 AsmState (ARunning es) (<[r1 := v']>regs) mem instrs
               else
-                (* TODO: Should this be (APagefaulting (f a)) ? *)
                 AsmState AHalted regs mem instrs)
 | SWriteMem regs instrs r1 r2 f es mem:
   asm_step (AsmState (ARunning (WriteMem r1 r2 f :: es)) regs mem instrs) None (λ σ', ∃ mv,
          mem !! f (regs !!! r2) = Some mv ∧
-         (* TODO: Should we have the following constraint? *)
-         (* is_Some (mem !! f a) ∧ *)
          σ' = if mv is Some mv' then
                 AsmState (ARunning es) regs (<[f (regs !!! r2) := Some (regs !!! r1)]>mem) instrs
               else
-                (* TODO: Should this be (APagefaulting (f a)) ? *)
                 AsmState AHalted regs mem instrs)
 | SSyscallCall regs instrs es mem:
   asm_step (AsmState (ARunning (Syscall :: es)) regs mem instrs)
@@ -98,10 +100,6 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
            (Some (Incoming, EAJump regs' mem'))
            (* We use [] here such that each instruction starts from [] *)
            (λ σ', σ' = AsmState (ARunning []) regs' mem' instrs)
-| SPagefaulting regs instrs a mem:
-  asm_step (AsmState (APagefaulting a) regs mem instrs)
-           (Some (Outgoing, EAPagefault a))
-           (λ σ', σ' = AsmState AHalted regs mem instrs)
 .
 
 Definition asm_module := Mod asm_step.
@@ -284,25 +282,6 @@ Proof.
 Qed.
 Global Hint Resolve asm_step_AWaiting_s : typeclass_instances.
 
-Lemma asm_step_APagefaulting_i rs ins mem a:
-  TStepI asm_module (AsmState (APagefaulting a) rs mem ins) (λ G,
-      G true (Some (Outgoing, EAPagefault a)) (λ G', G' (AsmState AHalted rs mem ins))
-   ).
-Proof.
-  constructor => ? HG. apply steps_impl_step_end => ???.
-  inv_all @m_step. eexists _, _. split_and!; [naive_solver..|]. naive_solver.
-Qed.
-Global Hint Resolve asm_step_APagefaulting_i : typeclass_instances.
-
-Lemma asm_step_APagefaulting_s rs mem ins a:
-  TStepS asm_module (AsmState (APagefaulting a) rs mem ins) (λ G,
-      G (Some (Outgoing, EAPagefault a)) (λ G', G' (AsmState AHalted rs mem ins))).
-Proof.
-  constructor => ??. eexists _, _. split; [done|] => ? /= ?.
-  apply: steps_spec_step_end. { by econs. } naive_solver.
-Qed.
-Global Hint Resolve asm_step_APagefaulting_s : typeclass_instances.
-
 Lemma asm_step_AHalted_i rs ins mem:
   TStepI asm_module (AsmState AHalted rs mem ins) (λ G, True).
 Proof.
@@ -338,7 +317,6 @@ Definition asm_closed_post (e : asm_event) (s : bool) :
   prepost (asm_closed_event * bool) unitUR :=
   match e with
   | (Outgoing, EASyscallCall args mem) => pp_end (EACSyscallCall args mem, s)
-  | (Outgoing, EAPagefault a) => pp_end (EACPagefault a, s)
   | _ => pp_prop False (pp_quant $ λ e', pp_end e')
   end.
 
@@ -384,11 +362,6 @@ Definition asm_prod_filter (ins1 ins2 : gset Z) : seq_product_state → option s
         s' = None ∧
         p' ≠ SPNone ∧
         p  = SPNone
-    | EAPagefault _ =>
-        s = None ∧
-        s' = Some SPNone ∧
-        p' = SPNone ∧
-        p ≠ SPNone
     end.
 Arguments asm_prod_filter _ _ _ _ _ _ _ _ /.
 
@@ -896,13 +869,11 @@ Module asm_examples.
     asm_loop [200; 201; 202; 203; 204] (λ rs mem,
        if bool_decide (rs !!! "PC" = 200) then
          r29' ← translate (inr_) (TExist Z);;;
-         (* translate (inr_) (TVis (EAJump 100 (<["PC":=100]> $ <["R30":= 212]> $ <["R29":= r29']> $ <["R2":= 2]> $ <["R1":= 2]> $ rs)));;;; *)
          '(rs', mem') ← call (Some ((<["PC":=100]> $ <["R30":= 203]> $ <["R29":= r29']> $ <["R2":= 2]> $ <["R1":= 2]> $ rs), mem));;;
          translate (inr_) (TAssume (rs' !!! "PC" = 203));;;;
          translate (inr_) (TAssume (rs' !!! "R29" = r29'));;;;
          translate (inr_) (TAssume ((rs !!! "R30") ≠ 200 ∧ (rs !!! "R30") ≠ 201 ∧ (rs !!! "R30") ≠ 202 ∧ (rs !!! "R30") ≠ 203 ∧ (rs !!! "R30") ≠ 204));;;;
          r30' ← translate (inr_) (TExist Z);;;
-         (* translate (inr_) (TVis (EAJump r30 (<["PC":= r30]> $ <["R30":= r30']> rs')));;;; *)
          Ret ((<["PC":= (rs !!! "R30")]> $ <["R30":= r30']> rs'), mem')
        else if bool_decide (rs !!! "PC" = 201) then translate (inr_) TUb
        else if bool_decide (rs !!! "PC" = 202) then translate (inr_) TUb

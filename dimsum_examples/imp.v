@@ -1,52 +1,5 @@
 From dimsum.core Require Export proof_techniques link prepost.
 
-(*
-
-  f() :=
-   let x := 1;
-   let y := Call ext(x);
-   y
-
-
-  Waiting false
-
-  - (Incoming, Call f []) ->
-
-  ReturnExt false (let x := 1; let y := Call ext (x); y)
-
-  - ->
-
-  ReturnExt false (Call ext (1))
-
-  - (Outgoing, Call ext [1]) ->
-
-  ReturnExt false (let y := Waiting true; y)
-
-  - (Incoming, Call f []) ->
-
-  ReturnExt false (let y := ReturnExt true (let x := 1; let y := Call ext (x); y); y)
-
-  - ->
-
-  ReturnExt false (let y := ReturnExt true (let y := Call ext (1); y); y)
-
-  - (Outgoing, Call ext [1]) ->
-
-  ReturnExt false (let y := ReturnExt true (let y := Waiting true; y); y)
-
-  - (Incoming, Return 2) ->
-
-  ReturnExt false (let y := ReturnExt true (let y := 2; y); y)
-
-  - ->
-
-  ReturnExt false (let y := ReturnExt true 2; y)
-
-  - (Outgoing, Return 2) ->
-
-  ReturnExt false (let y := Waiting true; y)
-*)
-
 Local Open Scope Z_scope.
 
 (** * C-like language language *)

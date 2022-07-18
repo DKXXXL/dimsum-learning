@@ -26,9 +26,6 @@ Arguments EExist {_ _}.
 Arguments EGet {_ _}.
 Arguments EPut {_ _}.
 
-(* Idea: don't allow Tau steps but instead make all step rules use ≈.
-(Silent steps are still possible via trivial choices.) *)
-
 Inductive mod_itree_step EV S : (itree (moduleE EV S) unit * S) → option EV → ((itree (moduleE EV S) unit * S) → Prop) → Prop :=
 | ITauS t t' s:
   observe t = TauF t' →
@@ -267,21 +264,21 @@ Proof.
         { apply wf_pred_mono. apply (steps_impl_rec_mono (mod_itree _ _)). }
         eexists _. split_and!;[ naive_solver..|].
         apply: IH => /=. 2: unfold steps_impl_eutt_rel in *; naive_solver. move: (Hu x) => [|//]. done.
-    + efeed pose proof IHn as IH'; [by econs|]. move: IH' => [?|[?[?[? Hfix]]]]; simplify_eq.
+    + exploit IHn; [by econs|] => -[?|[?[?[? Hfix]]]]; simplify_eq.
       * left. eapply HP; [|done..]. move => t1 ? [??]. subst. eexists _. split; [|naive_solver].
         move: (Hu x) => [|//]. done.
       * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|/=IH ?].
         { apply wf_pred_mono. apply (steps_impl_rec_mono (mod_itree _ _)). }
         eexists _. split_and!;[ naive_solver..|].
         apply IH => /=. 2: unfold steps_impl_eutt_rel in *; naive_solver. move: (Hu x) => [|//]. done.
-    + efeed pose proof IHn as IH'; [by econs|]. move: IH' => [?|[?[?[? Hfix]]]]; simplify_eq.
+    + exploit IHn; [by econs|] => -[?|[?[?[? Hfix]]]]; simplify_eq.
       * left. eapply HP; [|done..]. move => t1 ? [??]. subst. eexists _. split; [|naive_solver].
         move: (Hu s) => [|//]. done.
       * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|/=IH ?].
         { apply wf_pred_mono. apply (steps_impl_rec_mono (mod_itree _ _)). }
         eexists _. split_and!;[ naive_solver..|].
         apply IH => /=. 2: unfold steps_impl_eutt_rel in *; naive_solver. move: (Hu s) => [|//]. done.
-    + efeed pose proof IHn as IH'; [by econs|]. move: IH' => [?|[?[?[? Hfix]]]]; simplify_eq.
+    + exploit IHn; [by econs|] => -[?|[?[?[? Hfix]]]]; simplify_eq.
       * left. eapply HP; [|done..]. move => t1 ? [??]. subst. eexists _. split; [|naive_solver].
         move: (Hu tt) => [|//]. done.
       * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|/=IH ?].
@@ -293,7 +290,7 @@ Proof.
     destruct b1 => //. move: IHn => [?|IHn]; simplify_eq.
     + apply: steps_impl_end. eapply HP; [|done..]. move => t1' ? [??]. subst. eexists _. split; [|naive_solver].
       rewrite (itree_eta t1') Hot. by apply eqit_Tau_l.
-    + efeed pose proof IHn as IH'; [by econs|]. move: IH' => [?|[?[?[? Hfix]]]]; simplify_eq.
+    + exploit IHn; [by econs|] => -[?|[?[?[? Hfix]]]]; simplify_eq.
       * apply: steps_impl_end. eapply HP; [| |done]; [|done]. move => t1' ? [??]. subst. eexists _.
         split; [|naive_solver]. done.
       * apply: IH; [ | |done|done]; last first.

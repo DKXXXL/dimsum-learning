@@ -1,16 +1,13 @@
 # TODOs
 
 Cleanup:
-- [ ] cleanup imports
-- [ ] cleanup base.v
-- [ ] update deps (Iris, Coq, ...)
-  - [ ] use gset in definition of heap_state
-- [ ] cleanup axioms
-- [ ] change folder structure
+- [ ] use gset in definition of heap_state
 - [ ] make combinators define mod_state instead of initial state
-- [ ] clean up disabled in _CoqProject
-- [ ] Rename mod_state? Rename module?
+  - [ ] Rename mod_state? Rename module?
+- [ ] clean up disabled warnings in _CoqProject
 - [ ] Use notation for trefines?
+- [ ] Make ImmediateOp and RegisterOp coercions
+- [ ] Update itree? (leads to universe problem)
 
 Optional:
 - [ ] Add ghost state for f2i and add values of f2i to initial ownership (one persistent map)
@@ -31,8 +28,18 @@ Optional:
   - [ ] Add mmap and munmap syscalls to asm
   - [ ] Give spec for mmap at the C-level
   - [ ] Verify an example using it
-
-
+- [ ] Allow the proof to use a bigger resource than the prepost, e.g.
+      by defining an injection from the prepost resource to the bigger resource
+  - [ ] Use this to define ownership of registers for compiler codegen pass
+- [ ] Add framework for combining compiler passes
+- [ ] Make mod_seq_map only emit events when the inner module accepted them
+  - Tricky because the two events are not linked. Maybe it is not
+    necessary? With the current asm_closed it seems so since the env
+    can cause syscallrets at bad times but this would just cause UB.
+    Maybe bad events by the env should be UB instead of NB in general?
+    (e.g. in None state of asm allow Syscall events, but make them UB?
+    Does it matter?) Or maybe one should add a predicate to
+    mod_prepost to rule out non-sensical events from the env?
 
 Done:
 - [X] green-threading example
@@ -75,20 +82,6 @@ Done:
   - Maybe let x := Alloc 1 in x ← 1; let y = int_to_ptr(ptr_to_int(x)) in let r := !y in Free(y); Return r
     - refines Return 1
 - [X] Compiler
-
-Postponed:
-- [ ] Allow the proof to use a bigger resource than the prepost, e.g.
-      by defining an injection from the prepost resource to the bigger resource
-  - [ ] Use this to define ownership of registers for compiler codegen pass
-- [ ] Add framework for combining compiler passes
-- [ ] Make mod_seq_map only emit events when the inner module accepted them
-  - Tricky because the two events are not linked. Maybe it is not
-    necessary? With the current asm_closed it seems so since the env
-    can cause syscallrets at bad times but this would just cause UB.
-    Maybe bad events by the env should be UB instead of NB in general?
-    (e.g. in None state of asm allow Syscall events, but make them UB?
-    Does it matter?) Or maybe one should add a predicate to
-    mod_prepost to rule out non-sensical events from the env?
 
 # Notes
 
@@ -413,6 +406,52 @@ Commuting ∀ with events:
    - What if f := return malloc(a); and g(x, p) := x - p?
        Then there is UB in the implementation, but not in the spec! (see above)
 
+# Imp transitions
+```
+  f() :=
+   let x := 1;
+   let y := Call ext(x);
+   y
+
+
+  Waiting false
+
+  - (Incoming, Call f []) ->
+
+  ReturnExt false (let x := 1; let y := Call ext (x); y)
+
+  - ->
+
+  ReturnExt false (Call ext (1))
+
+  - (Outgoing, Call ext [1]) ->
+
+  ReturnExt false (let y := Waiting true; y)
+
+  - (Incoming, Call f []) ->
+
+  ReturnExt false (let y := ReturnExt true (let x := 1; let y := Call ext (x); y); y)
+
+  - ->
+
+  ReturnExt false (let y := ReturnExt true (let y := Call ext (1); y); y)
+
+  - (Outgoing, Call ext [1]) ->
+
+  ReturnExt false (let y := ReturnExt true (let y := Waiting true; y); y)
+
+  - (Incoming, Return 2) ->
+
+  ReturnExt false (let y := ReturnExt true (let y := 2; y); y)
+
+  - ->
+
+  ReturnExt false (let y := ReturnExt true 2; y)
+
+  - (Outgoing, Return 2) ->
+
+  ReturnExt false (let y := Waiting true; y)
+```
 
 # Random other notes
 
