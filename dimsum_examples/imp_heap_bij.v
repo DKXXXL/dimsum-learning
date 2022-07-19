@@ -10,7 +10,7 @@ Set Default Proof Using "Type".
 (** [imp_heap_bij] allows transformations of memory when proving a
 refinement between two Imp modules. *)
 
-(** * camera definition *)
+(** * Camera definition *)
 Inductive heap_bij_elem :=
 | HBShared (p : prov) | HBConstant (h : gmap Z val).
 Canonical Structure heap_bij_elemO := leibnizO heap_bij_elem.
@@ -24,7 +24,7 @@ Definition heap_bijUR_s_inj (r : (gmap_viewUR prov heap_bij_elemO)) : heap_bijUR
 Definition heap_bijUR_i_inj (r : (gmap_viewUR prov heap_bij_priv_elemO)) : heap_bijUR := (ε, r).
 
 
-(** * imp_heap_bij_own *)
+(** * heap_bij *)
 Record heap_bij := HeapBij {
   hb_bij : gmap prov heap_bij_elem;
   hb_priv_i : gmap prov (gmap Z val);
@@ -55,7 +55,7 @@ Qed.
 Global Program Instance heap_bij_empty : Empty heap_bij := HeapBij ∅ ∅ _ _.
 Solve Obligations with set_solver.
 
-(** hb_shared *)
+(** ** hb_shared *)
 Definition hb_shared (bij : heap_bij) : gmap prov prov :=
   (omap (λ v, if v is HBShared p then Some p else None) (hb_bij bij)).
 
@@ -71,7 +71,7 @@ Lemma hb_shared_lookup_None bij ps :
   hb_shared bij !! ps = None ↔ ∀ pi, hb_bij bij !! ps = Some (HBShared pi) → False.
 Proof. rewrite hb_shared_lookup. destruct (hb_bij bij !! ps) => //=. case_match; naive_solver. Qed.
 
-(** hb_shared_rev *)
+(** ** hb_shared_rev *)
 Definition hb_shared_rev (bij : heap_bij) : gmap prov prov :=
   list_to_map $ (λ x, (x.2, x.1)) <$> map_to_list (hb_shared bij).
 
@@ -89,14 +89,14 @@ Proof.
   - move => ?. eexists (_, _). rewrite elem_of_map_to_list. naive_solver.
 Qed.
 
-(** hb_shared_s *)
+(** ** hb_shared_s *)
 Definition hb_shared_s (bij : heap_bij) : gset prov := dom (hb_shared bij).
 
 Lemma elem_of_hb_shared_s bij ps :
   ps ∈ hb_shared_s bij ↔ ∃ pi, hb_bij bij !! ps = Some (HBShared pi).
 Proof. rewrite /hb_shared_s; unlock. rewrite elem_of_dom /is_Some. f_equiv => ?. apply hb_shared_lookup_Some. Qed.
 
-(** hb_shared_i *)
+(** ** hb_shared_i *)
 Definition hb_shared_i (bij : heap_bij) : gset prov :=
   list_to_set (omap (λ x, if x.2 is HBShared p then Some p else None) (map_to_list (hb_bij bij))).
 Global Typeclasses Opaque hb_shared_i.
@@ -111,7 +111,7 @@ Proof.
   - move => [??]. by eexists (_, _).
 Qed.
 
-(** hb_priv_s *)
+(** ** hb_priv_s *)
 Definition hb_priv_s (bij : heap_bij) : gmap prov (gmap Z val) :=
   omap (λ v, if v is HBConstant h then Some h else None) (hb_bij bij).
 
@@ -128,8 +128,8 @@ Proof.
   - move => ?. eexists _. split; [|done]. done.
 Qed.
 
-(** hb_provs_i *)
-(* hb_provs_s is directly written as [dom _ (hb_bij bij)] *)
+(** ** hb_provs_i *)
+(* hb_provs_s is directly written as [dom (hb_bij bij)] *)
 Definition hb_provs_i (bij : heap_bij) : gset prov :=
   dom (hb_priv_i bij) ∪ hb_shared_i bij.
 
@@ -137,7 +137,7 @@ Lemma elem_of_hb_provs_i bij pi :
   pi ∈ hb_provs_i bij ↔ (∃ h, hb_priv_i bij !! pi = Some h) ∨ ∃ ps, hb_bij bij !! ps = Some (HBShared pi).
 Proof. unfold hb_provs_i. rewrite elem_of_union elem_of_dom elem_of_hb_shared_i. naive_solver. Qed.
 
-(** heap_bij constructors *)
+(** ** heap_bij constructors *)
 Program Definition hb_share (p1 p2 : prov) (bij : heap_bij)
         (H : p1 ∉ hb_provs_i bij) :=
   HeapBij (<[p2 := HBShared p1]> (hb_bij bij)) (hb_priv_i bij) _ _.
@@ -302,7 +302,8 @@ Lemma hb_shared_update_const_i p h bij H:
   hb_shared (hb_update_const_i p h bij H) = hb_shared bij.
 Proof. done. Qed.
 
-(** ghost theory *)
+(** * ghost theory *)
+(** ** Ghost state definitions *)
 Definition heap_bij_auth_bij (m : gmap prov heap_bij_elem) : uPred heap_bijUR :=
   uPred_ownM (heap_bijUR_s_inj $ gmap_view_auth (DfracOwn 1) m).
 Definition heap_bij_auth_priv_i (m : gmap prov (gmap Z val)) : uPred heap_bijUR :=
@@ -320,6 +321,7 @@ Definition heap_bij_const_s (p : prov) (h : gmap Z val) : uPred (heap_bijUR) :=
 Definition heap_bij_const_i (p : prov) (h : gmap Z val) : uPred (heap_bijUR) :=
   uPred_ownM (heap_bijUR_i_inj $ gmap_view_frag p (DfracOwn 1) (HBIConstant h)).
 
+(** ** Ghost state lemmas *)
 Lemma heap_bij_alloc_shared1 m p1 p2:
   p2 ∉ dom m →
   heap_bij_auth_bij m ==∗ heap_bij_auth_bij (<[p2:=HBShared p1]> m) ∗ heap_bij_shared p1 p2.
@@ -555,7 +557,7 @@ Proof.
     iApply big_sepM_union; [by apply map_disjoint_difference_r|by iFrame "#"].
 Qed.
 
-(** ** val_in_bij *)
+(** * val_in_bij *)
 Definition loc_in_bij (l1 l2 : loc) : uPred heap_bijUR :=
   ⌜l1.2 = l2.2⌝ ∗ heap_bij_shared l1.1 l2.1.
 
@@ -586,173 +588,6 @@ Proof.
   naive_solver.
 Qed.
 
-(*
-(** ** expr_in_bij *)
-Fixpoint expr_in_bij (e1 e2 : expr) {struct e1} : uPred heap_bijUR :=
-  match e1, e2 with
-  | Var v, Var v' => ⌜v = v'⌝
-  | Val v, Val v' => val_in_bij v v'
-  | BinOp e1 o e2, BinOp e1' o' e2' => ⌜o = o'⌝ ∗ expr_in_bij e1 e1' ∗ expr_in_bij e2 e2'
-  | Load e, Load e' => expr_in_bij e e'
-  | Store e1 e2, Store e1' e2' => expr_in_bij e1 e1' ∗ expr_in_bij e2 e2'
-  | If e e1 e2, If e' e1' e2' => expr_in_bij e e' ∗ expr_in_bij e1 e1' ∗ expr_in_bij e2 e2'
-  | LetE v e1 e2, LetE v' e1' e2' => ⌜v = v'⌝ ∗ expr_in_bij e1 e1' ∗ expr_in_bij e2 e2'
-  | Call f args, Call f' args' => ⌜f = f'⌝ ∗ ⌜length args = length args'⌝ ∗
-        [∗] zip_with expr_in_bij args args'
-  | UbE, UbE => True
-  | AllocA ls e, AllocA ls' e' => ⌜ls = ls'⌝ ∗ expr_in_bij e e'
-  | FreeA ls e, FreeA ls' e' => ⌜ls.*2 = ls'.*2⌝ ∗ ([∗ list] l;l'∈ls.*1;ls'.*1, loc_in_bij l l') ∗ expr_in_bij e e'
-  | ReturnExt b e, ReturnExt b' e' => ⌜b = b'⌝ ∗ expr_in_bij e e'
-  | Waiting b, Waiting b' => ⌜b = b'⌝
-  | _, _ => False
-  end.
-
-Global Instance expr_in_bij_Persistent e1 e2 : Persistent (expr_in_bij e1 e2).
-Proof.
-  revert e2. induction e1 => e2; destruct e2 => /=; try apply _.
-  apply bi.sep_persistent; [apply _ |].
-  apply bi.sep_persistent; [apply _ |].
-  apply big_sepL_persistent_id. apply TCForall_Forall.
-  apply: Forall_zip_with_fst; [done|]. apply Forall_forall.
-  naive_solver.
-Qed.
-
-Lemma big_sepL2_Val_inv_l vl el :
-  ([∗ list] y1;y2 ∈ (Val <$> vl);el, expr_in_bij y1 y2) -∗
-  ∃ vl', ⌜el = Val <$> vl'⌝ ∗ [∗ list] y1;y2 ∈ vl;vl', val_in_bij y1 y2.
-Proof.
-  iIntros "Hel".
-  iInduction vl as [] "IH" forall (el); csimpl.
-  { iDestruct (big_sepL2_nil_inv_l with "[$]") as %->. iExists []. by iSplit. }
-  iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]"; subst.
-  iDestruct ("IH" with "[$]") as (??) "?" => /=. subst. case_match => //.
-  iExists (_::_); csimpl. iSplit; [done|]. iFrame.
-Qed.
-
-Lemma expr_in_bij_subst x v e v' e':
-  expr_in_bij e e' -∗
-  val_in_bij v v' -∗
-  expr_in_bij (subst x v e) (subst x v' e').
-Proof.
-  revert e'. induction e; iIntros (e') "#He #Hv"; destruct e' => //=; iDestruct!.
-  all: repeat iSplit => //.
-  all: rewrite ?fmap_length //; try case_bool_decide => //.
-  all: try by [iApply IHe]; try by [iApply IHe1]; try by [iApply IHe2]; try by [iApply IHe3].
-  rewrite !big_sepL_zip_with_same_length ?fmap_length //. rewrite big_sepL2_fmap_l big_sepL2_fmap_r.
-  iApply big_sepL2_impl; [done|].
-  iIntros "!>" (?? ???) "#?".
-  revert select (Forall _ _) => /Forall_forall IH. iApply IH => //. apply elem_of_list_lookup.
-  naive_solver.
-Qed.
-
-Lemma expr_in_bij_subst_l xs vs e vs' e':
-  length xs = length vs →
-  expr_in_bij e e' -∗
-  ([∗ list] v;v'∈vs;vs', val_in_bij v v') -∗
-  expr_in_bij (subst_l xs vs e) (subst_l xs vs' e').
-Proof.
-  iIntros (Hlen) "He Hv".
-  iInduction xs as [] "IH" forall(vs vs' e e' Hlen); destruct vs, vs'; simplify_eq/= => //.
-  iDestruct "Hv" as "[Hv Hvs]".
-  iApply ("IH" with "[//] [He Hv] Hvs").
-  iApply (expr_in_bij_subst with "He Hv").
-Qed.
-
-Lemma expr_in_bij_static e:
-  is_static_expr false e →
-  ⊢ expr_in_bij e e.
-Proof.
-  elim: e => //=; try naive_solver. { case => //= *; by iPureIntro. }
-  move => ?? IH Hb. iSplit; [done|]. iSplit; [done|]. iStopProof.
-  elim: IH Hb => //= ?? Hs ? IH ?. iIntros "_". iSplit.
-  - iApply Hs; naive_solver.
-  - iApply IH; naive_solver.
-Qed.
-
-(** ** ectx_in_bij *)
-Definition ectx_item_in_bij (Ki Ki' : expr_ectx) : uPred heap_bijUR :=
-  match Ki, Ki' with
-  | BinOpLCtx op e2, BinOpLCtx op' e2' => ⌜op = op'⌝ ∗ expr_in_bij e2 e2'
-  | BinOpRCtx v1 op, BinOpRCtx v1' op' => ⌜op = op'⌝ ∗ val_in_bij v1 v1'
-  | LoadCtx, LoadCtx => True
-  | StoreLCtx e2, StoreLCtx e2' => expr_in_bij e2 e2'
-  | StoreRCtx v1, StoreRCtx v1' => val_in_bij v1 v1'
-  | IfCtx e2 e3, IfCtx e2' e3' => expr_in_bij e2 e2' ∗ expr_in_bij e3 e3'
-  | LetECtx v e2, LetECtx v' e2' => ⌜v = v'⌝ ∗ expr_in_bij e2 e2'
-  | CallCtx f vl el, CallCtx f' vl' el' =>
-      ⌜f = f'⌝ ∗ ([∗ list] v;v'∈vl;vl', val_in_bij v v') ∗ [∗ list] e;e'∈el;el', expr_in_bij e e'
-  | FreeACtx ls, FreeACtx ls' => ⌜ls.*2 = ls'.*2⌝ ∗ ([∗ list] l;l'∈ls.*1;ls'.*1, loc_in_bij l l')
-  | ReturnExtCtx b, ReturnExtCtx b' => ⌜b = b'⌝
-  | _, _ => False
-  end.
-
-Definition ectx_in_bij (K1 K2 : list expr_ectx) : uPred heap_bijUR :=
-  [∗ list] Ki1;Ki2∈K1;K2, ectx_item_in_bij Ki1 Ki2.
-
-Global Instance ectx_item_in_bij_persistent Ki Ki' :
-  Persistent (ectx_item_in_bij Ki Ki').
-Proof. destruct Ki, Ki' => /=; apply _. Qed.
-
-Global Instance ectx_in_bij_persistent K K' :
-  Persistent (ectx_in_bij K K').
-Proof. destruct K, K' => /=; apply _. Qed.
-
-Lemma expr_in_bij_fill_item_2 K1 K2 e1 e2 :
-  ectx_item_in_bij K1 K2 -∗
-  expr_in_bij e1 e2 -∗
-  expr_in_bij (expr_fill_item K1 e1) (expr_fill_item K2 e2).
-Proof.
-  iIntros "??".
-  destruct K1, K2 => //; try by iDestruct!; iFrame => //.
-  iDestruct select (ectx_item_in_bij _ _) as (?) "[#Hvl #Hel]".
-  iDestruct (big_sepL2_length with "Hvl") as %?.
-  iDestruct (big_sepL2_length with "Hel") as %?.
-  iSplit!. { rewrite !app_length !fmap_length /=. lia. }
-  rewrite big_sepL_zip_with_same_length. 2: { rewrite !app_length !fmap_length /=. lia. }
-  iApply big_sepL2_app => /=; iFrame "∗#".
-  rewrite big_sepL2_fmap_l big_sepL2_fmap_r /=. iApply "Hvl".
-Qed.
-
-Lemma expr_in_bij_fill_2 K1 K2 e1 e2 :
-  ectx_in_bij K1 K2 -∗
-  expr_in_bij e1 e2 -∗
-  expr_in_bij (expr_fill K1 e1) (expr_fill K2 e2).
-Proof.
-  unfold ectx_in_bij. iIntros "H1 H2". iInduction K1 as [] "IH" forall (K2 e1 e2).
-  { iDestruct (big_sepL2_nil_inv_l with "[$]") as %->. iFrame. }
-  iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]"; simplify_eq/=.
-  iApply ("IH" with "[$]").
-  iApply (expr_in_bij_fill_item_2 with "[$] [$]").
-Qed.
-
-Lemma expr_in_bij_fill_item_l Ki e1 e2 :
-  expr_in_bij (expr_fill_item Ki e1) e2 -∗
-  ∃ Ki' e', ⌜e2 = expr_fill_item Ki' e'⌝ ∗ ectx_item_in_bij Ki Ki' ∗ expr_in_bij e1 e'.
-Proof.
-  iIntros "He".
-  destruct Ki, e2 => //=; iDestruct!; destruct!; try case_match => //; simplify_eq. 8: {
-    rewrite big_sepL_zip_with_same_length //.
-    iDestruct (big_sepL2_app_inv_l with "[$]") as (???) "[Hv1 Hel]".
-    iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[He Hel]". subst.
-    iDestruct (big_sepL2_Val_inv_l with "[$]") as (??) "Hvl'"; subst.
-    iExists (CallCtx _ _ _), _.
-    iSplit!; [done|..]; iFrame.
-  }
-  all: (unshelve iExists _); [econs; shelve| naive_solver].
-Qed.
-
-Lemma expr_in_bij_fill_l K e1 e2 :
-  expr_in_bij (expr_fill K e1) e2 -∗
-  ∃ K' e', ⌜e2 = expr_fill K' e'⌝ ∗ ectx_in_bij K K' ∗ expr_in_bij e1 e'.
-Proof.
-  elim: K e1 e2 => /=. { iIntros. iExists []. iSplit!. unfold ectx_in_bij. done. }
-  move => Ki K IH e1 e2. iIntros "He".
-  iDestruct (IH with "He") as (???) "[HK He]"; subst.
-  iDestruct (expr_in_bij_fill_item_l with "[$]") as (???) "[??]"; subst.
-  iExists (_::_). iSplit! => //; iFrame.
-Qed.
-*)
-
 Lemma eval_binop_bij o v1 v2 v1' v2' v:
   eval_binop o v1 v2 = Some v →
   val_in_bij v1' v1 -∗
@@ -764,7 +599,7 @@ Proof.
   lia.
 Qed.
 
-(** *** heap_in_bij *)
+(** * heap_in_bij *)
 Definition heap_in_bij (bij : heap_bij) (h h' : heap_state) : uPred heap_bijUR :=
   ∀ p1 p2 o,
   ⌜hb_bij bij !! p2 = Some (HBShared p1)⌝ -∗
@@ -1106,7 +941,7 @@ Proof.
   + iIntros (????). set_solver.
 Qed.
 
-(** prepost  *)
+(** * Definition of [imp_heap_bij] *)
 Definition imp_heap_bij_pre (e : imp_event) (s : unit) : prepost (imp_event * unit) heap_bijUR :=
   let vsi := vals_of_event e.2 in
   let hi := heap_of_event e.2 in
@@ -1135,6 +970,21 @@ Lemma imp_heap_bij_trefines m m' σ σ' `{!VisNoAll m}:
            (MS (imp_heap_bij m') (initial_imp_heap_bij_state m' σ')).
 Proof. move => ?. by apply: mod_prepost_trefines. Qed.
 
+(** ** imp_heap_bij_N *)
+Definition imp_heap_bij_N n (M: module imp_event) : module imp_event :=
+  Nat.iter n imp_heap_bij M.
+
+Fixpoint initial_imp_heap_bij_state_N n (M: module imp_event) (s: M.(m_state)) : (imp_heap_bij_N n M).(m_state) :=
+  match n with
+  | 0 => s
+  | S n => initial_imp_heap_bij_state (imp_heap_bij_N n M) (initial_imp_heap_bij_state_N n M s)
+  end.
+
+Global Instance imp_heap_bij_N_vis_no_all n m `{!VisNoAll m} :
+  VisNoAll (imp_heap_bij_N n m).
+Proof. elim: n => //= ??. apply _. Qed.
+
+(** * Proof techniques for [imp_heap_bij] *)
 Definition imp_heap_bij_call (n : trace_index) (fns1 fns2 : gmap string fndef) :=
   (∀ n' f es1' es2' K1' K2' es1 es2 vs1' vs2' h1' h2' b r rf',
       ImpExprFill es1' K1' (Call f es1) →
@@ -1252,6 +1102,8 @@ Proof.
       iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]". by simplify_eq.
 Qed.
 
+(** * Properties of [imp_heap_bij] *)
+(** ** Horizontal compositionality *)
 Lemma imp_heap_bij_combine fns1 fns2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m2}:
   trefines (MS (imp_link fns1 fns2 (imp_heap_bij m1) (imp_heap_bij m2))
                (MLFNone, [], initial_imp_heap_bij_state m1 σ1,
@@ -1307,6 +1159,7 @@ Proof.
     { iSatMono; iIntros!; iFrame. }
 Qed.
 
+(** ** Reflexivity *)
 Lemma imp_heap_bij_sim_call_bind args vs' ws' es ei Ks Ki vss vsi n b hi hs fns1 fns2 rf f r
   `{Hfill2: !ImpExprFill ei Ki (Call f ((Val <$> vs') ++ (subst_map vsi <$> args)))}
   `{Hfill1: !ImpExprFill es Ks (Call f ((Val <$> ws') ++ (subst_map vss <$> args)))}:
@@ -1504,6 +1357,7 @@ Proof.
   - rewrite !dom_union_L !dom_list_to_map_L !fst_zip ?fmap_length //; lia.
 Qed.
 
+(** ** Adequacy *)
 Lemma imp_heap_bij_imp_closed m σ:
   trefines (MS (imp_closed (imp_heap_bij m)) (SMFilter, initial_imp_heap_bij_state m σ, ICStart))
            (MS (imp_closed m) (SMFilter, σ, ICStart)).
@@ -1572,6 +1426,8 @@ Proof.
       tstep_i. apply: steps_impl_step_end => ???. inv_all @m_step.
 Qed.
 
+(** ** [imp_heap_bij] is adequate wrt. contextual refinement *)
+(** Follows from the lemmas above. *)
 Lemma imp_heap_bij_trefines_implies_ctx_refines fnsi fnss :
   dom fnsi = dom fnss →
   trefines (MS imp_module (initial_imp_state fnsi))
@@ -1591,6 +1447,7 @@ Proof.
   apply _.
 Qed.
 
+(** * Exercising [imp_heap_bij] *)
 Module imp_heap_bij_example.
 
 Local Open Scope Z_scope.
@@ -1653,17 +1510,3 @@ Proof.
   apply bij_alloc_opt_refines.
 Qed.
 End imp_heap_bij_example.
-
-(** imp_heap_bij_N *)
-Definition imp_heap_bij_N n (M: module imp_event) : module imp_event :=
-  Nat.iter n imp_heap_bij M.
-
-Fixpoint initial_imp_heap_bij_state_N n (M: module imp_event) (s: M.(m_state)) : (imp_heap_bij_N n M).(m_state) :=
-  match n with
-  | 0 => s
-  | S n => initial_imp_heap_bij_state (imp_heap_bij_N n M) (initial_imp_heap_bij_state_N n M s)
-  end.
-
-Global Instance imp_heap_bij_N_vis_no_all n m `{!VisNoAll m} :
-  VisNoAll (imp_heap_bij_N n m).
-Proof. elim: n => //= ??. apply _. Qed.
