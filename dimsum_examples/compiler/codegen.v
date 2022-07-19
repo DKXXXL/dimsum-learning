@@ -1368,9 +1368,9 @@ Lemma pass_correct a f2i f s' dins ins fn:
 Proof.
   move => Hrun ? Ha /NoDup_app[?[??]] Hf2i.
   apply imp_to_asm_proof; [done|set_solver|].
-  move => n i rs mem K f' fn' vs h cs pc ret gp rf rc lr Hpc Hins Hf ? Hsat Hargs Hlen Hlr Hcall Hret.
+  move => n i rs mem K f' fn' vs h cs pc gp rf rc lr Hpc Hins Hf ? Hsat Hlen Hlr Hcall Hret.
   move: Hf. rewrite {1}fmap_insert {1}fmap_empty lookup_insert_Some lookup_empty => ?.
-   unfold i2a_regs_call in *. destruct!; simplify_map_eq'.
+  destruct!; simplify_map_eq'.
 
   apply: (sim_intro (initial_state f2i)).
   1: by simplify_map_eq'. 1: done. 1: set_solver. 1: done. {
@@ -1429,7 +1429,6 @@ Proof.
       iApply (i2a_args_mono with "Hvs").
       apply map_preserved_insert_r_not_in; [compute_done|].
       apply map_preserved_insert_r_not_in; [compute_done|done].
-    - unfold i2a_regs_call. simplify_map_eq'. done.
     - apply deep_to_asm_instrs_is_Some. simplify_map_eq'.
       set (pc1 := rs !!! "PC") in *.
       set (pc2 := rs0 !!! "PC") in *. clearbody pc1 pc2.

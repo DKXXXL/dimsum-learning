@@ -66,7 +66,7 @@ Proof.
   tstep_s. rewrite -/locle_itree_strong. go. go_s. eexists (_, _, _). go.
   go_s. split!. go.
   go_s => ?. go.
-  revert select (_ ⊢ _) => HP. unfold i2a_regs_call in *.
+  revert select (_ ⊢ _) => HP.
   revert select (_ ∉ dom _) => /not_elem_of_dom?.
   unfold locle_f2i in *. cbn in Hi. unfold Z.succ in Hi.
   simplify_map_eq'.
@@ -621,8 +621,8 @@ Proof.
   go_s => -[?[??]]. go.
   rewrite bool_decide_true. 2: unfold main_asm_dom, memmove_asm_dom, memcpy_asm_dom; unlock; by vm_compute.
   tstep_i => ??. simplify_eq.
-  tstep_i. eexists true. split; [done|] => /=. eexists ∅, _, [], [], _, "main". split!.
-  { simplify_map_eq'. done. } 2: done. done.
+  tstep_i. eexists true. split; [done|] => /=. eexists ∅, _, [], [], "main". split!.
+  { simplify_map_eq'. done. }
   { apply: satisfiable_mono; [by eapply i2a_res_init|].
     iIntros!. iDestruct select (i2a_mem_auth _) as "$". rewrite /i2a_mem_map big_sepM_empty. iFrame.
     iSplitL; [|iAccu]. iApply i2a_mem_stack_init; [done|]. by iApply big_sepM_subseteq. }
@@ -633,7 +633,7 @@ Proof.
   go_i. split!. go.
   go_i => ?. go.
   go_i.
-  go_i => *. unfold i2a_regs_call in *. destruct!.
+  go_i => *. destruct!.
   iSatStart. iIntros!.
   iDestruct (i2a_args_intro with "[$]") as "?"; [done|]. rewrite i2a_args_cons ?i2a_args_nil; [|done].
   iDestruct!. iSatStop.
@@ -659,7 +659,7 @@ Proof.
   go_s. split; [done|]. go.
   go_s. split; [done|]. go.
 
-  go_i => *. unfold i2a_regs_call in *. case_match; destruct!.
+  go_i => *. case_match; destruct!.
   go_s. eexists (_, _). go.
   go_s. split!. go.
   go_s => ?. go.
@@ -682,7 +682,7 @@ Proof.
   go_i => *. split!. go.
   go_i => *. go.
   go_i.
-  go_i => *. unfold i2a_regs_call in *. destruct!.
+  go_i => *. destruct!.
   iSatStart. iIntros!.
   iDestruct (i2a_args_intro with "[$]") as "?"; [done|]. rewrite i2a_args_cons ?i2a_args_nil; [|done].
   iDestruct!. iSatStop.
@@ -708,7 +708,7 @@ Proof.
   go_s. split; [done|]. go.
   go_s. split; [done|]. go.
 
-  go_i => *. unfold i2a_regs_call in *. case_match; destruct!.
+  go_i => *. case_match; destruct!.
   go_s. eexists (_, _). go.
   go_s. split!. go.
   go_s => ?. go.

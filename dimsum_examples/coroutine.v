@@ -577,7 +577,7 @@ Proof.
   apply: tsim_implies_trefines => n0 /=.
   tstep_i => *. case_match; destruct!/=.
   tstep_s. split!.
-  tstep_s. move => -[] //= ? h gp vs avs ret f *.
+  tstep_s. move => -[] //= ? h gp vs avs f *.
   tstep_s. split!.
   tstep_s => ?.
   have ? : regs !!! "PC" ∈ ins1. { efeed pose proof Hi1; [done|]. destruct!. naive_solver. }
@@ -586,7 +586,7 @@ Proof.
   tstep_i => *. case_match; destruct!/=.
   rewrite bool_decide_true; [|fast_set_solver].
   tstep_i => *. simplify_eq.
-  tstep_i. eexists true. split; [done|]. eexists h, gp, vs, avs, ret, f.
+  tstep_i. eexists true. split; [done|]. eexists h, gp, vs, avs, f.
   split!. { naive_solver. } { fast_set_solver. }
   { iSatMono. iIntros!. rewrite /i2a_mem_map/mo big_sepM_empty big_sepM_union //. iDestruct!. iFrame.
     iDestruct (i2a_mem_stack_init with "[$]") as "?"; [done|]. iAccu. }
@@ -663,7 +663,7 @@ Proof.
     all: apply: steps_spec_step_end; [done|] => σ'' ?; assert (σ'' = σ') by naive_solver.
     + (* left to right *)
       tstep_s => ?.
-      tstep_i => *. unfold i2a_regs_call in *. destruct!; simplify_map_eq'.
+      tstep_i => *. destruct!; simplify_map_eq'.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
       move => /= *. destruct!; simplify_map_eq'.
@@ -699,8 +699,7 @@ Proof.
           apply map_preserved_insert_r_not_in; [compute_done|].
           apply coro_regs_regs_args_preserved. } { done. }
         { simplify_map_eq'. rewrite (coro_regs_regs_lookup_in "PC"); [|compute_done]. done. }
-        2: { rewrite /i2a_regs_call. simplify_map_eq'. apply (coro_regs_regs_lookup_not_in "R30"). compute_done. }
-        { unfold i2a_regs_call in *. simplify_map_eq'. fast_set_solver. }
+        { simplify_map_eq'. rewrite (coro_regs_regs_lookup_not_in "R30"); [|compute_done]. fast_set_solver. }
         { iSatMonoBupd. iFrame. simplify_map_eq'.
           rewrite (coro_regs_regs_lookup_in "SP"); [|compute_done].
           iDestruct (i2a_mem_swap_stack with "Hm [$]") as "[Hm ?]".
@@ -720,7 +719,7 @@ Proof.
           apply map_scramble_insert_r_in; [compute_done|].
           by apply coro_regs_regs_touched_scramble. }
         { simplify_map_eq'. iSplit; iIntros!; iFrame. }
-        { unfold i2a_regs_call in *. simplify_map_eq'. done. }
+        { simplify_map_eq'. done. }
       * destruct args as [|? [|]] => //.
         eexists false. split!.
         { simplify_map_eq'. rewrite (coro_regs_regs_lookup_in "PC"); [|compute_done]. done. }
@@ -749,7 +748,7 @@ Proof.
           apply map_scramble_insert_r_in; [compute_done|].
           by apply coro_regs_regs_touched_scramble. }
         { simplify_map_eq'. iSplit; iIntros!; iFrame. }
-        { unfold i2a_regs_call in *. simplify_map_eq'. done. }
+        { simplify_map_eq'. done. }
     + (* left call to outside *)
       case_bool_decide; [by tstep_s|].
       rewrite bool_decide_true //=.
@@ -766,7 +765,7 @@ Proof.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
       tstep_s. split!. { done. } { fast_set_solver. } { apply lookup_union_Some_raw. naive_solver. }
-      2: { done. } { fast_set_solver. } { by etrans. }
+      { fast_set_solver. } { by etrans. }
       { iSatMono. setoid_subst. iIntros!. iFrame. iAccu. }
       iSatClear.
 
@@ -774,7 +773,7 @@ Proof.
       tstep_i => e *. destruct e; destruct!.
       tstep_s. split!.
       tstep_s => -[] /= *. { tstep_s. split!. by tstep_s. }
-      tstep_s. split!. destruct!.
+      tstep_s. split!. destruct!. simplify_map_eq'.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_true. 2: fast_set_solver.
       tstep_i => /= *. destruct!/=.
@@ -803,7 +802,7 @@ Proof.
       (* going back inside *)
       tstep_i => e *. tstep_s. split!. destruct!/=.
       destruct e; destruct!.
-      tstep_s => -[] //= ? h' gp' vs' avs' ret' f' *.
+      tstep_s => -[] //= ? h' gp' vs' avs' f' *.
       tstep_s. split!.
       tstep_s => ?.
       have ? : regs !!! "PC" ∈ ins1. { efeed pose proof Hi1; [done|]. destruct!. naive_solver. }
@@ -812,7 +811,7 @@ Proof.
       tstep_i => *. case_match; destruct!/=.
       rewrite bool_decide_true; [|fast_set_solver].
       tstep_i => *. simplify_eq.
-      tstep_i. eexists true. split; [done|]. eexists h', gp', vs', avs', ret', f'.
+      tstep_i. eexists true. split; [done|]. eexists h', gp', vs', avs', f'.
       split!. { destruct (f2i1 !! f') eqn:?; naive_solver. } { fast_set_solver. }
       { iSatMono. iIntros!. iFrame. iAccu. }
       tsim_mirror m1 σ'. move => ??? Hcont.
@@ -833,7 +832,7 @@ Proof.
     all: apply: steps_spec_step_end; [done|] => σ'' ?; assert (σ'' = σ') by naive_solver.
     + (* right to left *)
       tstep_s => ?.
-      tstep_i => *. unfold i2a_regs_call in *. destruct!; simplify_map_eq'.
+      tstep_i => *. destruct!; simplify_map_eq'.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
       move => /= *. destruct!; simplify_map_eq'.
@@ -889,7 +888,7 @@ Proof.
       { simplify_map_eq'. iSplit; iIntros!; iFrame. }
       { simplify_map_eq'. done. }
       { apply map_preserved_insert_r_not_in; [compute_done|]. done. }
-      { unfold i2a_regs_call in *. simplify_map_eq'. done. }
+      { simplify_map_eq'. done. }
     + (* right call to outside *)
       case_bool_decide; [by tstep_s|].
       rewrite bool_decide_true //=.
@@ -909,7 +908,7 @@ Proof.
       move => /= *. destruct!/=.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
-      tstep_s. split!. { done. } { fast_set_solver. } 2: { done. } { fast_set_solver. } { by etrans. }
+      tstep_s. split!. { done. } { fast_set_solver. } { fast_set_solver. } { by etrans. }
       { iSatMono. setoid_subst. iIntros!. iFrame. iAccu. }
       iSatClear.
 
@@ -917,7 +916,7 @@ Proof.
       tstep_i => e *. destruct e; destruct!.
       tstep_s. split!.
       tstep_s => -[] /= *. { tstep_s. split!. by tstep_s. }
-      tstep_s. split!. destruct!.
+      tstep_s. split!. destruct!. simplify_map_eq'.
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_true. 2: fast_set_solver.
       tstep_i => /= *. destruct!/=.

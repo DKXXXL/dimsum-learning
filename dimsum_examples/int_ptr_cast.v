@@ -100,7 +100,7 @@ Proof.
   tstep_s => *. case_match => /= *. 2: congruence.
   tstep_s. rewrite -/int_to_ptr_itree. go. go_s. eexists (_, _, _). go.
   go_s. split!. go. go_s.
-  revert select (_ ⊢ _) => HP. unfold i2a_regs_call in *.
+  revert select (_ ⊢ _) => HP.
   revert select (_ ∉ dom _) => /not_elem_of_dom?.
   unfold int_to_ptr_asm in Hi. unfold int_to_ptr_f2i in *. (repeat case_bool_decide); simplify_map_eq'.
   - tstep_i.
@@ -390,7 +390,7 @@ Proof.
   go_s => ?. go. destruct!. simplify_map_eq'.
   rewrite bool_decide_true; [|unfold main_asm_dom;unlock; compute_done].
   go_i => ??. simplify_eq.
-  go_i. eexists true => /=. split; [done|]. eexists ∅, _, [], [], (regs !!! "R30"), "main".
+  go_i. eexists true => /=. split; [done|]. eexists ∅, _, [], [], "main".
   split!.
   { by simplify_map_eq'. }
   { apply: satisfiable_mono; [by eapply i2a_res_init|].
