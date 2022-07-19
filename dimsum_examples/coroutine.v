@@ -537,11 +537,11 @@ Theorem coro_spec finit regs_init gp_init m1 m2 σ1 σ2 ins1 ins2 fns1 fns2 f2i1
   i2a_mem_stack_mem (regs_init !!! "SP") gp_init ##ₘ coro_regs_mem regs_init →
   gp_init + GUARD_PAGE_SIZE ≤ regs_init !!! "SP" →
   trefines
-    (MS (asm_prod yield_asm_dom (ins1 ∪ ins2) asm_module
-           (asm_prod ins1 ins2 (imp_to_asm ins1 fns1 f2i1 m1) (imp_to_asm ins2 fns2 f2i2 m2)) )
-        (initial_asm_prod_state asm_module (asm_prod _ _ _ _)
+    (MS (asm_link yield_asm_dom (ins1 ∪ ins2) asm_module
+           (asm_link ins1 ins2 (imp_to_asm ins1 fns1 f2i1 m1) (imp_to_asm ins2 fns2 f2i2 m2)) )
+        (initial_asm_link_state asm_module (asm_link _ _ _ _)
            (initial_asm_state yield_asm)
-           (initial_asm_prod_state (imp_to_asm _ _ _ _) (imp_to_asm _ _ _ _)
+           (initial_asm_link_state (imp_to_asm _ _ _ _) (imp_to_asm _ _ _ _)
               (initial_imp_to_asm_state ∅ m1 σ1)
               (initial_imp_to_asm_state ∅ m2 σ2))))
     (MS (imp_to_asm ins fns f2i (coro_prod fns1 fns2 m1 m2))
@@ -571,7 +571,7 @@ Proof.
   have Hf1in : ∀ f i1 i2, f2i1 !! f  = Some i1 → f2i !! f = Some i2 → i1 = i2.
   { move => ???. rewrite /f2i lookup_union_Some_raw. naive_solver. }
   etrans. {
-    apply: asm_prod_trefines; [|done]. apply (yield_asm_refines_itree regs_init).
+    apply: asm_link_trefines; [|done]. apply (yield_asm_refines_itree regs_init).
     fast_set_solver.
   }
   apply: tsim_implies_trefines => n0 /=.

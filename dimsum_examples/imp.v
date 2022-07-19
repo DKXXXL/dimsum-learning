@@ -1646,7 +1646,7 @@ Proof.
     + by split!.
 Qed.
 (** * closing *)
-(*
+(**
 module imp_event:
 Incoming, Call f vs h -> Outgoing, Call f' vs' h' → Incoming, Return v h' -> Outgoing, Return v' h''
 
@@ -1707,16 +1707,17 @@ Proof. move => ????. inv_all @m_step; naive_solver. Qed.
 Definition imp_closed (m : module imp_event) : module imp_closed_event :=
   mod_seq_map m imp_closed_filter_module.
 
-(** * syntactic linking *)
-Definition imp_link (fns1 fns2 : gmap string fndef) : gmap string fndef :=
+(** * Linking *)
+(** ** Syntactic linking *)
+Definition imp_syn_link (fns1 fns2 : gmap string fndef) : gmap string fndef :=
   fns1 ∪ fns2.
 
 Definition imp_ctx_refines (fnsi fnss : gmap string fndef) :=
-  ∀ C, trefines (MS (imp_closed imp_module) (SMFilter, initial_imp_state (imp_link fnsi C), ICStart))
-                (MS (imp_closed imp_module) (SMFilter, initial_imp_state (imp_link fnss C), ICStart)).
+  ∀ C, trefines (MS (imp_closed imp_module) (SMFilter, initial_imp_state (imp_syn_link fnsi C), ICStart))
+                (MS (imp_closed imp_module) (SMFilter, initial_imp_state (imp_syn_link fnss C), ICStart)).
 
-(** * semantic linking *)
-Definition imp_prod_filter (fns1 fns2 : gset string) : seq_product_state → list seq_product_state → imp_ev → seq_product_state → list seq_product_state → imp_ev → bool → Prop :=
+(** ** Semantic linking *)
+Definition imp_link_filter (fns1 fns2 : gset string) : seq_product_state → list seq_product_state → imp_ev → seq_product_state → list seq_product_state → imp_ev → bool → Prop :=
   λ p cs e p' cs' e' ok,
     e' = e ∧
     ok = true ∧
@@ -1729,64 +1730,65 @@ Definition imp_prod_filter (fns1 fns2 : gset string) : seq_product_state → lis
         cs = p'::cs' ∧
         p ≠ p'
     end.
-Arguments imp_prod_filter _ _ _ _ _ _ _ _ /.
+Arguments imp_link_filter _ _ _ _ _ _ _ _ /.
 
-Definition imp_prod (fns1 fns2 : gset string) (m1 m2 : module imp_event) : module imp_event :=
-  mod_link (imp_prod_filter fns1 fns2) m1 m2.
+Definition imp_link (fns1 fns2 : gset string) (m1 m2 : module imp_event) : module imp_event :=
+  mod_link (imp_link_filter fns1 fns2) m1 m2.
 
 (* TODO: use this more *)
-Definition initial_imp_prod_state (m1 m2 : module imp_event) (σ1 : m1.(m_state)) (σ2 : m2.(m_state)) :=
+Definition initial_imp_link_state (m1 m2 : module imp_event) (σ1 : m1.(m_state)) (σ2 : m2.(m_state)) :=
   (@MLFNone imp_ev, @nil seq_product_state, σ1, σ2).
 
-Lemma imp_prod_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
+Lemma imp_link_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
   trefines (MS m1 σ1) (MS m1' σ1') →
   trefines (MS m2 σ2) (MS m2' σ2') →
-  trefines (MS (imp_prod ins1 ins2 m1 m2) (σ, σ1, σ2))
-           (MS (imp_prod ins1 ins2 m1' m2') (σ, σ1', σ2')).
+  trefines (MS (imp_link ins1 ins2 m1 m2) (σ, σ1, σ2))
+           (MS (imp_link ins1 ins2 m1' m2') (σ, σ1', σ2')).
 Proof. move => ??. by apply mod_link_trefines. Qed.
 
-Inductive imp_link_prod_combine_ectx :
+(** ** Relating semantic and syntactic linking *)
+Inductive imp_link_combine_ectx :
   nat → bool → bool → mod_link_state imp_ev → list seq_product_state → list expr_ectx → list expr_ectx → list expr_ectx → Prop :=
 | IPCENil:
-  imp_link_prod_combine_ectx 0 false false MLFNone [] [] [] []
+  imp_link_combine_ectx 0 false false MLFNone [] [] [] []
 | IPCENoneToLeft n cs K Kl Kr bl br:
-  imp_link_prod_combine_ectx n bl br MLFNone cs K Kl Kr →
-  imp_link_prod_combine_ectx (S n) bl br MLFLeft (SPNone :: cs)
+  imp_link_combine_ectx n bl br MLFNone cs K Kl Kr →
+  imp_link_combine_ectx (S n) bl br MLFLeft (SPNone :: cs)
                              (ReturnExtCtx (bl || br)::K) (ReturnExtCtx bl::Kl) Kr
 | IPCENoneToRight n cs K Kl Kr bl br:
-  imp_link_prod_combine_ectx n bl br MLFNone cs K Kl Kr →
-  imp_link_prod_combine_ectx (S n) bl br MLFRight (SPNone :: cs)
+  imp_link_combine_ectx n bl br MLFNone cs K Kl Kr →
+  imp_link_combine_ectx (S n) bl br MLFRight (SPNone :: cs)
                              (ReturnExtCtx (bl || br)::K) Kl (ReturnExtCtx br::Kr)
 | IPCELeftToRight n cs K Kl Kl' Kr bl br:
-  imp_link_prod_combine_ectx n bl br MLFLeft cs K Kl Kr →
+  imp_link_combine_ectx n bl br MLFLeft cs K Kl Kr →
   is_static_expr true (expr_fill Kl' (Var "")) →
-  imp_link_prod_combine_ectx (S n) true br MLFRight (SPLeft :: cs)
+  imp_link_combine_ectx (S n) true br MLFRight (SPLeft :: cs)
                              (Kl' ++ K) (Kl' ++ Kl) (ReturnExtCtx br::Kr)
 | IPCELeftToNone n cs K Kl Kl' Kr bl br:
-  imp_link_prod_combine_ectx n bl br MLFLeft cs K Kl Kr →
+  imp_link_combine_ectx n bl br MLFLeft cs K Kl Kr →
   is_static_expr true (expr_fill Kl' (Var "")) →
-  imp_link_prod_combine_ectx (S n) true br MLFNone (SPLeft :: cs)
+  imp_link_combine_ectx (S n) true br MLFNone (SPLeft :: cs)
                              (Kl' ++ K) (Kl' ++ Kl) Kr
 | IPCERightToLeft n cs K Kl Kr' Kr bl br:
-  imp_link_prod_combine_ectx n bl br MLFRight cs K Kl Kr →
+  imp_link_combine_ectx n bl br MLFRight cs K Kl Kr →
   is_static_expr true (expr_fill Kr' (Var "")) →
-  imp_link_prod_combine_ectx (S n) bl true MLFLeft (SPRight :: cs)
+  imp_link_combine_ectx (S n) bl true MLFLeft (SPRight :: cs)
                              (Kr' ++ K) (ReturnExtCtx bl::Kl) (Kr' ++ Kr)
 | IPCERightToNone n cs K Kl Kr' Kr bl br:
-  imp_link_prod_combine_ectx n bl br MLFRight cs K Kl Kr →
+  imp_link_combine_ectx n bl br MLFRight cs K Kl Kr →
   is_static_expr true (expr_fill Kr' (Var "")) →
-  imp_link_prod_combine_ectx (S n) bl true MLFNone (SPRight :: cs)
+  imp_link_combine_ectx (S n) bl true MLFNone (SPRight :: cs)
                              (Kr' ++ K) Kl (Kr' ++ Kr)
 .
 
-Definition imp_link_prod_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : imp_module.(m_state)) (σ2 : mod_link_state imp_ev * list seq_product_state * imp_state * imp_state) : Prop :=
+Definition imp_link_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : imp_module.(m_state)) (σ2 : mod_link_state imp_ev * list seq_product_state * imp_state * imp_state) : Prop :=
   let 'Imp e1 h1 fns1' := σ1 in
   let '(σf, cs, Imp el hl fnsl, Imp er hr fnsr) := σ2 in
   ∃ n K Kl Kr e1' el' er' bl br,
   fns1' = fns1 ∪ fns2 ∧
   fnsl = fns1 ∧
   fnsr = fns2 ∧
-  imp_link_prod_combine_ectx n bl br σf cs K Kl Kr ∧
+  imp_link_combine_ectx n bl br σf cs K Kl Kr ∧
   e1 = expr_fill K e1' ∧
   el = expr_fill Kl el' ∧
   er = expr_fill Kr er' ∧
@@ -1800,20 +1802,20 @@ Definition imp_link_prod_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : 
   end.
 
 
-Lemma imp_link_refines_prod fns1 fns2:
+Lemma imp_syn_link_refines_link fns1 fns2:
   fns1 ##ₘ fns2 →
-  trefines (MS imp_module (initial_imp_state (imp_link fns1 fns2)))
-           (MS (imp_prod (dom fns1) (dom fns2) imp_module imp_module)
-               (initial_imp_prod_state imp_module imp_module (initial_imp_state fns1) (initial_imp_state fns2))).
+  trefines (MS imp_module (initial_imp_state (imp_syn_link fns1 fns2)))
+           (MS (imp_link (dom fns1) (dom fns2) imp_module imp_module)
+               (initial_imp_link_state imp_module imp_module (initial_imp_state fns1) (initial_imp_state fns2))).
 Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
-  unshelve apply: tsim_remember. { exact: (λ _, imp_link_prod_inv true fns1 fns2). }
+  unshelve apply: tsim_remember. { exact: (λ _, imp_link_inv true fns1 fns2). }
   { split!. 1: by econs. all: done. } { done. }
   move => /= {}n _ Hloop [e1 h1 fns1'] [[[ipfs cs] [el hl fnsl]] [er hr fnsr]] [m [K [Kl [Kr ?]]]].
   have {}Hloop : ∀ σi σs,
-            imp_link_prod_inv false fns1 fns2 σi σs
-            → σi ⪯{imp_module, imp_prod (dom fns1) (dom fns2) imp_module imp_module, n, true} σs. {
+            imp_link_inv false fns1 fns2 σi σs
+            → σi ⪯{imp_module, imp_link (dom fns1) (dom fns2) imp_module imp_module, n, true} σs. {
     clear -Hloop. move => [e1 h1 fns1'] [[[ipfs cs] [el hl fnsl]] [er hr fnsr]].
     move => [m [K [Kl [Kr [e1' [el' [er' [bl [br [?[?[?[HK[?[?[? Hm]]]]]]]]]]]]]]]]; simplify_eq.
     elim/lt_wf_ind: m ipfs h1 hl hr cs K Kl Kr e1' el' er' bl br HK Hm => m IHm.
@@ -1914,7 +1916,7 @@ Proof.
         tstep_s. split!.
         apply Hloop. split!; [by econs|done..| ]. apply is_static_expr_forallb.
     + move => v h' ?.
-      revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _ _) => HK.
+      revert select (imp_link_combine_ectx _ _ _ _ _ _ _ _) => HK.
       inversion HK; clear HK; simplify_eq/= => //.
       * tstep_s. eexists (EIReturn _ _) => /=. split!.
         tstep_s. split!.
@@ -1926,21 +1928,21 @@ Proof.
         by apply is_static_expr_expr_fill.
 Qed.
 
-Lemma imp_prod_refines_link fns1 fns2:
+Lemma imp_link_refines_syn_link fns1 fns2:
   fns1 ##ₘ fns2 →
-  trefines (MS (imp_prod (dom fns1) (dom fns2) imp_module imp_module)
-               (initial_imp_prod_state imp_module imp_module (initial_imp_state fns1) (initial_imp_state fns2)))
-           (MS imp_module (initial_imp_state (imp_link fns1 fns2))).
+  trefines (MS (imp_link (dom fns1) (dom fns2) imp_module imp_module)
+               (initial_imp_link_state imp_module imp_module (initial_imp_state fns1) (initial_imp_state fns2)))
+           (MS imp_module (initial_imp_state (imp_syn_link fns1 fns2))).
 Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
-  unshelve apply: tsim_remember. { exact: (λ _, flip (imp_link_prod_inv false fns1 fns2)). }
+  unshelve apply: tsim_remember. { exact: (λ _, flip (imp_link_inv false fns1 fns2)). }
   { split!. 1: by econs. all: done. } { done. }
   move => /= {}n _ Hloop [[[ipfs cs] [el hl fnsl]] [er hr fnsr]] [e1 h1 fns1'] [m [K [Kl [Kr ?]]]].
   destruct!/=. case_match; destruct!.
   - destruct (to_val el') eqn:?.
     + destruct el'; simplify_eq/=.
-      revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _ _) => HK.
+      revert select (imp_link_combine_ectx _ _ _ _ _ _ _ _) => HK.
       inversion HK; clear HK; simplify_eq/=.
       * tstep_i => *; destruct!. tstep_s. split!.
         apply: Hloop; [done|]. by split!.
@@ -1984,7 +1986,7 @@ Proof.
            tend. split!. apply: Hloop; [done|]. split!; [by econs|done..].
   - destruct (to_val er') eqn:?.
     + destruct er'; simplify_eq/=.
-      revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _ _) => HK. inv/= HK.
+      revert select (imp_link_combine_ectx _ _ _ _ _ _ _ _) => HK. inv/= HK.
       * tstep_i => *; destruct!. tstep_s. split!.
         apply: Hloop; [done|]. by split!.
       * tstep_i => *; destruct!/=.
@@ -2035,7 +2037,7 @@ Proof.
       * tstep_i. split => *; destruct!/=.
         apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_forallb.
     + tstep_s. right.
-      revert select (imp_link_prod_combine_ectx _ _ _ _ _ _ _ _) => HK.
+      revert select (imp_link_combine_ectx _ _ _ _ _ _ _ _) => HK.
       inversion HK; clear HK; simplify_eq; rewrite ?orb_true_r.
       * split!. tstep_i. split => *; destruct!/=.
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done|done..|].
@@ -2050,16 +2052,17 @@ Lemma imp_trefines_implies_ctx_refines fnsi fnss :
   trefines (MS imp_module (initial_imp_state fnsi)) (MS imp_module (initial_imp_state fnss)) →
   imp_ctx_refines fnsi fnss.
 Proof.
-  move => Hdom Href C. rewrite /imp_link map_difference_union_r (map_difference_union_r fnss).
+  move => Hdom Href C. rewrite /imp_syn_link map_difference_union_r (map_difference_union_r fnss).
   apply mod_seq_map_trefines. { apply _. } { apply _. }
-  etrans. { apply imp_link_refines_prod. apply map_disjoint_difference_r'. }
-  etrans. 2: { apply imp_prod_refines_link. apply map_disjoint_difference_r'. }
+  etrans. { apply imp_syn_link_refines_link. apply map_disjoint_difference_r'. }
+  etrans. 2: { apply imp_link_refines_syn_link. apply map_disjoint_difference_r'. }
   rewrite !dom_difference_L Hdom.
-  apply imp_prod_trefines; [apply _..| |].
+  apply imp_link_trefines; [apply _..| |].
   - apply: Href.
   - erewrite map_difference_eq_dom_L => //. apply _.
 Qed.
 
+(** ** Commuting and associativity of semantic linking (WIP) *)
 (*
 (* TODO: track a stack of this and compute every thing from it (also keep an optional event) *)
 Inductive imp_prod_assoc_state :=
@@ -2095,12 +2098,12 @@ Definition imp_prod_assoc_inv (fns1 fns2 fns3 : gset string) (m1 m2 m3 : module 
 
 Lemma imp_prod_assoc1 fns1 fns2 fns3 m1 m2 m3 σ1 σ2 σ3:
   fns1 ## fns2 →
-  trefines (MS (imp_prod fns1 (fns2 ∪ fns3) m1 (imp_prod fns2 fns3 m2 m3))
-              (initial_imp_prod_state m1 (imp_prod _ _ m2 m3) σ1
-                  (initial_imp_prod_state m2 m3 σ2 σ3)))
-           (MS (imp_prod (fns1 ∪ fns2) fns3 (imp_prod fns1 fns2 m1 m2) m3)
-               (initial_imp_prod_state (imp_prod _ _ m1 m2) m3
-                  (initial_imp_prod_state m1 m2 σ1 σ2) σ3)
+  trefines (MS (imp_link fns1 (fns2 ∪ fns3) m1 (imp_link fns2 fns3 m2 m3))
+              (initial_imp_link_state m1 (imp_link _ _ m2 m3) σ1
+                  (initial_imp_link_state m2 m3 σ2 σ3)))
+           (MS (imp_link (fns1 ∪ fns2) fns3 (imp_link fns1 fns2 m1 m2) m3)
+               (initial_imp_link_state (imp_link _ _ m1 m2) m3
+                  (initial_imp_link_state m1 m2 σ1 σ2) σ3)
            ).
 Proof.
   move => Hdisj12.

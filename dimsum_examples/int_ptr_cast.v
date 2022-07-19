@@ -198,9 +198,9 @@ Definition main_itree : itree (moduleE imp_event unit) unit :=
 *)
 
 Lemma main_int_to_ptr_refines_itree :
-  trefines (MS (imp_prod (dom main_imp_prog) int_to_ptr_fns
+  trefines (MS (imp_link (dom main_imp_prog) int_to_ptr_fns
                          imp_module (mod_itree _ _))
-               (initial_imp_prod_state imp_module (mod_itree _ _) (initial_imp_state main_imp_prog) (int_to_ptr_itree, ∅)))
+               (initial_imp_link_state imp_module (mod_itree _ _) (initial_imp_state main_imp_prog) (int_to_ptr_itree, ∅)))
            (MS (mod_itree _ _) (main_itree, tt)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
@@ -373,12 +373,12 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
 *)
 
 Lemma top_level_refines_itree :
-  trefines (MS (asm_prod (main_asm_dom ∪ dom int_to_ptr_asm) (dom exit_asm)
+  trefines (MS (asm_link (main_asm_dom ∪ dom int_to_ptr_asm) (dom exit_asm)
                          (imp_to_asm (main_asm_dom ∪ dom int_to_ptr_asm)
                                      (dom main_imp_prog ∪ int_to_ptr_fns)
                                      main_f2i
                                      (mod_itree _ _)) (mod_itree _ _))
-               (initial_asm_prod_state (imp_to_asm _ _ _ _) (mod_itree _ _) (initial_imp_to_asm_state ∅ (mod_itree _ _) (main_itree, tt)) (exit_itree, tt)))
+               (initial_asm_link_state (imp_to_asm _ _ _ _) (mod_itree _ _) (initial_imp_to_asm_state ∅ (mod_itree _ _) (main_itree, tt)) (exit_itree, tt)))
            (MS (mod_itree _ _) (top_level_itree, tt)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
@@ -444,15 +444,15 @@ Lemma complete_refinement :
            (MS (mod_itree _ _) (top_level_itree, tt)).
 Proof.
   etrans. {
-    apply asm_link_refines_prod. compute_done.
+    apply asm_syn_link_refines_link. compute_done.
   }
   etrans. {
-    apply: asm_prod_trefines.
+    apply: asm_link_trefines.
     - etrans. {
-        apply asm_link_refines_prod. compute_done.
+        apply asm_syn_link_refines_link. compute_done.
       }
       etrans. {
-        apply: asm_prod_trefines.
+        apply: asm_link_trefines.
         - apply main_asm_refines_imp.
         - apply int_to_ptr_asm_refines_itree.
       }

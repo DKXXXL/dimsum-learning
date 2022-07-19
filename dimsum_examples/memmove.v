@@ -282,10 +282,10 @@ Lemma memcpy_spec n0 d s d' s' n o K e h m σ1 σ2 b cs hvs `{!ImpExprFill e K
   ((MLFLeft, cs, Imp (expr_fill K (Val (ValNum 0)))
                    (heap_update_big h (kmap (λ i, d' +ₗ i) (map_seqZ 0 hvs)))
                    (memmove_prog ∪ memcpy_prog), σ1)
-    ⪯{imp_prod {["memmove"; "memcpy"]} {["locle"]} imp_module (mod_itree imp_event ()), m, n0, true}
+    ⪯{imp_link {["memmove"; "memcpy"]} {["locle"]} imp_module (mod_itree imp_event ()), m, n0, true}
   σ2) →
   (MLFLeft, cs, Imp e h (memmove_prog ∪ memcpy_prog), σ1)
-    ⪯{imp_prod {["memmove"; "memcpy"]} {["locle"]} imp_module (mod_itree imp_event ()), m, n0, b}
+    ⪯{imp_link {["memmove"; "memcpy"]} {["locle"]} imp_module (mod_itree imp_event ()), m, n0, b}
   σ2.
 Proof.
   elim/ti_lt_ind: n0 b d d' s s' n h hvs e K ImpExprFill0 => n1 IH b d d' s s' n h hvs e K [->] ? Ho ?? Hle Hhvs Halive Hcont. subst.
@@ -381,8 +381,8 @@ Definition memmove_itree : itree (moduleE imp_event unit) unit :=
     Ret ()).
 
 Lemma memmove_refines_itree :
-  trefines (MS (imp_prod {["memmove"; "memcpy"]} {["locle"]} imp_module (mod_itree _ _))
-              (initial_imp_prod_state imp_module (mod_itree _ _)
+  trefines (MS (imp_link {["memmove"; "memcpy"]} {["locle"]} imp_module (mod_itree _ _))
+              (initial_imp_link_state imp_module (mod_itree _ _)
               (initial_imp_state (memmove_prog ∪ memcpy_prog)) (locle_itree, tt)))
            (MS (mod_itree _ _) (memmove_itree, tt)).
 Proof.
@@ -464,8 +464,8 @@ Definition main_itree : itree (moduleE imp_event unit) unit :=
   TUb.
 
 Lemma main_refines_itree :
-  trefines (MS (imp_prod {["main"]} {["memmove"; "memcpy"; "locle"]} imp_module (mod_itree _ _))
-              (initial_imp_prod_state imp_module (mod_itree _ _)
+  trefines (MS (imp_link {["main"]} {["memmove"; "memcpy"; "locle"]} imp_module (mod_itree _ _))
+              (initial_imp_link_state imp_module (mod_itree _ _)
               (initial_imp_state main_prog) (memmove_itree, tt)))
            (MS (mod_itree _ _) (main_itree, tt)).
 Proof.
@@ -602,13 +602,13 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   TUb.
 
 Lemma top_level_refines_itree :
-  trefines (MS (asm_prod (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm)
+  trefines (MS (asm_link (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm)
                          (dom print_asm)
                          (imp_to_asm (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm)
                                      {["main"; "memmove"; "memcpy"; "locle"]}
                                      main_f2i
                                      (mod_itree _ _)) (mod_itree _ _))
-              (initial_asm_prod_state (imp_to_asm _ _ _ _) (mod_itree _ _)
+              (initial_asm_link_state (imp_to_asm _ _ _ _) (mod_itree _ _)
                  (initial_imp_to_asm_state ∅ (mod_itree _ _) (main_itree, tt)) (print_itree, tt)))
            (MS (mod_itree _ _) (top_level_itree, tt)).
 Proof.
@@ -740,46 +740,46 @@ Proof.
     have -> : (main_asm ∪ memmove_asm ∪ memcpy_asm ∪ locle_asm ∪ print_asm) =
              (main_asm ∪ (memmove_asm ∪ memcpy_asm ∪ locle_asm) ∪ print_asm) by rewrite 2!assoc_L.
     etrans. {
-      apply asm_link_refines_prod. compute_done.
+      apply asm_syn_link_refines_link. compute_done.
     }
     etrans. {
-      apply: asm_prod_trefines; [|done].
-      etrans. { apply asm_link_refines_prod. compute_done. }
-      apply: asm_prod_trefines; [done|].
-      etrans. { apply asm_link_refines_prod. compute_done. }
-      apply: asm_prod_trefines; [|done].
-      apply asm_link_refines_prod. compute_done.
+      apply: asm_link_trefines; [|done].
+      etrans. { apply asm_syn_link_refines_link. compute_done. }
+      apply: asm_link_trefines; [done|].
+      etrans. { apply asm_syn_link_refines_link. compute_done. }
+      apply: asm_link_trefines; [|done].
+      apply asm_syn_link_refines_link. compute_done.
     }
     done.
   }
   etrans. {
-    apply: asm_prod_trefines; [|done].
-    apply: asm_prod_trefines; [apply main_asm_refines_imp|].
-    apply: asm_prod_trefines; [|done].
-    apply: asm_prod_trefines; [apply memmove_asm_refines_imp|apply memcpy_asm_refines_imp].
+    apply: asm_link_trefines; [|done].
+    apply: asm_link_trefines; [apply main_asm_refines_imp|].
+    apply: asm_link_trefines; [|done].
+    apply: asm_link_trefines; [apply memmove_asm_refines_imp|apply memcpy_asm_refines_imp].
   }
   etrans. {
-    apply: asm_prod_trefines; [|apply print_asm_refines_itree].
-    apply: asm_prod_trefines; [done|].
-    apply: asm_prod_trefines; [done|apply locle_asm_refines_itree].
+    apply: asm_link_trefines; [|apply print_asm_refines_itree].
+    apply: asm_link_trefines; [done|].
+    apply: asm_link_trefines; [done|apply locle_asm_refines_itree].
   }
   etrans. {
     etrans. {
-      apply: asm_prod_trefines; [|done].
-      apply: asm_prod_trefines; [done|].
-      apply: asm_prod_trefines; [|done].
+      apply: asm_link_trefines; [|done].
+      apply: asm_link_trefines; [done|].
+      apply: asm_link_trefines; [|done].
       rewrite /memmove_asm_dom /memcpy_asm_dom. unlock.
       apply: imp_to_asm_combine; compute_done.
     }
     rewrite idemp.
     etrans. {
-      apply: asm_prod_trefines; [|done].
-      apply: asm_prod_trefines; [done|].
+      apply: asm_link_trefines; [|done].
+      apply: asm_link_trefines; [done|].
       apply: imp_to_asm_combine; compute_done.
     }
     rewrite idemp -dom_union_L.
     etrans. {
-      apply: asm_prod_trefines; [|done].
+      apply: asm_link_trefines; [|done].
       rewrite /main_asm_dom. unlock.
       apply: imp_to_asm_combine; compute_done.
     }
@@ -787,25 +787,25 @@ Proof.
   }
   etrans. {
     etrans. {
-      apply: asm_prod_trefines; [|done].
+      apply: asm_link_trefines; [|done].
       apply: imp_to_asm_trefines.
-      apply: imp_prod_trefines; [done|].
-      apply: imp_prod_trefines; [|done].
+      apply: imp_link_trefines; [done|].
+      apply: imp_link_trefines; [|done].
       have -> : {["memmove"]} = dom memmove_prog by compute_done.
       have -> : {["memcpy"]} = dom memcpy_prog by compute_done.
-      apply: imp_prod_refines_link.
+      apply: imp_link_refines_syn_link.
       compute_done.
     }
     etrans. {
-      apply: asm_prod_trefines; [|done].
+      apply: asm_link_trefines; [|done].
       apply: imp_to_asm_trefines.
-      apply: imp_prod_trefines; [done|].
+      apply: imp_link_trefines; [done|].
       apply memmove_refines_itree.
     }
     done.
   }
   etrans. {
-    apply: asm_prod_trefines; [|done].
+    apply: asm_link_trefines; [|done].
     apply: imp_to_asm_trefines.
     apply main_refines_itree.
   }

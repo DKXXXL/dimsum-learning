@@ -454,6 +454,17 @@ Commuting ∀ with events:
   ReturnExt false (let y := Waiting true; y)
 ```
 
+# imp_heap_bij
+```
+                                   e_in'    e_out
+                                  ------> m ------
+                                 /                \
+                         e_in    |                v       e_out'
+IMP_HEAP_BIJ [ m ]     : ---> PRE e_in         POST e_out ------->
+
+```
+
+
 # Random other notes
 
 (* TODO: for angelic version, list EV must become propset (list EV).

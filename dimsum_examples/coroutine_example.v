@@ -201,13 +201,13 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   TUb.
 
 Lemma top_level_refines_itree :
-  trefines (MS (asm_prod (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom)
+  trefines (MS (asm_link (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom)
                          (dom print_asm)
                          (imp_to_asm (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom)
                                      {["yield"; "main"; "stream"]}
                                      all_f2i
                                      (mod_itree _ _)) (mod_itree _ _))
-              (initial_asm_prod_state (imp_to_asm _ _ _ _) (mod_itree _ _)
+              (initial_asm_link_state (imp_to_asm _ _ _ _) (mod_itree _ _)
                  (initial_imp_to_asm_state
                     (i2a_mem_stack_mem (stream_regs_init !!! "SP") stream_gp ∪ coro_regs_mem stream_regs_init)
                     (mod_itree _ _) (main_itree, tt)) (print_itree, tt)))
@@ -354,22 +354,22 @@ Lemma complete_refinement :
            (MS (mod_itree _ _) (top_level_itree, tt)).
 Proof.
   etrans. {
-    apply asm_link_refines_prod. rewrite /yield_asm. unlock. compute_done.
+    apply asm_syn_link_refines_link. rewrite /yield_asm. unlock. compute_done.
   }
   etrans. {
-    apply: asm_prod_trefines; [|done].
-    apply asm_link_refines_prod. rewrite /yield_asm. unlock. compute_done.
+    apply: asm_link_trefines; [|done].
+    apply asm_syn_link_refines_link. rewrite /yield_asm. unlock. compute_done.
   }
   etrans. {
-    apply: asm_prod_trefines; [|done].
-    apply: asm_prod_trefines; [done|].
-    apply asm_link_refines_prod. compute_done.
+    apply: asm_link_trefines; [|done].
+    apply: asm_link_trefines; [done|].
+    apply asm_syn_link_refines_link. compute_done.
   }
   etrans. {
-    apply: asm_prod_trefines.
+    apply: asm_link_trefines.
     - etrans. {
-        apply: asm_prod_trefines; [done|].
-        apply: asm_prod_trefines.
+        apply: asm_link_trefines; [done|].
+        apply: asm_link_trefines.
         + apply main_asm_refines_imp.
         + apply stream_asm_refines_imp.
       }

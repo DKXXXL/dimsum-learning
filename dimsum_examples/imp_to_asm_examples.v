@@ -225,10 +225,10 @@ Lemma full_add_stack :
                (initial_imp_to_asm_state ∅ imp_module (initial_imp_state full_imp_add_prog))).
 Proof.
   etrans. {
-    apply asm_link_refines_prod. { unfold asm_add, asm_add_client. eauto with map_disjoint. }
+    apply asm_syn_link_refines_link. { unfold asm_add, asm_add_client. eauto with map_disjoint. }
     all: compute_done. }
   etrans. {
-    apply: asm_prod_trefines.
+    apply: asm_link_trefines.
     - apply asm_add_refines_imp_add.
     - apply asm_add_client_refines_imp_add_client.
   }
@@ -237,7 +237,7 @@ Proof.
   }
   etrans. {
     apply: imp_to_asm_trefines.
-    apply imp_prod_refines_link.
+    apply imp_link_refines_syn_link.
     unfold imp_add_prog, imp_add_client_prog. eauto with map_disjoint.
   }
   rewrite left_id.

@@ -1381,11 +1381,11 @@ Lemma imp_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 mo1 mo2 m1 m2 σ1 σ2 `{!
   map_Forall (λ f i1, Is_true (if f2i2 !! f is Some i2 then bool_decide (i1 = i2) else true)) f2i1 →
   map_Forall (λ f i, f ∈ fns2 ∨ i ∉ ins2) f2i1 →
   map_Forall (λ f i, f ∈ fns1 ∨ i ∉ ins1) f2i2 →
-  trefines (MS (asm_prod ins1 ins2 (imp_to_asm ins1 fns1 f2i1 m1) (imp_to_asm ins2 fns2 f2i2 m2))
+  trefines (MS (asm_link ins1 ins2 (imp_to_asm ins1 fns1 f2i1 m1) (imp_to_asm ins2 fns2 f2i2 m2))
                (MLFNone, None, initial_imp_to_asm_state mo1 m1 σ1,
                  initial_imp_to_asm_state mo2 m2 σ2))
-           (MS (imp_to_asm (ins1 ∪ ins2) (fns1 ∪ fns2) (f2i1 ∪ f2i2) (imp_prod fns1 fns2 m1 m2))
-               (initial_imp_to_asm_state (mo1 ∪ mo2) (imp_prod _ _ _ _)
+           (MS (imp_to_asm (ins1 ∪ ins2) (fns1 ∪ fns2) (f2i1 ∪ f2i2) (imp_link fns1 fns2 m1 m2))
+               (initial_imp_to_asm_state (mo1 ∪ mo2) (imp_link _ _ _ _)
                   (MLFNone, [], σ1, σ2) )
 ).
 Proof.

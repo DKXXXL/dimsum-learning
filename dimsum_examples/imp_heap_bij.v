@@ -6,11 +6,9 @@ From dimsum.examples Require Import imp.
 
 Set Default Proof Using "Type".
 
-
-(* TODO: Allow also ownership of the outer heap, probably by adding a
-   second gmap prov (option Z → option val) and adding an new
-   heap_preserved and making sure that if hb_bij !! p2 = Some p1 then
-   we have the persistent fragment {[ p1 := None ]} *)
+(** * imp_heap_bij *)
+(** [imp_heap_bij] allows transformations of memory when proving a
+refinement between two Imp modules. *)
 
 (** * camera definition *)
 Inductive heap_bij_elem :=
@@ -27,18 +25,6 @@ Definition heap_bijUR_i_inj (r : (gmap_viewUR prov heap_bij_priv_elemO)) : heap_
 
 
 (** * imp_heap_bij_own *)
-(*
-
-                                   e_in'    e_out
-                                  ------> m ------
-                                 /                \
-                         e_in    |                v       e_out'
-IMP_HEAP_BIJ [ m ]     : ---> PRE e_in         POST e_out ------->
-
-
-
-*)
-
 Record heap_bij := HeapBij {
   hb_bij : gmap prov heap_bij_elem;
   hb_priv_i : gmap prov (gmap Z val);
@@ -1267,11 +1253,11 @@ Proof.
 Qed.
 
 Lemma imp_heap_bij_combine fns1 fns2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m2}:
-  trefines (MS (imp_prod fns1 fns2 (imp_heap_bij m1) (imp_heap_bij m2))
+  trefines (MS (imp_link fns1 fns2 (imp_heap_bij m1) (imp_heap_bij m2))
                (MLFNone, [], initial_imp_heap_bij_state m1 σ1,
                  initial_imp_heap_bij_state m2 σ2))
-           (MS (imp_heap_bij (imp_prod fns1 fns2 m1 m2))
-               (initial_imp_heap_bij_state (imp_prod _ _ _ _)
+           (MS (imp_heap_bij (imp_link fns1 fns2 m1 m2))
+               (initial_imp_heap_bij_state (imp_link _ _ _ _)
                   (MLFNone, [], σ1, σ2) )
 ).
 Proof.
@@ -1592,14 +1578,14 @@ Lemma imp_heap_bij_trefines_implies_ctx_refines fnsi fnss :
            (MS (imp_heap_bij imp_module) (initial_imp_heap_bij_state imp_module (initial_imp_state fnss))) →
   imp_ctx_refines fnsi fnss.
 Proof.
-  move => Hdom Href C. rewrite /imp_link map_difference_union_r (map_difference_union_r fnss).
+  move => Hdom Href C. rewrite /imp_syn_link map_difference_union_r (map_difference_union_r fnss).
   etrans; [|apply imp_heap_bij_imp_closed].
   apply mod_seq_map_trefines. { apply _. } { apply _. }
-  etrans. { apply imp_link_refines_prod. apply map_disjoint_difference_r'. }
-  etrans. { apply: imp_prod_trefines. 1: done. 1: apply imp_heap_bij_imp_refl. }
+  etrans. { apply imp_syn_link_refines_link. apply map_disjoint_difference_r'. }
+  etrans. { apply: imp_link_trefines. 1: done. 1: apply imp_heap_bij_imp_refl. }
   etrans. { apply imp_heap_bij_combine; apply _. }
   apply: mod_prepost_trefines.
-  etrans. 2: { apply imp_prod_refines_link. apply map_disjoint_difference_r'. }
+  etrans. 2: { apply imp_link_refines_syn_link. apply map_disjoint_difference_r'. }
   rewrite !dom_difference_L Hdom.
   erewrite map_difference_eq_dom_L => //.
   apply _.

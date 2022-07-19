@@ -327,22 +327,22 @@ Definition initial_asm_closed_state (m : module asm_event) (σ : m.(m_state)) :=
   (@SMFilter asm_event, σ, (@PPOutside asm_event asm_closed_event, false, (True : uPred unitUR)%I)).
 
 
-(** * syntactic linking *)
-Definition asm_link (instrs1 instrs2 : gmap Z asm_instr) : gmap Z asm_instr :=
+(** * Linking *)
+(** ** Syntactic linking *)
+Definition asm_syn_link (instrs1 instrs2 : gmap Z asm_instr) : gmap Z asm_instr :=
   instrs1 ∪ instrs2.
 
 Definition asm_ctx_refines (instrsi instrss : gmap Z asm_instr) :=
   ∀ C, trefines (MS (asm_closed asm_module)
-                    (initial_asm_closed_state asm_module (initial_asm_state (asm_link instrsi C))))
+                    (initial_asm_closed_state asm_module (initial_asm_state (asm_syn_link instrsi C))))
                 (MS (asm_closed asm_module)
-                    (initial_asm_closed_state asm_module (initial_asm_state (asm_link instrss C)))).
+                    (initial_asm_closed_state asm_module (initial_asm_state (asm_syn_link instrss C)))).
 
-(** * semantic linking *)
-
+(** ** Semantic linking *)
 (* State s says whether we are currently in the environment and
 expecting a syscall return. Some SPNone means that the program
 executed a page fault and is not waiting for any return. *)
-Definition asm_prod_filter (ins1 ins2 : gset Z) : seq_product_state → option seq_product_state → asm_ev → seq_product_state → option seq_product_state → asm_ev → bool → Prop :=
+Definition asm_link_filter (ins1 ins2 : gset Z) : seq_product_state → option seq_product_state → asm_ev → seq_product_state → option seq_product_state → asm_ev → bool → Prop :=
   λ p s e p' s' e' ok,
     e' = e ∧
     ok = true ∧
@@ -363,23 +363,24 @@ Definition asm_prod_filter (ins1 ins2 : gset Z) : seq_product_state → option s
         p' ≠ SPNone ∧
         p  = SPNone
     end.
-Arguments asm_prod_filter _ _ _ _ _ _ _ _ /.
+Arguments asm_link_filter _ _ _ _ _ _ _ _ /.
 
-Definition asm_prod (ins1 ins2 : gset Z) (m1 m2 : module asm_event) : module asm_event :=
-  mod_link (asm_prod_filter ins1 ins2) m1 m2.
+Definition asm_link (ins1 ins2 : gset Z) (m1 m2 : module asm_event) : module asm_event :=
+  mod_link (asm_link_filter ins1 ins2) m1 m2.
 
 (* TODO: use this more *)
-Definition initial_asm_prod_state (m1 m2 : module asm_event) (σ1 : m1.(m_state)) (σ2 : m2.(m_state)) :=
+Definition initial_asm_link_state (m1 m2 : module asm_event) (σ1 : m1.(m_state)) (σ2 : m2.(m_state)) :=
   (@MLFNone asm_ev, @None seq_product_state, σ1, σ2).
 
-Lemma asm_prod_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
+Lemma asm_link_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
   trefines (MS m1 σ1) (MS m1' σ1') →
   trefines (MS m2 σ2) (MS m2' σ2') →
-  trefines (MS (asm_prod ins1 ins2 m1 m2) (σ, σ1, σ2))
-           (MS (asm_prod ins1 ins2 m1' m2') (σ, σ1', σ2')).
+  trefines (MS (asm_link ins1 ins2 m1 m2) (σ, σ1, σ2))
+           (MS (asm_link ins1 ins2 m1' m2') (σ, σ1', σ2')).
 Proof. move => ??. by apply mod_link_trefines. Qed.
 
-Definition asm_link_prod_inv (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_module.(m_state)) (σ2 : mod_link_state asm_ev * option seq_product_state * asm_state * asm_state) : Prop :=
+(** ** Relating semantic and syntactic linking *)
+Definition asm_link_inv (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_module.(m_state)) (σ2 : mod_link_state asm_ev * option seq_product_state * asm_state * asm_state) : Prop :=
   let 'AsmState i1 rs1 mem1 ins1' := σ1 in
   let '(σf, s, AsmState il rsl meml insl, AsmState ir rsr memr insr) := σ2 in
   ins1' = ins1 ∪ ins2 ∧
@@ -393,15 +394,15 @@ Definition asm_link_prod_inv (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_module.(m
   | _ => False
   end.
 
-Lemma asm_link_refines_prod ins1 ins2:
+Lemma asm_syn_link_refines_link ins1 ins2:
   ins1 ##ₘ ins2 →
-  trefines (MS asm_module (initial_asm_state (asm_link ins1 ins2)))
-           (MS (asm_prod (dom ins1) (dom ins2) asm_module asm_module)
-               (initial_asm_prod_state asm_module asm_module (initial_asm_state ins1) (initial_asm_state ins2))).
+  trefines (MS asm_module (initial_asm_state (asm_syn_link ins1 ins2)))
+           (MS (asm_link (dom ins1) (dom ins2) asm_module asm_module)
+               (initial_asm_link_state asm_module asm_module (initial_asm_state ins1) (initial_asm_state ins2))).
 Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
-  unshelve apply: tsim_remember. { exact: (λ _, asm_link_prod_inv ins1 ins2). }
+  unshelve apply: tsim_remember. { exact: (λ _, asm_link_inv ins1 ins2). }
   { naive_solver. } { done. }
   move => /= {}n _ Hloop [i1 rs1 mem1 ins1'] [[[σf s] [il rsl meml insl]] [ir rsr memr insr]] [? [? [? Hinv]]].
   case_match; destruct!.
@@ -449,15 +450,15 @@ Proof.
     all: tstep_s; split!; apply: Hloop; naive_solver.
 Qed.
 
-Lemma asm_prod_refines_link ins1 ins2:
+Lemma asm_link_refines_syn_link ins1 ins2:
   ins1 ##ₘ ins2 →
-  trefines (MS (asm_prod (dom ins1) (dom ins2) asm_module asm_module)
-               (initial_asm_prod_state asm_module asm_module (initial_asm_state ins1) (initial_asm_state ins2)))
-           (MS asm_module (initial_asm_state (asm_link ins1 ins2))).
+  trefines (MS (asm_link (dom ins1) (dom ins2) asm_module asm_module)
+               (initial_asm_link_state asm_module asm_module (initial_asm_state ins1) (initial_asm_state ins2)))
+           (MS asm_module (initial_asm_state (asm_syn_link ins1 ins2))).
 Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
-  unshelve apply: tsim_remember. { exact: (λ _, flip (asm_link_prod_inv ins1 ins2)). }
+  unshelve apply: tsim_remember. { exact: (λ _, flip (asm_link_inv ins1 ins2)). }
   { naive_solver. } { done. }
   move => /= {}n _ Hloop [[[σf ?] [il rsl meml insl]] [ir rsr memr insr]] [i1 rs1 mem1 ins1'] [? [? [? Hinv]]].
   case_match; destruct!.
@@ -510,16 +511,16 @@ Lemma asm_trefines_implies_ctx_refines insi inss :
   trefines (MS asm_module (initial_asm_state insi)) (MS asm_module (initial_asm_state inss)) →
   asm_ctx_refines insi inss.
 Proof.
-  move => Hdom Href C. rewrite /asm_link map_difference_union_r (map_difference_union_r inss).
+  move => Hdom Href C. rewrite /asm_syn_link map_difference_union_r (map_difference_union_r inss).
   apply mod_seq_map_trefines. { apply _. } { apply _. }
   etrans. {
-    apply asm_link_refines_prod. apply map_disjoint_difference_r'.
+    apply asm_syn_link_refines_link. apply map_disjoint_difference_r'.
   }
   etrans. 2: {
-    apply asm_prod_refines_link. apply map_disjoint_difference_r'.
+    apply asm_link_refines_syn_link. apply map_disjoint_difference_r'.
   }
   rewrite !dom_difference_L Hdom.
-  apply asm_prod_trefines; [apply _..| |].
+  apply asm_link_trefines; [apply _..| |].
   - apply: Href.
   - erewrite map_difference_eq_dom_L => //. apply _.
 Qed.
