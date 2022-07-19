@@ -727,7 +727,7 @@ Proof.
   naive_solver.
 Qed.
 
-(** heap_bij_inv *)
+(** * heap_bij_inv *)
 Definition heap_bij_inv (hi hs : heap_state) : uPred heap_bijUR :=
   ∃ bij, ⌜dom (hb_bij bij) ⊆ h_provs hs⌝ ∗
          ⌜hb_provs_i bij ⊆ h_provs hi⌝ ∗

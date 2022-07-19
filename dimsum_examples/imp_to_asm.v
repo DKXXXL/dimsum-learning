@@ -5,96 +5,9 @@ From dimsum.examples Require Import imp asm.
 
 Local Open Scope Z_scope.
 
-(*
-
-
-P1 :=
- X;;
- Y
-
-P2 :=
- A;;
- B
-
-
-P1 :=
- X;;
- yield();;
- Y
-
-P2 :=
- A;;
- yield();;
- B
-
-
-Idea:
-- have an concurrent operational semantics without explicit and show
-  that it can be implemented by an premetive scheduler and a timer
-  interrupt
- *)
-
-(* Interesting thing to consider: What if the assembly does two
-allocations? Do they necessarily correspond to two different
-allocations in IMP?
-
--> No, build an example which exercises this part. *)
-
-(*
-Idea for new ghost state:
-
-asm_mem: gmap Z Z
--> like points-to predicate
-- asm_mem_auth (mem : gmap Z Z)
-- asm_mem_ptsto (a : Z) (v : Z)
-
-imp_heap: gmap prov (gmap Z val))
-- imp_heap_auth ih
-- imp_heap_block (b : gmap Z val)
-  - exclusive
-- imp_heap_dead (p : prov)
-  - persistent
-  - defined as p -> ∅
-
-physical_blocks: gmap prov Z
--> persistent, only allows extension
-
-Invariant :
-λ h mem sp pb, ∃ ih amem,
-  asm_mem_auth amem ∗
-  imp_heap_auth ih ∗
-  physical_blocks pb ∗
-  asm_imp_agree pb ∧
-  asm_mem_agree mem amem ∧
-  imp_heap_agree h ih ∧
-  (∀ z, z < sp → amem !! z = None) ∧
-
-imp_heap_agree h ih :=
-  dom _ ih ⊆ h_provs h ∧
-  ∀ l x, ih !! l.1 = Some b → h !! l = b !! l.2
-
-asm_mem_agree mem amem :=
-  ∀ a v, amem !! a = Some v → mem !!! a = v
-
-asm_imp_agree pb :=
-  ∀ p a, pb !! p = Some a →
-     imp_heap_dead p ∨ ∃ b, imp_heap_block b ∗ [∗ map] o↦v,
-       ∃ v', imp_val_to_asm_val pb v = Some v' ∧ asm_mem_ptsto (a + o) v'
-
--> Idea: if there is an access in the imp program, one can deduce that the heap
-   cell cannot be dead and thus there is an asm points to in asm_imp_agree.
-   For private blocks, one does not need to put the asm_mem_ptsto into asm_imp_agree
-   and thus one can freely modify them. If the source frees a memory block, one
-   knows that it is not dead and thus one gets the imp_heap_block and the asm_mem_ptstos
-   One probably also needs to know that the block still has the same size as when it
-   was allocated, but that could work e.g. by turning h_provs into gmap prov positive
-   which tracks the size of blocks.
-
-pb is also used to translate values
-*)
-
 (** * imp_to_asm *)
-(** ** registers *)
+
+(** * Registers *)
 Definition args_registers : list string :=
   ["R0"; "R1"; "R2"; "R3"; "R4"; "R5"; "R6"; "R7" ; "R8"].
 
@@ -114,7 +27,7 @@ Definition i2a_regs_ret (rs rsold : gmap string Z) (av : Z) : Prop :=
   rs !!! "R0" = av ∧
   map_preserved saved_registers rsold rs.
 
-(** ** mapping of provenances *)
+(** * Mapping of provenances *)
 Inductive imp_to_asm_elem :=
 | I2AShared (a : Z) | I2AConstant (h : gmap Z val).
 
@@ -211,7 +124,6 @@ Lemma i2a_ih_constant_union ih1 ih2:
   i2a_ih_constant (ih1 ∪ ih2) = i2a_ih_constant ih1 ∪ i2a_ih_constant ih2.
 Proof. apply map_omap_union. Qed.
 
-
 Lemma i2a_ih_constant_fmap ih:
   i2a_ih_constant (I2AConstant <$> ih) = ih.
 Proof.
@@ -274,7 +186,8 @@ Proof.
   split; destruct e; naive_solver.
 Qed.
 
-(** ** ghost state  *)
+(** * Ghost state *)
+(** ** Ghost state definitions *)
 Canonical Structure imp_to_asm_elemO := leibnizO imp_to_asm_elem.
 
 Definition imp_to_asmUR : ucmra :=
@@ -298,6 +211,7 @@ Definition i2a_mem_constant (a : Z) (v : option Z) : uPred imp_to_asmUR :=
 Definition i2a_mem_map (m : gmap Z (option Z)) : uPred imp_to_asmUR :=
   ([∗ map] a↦v ∈ m, i2a_mem_constant a v).
 
+(** ** Ghost state lemmas *)
 Lemma i2a_mem_constant_excl a v1 v2 :
   i2a_mem_constant a v1 -∗
   i2a_mem_constant a v2 -∗
@@ -628,7 +542,7 @@ Proof.
   done.
 Qed.
 
-(** ** invariants *)
+(** * invariants *)
 Definition i2a_val_rel (iv : val) (av : Z) : uPred imp_to_asmUR :=
   match iv with
   | ValNum z => ⌜av = z⌝
@@ -1132,14 +1046,6 @@ Proof.
     iSplit!; [done|]. by rewrite Nat.sub_0_r.
 Qed.
 
-(*   iAssert () *)
-(* iModIntro. *)
-(*   iSplitL "Hmem". *)
-(*   - iExists _. by iFrame. *)
-(*   - iExists _. by iFrame. *)
-(* Qed. *)
-
-
 Lemma i2a_args_nil o rs:
   i2a_args o [] rs ⊣⊢ True.
 Proof. done. Qed.
@@ -1206,7 +1112,7 @@ Proof.
     simplify_eq/=. rewrite ->Nat.sub_0_r in *. done.
 Qed.
 
-(** ** prepost *)
+(** * Definition of [imp_to_asm] *)
 Record imp_to_asm_stack_item := I2AI {
   i2as_extern : bool;
   i2as_ret : Z;
@@ -1322,6 +1228,7 @@ Lemma imp_to_asm_trefines mo m m' σ σ' ins fns f2i `{!VisNoAll m}:
            (MS (imp_to_asm ins fns f2i m') (initial_imp_to_asm_state mo m' σ')).
 Proof. move => ?. by apply: mod_prepost_trefines. Qed.
 
+(** * Horizontal compositionality of [imp_to_asm] *)
 Inductive imp_to_asm_combine_stacks (ins1 ins2 : gset Z) :
   seq_product_state → list seq_product_state →
   list imp_to_asm_stack_item → list imp_to_asm_stack_item → list imp_to_asm_stack_item →
@@ -1511,7 +1418,7 @@ Proof.
       1: { iSatMono. iIntros!. iFrame. }
 Qed.
 
-
+(** * Proof technique for [imp_to_asm] *)
 Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
   ins_dom = dom ins →
   fns_dom = dom fns →
