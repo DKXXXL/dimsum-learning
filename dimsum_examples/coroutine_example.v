@@ -165,7 +165,7 @@ Proof.
   go_s. done.
 Qed.
 
-Definition stream_sp : Z := 10000.
+Definition stream_sp : Z := 20000.
 Definition stream_ssz : N := 4098.
 Definition stream_regs_init : gmap string Z :=
   <["SP" := stream_sp]> $
