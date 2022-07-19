@@ -514,12 +514,12 @@ Lemma coro_prod_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAl
            (MS (coro_prod ins1 ins2 m1' m2') (σ, σ1', σ2')).
 Proof. move => ??. by apply mod_link_trefines. Qed.
 
-Theorem coro_spec finit regs_init gp_init m1 m2 σ1 σ2 ins1 ins2 fns1 fns2 f2i1 f2i2
+Theorem coro_spec finit regs_init ssz_init m1 m2 σ1 σ2 ins1 ins2 fns1 fns2 f2i1 f2i2
   `{!VisNoAll m1} `{!VisNoAll m2}:
   let fns := {["yield"]} ∪ fns1 ∪ fns2 in
   let ins := yield_asm_dom ∪ ins1 ∪ ins2 in
   let f2i := f2i1 ∪ f2i2 in
-  let mo := (i2a_mem_stack_mem (regs_init !!! "SP") gp_init ∪ coro_regs_mem regs_init) in
+  let mo := (i2a_mem_stack_mem (regs_init !!! "SP") ssz_init ∪ coro_regs_mem regs_init) in
   f2i2 !! finit = Some (regs_init !!! "PC") →
   finit ∈ fns2 →
   "yield" ∉ fns1 ∪ fns2 →
@@ -534,8 +534,7 @@ Theorem coro_spec finit regs_init gp_init m1 m2 σ1 σ2 ins1 ins2 fns1 fns2 f2i1
   map_Forall (λ f i, f ∈ fns2 ∨ i ∉ ins2) f2i →
   map_Forall (λ f i, f ∈ fns1 ∨ i ∉ ins1) f2i →
   map_Forall (λ f i, f = "yield" ∨ i ∉ yield_asm_dom) f2i →
-  i2a_mem_stack_mem (regs_init !!! "SP") gp_init ##ₘ coro_regs_mem regs_init →
-  gp_init + GUARD_PAGE_SIZE ≤ regs_init !!! "SP" →
+  i2a_mem_stack_mem (regs_init !!! "SP") ssz_init ##ₘ coro_regs_mem regs_init →
   trefines
     (MS (asm_link yield_asm_dom (ins1 ∪ ins2) asm_module
            (asm_link ins1 ins2 (imp_to_asm ins1 fns1 f2i1 m1) (imp_to_asm ins2 fns2 f2i2 m2)) )
@@ -549,7 +548,7 @@ Theorem coro_spec finit regs_init gp_init m1 m2 σ1 σ2 ins1 ins2 fns1 fns2 f2i1
           (initial_coro_prod_state finit _ _ σ1 σ2)))
 .
 Proof.
-  move => fns ins f2i mo Hinit Hfinit Hyf Hidisj Hfdisj Hydisj Hy1 Hy2 Hi1 Hi2 Hag Hf1 Hf2 Hfy Hmo Hgp.
+  move => fns ins f2i mo Hinit Hfinit Hyf Hidisj Hfdisj Hydisj Hy1 Hy2 Hi1 Hi2 Hag Hf1 Hf2 Hfy Hmo.
   have {}Hi1 : (∀ f, f ∈ fns1 → ∃ i, i ∈ ins1 ∧ f2i1 !! f = Some i). {
     move => ? /Hi1. case_match => // /bool_decide_unpack. naive_solver.
   }
@@ -577,7 +576,7 @@ Proof.
   apply: tsim_implies_trefines => n0 /=.
   tstep_i => *. case_match; destruct!/=.
   tstep_s. split!.
-  tstep_s. move => -[] //= ? h gp vs avs f *.
+  tstep_s. move => -[] //= ? h ssz vs avs f *.
   tstep_s. split!.
   tstep_s => ?.
   have ? : regs !!! "PC" ∈ ins1. { efeed pose proof Hi1; [done|]. destruct!. naive_solver. }
@@ -586,10 +585,10 @@ Proof.
   tstep_i => *. case_match; destruct!/=.
   rewrite bool_decide_true; [|fast_set_solver].
   tstep_i => *. simplify_eq.
-  tstep_i. eexists true. split; [done|]. eexists h, gp, vs, avs, f.
+  tstep_i. eexists true. split; [done|]. eexists h, ssz, vs, avs, f.
   split!. { naive_solver. } { fast_set_solver. }
   { iSatMono. iIntros!. rewrite /i2a_mem_map/mo big_sepM_empty big_sepM_union //. iDestruct!. iFrame.
-    iDestruct (i2a_mem_stack_init with "[$]") as "?"; [done|]. iAccu. }
+    iDestruct (i2a_mem_stack_init with "[$]") as "?". iAccu. }
   tsim_mirror m1 σ1. move => ??? Hcont.
   tstep_both. apply Hcont => κ ?? Hs. destruct κ.
   2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
@@ -612,13 +611,13 @@ Proof.
        match σc.1 with
        (* Left side, not yet changed to right side *)
        | CPFLeft =>
-           ∃ gp,
+           ∃ ssz,
            σpc1 = MLFLeft ∧
            σsm1 = SMProg ∧
            pp1 = PPInside ∧
            cs1 = csc ∧
            map_scramble touched_registers lrc lr1 ∧
-           (x1 ⊣⊢ i2a_mem_stack (yregs !!! "SP") gp ∗ i2a_mem_map (coro_regs_mem yregs) ∗ x2 ∗ xc)%I ∧
+           (x1 ⊣⊢ i2a_mem_stack (yregs !!! "SP") ssz ∗ i2a_mem_map (coro_regs_mem yregs) ∗ x2 ∗ xc)%I ∧
            σsm2 = SMFilter ∧
            pp2 = PPOutside ∧
            (if σc.2 is Some f then
@@ -631,14 +630,14 @@ Proof.
            (if σc.2 is Some f then f2i2 !! f = Some (yregs !!! "PC") ∧ f ∈ fns2 else True)
        (* Right side *)
        | CPFRight =>
-           ∃ gp regs1 ret2 regs2,
+           ∃ ssz regs1 ret2 regs2,
            σpc1 = MLFRight ∧
            σsm1 = SMFilter ∧
            pp1 = PPOutside ∧
            cs1 = [I2AI true (yregs !!! "PC") regs1; I2AI false cret cregs] ∧
            map_preserved saved_registers regs1 yregs ∧
            map_scramble touched_registers lrc lr2 ∧
-           (x2 ⊣⊢ i2a_mem_stack (yregs !!! "SP") gp ∗ i2a_mem_map (coro_regs_mem yregs) ∗ x1 ∗ xc)%I ∧
+           (x2 ⊣⊢ i2a_mem_stack (yregs !!! "SP") ssz ∗ i2a_mem_map (coro_regs_mem yregs) ∗ x1 ∗ xc)%I ∧
            σsm2 = SMProg ∧
            pp2 = PPInside ∧
            cs2 = [I2AI false ret2 regs2] ∧
@@ -802,7 +801,7 @@ Proof.
       (* going back inside *)
       tstep_i => e *. tstep_s. split!. destruct!/=.
       destruct e; destruct!.
-      tstep_s => -[] //= ? h' gp' vs' avs' f' *.
+      tstep_s => -[] //= ? h' ssz' vs' avs' f' *.
       tstep_s. split!.
       tstep_s => ?.
       have ? : regs !!! "PC" ∈ ins1. { efeed pose proof Hi1; [done|]. destruct!. naive_solver. }
@@ -811,7 +810,7 @@ Proof.
       tstep_i => *. case_match; destruct!/=.
       rewrite bool_decide_true; [|fast_set_solver].
       tstep_i => *. simplify_eq.
-      tstep_i. eexists true. split; [done|]. eexists h', gp', vs', avs', f'.
+      tstep_i. eexists true. split; [done|]. eexists h', ssz', vs', avs', f'.
       split!. { destruct (f2i1 !! f') eqn:?; naive_solver. } { fast_set_solver. }
       { iSatMono. iIntros!. iFrame. iAccu. }
       tsim_mirror m1 σ'. move => ??? Hcont.

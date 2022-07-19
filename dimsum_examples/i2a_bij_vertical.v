@@ -776,7 +776,7 @@ Proof.
     rename select (heap_preserved (i2a_ih_constant iha) hprev) into Hpreva.
     rename select (heap_preserved (hb_priv_i bijb) hprev) into Hprevb.
     iSatStart HP'. iIntros!.
-    iDestruct select (i2a_mem_inv _ _ _) as "((%&Hgp&Hsp)&Hmauth)".
+    iDestruct select (i2a_mem_inv _ _ _) as "((Hgp&Hsp)&Hmauth)".
     iDestruct (i2a_mem_lookup_big' mo with "[$] [$]") as %?.
     iDestruct (i2a_mem_uninit_alt1 with "[$]") as (? Hvslen) "Hsp"; [lia|].
     iDestruct select (i2a_heap_inv _) as (ih ??) "[Hsh [Hhag Hh]]".
@@ -837,7 +837,6 @@ Proof.
         rewrite i2a_ih_shared_union // i2a_ih_shared_fmap. by iApply (big_sepM_union_2 with "[$]").
       } iFrame "Hsh".
       iDestruct select (i2a_mem_map (mem ∖ _)) as "$". iFrame.
-      rewrite -!(assoc bi_sep). iSplit; [done|].
       iDestruct (i2a_mem_uninit_alt2 with "[$]") as "Huninit". rewrite Hvslen Z2Nat.id; [|lia].
       iFrame "Huninit".
       rewrite !bi.sep_exist_r. iExists _.
@@ -970,7 +969,7 @@ Proof.
     iSatStart HPa'. iIntros!.
     rewrite heap_of_event_event_set_vals_heap vals_of_event_event_set_vals_heap.
     2: { destruct e; simplify_eq/=; destruct!/=; solve_length. }
-    iDestruct select (i2a_mem_inv _ _ _) as "((%&Hgp&Hsp)&Hmauth)".
+    iDestruct select (i2a_mem_inv _ _ _) as "((Hgp&Hsp)&Hmauth)".
     iDestruct (i2a_mem_lookup_big' moa with "[$] [$]") as %?.
     iDestruct (i2a_mem_uninit_alt1 with "[$]") as (? Hvslen) "Hsp"; [lia|].
     iDestruct select (i2a_heap_inv _) as (iha' ??) "[Hsh [Hhag Hh]]".
@@ -1009,8 +1008,6 @@ Proof.
       iDestruct select (i2a_mem_map (mem'' ∖ _)) as "$".
       iDestruct select (i2a_mem_map mhag2) as "$".
       iDestruct select ([∗ map] _↦_ ∈ _, i2a_heap_shared _ _)%I as "#Hsh". iFrame. iFrame "Hsh".
-      rewrite -!(assoc bi_sep).
-      iSplit; [done|].
       iDestruct (i2a_mem_uninit_alt2 with "[$]") as "Hsp". rewrite Hvslen Z2Nat.id; [|lia]. iFrame.
       iSplitL.
       * iExists _. iFrame. repeat iSplit.

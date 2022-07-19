@@ -166,7 +166,7 @@ Proof.
 Qed.
 
 Definition stream_sp : Z := 10000.
-Definition stream_gp : Z := 5000.
+Definition stream_ssz : N := 4098.
 Definition stream_regs_init : gmap string Z :=
   <["SP" := stream_sp]> $
   <["PC" := stream_addr]> $
@@ -176,11 +176,11 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
   TAssume (rs !!! "PC" = main_addr);;;;
   TAssume (rs !!! "R30" ∉ yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom ∪ dom print_asm);;;;
-  TAssume (∃ gp, gp + GUARD_PAGE_SIZE ≤ rs !!! "SP" ∧
-     (i2a_mem_stack_mem (rs !!! "SP") gp ##ₘ
-       (i2a_mem_stack_mem (stream_regs_init !!! "SP") stream_gp ∪ coro_regs_mem stream_regs_init)) ∧
-    i2a_mem_stack_mem (rs !!! "SP") gp ∪
-    (i2a_mem_stack_mem (stream_regs_init !!! "SP") stream_gp ∪ coro_regs_mem stream_regs_init) ⊆ mem);;;;
+  TAssume (∃ ssz,
+     (i2a_mem_stack_mem (rs !!! "SP") ssz ##ₘ
+       (i2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init)) ∧
+    i2a_mem_stack_mem (rs !!! "SP") ssz ∪
+    (i2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init) ⊆ mem);;;;
   args ← TExist _;;;
   mem ← TExist _;;;
   TAssert (print_args 0 args);;;;
@@ -209,7 +209,7 @@ Lemma top_level_refines_itree :
                                      (mod_itree _ _)) (mod_itree _ _))
               (initial_asm_link_state (imp_to_asm _ _ _ _) (mod_itree _ _)
                  (initial_imp_to_asm_state
-                    (i2a_mem_stack_mem (stream_regs_init !!! "SP") stream_gp ∪ coro_regs_mem stream_regs_init)
+                    (i2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init)
                     (mod_itree _ _) (main_itree, tt)) (print_itree, tt)))
            (MS (mod_itree _ _) (top_level_itree, tt)).
 Proof.
@@ -219,7 +219,7 @@ Proof.
   go_s. split!. go.
   go_s => ?. go. simplify_map_eq'.
   go_s => Hret. go. rewrite !not_elem_of_union in Hret.
-  go_s => -[?[?[??]]]. go.
+  go_s => -[?[??]]. go.
   rewrite bool_decide_true. 2: unfold yield_asm_dom, yield_asm, main_asm_dom, stream_asm_dom; unlock; by vm_compute.
   tstep_i => ??. simplify_eq.
   tstep_i. eexists true. split; [done|] => /=. eexists ∅, _, [], [], "main". split!.
@@ -376,7 +376,7 @@ Proof.
       etrans. {
         rewrite dom_union_L.
         have ->: dom yield_asm = yield_asm_dom by rewrite /yield_asm_dom; unlock.
-        apply: (coro_spec "stream" stream_regs_init stream_gp).
+        apply: (coro_spec "stream" stream_regs_init stream_ssz).
         all: unfold yield_asm_dom, yield_asm, i2a_mem_stack_mem; unlock.
         all: compute_done.
       }

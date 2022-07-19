@@ -352,9 +352,7 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
   TAssume (rs !!! "PC" = 200);;;;
   TAssume (rs !!! "R30" ∉ main_asm_dom ∪ dom int_to_ptr_asm);;;;
-  TAssume (∃ gp, gp + GUARD_PAGE_SIZE ≤ rs !!! "SP" ∧
-            (∀ a, gp ≤ a < gp + GUARD_PAGE_SIZE → mem !! a = Some None) ∧
-            (∀ a, gp + GUARD_PAGE_SIZE ≤ a < rs !!! "SP" → ∃ v, mem !! a = Some (Some v)));;;;
+  TAssume (∃ ssz, i2a_mem_stack_mem (rs !!! "SP") ssz ⊆ mem);;;;
   args ← TExist _;;;
   mem ← TExist _;;;
   TAssert (length args = length syscall_arg_regs);;;;
@@ -393,10 +391,9 @@ Proof.
   go_i. eexists true => /=. split; [done|]. eexists ∅, _, [], [], "main".
   split!.
   { by simplify_map_eq'. }
-  { apply: satisfiable_mono; [by eapply i2a_res_init|].
-    iIntros!.
-    iDestruct (i2a_mem_inv_init with "[$] [$]") as "$"; [done..|].
-    iFrame. rewrite /i2a_mem_map big_sepM_empty. iSplit; [done|]. iAccu. }
+  { apply: satisfiable_mono; [by eapply (i2a_res_init mem)|].
+    iIntros!. rewrite /i2a_mem_map big_sepM_empty. iFrame. iSplitL; [|iAccu].
+    iApply i2a_mem_stack_init. by iApply big_sepM_subseteq. }
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.

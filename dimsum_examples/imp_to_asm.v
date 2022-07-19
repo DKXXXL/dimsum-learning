@@ -559,13 +559,12 @@ Definition i2a_guard_page (gp : Z) : uPred imp_to_asmUR :=
 Definition i2a_mem_uninit (a : Z) (len : Z) : uPred imp_to_asmUR :=
   [∗ list] a ∈ seqZ a len, ∃ v, i2a_mem_constant a (Some v).
 
-Definition i2a_mem_stack (sp gp : Z) : uPred imp_to_asmUR :=
-  ⌜gp + GUARD_PAGE_SIZE ≤ sp⌝ ∗
-  i2a_guard_page gp ∗
-  i2a_mem_uninit (gp + GUARD_PAGE_SIZE) (sp - (gp + GUARD_PAGE_SIZE)).
+Definition i2a_mem_stack (sp : Z) (ssz : N) : uPred imp_to_asmUR :=
+  i2a_guard_page (sp - Z.of_N ssz - GUARD_PAGE_SIZE) ∗
+  i2a_mem_uninit (sp - Z.of_N ssz) (Z.of_N ssz).
 
-Definition i2a_mem_inv (sp : Z) (gp : Z) (mem : gmap Z (option Z)) : uPred imp_to_asmUR :=
-  i2a_mem_stack sp gp ∗ i2a_mem_auth mem.
+Definition i2a_mem_inv (sp : Z) (ssz : N) (mem : gmap Z (option Z)) : uPred imp_to_asmUR :=
+  i2a_mem_stack sp ssz ∗ i2a_mem_auth mem.
 
 Definition i2a_heap_shared_agree (h : gmap loc val) (ih : gmap prov imp_to_asm_elem) : uPred imp_to_asmUR :=
   [∗ map] l↦v∈h,
@@ -638,103 +637,105 @@ Proof.
   have [??]:= Himpl _ _ _ ltac:(done) ltac:(done). by simplify_map_eq.
 Qed.
 
-Lemma i2a_guard_page_lookup a sp gp mem :
-  gp ≤ a < gp + GUARD_PAGE_SIZE →
-  i2a_mem_inv sp gp mem -∗
+Lemma i2a_guard_page_lookup a sp ssz mem :
+  sp - Z.of_N ssz - GUARD_PAGE_SIZE ≤ a < sp - Z.of_N ssz →
+  i2a_mem_inv sp ssz mem -∗
   ⌜mem !! a = Some None⌝.
 Proof.
-  iIntros (?) "((%&Hgp&?)&Hauth)". rewrite /i2a_guard_page.
+  iIntros (?) "((Hgp&?)&Hauth)". rewrite /i2a_guard_page.
   iDestruct (i2a_mem_lookup_big' with "[$] [$]") as %Hsub.
   iPureIntro. apply: lookup_weaken; [|done]. apply lookup_map_seqZ_Some. split; [lia|].
   apply lookup_replicate. split!. unlock. lia.
 Qed.
 
-Lemma i2a_mem_lookup a v mem sp gp:
-  i2a_mem_inv sp gp mem -∗
+Lemma i2a_mem_lookup a v mem sp ssz:
+  i2a_mem_inv sp ssz mem -∗
   i2a_mem_constant a v -∗
   ⌜mem !! a = Some v⌝.
 Proof.
-  iIntros "((%&?&?)&Hauth) Hconst".
+  iIntros "((?&?)&Hauth) Hconst".
   by iDestruct (i2a_mem_lookup' with "Hauth Hconst") as %?.
 Qed.
 
-Lemma i2a_mem_lookup_big sp gp m mem :
-  i2a_mem_inv sp gp mem -∗
+Lemma i2a_mem_lookup_big sp ssz m mem :
+  i2a_mem_inv sp ssz mem -∗
   i2a_mem_map m -∗
   ⌜m ⊆ mem⌝.
 Proof.
-  iIntros "((%&?&?)&Hauth) Hconst".
+  iIntros "((?&?)&Hauth) Hconst".
   by iDestruct (i2a_mem_lookup_big' with "Hauth Hconst") as %?.
 Qed.
 
-Lemma i2a_mem_range a v mem sp gp:
-  i2a_mem_inv sp gp mem -∗
+Lemma i2a_mem_range a v mem sp ssz:
+  i2a_mem_inv sp ssz mem -∗
   i2a_mem_constant a (Some v) -∗
-  ⌜¬ (gp ≤ a < sp)⌝.
+  ⌜¬ (sp - Z.of_N ssz ≤ a < sp)⌝.
 Proof.
   iIntros "Hinv Hconst" (?).
   iDestruct (i2a_mem_lookup with "[$] [$]") as %?.
-  destruct (decide (gp + GUARD_PAGE_SIZE ≤ a)).
+  destruct (decide (sp - Z.of_N ssz ≤ a)).
   2: { iDestruct (i2a_guard_page_lookup a with "[$]") as %?; [lia|]. simplify_eq. }
-  iDestruct "Hinv" as "((%&?&Hsp)&?)".
-  iDestruct (big_sepL_lookup _ _ (Z.to_nat (a - (gp + GUARD_PAGE_SIZE))) a with "Hsp") as (?) "?".
+  iDestruct "Hinv" as "((?&Hsp)&?)".
+  iDestruct (big_sepL_lookup _ _ (Z.to_nat (a - (sp - Z.of_N ssz))) a with "Hsp") as (?) "?".
   - apply lookup_seqZ. lia.
   - iDestruct (i2a_mem_constant_excl with "[$] [$]") as %[].
 Qed.
 
-Lemma i2a_mem_exists n sp gp mem :
+Lemma i2a_mem_exists n sp ssz mem :
   0 < n ≤ GUARD_PAGE_SIZE →
-  i2a_mem_inv sp gp mem -∗
+  i2a_mem_inv sp ssz mem -∗
   ⌜∃ v, mem !! (sp - n) = Some v⌝.
 Proof.
   iIntros (?) "Hinv".
-  destruct (decide (gp + GUARD_PAGE_SIZE ≤ sp - n)).
-  - iDestruct "Hinv" as "((%&?&Hsp)&?)".
-    iDestruct (big_sepL_lookup _ _ (Z.to_nat ((sp - n) - (gp + GUARD_PAGE_SIZE))) (sp - n) with "Hsp") as (?) "?".
+  destruct (decide (n ≤ Z.of_N ssz)).
+  - iDestruct "Hinv" as "((?&Hsp)&?)".
+    iDestruct (big_sepL_lookup _ _ (Z.to_nat (Z.of_N ssz - n)) (sp - n) with "Hsp") as (?) "?".
     * apply lookup_seqZ. lia.
     * iDestruct (i2a_mem_lookup' with "[$] [$]") as %?. iSplit!.
-  - iAssert ⌜gp + GUARD_PAGE_SIZE ≤ sp⌝%I as %?. { unfold i2a_mem_inv, i2a_mem_stack. by iDestruct!. }
-    iDestruct (i2a_guard_page_lookup (sp - n) with "[$]") as %?.
+  - iDestruct (i2a_guard_page_lookup (sp - n) with "[$]") as %?.
     + lia.
     + iSplit!.
 Qed.
 
-Lemma i2a_mem_alloc n sp gp mem v :
+Lemma i2a_mem_alloc n sp ssz mem v :
   mem !! (sp - n) = Some (Some v) →
   0 ≤ n ≤ GUARD_PAGE_SIZE →
-  i2a_mem_inv sp gp mem ==∗ ⌜gp ≤ sp - n⌝ ∗ i2a_mem_inv (sp - n) gp mem ∗ i2a_mem_uninit (sp - n) n.
+  i2a_mem_inv sp ssz mem ==∗ ⌜n ≤ Z.of_N ssz⌝ ∗ i2a_mem_inv (sp - n) (ssz - Z.to_N n) mem ∗ i2a_mem_uninit (sp - n) n.
 Proof.
   iIntros (? ?) "Hinv". iModIntro.
-  destruct (decide (gp + GUARD_PAGE_SIZE ≤ sp - n)).
-  - iDestruct "Hinv" as "((%&?&?)&?)".
-    rewrite (i2a_mem_uninit_split ((sp - n) - (gp + GUARD_PAGE_SIZE))). 2: lia.
+  destruct (decide (n ≤ Z.of_N ssz)).
+  - iDestruct "Hinv" as "((?&?)&?)".
+    rewrite (i2a_mem_uninit_split (Z.of_N ssz - n)). 2: lia.
     iDestruct!.
-    have ->: (gp + GUARD_PAGE_SIZE + (sp - n - (gp + GUARD_PAGE_SIZE))) = (sp - n) by lia.
-    have ->: (sp - (gp + GUARD_PAGE_SIZE) - (sp - n - (gp + GUARD_PAGE_SIZE))) = n by lia. iFrame.
-    iSplit!; [lia|done..].
-  - iAssert ⌜gp + GUARD_PAGE_SIZE ≤ sp⌝%I as %?. { unfold i2a_mem_inv, i2a_mem_stack. by iDestruct!. }
-    iDestruct (i2a_guard_page_lookup (sp - n) with "[$]") as %?.
+    have ->: (sp - Z.of_N ssz + (Z.of_N ssz - n)) = (sp - n) by lia.
+    have ->: (Z.of_N ssz - (Z.of_N ssz - n)) = n by lia. iSplit!. iFrame.
+    unfold i2a_mem_stack.
+    have -> : (sp - n - Z.of_N (ssz - Z.to_N n) - GUARD_PAGE_SIZE) = (sp - Z.of_N ssz - GUARD_PAGE_SIZE) by lia.
+    have -> : (sp - n - Z.of_N (ssz - Z.to_N n)) = (sp - Z.of_N ssz) by lia.
+    have -> : (Z.of_N (ssz - Z.to_N n)) = (Z.of_N ssz - n) by lia.
+    iFrame.
+  - iDestruct (i2a_guard_page_lookup (sp - n) with "[$]") as %?.
     + lia.
     + simplify_eq.
 Qed.
 
-Lemma i2a_mem_update v' a v mem sp gp:
-  i2a_mem_inv sp gp mem -∗
+Lemma i2a_mem_update v' a v mem sp ssz:
+  i2a_mem_inv sp ssz mem -∗
   i2a_mem_constant a v ==∗
-  i2a_mem_inv sp gp (<[a := Some v']> mem) ∗ i2a_mem_constant a (Some v').
+  i2a_mem_inv sp ssz (<[a := Some v']> mem) ∗ i2a_mem_constant a (Some v').
 Proof.
-  iDestruct 1 as "((%&?&?)&Hauth)".
+  iDestruct 1 as "((?&?)&Hauth)".
   iIntros "Hconst".
   iDestruct (i2a_mem_lookup' with "[$] [$]") as %?.
   iMod (i2a_mem_update' with "[$]") as "[? $]". iModIntro.
   by iFrame.
 Qed.
 
-Lemma i2a_mem_update_big sp gp mem mo mo' :
+Lemma i2a_mem_update_big sp ssz mem mo mo' :
   dom mo = dom mo' →
-  i2a_mem_inv sp gp mem -∗
+  i2a_mem_inv sp ssz mem -∗
   i2a_mem_map mo ==∗
-  i2a_mem_map mo' ∗ i2a_mem_inv sp gp (mo' ∪ mem).
+  i2a_mem_map mo' ∗ i2a_mem_inv sp ssz (mo' ∪ mem).
 Proof.
   iIntros (Hdom) "[$ Hmem] Hconst".
   iMod (i2a_mem_delete_big' with "[$] [$]").
@@ -744,28 +745,31 @@ Proof.
   by rewrite (map_difference_eq_dom_L _ mo mo') // -map_difference_union_r.
 Qed.
 
-Lemma i2a_mem_delete n mem sp gp:
+Lemma i2a_mem_delete n mem sp ssz:
   0 ≤ n →
-  i2a_mem_inv sp gp mem -∗
+  i2a_mem_inv sp ssz mem -∗
   i2a_mem_uninit sp n ==∗
-  i2a_mem_inv (sp + n) gp mem.
+  i2a_mem_inv (sp + n) (ssz + Z.to_N n) mem.
 Proof.
   move => ?.
-  iDestruct 1 as "((%&?&?)&Hauth)".
-  iIntros "Huninit". iModIntro. iFrame. iSplit!; [lia|].
-  iApply (i2a_mem_uninit_split (sp - (gp + GUARD_PAGE_SIZE))); [lia|]. iFrame.
-  have -> : (gp + GUARD_PAGE_SIZE + (sp - (gp + GUARD_PAGE_SIZE))) = sp by lia.
-  have -> : (sp + n - (gp + GUARD_PAGE_SIZE) - (sp - (gp + GUARD_PAGE_SIZE))) = n by lia.
+  iDestruct 1 as "((?&?)&Hauth)".
+  iIntros "Huninit". iModIntro. iFrame.
+  rewrite /i2a_mem_stack.
+  have -> : (sp + n - Z.of_N (ssz + Z.to_N n)) = sp - Z.of_N ssz by lia. iFrame.
+  have -> : (Z.of_N (ssz + Z.to_N n)) = Z.of_N ssz + n by lia.
+  iApply (i2a_mem_uninit_split (Z.of_N ssz)); [lia|]. iFrame.
+  have -> : (sp - Z.of_N ssz + Z.of_N ssz) = sp by lia.
+  have -> : (Z.of_N ssz + n - Z.of_N ssz) = n by lia.
   done.
 Qed.
 
-Lemma i2a_mem_delete_big adrs mem sp sp' gp:
+Lemma i2a_mem_delete_big adrs mem sp sp' ssz:
   sp ≤ sp' →
   Forall (λ a, sp ≤ a < sp') adrs →
   length adrs = Z.to_nat (sp' - sp) →
-  i2a_mem_inv sp gp mem -∗
+  i2a_mem_inv sp ssz mem -∗
   ([∗ list] a∈adrs, ∃ v, i2a_mem_constant a (Some v)) ==∗
-  i2a_mem_inv sp' gp mem.
+  i2a_mem_inv sp' (ssz + Z.to_N (sp' - sp)) mem.
 Proof.
   iIntros (? Hall ?) "Hinv Ha".
   iAssert ⌜NoDup adrs⌝%I as %?. {
@@ -788,10 +792,10 @@ Proof.
   iApply (i2a_mem_delete with "[$] [$]"). lia.
 Qed.
 
-Lemma i2a_mem_swap_stack sp1 gp1 sp2 gp2 mem:
-  i2a_mem_inv sp1 gp1 mem -∗
-  i2a_mem_stack sp2 gp2 -∗
-  i2a_mem_inv sp2 gp2 mem ∗ i2a_mem_stack sp1 gp1.
+Lemma i2a_mem_swap_stack sp1 ssz1 sp2 ssz2 mem:
+  i2a_mem_inv sp1 ssz1 mem -∗
+  i2a_mem_stack sp2 ssz2 -∗
+  i2a_mem_inv sp2 ssz2 mem ∗ i2a_mem_stack sp1 ssz1.
 Proof. iIntros "[??] ?". iFrame. Qed.
 
 Lemma i2a_heap_alloc h l n:
@@ -861,10 +865,10 @@ Proof.
     by rewrite lookup_delete_ne.
 Qed.
 
-Lemma i2a_heap_lookup_shared h l v z mem ss gp:
+Lemma i2a_heap_lookup_shared h l v z mem ss ssz:
   h_heap h !! l = Some v →
   i2a_heap_inv h -∗
-  i2a_mem_inv ss gp mem -∗
+  i2a_mem_inv ss ssz mem -∗
   i2a_heap_shared l.1 z -∗
   ∃ av, ⌜mem !! (z + l.2)%Z = Some (Some av)⌝ ∗ i2a_val_rel v av.
 Proof.
@@ -952,13 +956,13 @@ Proof.
   by iApply (IH with "[$]").
 Qed.
 
-Lemma i2a_heap_update_shared h l v z mem ss av gp:
+Lemma i2a_heap_update_shared h l v z mem ss av ssz:
   heap_alive h l →
   i2a_heap_inv h -∗
-  i2a_mem_inv ss gp mem -∗
+  i2a_mem_inv ss ssz mem -∗
   i2a_heap_shared l.1 z -∗
   i2a_val_rel v av ==∗
-  i2a_heap_inv (heap_update h l v) ∗ i2a_mem_inv ss gp (<[z + l.2 := Some av]>mem).
+  i2a_heap_inv (heap_update h l v) ∗ i2a_mem_inv ss ssz (<[z + l.2 := Some av]>mem).
 Proof.
   iIntros ([??]).
   iDestruct 1 as (? Hdom Hag) "[Hsh [Hs Hauth]]".
@@ -995,52 +999,21 @@ Proof.
   iExists _. iFrame. iSplit!. by rewrite i2a_ih_shared_empty.
 Qed.
 
-(* TODO: refactor this *)
-Definition i2a_mem_stack_mem (sp gp : Z) : gmap Z (option Z) :=
-  map_seqZ gp (replicate (locked Z.to_nat GUARD_PAGE_SIZE) None) ∪
-  map_seqZ (gp + GUARD_PAGE_SIZE) (Some <$> replicate (Z.to_nat $ sp - (gp + GUARD_PAGE_SIZE)) 0).
+Definition i2a_mem_stack_mem (sp : Z) (ssz : N) : gmap Z (option Z) :=
+  map_seqZ (sp - Z.of_N ssz - GUARD_PAGE_SIZE) (replicate (locked Z.to_nat GUARD_PAGE_SIZE) None) ∪
+  map_seqZ (sp - Z.of_N ssz) (Some <$> replicate (N.to_nat $ ssz) 0).
 
-Lemma i2a_mem_stack_init gp sp:
-  gp + GUARD_PAGE_SIZE ≤ sp →
-  i2a_mem_map (i2a_mem_stack_mem sp gp) -∗
-  i2a_mem_stack sp gp.
+Lemma i2a_mem_stack_init ssz sp:
+  i2a_mem_map (i2a_mem_stack_mem sp ssz) -∗
+  i2a_mem_stack sp ssz.
 Proof.
-  iIntros (?) "Hm". rewrite /i2a_mem_map/i2a_mem_stack_mem big_sepM_union.
+  iIntros "Hm". rewrite /i2a_mem_map/i2a_mem_stack_mem big_sepM_union.
   2: { apply map_disjoint_spec => ???. rewrite !lookup_map_seqZ_Some.
        rewrite list_lookup_fmap fmap_Some. setoid_rewrite lookup_replicate. unlock. lia. }
-  iDestruct "Hm" as "[$ ?]". iSplit; [done|].
-  have {2} ->: (sp - (gp + GUARD_PAGE_SIZE)) = length $ replicate (Z.to_nat (sp - (gp + GUARD_PAGE_SIZE))) 0.
+  iDestruct "Hm" as "[$ ?]".
+  have {3} ->: (Z.of_N ssz) = length $ replicate (N.to_nat ssz) 0.
   { rewrite replicate_length. lia. }
   by iApply i2a_mem_uninit_alt2.
-Qed.
-
-Lemma i2a_mem_inv_init gp sp mem:
-  gp + GUARD_PAGE_SIZE ≤ sp →
-  (∀ a, gp ≤ a < gp + GUARD_PAGE_SIZE → mem !! a = Some None) →
-  (∀ a, gp + GUARD_PAGE_SIZE ≤ a < sp → ∃ v, mem !! a = Some (Some v)) →
-  i2a_mem_auth mem -∗
-  ([∗ map] a↦v∈mem, i2a_mem_constant a v) -∗
-  i2a_mem_inv sp gp mem.
-Proof.
-  iIntros (? Hgp Hsp) "$ H".
-  rewrite -(map_filter_union_complement (λ a, a.1 < gp + GUARD_PAGE_SIZE) mem).
-  rewrite big_sepM_union. 2: apply map_disjoint_filter_complement.
-  iDestruct "H" as "[H1 H2]".
-  iSplit; [done|]. iSplitL "H1".
-  - unfold i2a_guard_page.
-    iApply (big_sepM_impl_strong' with "[$]").
-    iIntros "!>" (k ?) "?". iIntros ([?[? Hlt]%lookup_replicate]%lookup_map_seqZ_Some). simplify_eq.
-    unlock in Hlt. rewrite map_filter_lookup_true. 2: naive_solver lia.
-    rewrite Hgp. 2: lia. done.
-  - unfold i2a_mem_uninit.
-    iApply big_sepM_map_seq_0.
-    iApply (big_sepM_kmap_intro (λ x, gp + GUARD_PAGE_SIZE + Z.of_nat x)). { move => ???. lia. }
-    iApply (big_sepM_impl_strong' with "[$]").
-    iIntros "!>" (k ?) "?". iIntros ([a [?[? [??]%lookup_seqZ]%lookup_map_seq_Some]]%lookup_kmap_Some).
-    2: { move => ???. lia. } simplify_eq.
-    rewrite map_filter_lookup_true. 2: { move => ?? /= Hx. clear -Hx. lia. }
-    have [|? ->]:= Hsp (gp + GUARD_PAGE_SIZE + a); [lia|].
-    iSplit!; [done|]. by rewrite Nat.sub_0_r.
 Qed.
 
 Lemma i2a_args_nil o rs:
@@ -1132,10 +1105,10 @@ Definition imp_to_asm_pre (ins : gset Z) (fns : gset string) (f2i : gmap string 
     pp_quant $ λ b : bool,
     pp_prop (i = Incoming) $
     pp_quant $ λ h,
-    pp_quant $ λ gp,
+    pp_quant $ λ ssz,
     pp_quant $ λ vs,
     pp_quant $ λ avs,
-    pp_star (i2a_mem_inv (rs !!! "SP") gp mem ∗ i2a_heap_inv h ∗ [∗ list] v;av∈vs;avs, i2a_val_rel v av) $
+    pp_star (i2a_mem_inv (rs !!! "SP") ssz mem ∗ i2a_heap_inv h ∗ [∗ list] v;av∈vs;avs, i2a_val_rel v av) $
     if b then
       (* env chooses function name *)
       pp_quant $ λ f,
@@ -1171,9 +1144,9 @@ Definition imp_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string
   pp_prop (e.1 = Outgoing) $
   pp_quant $ λ rs,
   pp_quant $ λ mem,
-  pp_quant $ λ gp,
+  pp_quant $ λ ssz,
   pp_quant $ λ avs,
-  pp_star (i2a_mem_inv (rs !!! "SP") gp mem ∗ i2a_heap_inv (heap_of_event e.2) ∗
+  pp_star (i2a_mem_inv (rs !!! "SP") ssz mem ∗ i2a_heap_inv (heap_of_event e.2) ∗
              [∗ list] v;av∈(vals_of_event e.2);avs, i2a_val_rel v av) $
   match e with
   | (i, EICall f vs h) =>
@@ -1410,27 +1383,27 @@ Qed.
 Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
   ins_dom = dom ins →
   fns_dom = dom fns →
-  (∀ n i rs mem K f fn vs h cs pc gp rf rc lr,
+  (∀ n i rs mem K f fn vs h cs pc ssz rf rc lr,
       rs !!! "PC" = pc →
       ins !! pc = Some i →
       fns !! f = Some fn →
       f2i !! f = Some pc →
-      satisfiable (i2a_mem_inv (rs !!! "SP") gp mem ∗ i2a_heap_inv h ∗ i2a_args 0 vs rs ∗ rf ∗ rc) →
+      satisfiable (i2a_mem_inv (rs !!! "SP") ssz mem ∗ i2a_heap_inv h ∗ i2a_args 0 vs rs ∗ rf ∗ rc) →
       length vs = length (fd_args fn) →
       map_scramble touched_registers lr rs →
       (* Call *)
-      (∀ K' rs' mem' f' es vs pc' gp' h' lr' rf' r',
+      (∀ K' rs' mem' f' es vs pc' ssz' h' lr' rf' r',
           Forall2 (λ e v, e = Val v) es vs →
           rs' !!! "PC" = pc' →
           (ins !! pc' = None ↔ fns !! f' = None) →
           f2i !! f' = Some pc' →
-          satisfiable (i2a_mem_inv (rs' !!! "SP") gp' mem' ∗ i2a_heap_inv h' ∗
+          satisfiable (i2a_mem_inv (rs' !!! "SP") ssz' mem' ∗ i2a_heap_inv h' ∗
                       i2a_args 0 vs rs' ∗ rf' ∗ r') →
           is_Some (ins !! (rs' !!! "R30")) →
           map_scramble touched_registers lr' rs' →
-          (∀ rs'' gp'' mem'' av v h'' rf'' lr'',
+          (∀ rs'' ssz'' mem'' av v h'' rf'' lr'',
               rs'' !!! "PC" = rs' !!! "R30" →
-              satisfiable (i2a_mem_inv (rs'' !!! "SP") gp'' mem'' ∗ i2a_heap_inv h'' ∗
+              satisfiable (i2a_mem_inv (rs'' !!! "SP") ssz'' mem'' ∗ i2a_heap_inv h'' ∗
                            i2a_val_rel v av ∗ rf'' ∗ r') →
               i2a_regs_ret rs'' rs' av →
               map_scramble touched_registers lr'' rs'' →
@@ -1439,9 +1412,9 @@ Lemma imp_to_asm_proof ins fns ins_dom fns_dom f2i :
           AsmState (ARunning []) rs' mem' ins ⪯{asm_module, imp_to_asm ins_dom fns_dom f2i imp_module, n, true}
                (SMProg, Imp (expr_fill K (expr_fill K' (imp.Call f' es))) h' fns, (PPInside, I2A cs lr', rf'))) →
       (* Return *)
-      (∀ rs' mem' gp' av v h' lr' rf',
+      (∀ rs' mem' ssz' av v h' lr' rf',
           rs' !!! "PC" = rs !!! "R30" →
-          satisfiable (i2a_mem_inv (rs' !!! "SP") gp' mem' ∗ i2a_heap_inv h' ∗
+          satisfiable (i2a_mem_inv (rs' !!! "SP") ssz' mem' ∗ i2a_heap_inv h' ∗
                       i2a_val_rel v av ∗ rf' ∗ rc) →
           i2a_regs_ret rs' rs av →
           map_scramble touched_registers lr' rs' →
@@ -1470,10 +1443,10 @@ Proof.
                  ). }
   { simpl. exact (λ  '(AsmState i1 rs1 mem1 ins'1) '(σfs1, Imp e1 h1 fns'1, (t1, I2A cs1 lr1, r1))
                      '(AsmState i2 rs2 mem2 ins'2) '(σfs2, Imp e2 h2 fns'2, (t2, I2A cs2 lr2, r2)),
-    ∃ i K av v pc lr' gp,
+    ∃ i K av v pc lr' ssz,
       rs2 !!! "PC" = pc ∧
       ins !! pc = Some i ∧
-      satisfiable (i2a_mem_inv (rs2 !!! "SP") gp mem2 ∗ i2a_heap_inv h2 ∗ i2a_val_rel v av ∗ r1 ∗ r2) ∧
+      satisfiable (i2a_mem_inv (rs2 !!! "SP") ssz mem2 ∗ i2a_heap_inv h2 ∗ i2a_val_rel v av ∗ r1 ∗ r2) ∧
       i2a_regs_ret rs2 lr' av ∧
       i2 = ARunning [] ∧
       ins'1 = ins'2 ∧
@@ -1497,14 +1470,14 @@ Proof.
     (* This inner loop deals with calls inside of the module. We use
     Hf both for calls triggered from inside and outside the module. *)
     unshelve eapply tsim_remember. { exact (λ n '(AsmState i1 rs1 mem1 ins'1) '(σfs1, Imp e1 h1 fns'1, (t1, I2A cs1 lr1, r1)),
-       ∃ K' pc i f fn vs r' gp,
+       ∃ K' pc i f fn vs r' ssz,
          rs1 !!! "PC" = pc ∧
          ins !! pc = Some i ∧
          fns !! f = Some fn ∧
          f2i !! f = Some pc ∧
          ins'1 = ins ∧
          fns'1 = fns ∧
-         satisfiable (i2a_mem_inv (rs1 !!! "SP") gp mem1 ∗ i2a_heap_inv h1 ∗
+         satisfiable (i2a_mem_inv (rs1 !!! "SP") ssz mem1 ∗ i2a_heap_inv h1 ∗
                                    i2a_args 0 vs rs1 ∗ r' ∗ r1) ∧
          i1 = ARunning [] ∧
          e1 = expr_fill K' (AllocA fn.(fd_vars) $ subst_l fn.(fd_args) vs fn.(fd_body)) ∧
@@ -1512,9 +1485,9 @@ Proof.
          length vs = length (fd_args fn) ∧
          t1 = PPInside ∧
          σfs1 = SMProg ∧
-         (∀ rs' mem' gp' av v h' lr' rf',
+         (∀ rs' mem' ssz' av v h' lr' rf',
           rs' !!! "PC" = rs1 !!! "R30" →
-          satisfiable (i2a_mem_inv (rs' !!! "SP") gp' mem' ∗ i2a_heap_inv h' ∗
+          satisfiable (i2a_mem_inv (rs' !!! "SP") ssz' mem' ∗ i2a_heap_inv h' ∗
                       i2a_val_rel v av ∗ r' ∗ rf') →
           i2a_regs_ret rs' rs1 av  →
           map_scramble touched_registers lr' rs' →
@@ -1536,7 +1509,7 @@ Proof.
     apply: Hf; [try done..| |].
     { iSatMono. iIntros!. iFrame. iAccu. }
     + iSatClear.
-      move => K'' rs'' mem'' f'' es vs'' pc'' gp'' h'' lr rf'' r'' Hall ?????? Hret'.
+      move => K'' rs'' mem'' f'' es vs'' pc'' ssz'' h'' lr rf'' r'' Hall ?????? Hret'.
       have ?: es = Val <$> vs''. { clear -Hall. elim: Hall; naive_solver. } subst.
       destruct (ins !! (rs'' !!! "PC")) eqn:Hi.
       * have [??] : is_Some (fns !! f''). { apply not_eq_None_Some. naive_solver. }

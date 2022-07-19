@@ -85,7 +85,7 @@ Lemma asm_add_refines_imp_add :
            (MS (imp_to_asm (dom asm_add) (dom imp_add_prog) (<["add" := 100]> ∅) imp_module) (initial_imp_to_asm_state ∅ imp_module (initial_imp_state imp_add_prog))).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
-  move => n i rs mem K f fn vs h cs pc gp rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? Hcall Hret.
+  move => n i rs mem K f fn vs h cs pc ssz rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? Hcall Hret.
   unfold imp_add_prog in Hf. unfold asm_add in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct!; simplify_map_eq/=.
   destruct vs as [|v1 [|v2 []]] => //=.
@@ -113,7 +113,7 @@ Lemma asm_add_client_refines_imp_add_client :
                (initial_imp_to_asm_state ∅ imp_module (initial_imp_state imp_add_client_prog) )).
 Proof.
   apply imp_to_asm_proof; [set_solver..|].
-  move => n i rs mem K f fn vs h cs pc gp rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? Hcall Hret.
+  move => n i rs mem K f fn vs h cs pc ssz rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? Hcall Hret.
   unfold imp_add_client_prog in Hf. unfold asm_add_client in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct!; simplify_map_eq/=.
   destruct vs as [|] => //=.
@@ -155,7 +155,7 @@ Proof.
   { split!; by simplify_map_eq'. }
   { by simplify_map_list. }
   iSatClear.
-  move => rs'' gp'' mem'' av v h'' rf'' lr'' Hpc'' Hsat'' Hr ?.
+  move => rs'' ssz'' mem'' av v h'' rf'' lr'' Hpc'' Hsat'' Hr ?.
   move: Hr => [? Hm]; simplify_map_eq'.
   tstep_i => ??. simplify_map_eq'.
   iSatStart. iIntros!.

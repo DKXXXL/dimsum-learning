@@ -586,7 +586,7 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
   TAssume (rs !!! "PC" = main_addr);;;;
   TAssume (rs !!! "R30" ∉ main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm);;;;
-  TAssume (∃ gp, gp + GUARD_PAGE_SIZE ≤ rs !!! "SP" ∧ i2a_mem_stack_mem (rs !!! "SP") gp ⊆ mem);;;;
+  TAssume (∃ ssz, i2a_mem_stack_mem (rs !!! "SP") ssz ⊆ mem);;;;
   args ← TExist _;;;
   mem ← TExist _;;;
   TAssert (print_args 1 args);;;;
@@ -618,15 +618,14 @@ Proof.
   go_s. split!. go.
   go_s => ?. go. simplify_map_eq'.
   go_s => ?. go.
-  go_s => -[?[??]]. go.
+  go_s => -[??]. go.
   rewrite bool_decide_true. 2: unfold main_asm_dom, memmove_asm_dom, memcpy_asm_dom; unlock; by vm_compute.
   tstep_i => ??. simplify_eq.
   tstep_i. eexists true. split; [done|] => /=. eexists ∅, _, [], [], "main". split!.
   { simplify_map_eq'. done. }
-  { apply: satisfiable_mono; [by eapply i2a_res_init|].
-    iIntros!. iDestruct select (i2a_mem_auth _) as "$". rewrite /i2a_mem_map big_sepM_empty. iFrame.
-    iSplitL; [|iAccu]. iApply i2a_mem_stack_init; [done|]. by iApply big_sepM_subseteq. }
-
+  { apply: satisfiable_mono; [by eapply (i2a_res_init mem)|].
+    iIntros!. rewrite /i2a_mem_map big_sepM_empty. iFrame. iSplitL; [|iAccu].
+    iApply i2a_mem_stack_init. by iApply big_sepM_subseteq. }
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.

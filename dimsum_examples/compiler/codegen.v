@@ -329,7 +329,6 @@ Context `{!ProofFixedValues}.
 (** ** general invariants *)
 Definition stack_slot (sz : N) (slot : N) (v : Z) : uPred _ :=
   ⌜(slot < sz)%N⌝ ∗
-  (* ⌜pf_gp ≤ pf_sp - Z.of_N slot - 1⌝ ∗  *)
   i2a_mem_constant (pf_sp - Z.of_N slot - 1) (Some v).
 
 Definition stack_slot_uninit (sz : N) (slots : list N) : uPred _ :=
@@ -354,15 +353,15 @@ Definition ci2a_regs_inv (s : state) (lr rs : gmap string Z) : uPred imp_to_asmU
   ⌜s.(s_f2i) = pf_f2i⌝.
 
 Definition ci2a_inv (s : state) (lr rs : gmap string Z) (mem : gmap Z (option Z)) (h : heap_state) : uPred _ :=
-  ∃ gp,
-  i2a_mem_inv (pf_sp - Z.of_N s.(s_stacksize)) gp mem ∗
+  ∃ ssz,
+  i2a_mem_inv (pf_sp - Z.of_N s.(s_stacksize)) ssz mem ∗
   i2a_heap_inv h ∗
   ci2a_regs_inv s lr rs.
 
 (** *** lemmas for general invariants *)
-Lemma stack_slot_lookup slot v mem sp gp sz:
+Lemma stack_slot_lookup slot v mem sp ssz sz:
   stack_slot sz slot v -∗
-  i2a_mem_inv sp gp mem -∗
+  i2a_mem_inv sp ssz mem -∗
   ⌜mem !! (pf_sp - Z.of_N slot - 1) = Some (Some v)⌝.
 Proof. iIntros "[% ?] ?". iApply (i2a_mem_lookup with "[$] [$]"). Qed.
 
@@ -1368,7 +1367,7 @@ Lemma pass_correct a f2i f s' dins ins fn:
 Proof.
   move => Hrun ? Ha /NoDup_app[?[??]] Hf2i.
   apply imp_to_asm_proof; [done|set_solver|].
-  move => n i rs mem K f' fn' vs h cs pc gp rf rc lr Hpc Hins Hf ? Hsat Hlen Hlr Hcall Hret.
+  move => n i rs mem K f' fn' vs h cs pc ssz rf rc lr Hpc Hins Hf ? Hsat Hlen Hlr Hcall Hret.
   move: Hf. rewrite {1}fmap_insert {1}fmap_empty lookup_insert_Some lookup_empty => ?.
   destruct!; simplify_map_eq'.
 
