@@ -101,8 +101,8 @@ Local Ltac go_i :=
   tstep_i; go.
 
 Lemma main_refines_itree :
-  trefines (MS (coro_prod {["main"]} {["stream"]} imp_module imp_module)
-              (initial_coro_prod_state "stream" imp_module imp_module
+  trefines (MS (coro_link {["main"]} {["stream"]} imp_module imp_module)
+              (initial_coro_link_state "stream" imp_module imp_module
               (initial_imp_state main_prog) (initial_imp_state stream_prog)))
            (MS (mod_itree _ _) (main_itree, tt)).
 Proof.

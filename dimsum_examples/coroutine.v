@@ -3,30 +3,16 @@ From dimsum.core Require Import seq_product link itree.
 From dimsum.examples Require Import imp asm imp_to_asm.
 
 Local Open Scope Z_scope.
-
 Local Opaque map_union. (* without this simpl takes very long *)
 
+(** * Coroutine library *)
+
+(** * Preliminary definitions *)
 Definition yield_addr : Z := 2000.
 
 Definition coro_state_addr : Z := 3000.
 
 Definition coro_saved_regs : list string := saved_registers ++ ["PC"].
-Lemma coro_saved_regs_length :
-  length coro_saved_regs = 13%nat.
-Proof. done. Qed.
-Lemma coro_saved_regs_lookup_saved i :
-  (i < 12)%nat →
-  coro_saved_regs !! i = Some (saved_registers !!! i).
-Proof. move => ?. do 12 (destruct i as [|i]; try done); lia. Qed.
-Lemma coro_saved_regs_take_PC r :
-  r ≠ "PC" →
-  r ∈ take 12 coro_saved_regs ↔ r ∈ coro_saved_regs.
-Proof. fast_set_solver. Qed.
-Lemma coro_saved_regs_take_saved r i :
-  (i < 12)%nat →
-  r ≠ saved_registers !!! i →
-  r ∈ take (i + 1) coro_saved_regs ↔ r ∈ take i coro_saved_regs.
-Proof. cbn. repeat (destruct i as [|i] => /=; [fast_set_solver|try lia]). Qed.
 
 Definition coro_get_regs (regs : gmap string Z) : list Z :=
   ((regs !!!.) <$> coro_saved_regs).
@@ -47,6 +33,27 @@ Arguments coro_regs_regs_n : simpl never.
 Definition coro_regs_regs (regs : gmap string Z) : gmap string Z :=
   list_to_map ((λ x, (x, regs !!! x)) <$> coro_saved_regs).
 Arguments coro_regs_regs : simpl never.
+
+(** ** Lemmas about preliminary definitions *)
+Lemma coro_saved_regs_length :
+  length coro_saved_regs = 13%nat.
+Proof. done. Qed.
+
+Lemma coro_saved_regs_lookup_saved i :
+  (i < 12)%nat →
+  coro_saved_regs !! i = Some (saved_registers !!! i).
+Proof. move => ?. do 12 (destruct i as [|i]; try done); lia. Qed.
+
+Lemma coro_saved_regs_take_PC r :
+  r ≠ "PC" →
+  r ∈ take 12 coro_saved_regs ↔ r ∈ coro_saved_regs.
+Proof. fast_set_solver. Qed.
+
+Lemma coro_saved_regs_take_saved r i :
+  (i < 12)%nat →
+  r ≠ saved_registers !!! i →
+  r ∈ take (i + 1) coro_saved_regs ↔ r ∈ take i coro_saved_regs.
+Proof. cbn. repeat (destruct i as [|i] => /=; [fast_set_solver|try lia]). Qed.
 
 Lemma coro_regs_regs_args_preserved rs rs':
  map_preserved args_registers rs (coro_regs_regs rs' ∪ rs).
@@ -194,20 +201,22 @@ Qed.
 Lemma coro_regs_mem_n_0 rs :
   coro_regs_mem_n rs 0 = ∅.
 Proof. done. Qed.
+
 Lemma coro_regs_regs_n_0 rs :
   coro_regs_regs_n rs 0 = ∅.
 Proof. done. Qed.
 
+(** * [yield] library  *)
+(** ** Implementation of [yield]  *)
 Definition yield_swap_reg (r : string) (o : Z) : list deep_asm_instr := [
     Aload "R16" "R17" o;
     Astore r "R17" o;
     Amov r "R16"
   ].
 
-
-Definition yield_asm: gmap Z asm_instr := deep_to_asm_instrs yield_addr (
-  [Amov "R17" coro_state_addr;
-   Amov "R16" 0] ++ (* dummy *)
+Definition yield_asm: gmap Z asm_instr := deep_to_asm_instrs yield_addr ([
+  Amov "R17" coro_state_addr;
+  Amov "R16" 0] ++ (* dummy *)
   mjoin (imap (λ i r, yield_swap_reg r (Z.of_nat i)) (locked saved_registers)) ++ [
   Aload "R16" "R17" (Z.of_nat $ length saved_registers);
   Astore "R30" "R17" (Z.of_nat $ length saved_registers);
@@ -215,6 +224,7 @@ Definition yield_asm: gmap Z asm_instr := deep_to_asm_instrs yield_addr (
 
 Definition yield_asm_dom : gset Z := locked dom yield_asm.
 
+(** ** Specification of [yield]  *)
 Definition yield_itree : itree (moduleE asm_event (gmap string Z)) unit :=
   ITree.forever (
   '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
@@ -230,6 +240,7 @@ Definition yield_itree : itree (moduleE asm_event (gmap string Z)) unit :=
                     (<["R16" := r16]> $ <["R17" := r17]> $ (coro_regs_regs rsold ∪ rs))
                     (coro_regs_mem rs' ∪ mem))).
 
+(** ** Verification of [yield]  *)
 Local Ltac go :=
   clear_itree.
 Local Ltac go_s :=
@@ -429,14 +440,15 @@ Proof.
       do 12 (destruct i as [|i]; [compute_done|]). lia.
 Qed.
 
-Inductive coro_prod_filter_state :=
+(** * Definition of coroutine linking *)
+Inductive coro_link_filter_state :=
 | CPFInit
 | CPFLeft
 | CPFRight.
 
-Global Instance coro_prod_filter_state_inhabited : Inhabited coro_prod_filter_state := populate CPFRight.
+Global Instance coro_link_filter_state_inhabited : Inhabited coro_link_filter_state := populate CPFRight.
 
-Definition coro_prod_filter (fns1 fns2 : gset string) : seq_product_state → coro_prod_filter_state * (option string) → imp_ev → seq_product_state → coro_prod_filter_state * (option string) → imp_ev → bool → Prop :=
+Definition coro_link_filter (fns1 fns2 : gset string) : seq_product_state → coro_link_filter_state * (option string) → imp_ev → seq_product_state → coro_link_filter_state * (option string) → imp_ev → bool → Prop :=
   λ p s e p' s' e' ok,
     match s.1, p with
     | CPFInit, SPNone =>
@@ -496,21 +508,22 @@ Definition coro_prod_filter (fns1 fns2 : gset string) : seq_product_state → co
             s' = s
         end
     end.
-Arguments coro_prod_filter _ _ _ _ _ _ _ _ /.
+Arguments coro_link_filter _ _ _ _ _ _ _ _ /.
 
-Definition coro_prod (fns1 fns2 : gset string) (m1 m2 : module imp_event) : module imp_event :=
-  mod_link (coro_prod_filter fns1 fns2) m1 m2.
+Definition coro_link (fns1 fns2 : gset string) (m1 m2 : module imp_event) : module imp_event :=
+  mod_link (coro_link_filter fns1 fns2) m1 m2.
 
-Definition initial_coro_prod_state (finit : string) (m1 m2 : module imp_event) (σ1 : m1.(m_state)) (σ2 : m2.(m_state)) :=
+Definition initial_coro_link_state (finit : string) (m1 m2 : module imp_event) (σ1 : m1.(m_state)) (σ2 : m2.(m_state)) :=
   (@MLFNone imp_ev, (CPFInit, (Some finit)), σ1, σ2).
 
-Lemma coro_prod_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
+Lemma coro_link_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
   trefines (MS m1 σ1) (MS m1' σ1') →
   trefines (MS m2 σ2) (MS m2' σ2') →
-  trefines (MS (coro_prod ins1 ins2 m1 m2) (σ, σ1, σ2))
-           (MS (coro_prod ins1 ins2 m1' m2') (σ, σ1', σ2')).
+  trefines (MS (coro_link ins1 ins2 m1 m2) (σ, σ1, σ2))
+           (MS (coro_link ins1 ins2 m1' m2') (σ, σ1', σ2')).
 Proof. move => ??. by apply mod_link_trefines. Qed.
 
+(** * Main Theorem: Yield library refines coroutine linking *)
 Theorem coro_spec finit regs_init ssz_init m1 m2 σ1 σ2 ins1 ins2 fns1 fns2 f2i1 f2i2
   `{!VisNoAll m1} `{!VisNoAll m2}:
   let fns := {["yield"]} ∪ fns1 ∪ fns2 in
@@ -540,9 +553,9 @@ Theorem coro_spec finit regs_init ssz_init m1 m2 σ1 σ2 ins1 ins2 fns1 fns2 f2i
            (initial_asm_link_state (imp_to_asm _ _ _ _) (imp_to_asm _ _ _ _)
               (initial_imp_to_asm_state ∅ m1 σ1)
               (initial_imp_to_asm_state ∅ m2 σ2))))
-    (MS (imp_to_asm ins fns f2i (coro_prod fns1 fns2 m1 m2))
-       (initial_imp_to_asm_state mo (coro_prod _ _ _ _)
-          (initial_coro_prod_state finit _ _ σ1 σ2)))
+    (MS (imp_to_asm ins fns f2i (coro_link fns1 fns2 m1 m2))
+       (initial_imp_to_asm_state mo (coro_link _ _ _ _)
+          (initial_coro_link_state finit _ _ σ1 σ2)))
 .
 Proof.
   move => fns ins f2i mo Hinit Hfinit Hyf Hidisj Hfdisj Hydisj Hy1 Hy2 Hi1 Hi2 Hag Hf1 Hf2 Hfy Hmo.
