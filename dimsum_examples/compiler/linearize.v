@@ -1,13 +1,13 @@
 From stdpp Require Import pretty strings.
 From dimsum.core Require Export proof_techniques.
-From dimsum.examples Require Import imp.
-From dimsum.examples.compiler Require Import monad linear_imp.
+From dimsum.examples Require Import rec.
+From dimsum.examples.compiler Require Import monad linear_rec.
 
 Local Open Scope Z_scope.
 Set Default Proof Using "Type".
 
-(** * Linearize pass : Imp -> LinearImp *)
-(** This pass turns an Imp program into a LinearImp program. It
+(** * Linearize pass : Rec -> LinearRec *)
+(** This pass turns an Rec program into a LinearRec program. It
 assumes that all variable names are unique (as established by the SSA
 pass). *)
 
@@ -20,7 +20,7 @@ Proof.
   move: Heq => /string_app_inj_r?. by simplify_eq.
 Qed.
 
-Module ci2a_linearize.
+Module cr2a_linearize.
 
 (** * pass *)
 Inductive error :=.
@@ -77,7 +77,7 @@ Fixpoint pass (e : static_expr) : M var_val :=
 Definition test_fn_1 : fndef := {|
   fd_args := ["x"];
   fd_vars := [];
-  fd_body := (BinOp (BinOp (Var "x") ShiftOp (Val 2)) AddOp (Call "f" [Load (Var "x"); Val 1]));
+  fd_body := (BinOp (BinOp (Var "x") OffsetOp (Val 2)) AddOp (Call "f" [Load (Var "x"); Val 1]));
   fd_static := I;
 |}.
 
@@ -85,18 +85,18 @@ Definition test_fn_1 : fndef := {|
 Lemma test_1 :
   crun 0%N (pass (expr_to_static_expr $ test_fn_1.(fd_body))) =
   CResult 4%N (λ x,
-       LLetE "$0$" (LBinOp (VVar "x") ShiftOp (VVal (StaticValNum 2)))
+       LLetE "$0$" (LBinOp (VVar "x") OffsetOp (VVal (StaticValNum 2)))
          (LLetE "$1$" (LLoad (VVar "x"))
             (LLetE "$2$" (LCall "f" [VVar "$1$"; VVal (StaticValNum 1)])
                (LLetE "$3$" (LBinOp (VVar "$0$") AddOp (VVar "$2$")) x)))) (CSuccess (VVar "$3$")).
-Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
+Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 
 Lemma test_2 :
   crun 0%N (pass (expr_to_static_expr $ LetE "v" (BinOp (Val 1) AddOp (Val 1)) $ Var "v")) =
   CResult 1%N (λ x,
        LLetE "$0$" (LBinOp (VVal (StaticValNum 1)) AddOp (VVal (StaticValNum 1)))
          (LLetE "v" (LVarVal (VVar "$0$")) x)) (CSuccess (VVar "v")).
-Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
+Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 
 Lemma test_3 :
   crun 0%N (pass (expr_to_static_expr $  BinOp
@@ -110,7 +110,7 @@ Lemma test_3 :
             (LLetE "$1$" (LVarVal (VVar "$0$")) (LLetE "$2$" (LBinOp (VVar "$1$") AddOp (VVar "x")) x)))
          (LLetE "$1$" (LVarVal (VVal (StaticValNum 3))) (LLetE "$2$" (LBinOp (VVar "$1$") AddOp (VVar "x")) x)))
     (CSuccess (VVar "$2$")).
-Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
+Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 
 Lemma test_4 :
   crun 0%N (pass (expr_to_static_expr $ BinOp
@@ -128,7 +128,7 @@ Lemma test_4 :
             (LLetE "$1$" (LVarVal (VVal (StaticValNum 3)))
                (LLetE "$2$" (LVarVal (VVar "$1$")) (LLetE "$3$" (LBinOp (VVar "$2$") AddOp (VVar "x")) x)))))
     (CSuccess (VVar "$3$")).
-Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
+Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 
 (** * Verification of pass *)
 Lemma pass_state_mono s es s' ei v :
@@ -157,7 +157,7 @@ Local Ltac learn_state :=
 Local Ltac prepare_goal :=
   simplify_eq/=;
   repeat match goal with
-  | H : ImpExprFill _ _ _ |- _ => destruct H; subst
+  | H : RecExprFill _ _ _ |- _ => destruct H; subst
   | H : NoDup (_ ++ _) |- _ => apply NoDup_app in H; destruct H as (?&?&?)
   | H : NoDup (_ :: _) |- _ => apply NoDup_cons in H; destruct H as (?&?)
   end;
@@ -167,8 +167,8 @@ Local Ltac prepare_goal :=
   learn_state.
 
 Lemma pass_correct ei' Ki ei Ks es es' n h fns1 fns2 v s s' vsi vss
-      `{!ImpExprFill es Ks (subst_map vss (static_expr_to_expr es'))}:
-  imp_proof_call n fns1 fns2 →
+      `{!RecExprFill es Ks (subst_map vss (static_expr_to_expr es'))}:
+  rec_proof_call n fns1 fns2 →
   crun s (pass es') = CResult s' ei (CSuccess v) →
   vss ⊆ vsi →
   NoDup (assigned_vars (static_expr_to_expr es')) →
@@ -183,15 +183,15 @@ Lemma pass_correct ei' Ki ei Ks es es' n h fns1 fns2 v s s' vsi vss
     (∀ v, is_Some (vsi' !! v) → is_Some (vsi !! v) ∨
                                 v ∈ assigned_vars (static_expr_to_expr es') ∨
                                 ∃ n, v = tmp_var n ∧ (n < s')%N) →
-    Imp (expr_fill Ki $ subst_map vsi' (lexpr_to_expr ei')) h' fns1
-       ⪯{imp_module, imp_module, n, false}
-    Imp (expr_fill Ks (Val v')) h' fns2) →
-  Imp (expr_fill Ki $ subst_map vsi (lexpr_to_expr (ei ei'))) h fns1
-      ⪯{imp_module, imp_module, n, false}
-  Imp es h fns2.
+    Rec (expr_fill Ki $ subst_map vsi' (lexpr_to_expr ei')) h' fns1
+       ⪯{rec_module, rec_module, n, false}
+    Rec (expr_fill Ks (Val v')) h' fns2) →
+  Rec (expr_fill Ki $ subst_map vsi (lexpr_to_expr (ei ei'))) h fns1
+      ⪯{rec_module, rec_module, n, false}
+  Rec es h fns2.
 Proof.
   move => Hcall.
-  elim: es' es s s' ei ei' v vsi vss h Ks ImpExprFill0; try by move => *; simplify_crun_eq.
+  elim: es' es s s' ei ei' v vsi vss h Ks RecExprFill0; try by move => *; simplify_crun_eq.
   - move => ?????????????????? Hcont. prepare_goal. case_match. 2: by tstep_s.
     apply Hcont; [done|by eapply lookup_weaken|done|naive_solver].
   - move => ?????????????????? Hcont. prepare_goal. apply Hcont; [done|done|done|naive_solver].
@@ -343,12 +343,12 @@ Lemma test_1 :
     lfd_args := ["x"];
     lfd_vars := [];
     lfd_body :=
-      LLetE "$0$" (LBinOp (VVar "x") ShiftOp (VVal (StaticValNum 2)))
+      LLetE "$0$" (LBinOp (VVar "x") OffsetOp (VVal (StaticValNum 2)))
         (LLetE "$1$" (LLoad (VVar "x"))
            (LLetE "$2$" (LCall "f" [VVar "$1$"; VVal (StaticValNum 1)])
               (LLetE "$3$" (LBinOp (VVar "$0$") AddOp (VVar "$2$")) (LEnd (LVarVal (VVar "$3$"))))))
   |}.
-Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
+Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 
 (** * Verification of pass_fn *)
 Lemma pass_fn_args fn fn' :
@@ -365,13 +365,13 @@ Lemma pass_fn_correct f fn fn' :
   pass_fn fn = CSuccess fn' →
   NoDup (sfd_args fn ++ (sfd_vars fn).*1 ++ assigned_vars (static_expr_to_expr (sfd_body fn))) →
   (∀ n, tmp_var n ∉ sfd_args fn ++ (sfd_vars fn).*1 ++ assigned_vars (static_expr_to_expr (sfd_body fn))) →
-  trefines (MS imp_module (initial_imp_lstate (<[f := fn']> ∅)))
-           (MS imp_module (initial_imp_sstate (<[f := fn]> ∅))).
+  trefines (MS rec_module (initial_rec_lstate (<[f := fn']> ∅)))
+           (MS rec_module (initial_rec_sstate (<[f := fn]> ∅))).
 Proof.
   destruct (crun 0%N (pass (sfd_body fn))) as [?? res] eqn: Hsucc.
   unfold pass_fn. rewrite Hsucc => /= /(compiler_success_fmap_success _ _ _ _ _ _)[?[??]]. subst.
   move => // /NoDup_app[?[?/NoDup_app[?[??]]]]?.
-  apply imp_proof. { move => ?. rewrite !lookup_fmap !fmap_None !lookup_insert_None. naive_solver. }
+  apply rec_proof. { move => ?. rewrite !lookup_fmap !fmap_None !lookup_insert_None. naive_solver. }
   move => ???????. rewrite !fmap_insert !fmap_empty /=.
   move => /lookup_insert_Some[[??]|[??]]; simplify_map_eq. split!.
   move => ?? Hret.
@@ -391,4 +391,4 @@ Proof.
   tstep_s => ??. tstep_i. split!; [done|]. by apply Hret.
 Qed.
 
-End ci2a_linearize.
+End cr2a_linearize.

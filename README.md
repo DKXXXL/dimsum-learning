@@ -32,7 +32,7 @@ You might need to run `eval $(opam env)` to update the environment of your shell
 ## Differences to the Paper
 
 Before exploring the Coq development, note the following differences between the paper and the mechanization:
-- The language Rec is called Imp in the Coq development.
+- The language Rec is called Rec in the Coq development.
 - `module` in the Coq development does not contain an initial state.
   A module as defined in the paper is `mod_state` in the Coq development.
   Combinators and languages in Coq are defined as Coq `module` and provide the initial state in a separate definition (usually called `initial_COMBINATOR_NAME_state`).
@@ -50,13 +50,13 @@ Section 2:
 - Verification of the running example including programs and specifications: `theories/memmove.v`
 - Proof rules in Figure 5:
   - `asm-link-syn`: `asm_link_refines_prod` and `asm_prod_refines_link` in `theories/asm.v`
-  - `rec-link-syn`: `imp_link_refines_prod` and `imp_prod_refines_link` in `theories/imp.v`
+  - `rec-link-syn`: `imp_link_refines_prod` and `imp_prod_refines_link` in `theories/rec.v`
   - `asm-link-horizontal`: `asm_prod_trefines` in `theories/asm.v`
-  - `rec-link-horizontal`: `imp_prod_trefines` in `theories/imp.v`
-  - `rec-wrapper-compat`: `imp_to_asm_trefines` in `theories/imp_to_asm.v`
+  - `rec-link-horizontal`: `imp_prod_trefines` in `theories/rec.v`
+  - `rec-wrapper-compat`: `rec_to_asm_trefines` in `theories/rec_to_asm.v`
   - `compiler-correct`: `compile_correct` in `theories/compiler/compiler.v`
-  - `rec-to-asm-link`: `imp_to_asm_combine` in `theories/imp_to_asm.v`
-- Definition of the Rec to Asm wrapper: `imp_to_asm` in `theories/imp_to_asm.v`
+  - `rec-to-asm-link`: `rec_to_asm_combine` in `theories/rec_to_asm.v`
+- Definition of the Rec to Asm wrapper: `rec_to_asm` in `theories/rec_to_asm.v`
 
 Section 3.1:
 - Definition of module: `module`, `mod_state` in `theories/module.v`
@@ -87,10 +87,10 @@ Section 4:
   - Syntactic Linking: `asm_link` in `theories/asm.v`
   - Semantic Linking: `asm_prod` in `theories/asm.v`
 - Definition of Rec:
-  - Syntax: `expr` in `theories/imp.v`
-  - Module Semantics: `imp_module` in `theories/imp.v`
-  - Syntactic Linking: `imp_link` in `theories/imp.v`
-  - Semantic Linking: `imp_prod` in `theories/imp.v`
+  - Syntax: `expr` in `theories/rec.v`
+  - Module Semantics: `rec_module` in `theories/rec.v`
+  - Syntactic Linking: `rec_link` in `theories/rec.v`
+  - Semantic Linking: `imp_prod` in `theories/rec.v`
 - Coroutine Library:
   - Definition of the linking operator: `coro_prod` in `theories/coroutine.v`
   - `yield`: `yield_asm` in `theories/coroutine.v`
@@ -102,14 +102,14 @@ Section 5:
   - Compiler correctness: compiler_correct in `theories/compiler/compiler.v`
     - Note that the compiler_correct lemma only allows compiling
       single functions but they can be combined using
-      `imp_to_asm_combine` in `theories/imp_to_asm.v` and the equivalence
+      `rec_to_asm_combine` in `theories/rec_to_asm.v` and the equivalence
       of syntactic and semantic linking.
   - SSA pass: `theories/compiler/ssa.v`
   - Linearize pass: `theories/compiler/linearize.v`
   - Mem2Reg pass: `theories/compiler/mem2reg.v`
   - Codegen pass: `theories/compiler/codegen.v`
-- Rec-to-rec wrapper: `imp_heap_bij` in `theories/imp_heap_bij_own.v`
-- `rec-to-asm-vertical`: `i2a_bij_vertical` in `theories/i2a_bij_vertical.v`
+- Rec-to-rec wrapper: `rec_heap_bij` in `theories/imp_heap_bij_own.v`
+- `rec-to-asm-vertical`: `r2a_bij_vertical` in `theories/r2a_bij_vertical.v`
 
 
 ### Axioms

@@ -1,11 +1,11 @@
 From stdpp Require Import pretty.
 From dimsum.core Require Export proof_techniques.
-From dimsum.examples Require Import imp.
+From dimsum.examples Require Import rec.
 
 Local Open Scope Z_scope.
 Set Default Proof Using "Type".
 
-(** * SSA pass : Imp -> Imp *)
+(** * SSA pass : Rec -> Rec *)
 (** This pass renames let bindings, function arguments, and local
 variables such that all names are unique. This is used by the
 following passes. *)
@@ -21,7 +21,7 @@ Proof.
   all: move => /pretty_N_digits; compute_done.
 Qed.
 
-Module ci2a_ssa.
+Module cr2a_ssa.
 
 (** * pass *)
 (** Since this pass is simple, we don't use the full compiler monad,
@@ -77,7 +77,7 @@ Lemma test_fn_1_test :
   pass ∅ (expr_to_static_expr $ test_fn_1.(fd_body)) 0 =
   (4%N, SLetE "x$0" (SLetE "x$1" (SVar "x") (SVar "x$1"))
        (SLetE "y$2" (SVar "x$0") (SLetE "x$3" (SVar "x$0") (SVar "x$3")))).
-Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
+Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 
 (** * Verification of pass *)
 Lemma pass_state ren s e :
@@ -109,21 +109,21 @@ Proof.
 Qed.
 
 Lemma pass_correct Ki Ks ei es es' n h fns1 fns2 s vsi vss ren
-      `{!ImpExprFill es Ks (subst_map vss (static_expr_to_expr es'))}
-      `{!ImpExprFill ei Ki (subst_map vsi (static_expr_to_expr (pass ren es' s).2))}:
-  imp_proof_call n fns1 fns2 →
+      `{!RecExprFill es Ks (subst_map vss (static_expr_to_expr es'))}
+      `{!RecExprFill ei Ki (subst_map vsi (static_expr_to_expr (pass ren es' s).2))}:
+  rec_proof_call n fns1 fns2 →
   (∀ i v, vss !! i = Some v → ∃ i', ren !! i = Some i' ∧ vsi !! i' = Some v) →
   (∀ x s', (s ≤ s')%N → vsi !! ssa_var x s' = None) →
   (∀ h' v',
-    Imp (expr_fill Ki $ (Val v')) h' fns1
-       ⪯{imp_module, imp_module, n, false}
-    Imp (expr_fill Ks (Val v')) h' fns2) →
-  Imp ei h fns1
-      ⪯{imp_module, imp_module, n, false}
-  Imp es h fns2.
+    Rec (expr_fill Ki $ (Val v')) h' fns1
+       ⪯{rec_module, rec_module, n, false}
+    Rec (expr_fill Ks (Val v')) h' fns2) →
+  Rec ei h fns1
+      ⪯{rec_module, rec_module, n, false}
+  Rec es h fns2.
 Proof.
   move => Hcall.
-  revert es ei ren s vsi vss h Ks Ki ImpExprFill0 ImpExprFill1.
+  revert es ei ren s vsi vss h Ks Ki RecExprFill0 RecExprFill1.
   induction es' => //= es ei ren s vsi vss h Ks Ki [?] [?] Hvs Hvars Hcont; simplify_eq.
   - destruct (vss !! x) eqn: Hx. 2: by tstep_s.
     move: Hx => /Hvs[?[-> ->]]. done.
@@ -182,7 +182,7 @@ Lemma test_fn_1_test_pass :
       SLetE "x$2" (SLetE "x$3" (SVar "x$0") (SVar "x$3"))
         (SLetE "y$4" (SVar "x$2") (SLetE "x$5" (SVar "x$2") (SVar "x$5")))
   |}.
-Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
+Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 
 (** * Verification of pass_fn *)
 Lemma pass_fn_args_NoDup fn:
@@ -205,10 +205,10 @@ Proof.
 Qed.
 
 Lemma pass_fn_correct f fn :
-  trefines (MS imp_module (initial_imp_sstate (<[f := pass_fn fn]> ∅)))
-           (MS imp_module (initial_imp_sstate (<[f := fn]> ∅))).
+  trefines (MS rec_module (initial_rec_sstate (<[f := pass_fn fn]> ∅)))
+           (MS rec_module (initial_rec_sstate (<[f := fn]> ∅))).
 Proof.
-  apply imp_proof. { move => ?. rewrite !lookup_fmap !fmap_None !lookup_insert_None. naive_solver. }
+  apply rec_proof. { move => ?. rewrite !lookup_fmap !fmap_None !lookup_insert_None. naive_solver. }
   move => ????? vs ?. rewrite !fmap_insert !fmap_empty /=.
   move => /lookup_insert_Some[[??]|[??]]; simplify_map_eq. split!. { by rewrite imap_length. }
   rewrite imap_length. move => ?? Hret.
@@ -262,4 +262,4 @@ Proof.
     by apply Hret.
 Qed.
 
-End ci2a_ssa.
+End cr2a_ssa.

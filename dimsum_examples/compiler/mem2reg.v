@@ -1,11 +1,11 @@
 From dimsum.core Require Export proof_techniques.
-From dimsum.examples Require Import imp_heap_bij.
-From dimsum.examples.compiler Require Import monad linear_imp linearize.
+From dimsum.examples Require Import rec_heap_bij.
+From dimsum.examples.compiler Require Import monad linear_rec linearize.
 
-(** * Mem2Reg pass : LinearImp -> LinearImp *)
+(** * Mem2Reg pass : LinearRec -> LinearRec *)
 (** This pass optimizes local variables whose address is not taken to let bindings. *)
 
-Module ci2a_mem2reg.
+Module cr2a_mem2reg.
 
 (** * pass and pass_fn *)
 Inductive error := UsedAsLoc | NotSupported.
@@ -119,7 +119,7 @@ Proof. rewrite /pass_fn. by repeat case_match. Qed.
 (** * Tests *)
 Definition test_opt_fn (f: fndef) :=
   let s := fndef_to_static_fndef f in
-  let c := ci2a_linearize.pass_fn s in
+  let c := cr2a_linearize.pass_fn s in
   let d := pass_fn <$> c in
   d.
 
@@ -141,7 +141,7 @@ Lemma test_1 :
         (LLetE "x" (LVarVal (VVal (StaticValNum 1)))
         (LLetE "_" (LVarVal (VVar "$0$")) (LLetE "$1$" (LVarVal (VVar "x")) (LEnd (LVarVal (VVar "$1$")))))))
     |}.
-Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
+Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 
 Definition test_fn_2 : fndef := {|
   fd_args := ["y"];
@@ -168,14 +168,14 @@ Lemma test_2 :
         (LLetE "$2$" (LVarVal (VVar "x"))
         (LLetE "$3$" (LBinOp (VVar "$2$") AddOp (VVar "z")) (LEnd (LVarVal (VVar "$3$"))))))))))
     |}.
-Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
+Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 
 
 (* TODO: this is kind of a corner case, since the expression has UB, which results in *)
 Definition test_fn_3 : fndef := {|
   fd_args := ["y"];
   fd_vars := [("x", 4%Z)];
-  fd_body := (BinOp (BinOp (Var "y") ShiftOp (Val 2)) AddOp (Call "f" [Load (Var "x"); Val 1]));
+  fd_body := (BinOp (BinOp (Var "y") OffsetOp (Val 2)) AddOp (Call "f" [Load (Var "x"); Val 1]));
   fd_static := I;
 |}.
 
@@ -187,12 +187,12 @@ Lemma test_3 :
       lfd_vars := [];
       lfd_body :=
         LLetE "x" (LVarVal (VVal (StaticValNum 0)))
-          (LLetE "$0$" (LBinOp (VVar "y") ShiftOp (VVal (StaticValNum 2)))
+          (LLetE "$0$" (LBinOp (VVar "y") OffsetOp (VVal (StaticValNum 2)))
              (LLetE "$1$" (LVarVal (VVar "x"))
                 (LLetE "$2$" (LCall "f" [VVar "$1$"; VVal (StaticValNum 1)])
                    (LLetE "$3$" (LBinOp (VVar "$0$") AddOp (VVar "$2$")) (LEnd (LVarVal (VVar "$3$")))))))
     |}.
-Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
+Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 
 Definition test_fn_4 : fndef := {|
   fd_args := ["x"];
@@ -217,12 +217,12 @@ Lemma test_4 :
         (LLetE "$2$" (LVarVal (VVar "y"))
         (LLetE "$3$" (LBinOp (VVar "$1$") AddOp (VVar "$2$")) (LEnd (LVarVal (VVar "$3$")))))))))
     |}.
-Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
+Proof. vm_compute. match goal with |- ?x = ?x => exact: eq_refl end. Abort.
 
 (** * Verification of pass and pass_fn *)
 Lemma lexpr_tsim_var_val  v es ei Ks Ki vss vsi x n hi hs fns1 fns2 rf r
-  `{Hfill1: !ImpExprFill es Ks (subst_map vss (var_val_to_expr v))}
-  `{Hfill2: !ImpExprFill ei Ki (subst_map vsi (var_val_to_expr v))}:
+  `{Hfill1: !RecExprFill es Ks (subst_map vss (var_val_to_expr v))}
+  `{Hfill2: !RecExprFill ei Ki (subst_map vsi (var_val_to_expr v))}:
     dom vss ⊆ dom vsi →
     v ≠ VVar x →
     satisfiable (([∗ map] vi;vs ∈ (delete x vsi); (delete x vss), val_in_bij vi vs) ∗ r) →
@@ -230,13 +230,13 @@ Lemma lexpr_tsim_var_val  v es ei Ks Ki vss vsi x n hi hs fns1 fns2 rf r
       subst_map vsi (var_val_to_expr v) = Val v' →
       subst_map vss (var_val_to_expr v) = Val w' →
       satisfiable (([∗ map] vi;vs ∈ (delete x vsi); (delete x vss), val_in_bij vi vs) ∗ val_in_bij v' w' ∗ r) →
-      Imp (expr_fill Ki (Val v')) hi fns1
-        ⪯{imp_module, imp_heap_bij imp_module, n, true}
-      (SMProg, Imp (expr_fill Ks (Val w')) hs fns2, (PPInside, (), rf))
+      Rec (expr_fill Ki (Val v')) hi fns1
+        ⪯{rec_module, rec_heap_bij rec_module, n, true}
+      (SMProg, Rec (expr_fill Ks (Val w')) hs fns2, (PPInside, (), rf))
     ) →
-    Imp ei hi fns1
-      ⪯{imp_module, imp_heap_bij imp_module, n, true}
-    (SMProg, Imp es hs fns2, (PPInside, (), rf)).
+    Rec ei hi fns1
+      ⪯{rec_module, rec_heap_bij rec_module, n, true}
+    (SMProg, Rec es hs fns2, (PPInside, (), rf)).
 Proof.
  intros Hdom Hne Hsat Hcont; destruct Hfill1 as [->], Hfill2 as [->].
  destruct v as [y|w]; simpl.
@@ -258,28 +258,28 @@ Qed.
 
 
 Lemma lexpr_tsim_var_val_call vs' ws' ys es ei Ks Ki vss vsi x n hi hs fns1 fns2 rf f r
-  `{Hfill2: !ImpExprFill ei Ki (Call f ((Val <$> vs') ++ (subst_map vsi <$> (var_val_to_expr <$> ys))))}
-  `{Hfill1: !ImpExprFill es Ks (Call f ((Val <$> ws') ++ (subst_map vss <$> (var_val_to_expr <$> ys))))}:
+  `{Hfill2: !RecExprFill ei Ki (Call f ((Val <$> vs') ++ (subst_map vsi <$> (var_val_to_expr <$> ys))))}
+  `{Hfill1: !RecExprFill es Ks (Call f ((Val <$> ws') ++ (subst_map vss <$> (var_val_to_expr <$> ys))))}:
     dom vss ⊆ dom vsi →
     Forall (λ v, v ≠ VVar x) ys →
     satisfiable (([∗ map] vi;vs ∈ (delete x vsi); (delete x vss), val_in_bij vi vs) ∗ ([∗ list] v; w ∈ vs'; ws', val_in_bij v w) ∗ r) →
     (∀ vs ws,
       satisfiable (([∗ map] vi;vs ∈ (delete x vsi); (delete x vss), val_in_bij vi vs) ∗ ([∗ list] v; w ∈ vs' ++ vs; ws' ++ ws, val_in_bij v w) ∗ r) →
-      Imp (expr_fill Ki (Call f (Val <$> (vs' ++ vs)))) hi fns1
-        ⪯{imp_module, imp_heap_bij imp_module, n, true}
-      (SMProg, Imp (expr_fill Ks (Call f (Val <$> (ws' ++ ws)))) hs fns2, (PPInside, (), rf))
+      Rec (expr_fill Ki (Call f (Val <$> (vs' ++ vs)))) hi fns1
+        ⪯{rec_module, rec_heap_bij rec_module, n, true}
+      (SMProg, Rec (expr_fill Ks (Call f (Val <$> (ws' ++ ws)))) hs fns2, (PPInside, (), rf))
     ) →
-    Imp ei hi fns1
-      ⪯{imp_module, imp_heap_bij imp_module, n, true}
-    (SMProg, Imp es hs fns2, (PPInside, (), rf)).
+    Rec ei hi fns1
+      ⪯{rec_module, rec_heap_bij rec_module, n, true}
+    (SMProg, Rec es hs fns2, (PPInside, (), rf)).
 Proof.
  intros Hdom Hall Hsat Hcont;destruct Hfill1 as [->], Hfill2 as [->].
  induction ys as [|y ys IH] in vs', ws', Hsat, Hall, Hcont |-*; simpl.
  - specialize (Hcont [] []). rewrite !app_nil_r in Hcont.
    rewrite !app_nil_r. eapply Hcont, Hsat.
  - eapply Forall_cons_1 in Hall as [Hne Hall]. eapply lexpr_tsim_var_val; eauto.
-   { eapply imp_expr_fill_expr_fill, (imp_expr_fill_expr_fill _ [CallCtx _ _ _]), imp_expr_fill_end. }
-   { eapply imp_expr_fill_expr_fill, (imp_expr_fill_expr_fill _ [CallCtx _ _ _]), imp_expr_fill_end. }
+   { eapply rec_expr_fill_expr_fill, (rec_expr_fill_expr_fill _ [CallCtx _ _ _]), rec_expr_fill_end. }
+   { eapply rec_expr_fill_expr_fill, (rec_expr_fill_expr_fill _ [CallCtx _ _ _]), rec_expr_fill_end. }
    clear Hsat; intros v w _ _ Hsat; simpl.
    rewrite !cons_middle !app_assoc. change ([Val v]) with (Val <$> [v]).
    change ([Val w]) with (Val <$> [w]). rewrite -!fmap_app.
@@ -291,17 +291,17 @@ Proof.
       rewrite !app_assoc //.
 Qed.
 
-Local Hint Resolve imp_heap_bij_call_mono : core.
-Local Hint Resolve imp_heap_bij_return_mono : core.
+Local Hint Resolve rec_heap_bij_call_mono : core.
+Local Hint Resolve rec_heap_bij_return_mono : core.
 
 
 Lemma pass_lexpr_op_correct ei' Ki ei Ks es es' x k (l: loc) n hi hs fns1 fns2 vsi vss wi ws r rf (f: option var_val → option var_val)
-  `{Hfill1: !ImpExprFill es Ks (subst_map vss (lexpr_op_to_expr es'))}
-  `{Hfill2: !ImpExprFill ei Ki (subst_map vsi (lexpr_op_to_expr ei'))}:
-    imp_heap_bij_call n fns1 fns2 →
+  `{Hfill1: !RecExprFill es Ks (subst_map vss (lexpr_op_to_expr es'))}
+  `{Hfill2: !RecExprFill ei Ki (subst_map vsi (lexpr_op_to_expr ei'))}:
+    rec_heap_bij_call n fns1 fns2 →
     (∀ (w1 w2: val),
        default (Val wi) (subst_map vsi <$> (var_val_to_expr <$> (f None))) = Val w1 →
-      imp_heap_bij_return n fns1 fns2 Ki Ks
+      rec_heap_bij_return n fns1 fns2 Ki Ks
         (r ∗ heap_bij_const_s l.1 (<[0%Z := w2]> (zero_block l k)) ∗ val_in_bij w1 w2)) →
     satisfiable (([∗ map] v1;v2 ∈ (delete x vsi);(delete x vss), val_in_bij v1 v2) ∗
                    heap_bij_inv hi hs ∗ val_in_bij wi ws ∗
@@ -311,9 +311,9 @@ Lemma pass_lexpr_op_correct ei' Ki ei Ks es es' x k (l: loc) n hi hs fns1 fns2 v
     dom vss ⊆ dom vsi →
     l.2 = 0 →
     crun () (lexpr_op_pass x es') = CResult () f (CSuccess ei') →
-    Imp ei hi fns1
-      ⪯{imp_module, imp_heap_bij imp_module, n, true}
-    (SMProg, Imp es hs fns2, (PPInside, (), rf)).
+    Rec ei hi fns1
+      ⪯{rec_module, rec_heap_bij rec_module, n, true}
+    (SMProg, Rec es hs fns2, (PPInside, (), rf)).
 Proof.
   intros Hcalls Hcont Hsat Hxs Hxi Hsub Hl Hrun.
   destruct Hfill1 as [->], Hfill2 as [->].
@@ -399,12 +399,12 @@ Qed.
 Lemma LLetM_sim Ki Ks vsi vss x o ei es n hi hs fns1 fns2 rf vi wi:
   vsi !! x = Some vi →
   default (Val vi) (subst_map vsi <$> (var_val_to_expr <$> o)) = Val wi →
-  Imp (expr_fill Ki (subst_map (<[x := wi]> vsi) (lexpr_to_expr ei))) hi fns1
-    ⪯{imp_module, imp_heap_bij imp_module, n, true}
-  (SMProg, Imp (expr_fill Ks (subst_map vss (lexpr_to_expr es))) hs fns2, (PPInside, (), rf)) →
-  Imp (expr_fill Ki (subst_map vsi (lexpr_to_expr (LLetM x o ei)))) hi fns1
-    ⪯{imp_module, imp_heap_bij imp_module, n, true}
-  (SMProg, Imp (expr_fill Ks (subst_map vss (lexpr_to_expr es))) hs fns2, (PPInside, (), rf)).
+  Rec (expr_fill Ki (subst_map (<[x := wi]> vsi) (lexpr_to_expr ei))) hi fns1
+    ⪯{rec_module, rec_heap_bij rec_module, n, true}
+  (SMProg, Rec (expr_fill Ks (subst_map vss (lexpr_to_expr es))) hs fns2, (PPInside, (), rf)) →
+  Rec (expr_fill Ki (subst_map vsi (lexpr_to_expr (LLetM x o ei)))) hi fns1
+    ⪯{rec_module, rec_heap_bij rec_module, n, true}
+  (SMProg, Rec (expr_fill Ks (subst_map vss (lexpr_to_expr es))) hs fns2, (PPInside, (), rf)).
 Proof.
   destruct o; simpl.
   - intros Hlook Heq Hsim; rewrite Heq.
@@ -415,20 +415,20 @@ Proof.
 Qed.
 
 Lemma pass_correct  r rf ei' Ki ei Ks es es' x (l: loc) n k h h' fns1 fns2 vsi vss vi vs r_p
-  `{Hfill1: !ImpExprFill es Ks (subst_map vss (lexpr_to_expr es'))}
-  `{Hfill2: !ImpExprFill ei Ki (subst_map vsi (lexpr_to_expr ei'))}:
+  `{Hfill1: !RecExprFill es Ks (subst_map vss (lexpr_to_expr es'))}
+  `{Hfill2: !RecExprFill ei Ki (subst_map vsi (lexpr_to_expr ei'))}:
     l.2 = 0 →
-    imp_heap_bij_call n fns1 fns2 →
-    (∀ w, imp_heap_bij_return n fns1 fns2 Ki Ks (r ∗ heap_bij_const_s l.1 (<[0%Z := w]> (zero_block l k)))) →
+    rec_heap_bij_call n fns1 fns2 →
+    (∀ w, rec_heap_bij_return n fns1 fns2 Ki Ks (r ∗ heap_bij_const_s l.1 (<[0%Z := w]> (zero_block l k)))) →
     vss !! x = Some (ValLoc l) →
     vsi !! x = Some vi →
     dom vss ⊆ dom vsi →
     satisfiable (heap_bij_inv h h' ∗ heap_bij_const_s l.1 (<[0%Z := vs]> (zero_block l k)) ∗
                 val_in_bij vi vs ∗ ([∗ map] v1;v2 ∈ (delete x vsi);(delete x vss), val_in_bij v1 v2) ∗ r ∗ rf) →
     crun () (pass x es') = CResult () r_p (CSuccess ei') →
-    Imp ei h fns1
-      ⪯{imp_module, imp_heap_bij imp_module, n, true}
-    (SMProg, Imp es h' fns2, (PPInside, (), rf)).
+    Rec ei h fns1
+      ⪯{rec_module, rec_heap_bij rec_module, n, true}
+    (SMProg, Rec es h' fns2, (PPInside, (), rf)).
 Proof.
   intros Hl; destruct Hfill1 as [->]. destruct Hfill2 as [->].
   revert r rf ei' Ki Ks x n k h h' fns1 fns2 vsi vss vi vs r_p.
@@ -442,7 +442,7 @@ Proof.
       simpl. clear Hsat. intros w1 w2 Hdef. intros n' v1 v2 h1' h2' rf' b Hsub Hsat.
       simpl. tstep_s. tstep_i.
       rewrite -!subst_subst_map_delete.
-      apply: imp_heap_bij_sim_refl_static; simpl; eauto.
+      apply: rec_heap_bij_sim_refl_static; simpl; eauto.
       { set_solver. }
       { eapply lexpr_is_static. }
       iSatMono. iIntros "($ & Hv & ([Hm $] & $ & _) & $)".
@@ -463,7 +463,7 @@ Proof.
         destruct v as [z|]; last done; simpl.
         destruct (decide (z = y)); subst; first naive_solver.
         rewrite lookup_insert_ne //. }
-      eapply IH; eauto using imp_heap_bij_call_mono; first last.
+      eapply IH; eauto using rec_heap_bij_call_mono; first last.
       { iSatMono. iIntros "($ & Hv & ([Hall r] & $ & $) & $)".
         rewrite delete_insert_delete. rewrite !delete_insert_ne //.
         iSplitR "r"; last iExact "r".
@@ -487,12 +487,12 @@ Proof.
       iDestruct "Hval" as "%". subst. iSatStop. done. }
     tstep_i.
     destruct bb; eapply LLetM_sim; eauto.
-    + eapply IH1; eauto using imp_heap_bij_call_mono; first last.
+    + eapply IH1; eauto using rec_heap_bij_call_mono; first last.
       { iSatMono. iIntros "($ & Hv & ([Hall r] & $ & $) & $)".
         rewrite delete_insert_delete. iFrame. }
       { set_solver. }
       { rewrite lookup_insert //. }
-    + eapply IH2; eauto using imp_heap_bij_call_mono; first last.
+    + eapply IH2; eauto using rec_heap_bij_call_mono; first last.
       { iSatMono. iIntros "($ & Hv & ([Hall r] & $ & $) & $)".
         rewrite delete_insert_delete. iFrame. }
       { set_solver. }
@@ -628,21 +628,21 @@ Lemma pass_correct_refines f x args vars exprs i k cont expri:
   (NoDup (args ++ (vars.*1))) →
   crun () (pass x exprs) = CResult () cont (CSuccess expri) →
   trefines
-    (MS imp_module
-      (initial_imp_state
+    (MS rec_module
+      (initial_rec_state
             (lfndef_to_fndef <$>
               <[f:={|
                     lfd_args := args;
                     lfd_vars := delete i vars;
                     lfd_body := LLetE x (LVarVal (VVal (StaticValNum 0))) expri
                   |}]> ∅)))
-    (MS (imp_heap_bij imp_module)
-      (initial_imp_heap_bij_state imp_module
-          (initial_imp_state
+    (MS (rec_heap_bij rec_module)
+      (initial_rec_heap_bij_state rec_module
+          (initial_rec_state
             (lfndef_to_fndef <$>
               <[f:={| lfd_args := args; lfd_vars := vars; lfd_body := exprs |}]> ∅)))).
 Proof.
-  intros Heq Hnodup Hrun. apply: imp_heap_bij_proof.
+  intros Heq Hnodup Hrun. apply: rec_heap_bij_proof.
   - set_solver.
   - move => ??. intros [-> ->]%pass_lookup_singleton.
     eexists. split; simpl.
@@ -697,8 +697,8 @@ Proof.
     { rewrite list_lookup_fmap Heq //. }
 
     eapply (pass_correct (r ∗ [∗ list] l1;l2 ∈ li;delete i ls, loc_in_bij l1 l2) _ _ _ _ _ _ _ _ l _ k _ _ _ _ _ _ _ 0%Z); last done.
-    + eapply imp_expr_fill_expr_fill, imp_expr_fill_FreeA, imp_expr_fill_end.
-    + eapply imp_expr_fill_expr_fill, imp_expr_fill_FreeA, imp_expr_fill_end.
+    + eapply rec_expr_fill_expr_fill, rec_expr_fill_FreeA, rec_expr_fill_end.
+    + eapply rec_expr_fill_expr_fill, rec_expr_fill_FreeA, rec_expr_fill_end.
     + by eapply heap_alloc_list_offset_zero.
     + done.
     + iSatClear. simpl. intros w n' v1 v2 h1' h2' rf' b Hle Hsat. simpl.
@@ -773,12 +773,12 @@ Lemma pass_single_var_correct f x args exprs varss expri varsi :
   (NoDup (args ++ (varss.*1))) →
   pass_single_var x exprs varss = (expri, varsi) →
   trefines
-  (MS imp_module (initial_imp_state
+  (MS rec_module (initial_rec_state
     (lfndef_to_fndef <$>
     <[f:={| lfd_args := args; lfd_vars := varsi; lfd_body := expri |}]> ∅)))
-  (MS (imp_heap_bij imp_module)
-     (initial_imp_heap_bij_state imp_module
-        (initial_imp_state
+  (MS (rec_heap_bij rec_module)
+     (initial_rec_heap_bij_state rec_module
+        (initial_rec_state
            (lfndef_to_fndef <$>
             <[f:={| lfd_args := args; lfd_vars := varss; lfd_body := exprs |}]> ∅)))).
 Proof.
@@ -786,8 +786,8 @@ Proof.
   destruct list_find as [[i [y n]]|] eqn: Hfind;
     first destruct (crun () (pass x exprs)) as [[] ? [res|]] eqn: Hrun; simpl;
     last first.
-  - injection 1 as ??; subst. eapply imp_heap_bij_imp_refl.
-  - injection 1 as ??; subst. eapply imp_heap_bij_imp_refl.
+  - injection 1 as ??; subst. eapply rec_heap_bij_refl.
+  - injection 1 as ??; subst. eapply rec_heap_bij_refl.
   - injection 1 as ??; subst.
     eapply list_find_Some in Hfind as (Hlook & Hdec & _).
     eapply bool_decide_unpack in Hdec. subst.
@@ -851,12 +851,12 @@ Lemma pass_body_correct f args varss exprs expri varsi:
   pass_body exprs varss = (expri, varsi) →
   NoDup (args ++ varss.*1) →
   trefines
-    (MS imp_module (initial_imp_state
+    (MS rec_module (initial_rec_state
       (lfndef_to_fndef <$>
       <[f:={| lfd_args := args; lfd_vars := varsi; lfd_body := expri |}]> ∅)))
-    (MS (imp_heap_bij_N (length varss) imp_module)
-       (initial_imp_heap_bij_state_N _ imp_module
-          (initial_imp_lstate
+    (MS (rec_heap_bij_N (length varss) rec_module)
+       (initial_rec_heap_bij_state_N _ rec_module
+          (initial_rec_lstate
              (<[f:={| lfd_args := args; lfd_vars := varss; lfd_body := exprs |}]> ∅)))).
 Proof.
   rewrite /pass_body. remember varss as L. rewrite {1 3 6}HeqL. clear HeqL.
@@ -866,7 +866,7 @@ Proof.
     eapply foldr_pass_single_vars in Hbody as Hsub.
     intros Hsingle Hnd.
     eapply IH in Hbody as Hx; last done.
-    eapply imp_heap_bij_trefines in Hx; last apply imp_vis_no_all.
+    eapply rec_heap_bij_trefines in Hx; last apply rec_vis_no_all.
     eapply pass_single_var_correct in Hsingle; last first.
     + eapply NoDup_app. eapply NoDup_app in Hnd as [Hnd [Hinter Hvarss]].
       split; first apply Hnd. split.
@@ -893,13 +893,13 @@ Qed.
 
 Lemma pass_fn_correct f fn :
   NoDup (fn.(lfd_args) ++ fn.(lfd_vars).*1) →
-  trefines (MS imp_module (initial_imp_lstate (<[f := pass_fn fn]> ∅)))
-           (MS (imp_heap_bij_N (length fn.(lfd_vars)) imp_module) (initial_imp_heap_bij_state_N _ imp_module
-                                            (initial_imp_lstate (<[f := fn]> ∅)))).
+  trefines (MS rec_module (initial_rec_lstate (<[f := pass_fn fn]> ∅)))
+           (MS (rec_heap_bij_N (length fn.(lfd_vars)) rec_module) (initial_rec_heap_bij_state_N _ rec_module
+                                            (initial_rec_lstate (<[f := fn]> ∅)))).
 Proof.
   rewrite /pass_fn. destruct pass_body as [expri varsi] eqn: Hpass.
   revert Hpass. destruct fn as [args varss exprs]; simpl.
   intros Heq Hnd. by eapply pass_body_correct.
 Qed.
 
-End ci2a_mem2reg.
+End cr2a_mem2reg.

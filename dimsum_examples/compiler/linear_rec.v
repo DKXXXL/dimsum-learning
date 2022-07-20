@@ -1,7 +1,7 @@
-From dimsum.examples Require Export imp.
+From dimsum.examples Require Export rec.
 
-(** * Linear Imp *)
-(** This file defines a linear subset of Imp, corresponding to the A-normal form. *)
+(** * Linear Rec *)
+(** This file defines a linear subset of Rec, corresponding to the A-normal form. *)
 
 (** * Variables or Values *)
 Inductive var_val :=
@@ -98,5 +98,5 @@ Program Definition lfndef_to_fndef (fn : lfndef) : fndef := {|
 |}.
 Next Obligation. move => ?. apply lexpr_is_static. Qed.
 
-Definition initial_imp_lstate (fns : gmap string lfndef) : imp_state :=
-  initial_imp_state (lfndef_to_fndef <$> fns).
+Definition initial_rec_lstate (fns : gmap string lfndef) : rec_state :=
+  initial_rec_state (lfndef_to_fndef <$> fns).

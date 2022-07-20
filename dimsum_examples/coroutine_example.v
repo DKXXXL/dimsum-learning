@@ -1,6 +1,6 @@
 From dimsum.core Require Export proof_techniques.
 From dimsum.core Require Import itree.
-From dimsum.examples Require Import imp asm imp_to_asm print coroutine.
+From dimsum.examples Require Import rec asm rec_to_asm print coroutine.
 From dimsum.examples.compiler Require Import compiler.
 
 Local Open Scope Z_scope.
@@ -10,28 +10,28 @@ Local Open Scope Z_scope.
 Definition stream_addr: Z := 700.
 Definition main_addr: Z := 800.
 
-Definition stream_imp: fndef := {|
+Definition stream_rec: fndef := {|
   fd_args := [("n")];
   fd_vars := [];
-  fd_body := LetE "_" (imp.Call "yield" [Var "n"]) $
-             (imp.Call "stream" [BinOp (Var "n") AddOp (Val $ ValNum 1)]);
+  fd_body := LetE "_" (rec.Call "yield" [Var "n"]) $
+             (rec.Call "stream" [BinOp (Var "n") AddOp (Val $ ValNum 1)]);
   fd_static := I
 |}.
 Definition stream_prog : gmap string fndef :=
-  <["stream" := stream_imp]> $ ∅.
+  <["stream" := stream_rec]> $ ∅.
 
-Definition main_imp: fndef := {|
+Definition main_rec: fndef := {|
   fd_args := [];
   fd_vars := [];
-  fd_body := LetE "x" (imp.Call "yield" [Val $ ValNum 0]) $
-             LetE "_" (imp.Call "print" [(Var "x")]) $
-             LetE "y" (imp.Call "yield" [Val $ ValNum 0]) $
-             LetE "_" (imp.Call "print" [(Var "y")]) $
-             (imp.Call "yield" [Val $ ValNum 0]);
+  fd_body := LetE "x" (rec.Call "yield" [Val $ ValNum 0]) $
+             LetE "_" (rec.Call "print" [(Var "x")]) $
+             LetE "y" (rec.Call "yield" [Val $ ValNum 0]) $
+             LetE "_" (rec.Call "print" [(Var "y")]) $
+             (rec.Call "yield" [Val $ ValNum 0]);
   fd_static := I
 |}.
 Definition main_prog : gmap string fndef :=
-  <["main" := main_imp]> $ ∅.
+  <["main" := main_rec]> $ ∅.
 
 Definition all_f2i : gmap string Z :=
   <["yield"  := yield_addr]> $
@@ -41,39 +41,39 @@ Definition all_f2i : gmap string Z :=
   ∅.
 
 Definition stream_asm : gmap Z asm_instr :=
-  deep_to_asm_instrs stream_addr ltac:(i2a_compile all_f2i stream_imp).
+  deep_to_asm_instrs stream_addr ltac:(r2a_compile all_f2i stream_rec).
 
 Definition main_asm : gmap Z asm_instr :=
-  deep_to_asm_instrs main_addr ltac:(i2a_compile all_f2i main_imp).
+  deep_to_asm_instrs main_addr ltac:(r2a_compile all_f2i main_rec).
 
 Definition stream_asm_dom : gset Z := locked dom stream_asm.
 Definition main_asm_dom : gset Z := locked dom main_asm.
 
-Lemma stream_asm_refines_imp :
+Lemma stream_asm_refines_rec :
   trefines (MS asm_module (initial_asm_state stream_asm))
-           (MS (imp_to_asm (dom stream_asm) {["stream"]} all_f2i imp_module)
-               (initial_imp_to_asm_state ∅ imp_module (initial_imp_state (<["stream" := stream_imp]> ∅)))).
+           (MS (rec_to_asm (dom stream_asm) {["stream"]} all_f2i rec_module)
+               (initial_rec_to_asm_state ∅ rec_module (initial_rec_state (<["stream" := stream_rec]> ∅)))).
 Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
 
-Lemma main_asm_refines_imp :
+Lemma main_asm_refines_rec :
   trefines (MS asm_module (initial_asm_state main_asm))
-           (MS (imp_to_asm (dom main_asm) {["main"]} all_f2i imp_module)
-               (initial_imp_to_asm_state ∅ imp_module (initial_imp_state (<["main" := main_imp]> ∅)))).
+           (MS (rec_to_asm (dom main_asm) {["main"]} all_f2i rec_module)
+               (initial_rec_to_asm_state ∅ rec_module (initial_rec_state (<["main" := main_rec]> ∅)))).
 Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
 
-Definition main_itree : itree (moduleE imp_event unit) unit :=
-  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, EICall f vs h));;;
+Definition main_itree : itree (moduleE rec_event unit) unit :=
+  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));;;
   TAssume (f = "main");;;;
   TAssume (vs = []);;;;
-  TVis (Outgoing, EICall "print" [ValNum 0] h);;;;
+  TVis (Outgoing, ERCall "print" [ValNum 0] h);;;;
   e ← TExist _;;;
   TVis (Incoming, e);;;;
-  TAssume (if e is EIReturn _ _ then true else false);;;;
-  TVis (Outgoing, EICall "print" [ValNum 1] (heap_of_event e));;;;
+  TAssume (if e is ERReturn _ _ then true else false);;;;
+  TVis (Outgoing, ERCall "print" [ValNum 1] (heap_of_event e));;;;
   e ← TExist _;;;
   TVis (Incoming, e);;;;
-  TAssume (if e is EIReturn _ _ then true else false);;;;
-  TVis (Outgoing, EIReturn (ValNum 2) (heap_of_event e));;;;
+  TAssume (if e is ERReturn _ _ then true else false);;;;
+  TVis (Outgoing, ERReturn (ValNum 2) (heap_of_event e));;;;
   TUb.
 Local Ltac go :=
   clear_itree.
@@ -83,9 +83,9 @@ Local Ltac go_i :=
   tstep_i; go.
 
 Lemma main_refines_itree :
-  trefines (MS (coro_link {["main"]} {["stream"]} imp_module imp_module)
-              (initial_coro_link_state "stream" imp_module imp_module
-              (initial_imp_state main_prog) (initial_imp_state stream_prog)))
+  trefines (MS (coro_link {["main"]} {["stream"]} rec_module rec_module)
+              (initial_coro_link_state "stream" rec_module rec_module
+              (initial_rec_state main_prog) (initial_rec_state stream_prog)))
            (MS (mod_itree _ _) (main_itree, tt)).
 Proof.
   apply: tsim_implies_trefines => n0 /=. unfold main_prog, stream_prog.
@@ -159,10 +159,10 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   TAssume (rs !!! "PC" = main_addr);;;;
   TAssume (rs !!! "R30" ∉ yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom ∪ dom print_asm);;;;
   TAssume (∃ ssz,
-     (i2a_mem_stack_mem (rs !!! "SP") ssz ##ₘ
-       (i2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init)) ∧
-    i2a_mem_stack_mem (rs !!! "SP") ssz ∪
-    (i2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init) ⊆ mem);;;;
+     (r2a_mem_stack_mem (rs !!! "SP") ssz ##ₘ
+       (r2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init)) ∧
+    r2a_mem_stack_mem (rs !!! "SP") ssz ∪
+    (r2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init) ⊆ mem);;;;
   args ← TExist _;;;
   mem ← TExist _;;;
   TAssert (print_args 0 args);;;;
@@ -185,13 +185,13 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
 Lemma top_level_refines_itree :
   trefines (MS (asm_link (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom)
                          (dom print_asm)
-                         (imp_to_asm (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom)
+                         (rec_to_asm (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom)
                                      {["yield"; "main"; "stream"]}
                                      all_f2i
                                      (mod_itree _ _)) (mod_itree _ _))
-              (initial_asm_link_state (imp_to_asm _ _ _ _) (mod_itree _ _)
-                 (initial_imp_to_asm_state
-                    (i2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init)
+              (initial_asm_link_state (rec_to_asm _ _ _ _) (mod_itree _ _)
+                 (initial_rec_to_asm_state
+                    (r2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init)
                     (mod_itree _ _) (main_itree, tt)) (print_itree, tt)))
            (MS (mod_itree _ _) (top_level_itree, tt)).
 Proof.
@@ -206,11 +206,11 @@ Proof.
   tstep_i => ??. simplify_eq.
   tstep_i. eexists true. split; [done|] => /=. eexists ∅, _, [], [], "main". split!.
   { simplify_map_eq'. done. } { rewrite !not_elem_of_union. naive_solver. }
-  { apply: satisfiable_mono; [by eapply i2a_res_init|].
-    iIntros!. iDestruct select (i2a_mem_auth _) as "$". iFrame.
+  { apply: satisfiable_mono; [by eapply r2a_res_init|].
+    iIntros!. iDestruct select (r2a_mem_auth _) as "$". iFrame.
     iDestruct (big_sepM_subseteq with "[$]") as "?"; [done|].
     rewrite big_sepM_union; [|done]. iDestruct!. iFrame.
-    iSplitL; [|iAccu]. by iApply i2a_mem_stack_init. }
+    iSplitL; [|iAccu]. by iApply r2a_mem_stack_init. }
 
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq.
@@ -219,7 +219,7 @@ Proof.
   go_i.
   go_i => *. destruct!.
   iSatStart. iIntros!.
-  iDestruct (i2a_args_intro with "[$]") as "?"; [done|]. rewrite i2a_args_cons ?i2a_args_nil; [|done].
+  iDestruct (r2a_args_intro with "[$]") as "?"; [done|]. rewrite r2a_args_cons ?r2a_args_nil; [|done].
   iDestruct!. iSatStop.
 
   rename select (all_f2i !! _ = Some _) into Hf2i. unfold all_f2i in Hf2i. simplify_map_eq'.
@@ -269,7 +269,7 @@ Proof.
   go_i. go.
   go_i => *. destruct!.
   iSatStart. iIntros!.
-  iDestruct (i2a_args_intro with "[$]") as "?"; [done|]. rewrite i2a_args_cons ?i2a_args_nil; [|done].
+  iDestruct (r2a_args_intro with "[$]") as "?"; [done|]. rewrite r2a_args_cons ?r2a_args_nil; [|done].
   iDestruct!. iSatStop.
 
   rename select (all_f2i !! _ = Some _) into Hf2i2. unfold all_f2i in Hf2i2. simplify_map_eq'.
@@ -322,7 +322,7 @@ Proof.
   go_s. eexists _. go.
   go_s. split; [done|]. go.
   go_s. split. {
-    unfold i2a_regs_ret in *. destruct!. simplify_map_eq'.
+    unfold r2a_regs_ret in *. destruct!. simplify_map_eq'.
     iSatStart. iIntros!.
     iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[%?]". simplify_eq/=.
     iSatStop. done.
@@ -352,18 +352,18 @@ Proof.
     - etrans. {
         apply: asm_link_trefines; [done|].
         apply: asm_link_trefines.
-        + apply main_asm_refines_imp.
-        + apply stream_asm_refines_imp.
+        + apply main_asm_refines_rec.
+        + apply stream_asm_refines_rec.
       }
       etrans. {
         rewrite dom_union_L.
         have ->: dom yield_asm = yield_asm_dom by rewrite /yield_asm_dom; unlock.
         apply: (coro_spec "stream" stream_regs_init stream_ssz).
-        all: unfold yield_asm_dom, yield_asm, i2a_mem_stack_mem; unlock.
+        all: unfold yield_asm_dom, yield_asm, r2a_mem_stack_mem; unlock.
         all: compute_done.
       }
       etrans. {
-        apply: imp_to_asm_trefines.
+        apply: rec_to_asm_trefines.
         apply: main_refines_itree.
       }
       done.

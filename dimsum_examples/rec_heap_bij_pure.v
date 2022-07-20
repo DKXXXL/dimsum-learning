@@ -1,14 +1,14 @@
 From dimsum.core Require Export proof_techniques.
 From dimsum.core Require Import link prepost.
 From dimsum.core Require Import axioms.
-From dimsum.examples Require Import imp.
+From dimsum.examples Require Import rec.
 
-(** * Pure version of [imp_heap_bij] *)
+(** * Pure version of [rec_heap_bij] *)
 
 Module pure_bij.
 Implicit Types (p : prov).
 
-(** * imp_heap_bij *)
+(** * rec_heap_bij *)
 Inductive heap_bij_elem :=
 | HBShared (p : prov) | HBOwned (p : player).
 Global Instance heap_bij_elem_eq_dec : EqDecision heap_bij_elem.
@@ -45,7 +45,7 @@ Proof.
   all: apply AxProofIrrelevance.
 Qed.
 
-Global Program Instance imp_heap_bij_empty : Empty heap_bij :=
+Global Program Instance rec_heap_bij_empty : Empty heap_bij :=
   HeapBij ∅ ∅ _ _.
 Solve Obligations with set_solver.
 
@@ -507,7 +507,7 @@ Proof.
 Qed.
 
 (** ** heap_preserved *)
-(* TODO: This is shadowing the definition from imp.v. *)
+(* TODO: This is shadowing the definition from rec.v. *)
 Definition heap_preserved (ps : gset prov) (h h' : heap_state) :=
   ∀ p o, p ∈ ps → h.(h_heap) !! (p, o) = h'.(h_heap) !! (p, o).
 
@@ -577,48 +577,48 @@ Lemma heap_preserved_free_r l he hp bij:
   heap_preserved bij he (heap_free hp l).
 Proof. move => Hni Hp p o /= ?. rewrite map_filter_lookup_true; [by apply Hp|]. set_solver. Qed.
 
-(** * imp_heap_bij module *)
-Record imp_heap_bij_state := ImpHeapBij {
-  ihb_bij : heap_bij;
+(** * rec_heap_bij module *)
+Record rec_heap_bij_state := RecHeapBij {
+  rhb_bij : heap_bij;
   (* last seen heaps *)
-  ihb_heap_i : heap_state;
-  ihb_heap_s : heap_state;
+  rhb_heap_i : heap_state;
+  rhb_heap_s : heap_state;
 }.
-Add Printing Constructor imp_heap_bij_state.
+Add Printing Constructor rec_heap_bij_state.
 
-Definition imp_heap_bij_pre (e : imp_event) (s : imp_heap_bij_state) : prepost (imp_event * imp_heap_bij_state) unitUR :=
+Definition rec_heap_bij_pre (e : rec_event) (s : rec_heap_bij_state) : prepost (rec_event * rec_heap_bij_state) unitUR :=
   let hi := heap_of_event e.2 in
   pp_quant $ λ bij',
   pp_quant $ λ vss,
   pp_quant $ λ hs,
-  pp_prop (heap_bij_extend Env s.(ihb_bij) bij') $
+  pp_prop (heap_bij_extend Env s.(rhb_bij) bij') $
   pp_prop (dom (hb_bij bij') ⊆ h_provs hs) $
   pp_prop (hb_provs_i bij' ⊆ h_provs hi) $
   pp_prop (Forall2 (val_in_bij bij') (vals_of_event e.2) vss) $
   pp_prop (heap_in_bij bij' hi hs) $
-  pp_prop (heap_preserved (hb_player_s Prog bij') s.(ihb_heap_s) hs) $
-  pp_prop (heap_preserved (hb_player_i Prog bij') s.(ihb_heap_i) hi) $
-  pp_end ((e.1, event_set_vals_heap e.2 vss hs), ImpHeapBij bij' hi hs).
+  pp_prop (heap_preserved (hb_player_s Prog bij') s.(rhb_heap_s) hs) $
+  pp_prop (heap_preserved (hb_player_i Prog bij') s.(rhb_heap_i) hi) $
+  pp_end ((e.1, event_set_vals_heap e.2 vss hs), RecHeapBij bij' hi hs).
 
-Definition imp_heap_bij_post (e : imp_event) (s : imp_heap_bij_state) : prepost (imp_event * imp_heap_bij_state) unitUR :=
+Definition rec_heap_bij_post (e : rec_event) (s : rec_heap_bij_state) : prepost (rec_event * rec_heap_bij_state) unitUR :=
   let hs := heap_of_event e.2 in
   pp_quant $ λ bij',
   pp_quant $ λ vsi,
   pp_quant $ λ hi,
-  pp_prop (heap_bij_extend Prog s.(ihb_bij) bij') $
+  pp_prop (heap_bij_extend Prog s.(rhb_bij) bij') $
   pp_prop (dom (hb_bij bij') ⊆ h_provs hs) $
   pp_prop (hb_provs_i bij' ⊆ h_provs hi) $
   pp_prop (Forall2 (val_in_bij bij') vsi (vals_of_event e.2)) $
   pp_prop (heap_in_bij bij' hi hs) $
-  pp_prop (heap_preserved (hb_player_i Env bij') s.(ihb_heap_i) hi) $
-  pp_prop (heap_preserved (hb_player_s Env bij') s.(ihb_heap_s) hs) $
-  pp_end ((e.1, event_set_vals_heap e.2 vsi hi), ImpHeapBij bij' hi hs).
+  pp_prop (heap_preserved (hb_player_i Env bij') s.(rhb_heap_i) hi) $
+  pp_prop (heap_preserved (hb_player_s Env bij') s.(rhb_heap_s) hs) $
+  pp_end ((e.1, event_set_vals_heap e.2 vsi hi), RecHeapBij bij' hi hs).
 
-Definition imp_heap_bij (m : module imp_event) : module imp_event :=
-  mod_prepost imp_heap_bij_pre imp_heap_bij_post m.
+Definition rec_heap_bij (m : module rec_event) : module rec_event :=
+  mod_prepost rec_heap_bij_pre rec_heap_bij_post m.
 
-Definition initial_imp_heap_bij_state (m : module imp_event) (σ : m.(m_state)) :=
-  (@SMFilter imp_event, σ, (@PPOutside imp_event imp_event, ImpHeapBij ∅ ∅ ∅, (True%I : uPred unitUR))).
+Definition initial_rec_heap_bij_state (m : module rec_event) (σ : m.(m_state)) :=
+  (@SMFilter rec_event, σ, (@PPOutside rec_event rec_event, RecHeapBij ∅ ∅ ∅, (True%I : uPred unitUR))).
 
 (** * vertical compositionality *)
 (** ** map values and heaps through bij *)
@@ -982,16 +982,16 @@ Proof.
     move => [//|?]. fresh_map_learn; destruct!. naive_solver.
 Qed.
 
-(** ** proof of vertical compositionality *)
-Lemma imp_heap_bij_vertical m σ `{!VisNoAll m}:
-  trefines (MS (imp_heap_bij (imp_heap_bij m))
-               (initial_imp_heap_bij_state (imp_heap_bij m) (initial_imp_heap_bij_state m σ)))
-           (MS (imp_heap_bij m)
-               (initial_imp_heap_bij_state m σ))
+(** ** Proof of vertical compositionality *)
+Lemma rec_heap_bij_vertical m σ `{!VisNoAll m}:
+  trefines (MS (rec_heap_bij (rec_heap_bij m))
+               (initial_rec_heap_bij_state (rec_heap_bij m) (initial_rec_heap_bij_state m σ)))
+           (MS (rec_heap_bij m)
+               (initial_rec_heap_bij_state m σ))
 .
 Proof.
   unshelve apply: mod_prepost_combine. {
-    exact (λ pl '(ImpHeapBij bija hia hsa) '(ImpHeapBij bijb hib hsb) '(ImpHeapBij bij hi hs) xa xb x,
+    exact (λ pl '(RecHeapBij bija hia hsa) '(RecHeapBij bijb hib hsb) '(RecHeapBij bij hi hs) xa xb x,
     hb_player_s Env bija = ∅
     ∧ satisfiable xb
     ∧ x = xa

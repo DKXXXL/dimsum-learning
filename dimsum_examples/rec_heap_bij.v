@@ -2,13 +2,13 @@ From iris.algebra.lib Require Import gmap_view.
 From dimsum.core Require Export proof_techniques prepost.
 From dimsum.core Require Import link.
 From dimsum.core Require Import axioms.
-From dimsum.examples Require Import imp.
+From dimsum.examples Require Import rec.
 
 Set Default Proof Using "Type".
 
-(** * imp_heap_bij *)
-(** [imp_heap_bij] allows transformations of memory when proving a
-refinement between two Imp modules. *)
+(** * rec_heap_bij *)
+(** [rec_heap_bij] allows transformations of memory when proving a
+refinement between two Rec modules. *)
 
 (** * Camera definition *)
 Inductive heap_bij_elem :=
@@ -941,8 +941,8 @@ Proof.
   + iIntros (????). set_solver.
 Qed.
 
-(** * Definition of [imp_heap_bij] *)
-Definition imp_heap_bij_pre (e : imp_event) (s : unit) : prepost (imp_event * unit) heap_bijUR :=
+(** * Definition of [rec_heap_bij] *)
+Definition rec_heap_bij_pre (e : rec_event) (s : unit) : prepost (rec_event * unit) heap_bijUR :=
   let vsi := vals_of_event e.2 in
   let hi := heap_of_event e.2 in
   pp_quant $ λ vss,
@@ -950,7 +950,7 @@ Definition imp_heap_bij_pre (e : imp_event) (s : unit) : prepost (imp_event * un
   pp_star (heap_bij_inv hi hs ∗ [∗ list] v1;v2∈vsi;vss, val_in_bij v1 v2) $
   pp_end ((e.1, event_set_vals_heap e.2 vss hs), tt).
 
-Definition imp_heap_bij_post (e : imp_event) (s : unit) : prepost (imp_event * unit) heap_bijUR :=
+Definition rec_heap_bij_post (e : rec_event) (s : unit) : prepost (rec_event * unit) heap_bijUR :=
   let vss := vals_of_event e.2 in
   let hs := heap_of_event e.2 in
   pp_quant $ λ vsi,
@@ -958,77 +958,77 @@ Definition imp_heap_bij_post (e : imp_event) (s : unit) : prepost (imp_event * u
   pp_star (heap_bij_inv hi hs ∗ [∗ list] v1;v2∈vsi;vss, val_in_bij v1 v2) $
   pp_end ((e.1, event_set_vals_heap e.2 vsi hi), tt).
 
-Definition imp_heap_bij (m : module imp_event) : module imp_event :=
-  mod_prepost imp_heap_bij_pre imp_heap_bij_post m.
+Definition rec_heap_bij (m : module rec_event) : module rec_event :=
+  mod_prepost rec_heap_bij_pre rec_heap_bij_post m.
 
-Definition initial_imp_heap_bij_state (m : module imp_event) (σ : m.(m_state)) :=
-  (@SMFilter imp_event, σ, (@PPOutside imp_event imp_event, tt, (True : uPred heap_bijUR)%I)).
+Definition initial_rec_heap_bij_state (m : module rec_event) (σ : m.(m_state)) :=
+  (@SMFilter rec_event, σ, (@PPOutside rec_event rec_event, tt, (True : uPred heap_bijUR)%I)).
 
-Lemma imp_heap_bij_trefines m m' σ σ' `{!VisNoAll m}:
+Lemma rec_heap_bij_trefines m m' σ σ' `{!VisNoAll m}:
   trefines (MS m σ) (MS m' σ') →
-  trefines (MS (imp_heap_bij m) (initial_imp_heap_bij_state m σ))
-           (MS (imp_heap_bij m') (initial_imp_heap_bij_state m' σ')).
+  trefines (MS (rec_heap_bij m) (initial_rec_heap_bij_state m σ))
+           (MS (rec_heap_bij m') (initial_rec_heap_bij_state m' σ')).
 Proof. move => ?. by apply: mod_prepost_trefines. Qed.
 
-(** ** imp_heap_bij_N *)
-Definition imp_heap_bij_N n (M: module imp_event) : module imp_event :=
-  Nat.iter n imp_heap_bij M.
+(** ** rec_heap_bij_N *)
+Definition rec_heap_bij_N n (M: module rec_event) : module rec_event :=
+  Nat.iter n rec_heap_bij M.
 
-Fixpoint initial_imp_heap_bij_state_N n (M: module imp_event) (s: M.(m_state)) : (imp_heap_bij_N n M).(m_state) :=
+Fixpoint initial_rec_heap_bij_state_N n (M: module rec_event) (s: M.(m_state)) : (rec_heap_bij_N n M).(m_state) :=
   match n with
   | 0 => s
-  | S n => initial_imp_heap_bij_state (imp_heap_bij_N n M) (initial_imp_heap_bij_state_N n M s)
+  | S n => initial_rec_heap_bij_state (rec_heap_bij_N n M) (initial_rec_heap_bij_state_N n M s)
   end.
 
-Global Instance imp_heap_bij_N_vis_no_all n m `{!VisNoAll m} :
-  VisNoAll (imp_heap_bij_N n m).
+Global Instance rec_heap_bij_N_vis_no_all n m `{!VisNoAll m} :
+  VisNoAll (rec_heap_bij_N n m).
 Proof. elim: n => //= ??. apply _. Qed.
 
-(** * Proof techniques for [imp_heap_bij] *)
-Definition imp_heap_bij_call (n : trace_index) (fns1 fns2 : gmap string fndef) :=
+(** * Proof techniques for [rec_heap_bij] *)
+Definition rec_heap_bij_call (n : trace_index) (fns1 fns2 : gmap string fndef) :=
   (∀ n' f es1' es2' K1' K2' es1 es2 vs1' vs2' h1' h2' b r rf',
-      ImpExprFill es1' K1' (Call f es1) →
-      ImpExprFill es2' K2' (Call f es2) →
+      RecExprFill es1' K1' (Call f es1) →
+      RecExprFill es2' K2' (Call f es2) →
       n' ⊆ n →
       Forall2 (λ e v, e = Val v) es1 vs1' →
       Forall2 (λ e v, e = Val v) es2 vs2' →
       satisfiable (heap_bij_inv h1' h2' ∗ ([∗ list] v1;v2∈vs1';vs2', val_in_bij v1 v2) ∗ r ∗ rf') →
       (∀ v1'' v2'' h1'' h2'' rf'',
         satisfiable (heap_bij_inv h1'' h2'' ∗ val_in_bij v1'' v2'' ∗ r ∗ rf'') →
-        Imp (expr_fill K1' (Val v1'')) h1'' fns1
-            ⪯{imp_module, imp_heap_bij imp_module, n', true}
-        (SMProg, Imp (expr_fill K2' (Val v2'')) h2'' fns2, (PPInside, tt, rf''))) →
-      Imp es1' h1' fns1
-          ⪯{imp_module, imp_heap_bij imp_module, n', b}
-      (SMProg, Imp es2' h2' fns2, (PPInside, tt, rf'))).
+        Rec (expr_fill K1' (Val v1'')) h1'' fns1
+            ⪯{rec_module, rec_heap_bij rec_module, n', true}
+        (SMProg, Rec (expr_fill K2' (Val v2'')) h2'' fns2, (PPInside, tt, rf''))) →
+      Rec es1' h1' fns1
+          ⪯{rec_module, rec_heap_bij rec_module, n', b}
+      (SMProg, Rec es2' h2' fns2, (PPInside, tt, rf'))).
 
-Definition imp_heap_bij_return n fns1 fns2 Ki Ks r :=
+Definition rec_heap_bij_return n fns1 fns2 Ki Ks r :=
   (∀ n' v1 v2 h1' h2' rf' b,
       n' ⊆ n →
       satisfiable (heap_bij_inv h1' h2' ∗ val_in_bij v1 v2 ∗ r ∗ rf') →
-      Imp (expr_fill Ki (Val v1)) h1' fns1
-        ⪯{imp_module, imp_heap_bij imp_module, n', b}
-      (SMProg, Imp (expr_fill Ks (Val v2)) h2' fns2, (PPInside, (), rf'))).
+      Rec (expr_fill Ki (Val v1)) h1' fns1
+        ⪯{rec_module, rec_heap_bij rec_module, n', b}
+      (SMProg, Rec (expr_fill Ks (Val v2)) h2' fns2, (PPInside, (), rf'))).
 
-Lemma imp_heap_bij_call_mono n n' fns1 fns2:
-  imp_heap_bij_call n fns1 fns2 →
+Lemma rec_heap_bij_call_mono n n' fns1 fns2:
+  rec_heap_bij_call n fns1 fns2 →
   n' ⊆ n →
-  imp_heap_bij_call n' fns1 fns2.
+  rec_heap_bij_call n' fns1 fns2.
 Proof.
   intros Hprf ???????????????????????.
   eapply Hprf; eauto. by etrans.
 Qed.
 
-Lemma imp_heap_bij_return_mono n n' fns1 fns2 K1 K2 r:
-  imp_heap_bij_return n fns1 fns2 K1 K2 r →
+Lemma rec_heap_bij_return_mono n n' fns1 fns2 K1 K2 r:
+  rec_heap_bij_return n fns1 fns2 K1 K2 r →
   n' ⊆ n →
-  imp_heap_bij_return n' fns1 fns2 K1 K2 r.
+  rec_heap_bij_return n' fns1 fns2 K1 K2 r.
 Proof.
   intros Hprf ??????????.
   eapply Hprf; eauto. by etrans.
 Qed.
 
-Lemma imp_heap_bij_proof fns1 fns2 :
+Lemma rec_heap_bij_proof fns1 fns2 :
   dom fns1 = dom fns2 →
   (∀ f fn1, fns1 !! f = Some fn1 → ∃ fn2, fns2 !! f = Some fn2
                                           ∧ length (fd_args fn1) = length (fd_args fn2)) →
@@ -1039,20 +1039,20 @@ Lemma imp_heap_bij_proof fns1 fns2 :
       length vs2 = length (fd_args fn2) →
       satisfiable (heap_bij_inv h1 h2 ∗ ([∗ list] v1;v2∈vs1;vs2, val_in_bij v1 v2) ∗ r ∗ rf) →
 
-      imp_heap_bij_call n fns1 fns2 →
-      imp_heap_bij_return n fns1 fns2 K1 K2 r →
+      rec_heap_bij_call n fns1 fns2 →
+      rec_heap_bij_return n fns1 fns2 K1 K2 r →
 
-      Imp (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs1 (fd_body fn1))) h1 fns1
-          ⪯{imp_module, imp_heap_bij imp_module, n, false}
-      (SMProg, Imp (expr_fill K2 (AllocA fn2.(fd_vars) $ subst_l fn2.(fd_args) vs2 (fd_body fn2))) h2 fns2, (PPInside, tt, rf))) →
-  trefines (MS imp_module (initial_imp_state fns1))
-           (MS (imp_heap_bij imp_module)
-               (initial_imp_heap_bij_state imp_module (initial_imp_state fns2))).
+      Rec (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs1 (fd_body fn1))) h1 fns1
+          ⪯{rec_module, rec_heap_bij rec_module, n, false}
+      (SMProg, Rec (expr_fill K2 (AllocA fn2.(fd_vars) $ subst_l fn2.(fd_args) vs2 (fd_body fn2))) h2 fns2, (PPInside, tt, rf))) →
+  trefines (MS rec_module (initial_rec_state fns1))
+           (MS (rec_heap_bij rec_module)
+               (initial_rec_heap_bij_state rec_module (initial_rec_state fns2))).
 Proof.
   move => Hdom Hlen Hf.
   rewrite (lock (dom _)) in Hdom.
   pose (R := λ (b : bool) (s1 s2 : (unit * uPred heap_bijUR)), if b then s1.2 ≡ s2.2 else True).
-  apply: (imp_prepost_proof R); unfold R in *.
+  apply: (rec_prepost_proof R); unfold R in *.
   { destruct b.
     - constructor => ? // ?? -> //.
     - by constructor => ?. }
@@ -1062,7 +1062,7 @@ Proof.
   have [?[??]]:= (Hlen _ _ ltac:(done)).
   split!. move => ?. split; [lia|].
   move => Hcall Hret.
-  unshelve eapply tsim_remember'. { simpl. exact (λ n' '(Imp e1 h1 fns1') '(σfs, Imp e2 h2 fns2', (t1, _, rf')),
+  unshelve eapply tsim_remember'. { simpl. exact (λ n' '(Rec e1 h1 fns1') '(σfs, Rec e2 h2 fns2', (t1, _, rf')),
      ∃ K1 K2 f vs1 vs2 fn1 fn2 r,
        fns1' = fns1 ∧
        fns2' = fns2 ∧
@@ -1074,7 +1074,7 @@ Proof.
        σfs = SMProg ∧
        t1 = PPInside ∧
        satisfiable (heap_bij_inv h1 h2 ∗ ([∗ list] v1;v2∈vs1;vs2, val_in_bij v1 v2) ∗ r ∗ rf') ∧
-       imp_heap_bij_return n' fns1 fns2 K1 K2 r). }
+       rec_heap_bij_return n' fns1 fns2 K1 K2 r). }
   { move => /= ??. split! => //; [lia|..]. { iSatMono. iFrame. iAccu. } iSatClear.
     move => ?????????. apply: tsim_mono; [|done]. apply: Hret; [done|]. eexists [_]. split!.
     iSatMono. iIntros!. iFrame. }
@@ -1102,14 +1102,14 @@ Proof.
       iDestruct (big_sepL2_cons_inv_l with "[$]") as (???) "[??]". by simplify_eq.
 Qed.
 
-(** * Properties of [imp_heap_bij] *)
+(** * Properties of [rec_heap_bij] *)
 (** ** Horizontal compositionality *)
-Lemma imp_heap_bij_combine fns1 fns2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m2}:
-  trefines (MS (imp_link fns1 fns2 (imp_heap_bij m1) (imp_heap_bij m2))
-               (MLFNone, [], initial_imp_heap_bij_state m1 σ1,
-                 initial_imp_heap_bij_state m2 σ2))
-           (MS (imp_heap_bij (imp_link fns1 fns2 m1 m2))
-               (initial_imp_heap_bij_state (imp_link _ _ _ _)
+Lemma rec_heap_bij_combine fns1 fns2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m2}:
+  trefines (MS (rec_link fns1 fns2 (rec_heap_bij m1) (rec_heap_bij m2))
+               (MLFNone, [], initial_rec_heap_bij_state m1 σ1,
+                 initial_rec_heap_bij_state m2 σ2))
+           (MS (rec_heap_bij (rec_link fns1 fns2 m1 m2))
+               (initial_rec_heap_bij_state (rec_link _ _ _ _)
                   (MLFNone, [], σ1, σ2) )
 ).
 Proof.
@@ -1160,36 +1160,36 @@ Proof.
 Qed.
 
 (** ** Reflexivity *)
-Lemma imp_heap_bij_sim_call_bind args vs' ws' es ei Ks Ki vss vsi n b hi hs fns1 fns2 rf f r
-  `{Hfill2: !ImpExprFill ei Ki (Call f ((Val <$> vs') ++ (subst_map vsi <$> args)))}
-  `{Hfill1: !ImpExprFill es Ks (Call f ((Val <$> ws') ++ (subst_map vss <$> args)))}:
+Lemma rec_heap_bij_sim_call_bind args vs' ws' es ei Ks Ki vss vsi n b hi hs fns1 fns2 rf f r
+  `{Hfill2: !RecExprFill ei Ki (Call f ((Val <$> vs') ++ (subst_map vsi <$> args)))}
+  `{Hfill1: !RecExprFill es Ks (Call f ((Val <$> ws') ++ (subst_map vss <$> args)))}:
     satisfiable (heap_bij_inv hi hs ∗ ([∗ map] vi;vs ∈ vsi; vss, val_in_bij vi vs) ∗ ([∗ list] v; w ∈ vs'; ws', val_in_bij v w) ∗ r ∗ rf) →
     dom vss ⊆ dom vsi →
-    imp_heap_bij_call n fns1 fns2 →
+    rec_heap_bij_call n fns1 fns2 →
     (∀ vs ws hi' hs' b' n' rf',
       n' ⊆ n →
       satisfiable (heap_bij_inv hi' hs' ∗ ([∗ map] vi;vs ∈ vsi; vss, val_in_bij vi vs) ∗ ([∗ list] v; w ∈ vs' ++ vs; ws' ++ ws, val_in_bij v w) ∗ r ∗ rf') →
-      Imp (expr_fill Ki (Call f (Val <$> (vs' ++ vs)))) hi' fns1
-        ⪯{imp_module, imp_heap_bij imp_module, n', b'}
-      (SMProg, Imp (expr_fill Ks (Call f (Val <$> (ws' ++ ws)))) hs' fns2, (PPInside, (), rf'))
+      Rec (expr_fill Ki (Call f (Val <$> (vs' ++ vs)))) hi' fns1
+        ⪯{rec_module, rec_heap_bij rec_module, n', b'}
+      (SMProg, Rec (expr_fill Ks (Call f (Val <$> (ws' ++ ws)))) hs' fns2, (PPInside, (), rf'))
     ) →
     Forall
     (λ e : expr,
        ∀ es ei hi hs n b Ki Ks r rf,
-         ImpExprFill es Ks (subst_map vss e)
-         → ImpExprFill ei Ki (subst_map vsi e)
-             → imp_heap_bij_call n fns1 fns2
+         RecExprFill es Ks (subst_map vss e)
+         → RecExprFill ei Ki (subst_map vsi e)
+             → rec_heap_bij_call n fns1 fns2
                   → satisfiable
                       (heap_bij_inv hi hs ∗
                       ([∗ map] v1;v2 ∈ vsi;vss, val_in_bij v1 v2) ∗ r ∗
                       rf)
-                      → imp_heap_bij_return n fns1 fns2 Ki Ks r
-                     → Imp ei hi fns1 ⪯{imp_module,
-                     imp_heap_bij imp_module, n, b}
-                     (SMProg, Imp es hs fns2, (PPInside, (), rf))) args →
-    Imp ei hi fns1
-      ⪯{imp_module, imp_heap_bij imp_module, n, b}
-    (SMProg, Imp es hs fns2, (PPInside, (), rf)).
+                      → rec_heap_bij_return n fns1 fns2 Ki Ks r
+                     → Rec ei hi fns1 ⪯{rec_module,
+                     rec_heap_bij rec_module, n, b}
+                     (SMProg, Rec es hs fns2, (PPInside, (), rf))) args →
+    Rec ei hi fns1
+      ⪯{rec_module, rec_heap_bij rec_module, n, b}
+    (SMProg, Rec es hs fns2, (PPInside, (), rf)).
 Proof.
   intros Hsat Hdom Hfuns Hcont Hargs; destruct Hfill1 as [->], Hfill2 as [->].
   induction args as [|e args IH] in n, b, vs', ws', hs, hi, Hsat, Hcont, Hargs, Hfuns, rf |-*; simpl.
@@ -1197,8 +1197,8 @@ Proof.
    rewrite !app_nil_r. eapply Hcont, Hsat. done.
  - eapply Forall_cons_1 in Hargs as [Harg Hall].
    apply: Harg.
-  + eapply imp_expr_fill_expr_fill, (imp_expr_fill_expr_fill _ [CallCtx _ _ _]), imp_expr_fill_end.
-  + eapply imp_expr_fill_expr_fill, (imp_expr_fill_expr_fill _ [CallCtx _ _ _]), imp_expr_fill_end.
+  + eapply rec_expr_fill_expr_fill, (rec_expr_fill_expr_fill _ [CallCtx _ _ _]), rec_expr_fill_end.
+  + eapply rec_expr_fill_expr_fill, (rec_expr_fill_expr_fill _ [CallCtx _ _ _]), rec_expr_fill_end.
   + done.
   + iSatMono. iIntros "(Hbij & #Hvals & #Hvals' & r & rf)". iFrame.
     iFrame "Hvals". iCombine "Hvals Hvals' r" as "r". iExact "r".
@@ -1208,21 +1208,21 @@ Proof.
     specialize (IH (vs' ++ [v]) (ws' ++ [w]) n' b' h1' h2' rf').
     eapply IH; eauto.
     * iSatMono. iIntros "($ & $ & ($ & $ & $) & $)". done.
-    * by apply: imp_heap_bij_call_mono.
+    * by apply: rec_heap_bij_call_mono.
     * intros vs ws hi' hs' b'' n'' rf'' Hsub' Hsat. rewrite -!app_assoc.
       clear IH Hall Hsat'. eapply Hcont; first by etrans.
       rewrite !app_assoc //.
 Qed.
 
-Lemma imp_heap_bij_sim_refl_static vss vsi e es ei hi hs n b Ki Ks fns1 fns2 r rf
-  `{Hfill1: !ImpExprFill es Ks (subst_map vss e)}
-  `{Hfill2: !ImpExprFill ei Ki (subst_map vsi e)}:
+Lemma rec_heap_bij_sim_refl_static vss vsi e es ei hi hs n b Ki Ks fns1 fns2 r rf
+  `{Hfill1: !RecExprFill es Ks (subst_map vss e)}
+  `{Hfill2: !RecExprFill ei Ki (subst_map vsi e)}:
   dom vss ⊆ dom vsi →
-  imp_heap_bij_call n fns1 fns2 →
-  imp_heap_bij_return n fns1 fns2 Ki Ks r →
+  rec_heap_bij_call n fns1 fns2 →
+  rec_heap_bij_return n fns1 fns2 Ki Ks r →
   is_static_expr false e →
   satisfiable (heap_bij_inv hi hs ∗ ([∗ map] v1;v2 ∈ vsi; vss, val_in_bij v1 v2) ∗ r ∗ rf) →
-  Imp ei hi fns1 ⪯{imp_module, imp_heap_bij imp_module, n, b} (SMProg, Imp es hs fns2, (PPInside, (), rf)).
+  Rec ei hi fns1 ⪯{rec_module, rec_heap_bij rec_module, n, b} (SMProg, Rec es hs fns2, (PPInside, (), rf)).
 Proof.
   induction e as [x|v|e1 op e2 IH1 IH2|e IH|e1 e2 IH1 IH2|e e1 e2 IH IH1 IH2| x e1 e2 IH1 IH2| f args IH| | | |] in vss, vsi, hi, hs, n, b, Ks, Ki, es, ei, Hfill1, Hfill2, r, rf |-*;
     intros Hsub Hcall Hcont Hstatic Hsat;
@@ -1243,7 +1243,7 @@ Proof.
     iSatClear. intros n' vi vs hi' hs' rf' b' Hn' Hsat; simpl.
     apply: IH2; simpl; eauto; last first.
     { iSatMono. iIntros "($ & #Hv & [#Hm r] & $)". iFrame "Hm". iCombine "Hm Hv r " as "r". iExact "r". }
-    2: { by apply: imp_heap_bij_call_mono. }
+    2: { by apply: rec_heap_bij_call_mono. }
     iSatClear. intros n'' wi ws hi'' hs'' rf'' b'' Hn'' Hsat; simpl.
     tstep_s. intros w Heval. iSatStart.
     iIntros "(Hinv & Hw & (Hsub & Hv & r) & rf)".
@@ -1266,7 +1266,7 @@ Proof.
       iSatClear. intros n' vi vs hi' hs' rf' b' Hn' Hsat; simpl.
     apply: IH2; simpl; [eauto..|]; last first.
     { iSatMono. iIntros "($ & #Hv & [#Hm r] & $)". iFrame "Hm". iCombine "Hm Hv r " as "r". iExact "r". }
-    2: { by apply: imp_heap_bij_call_mono. }
+    2: { by apply: rec_heap_bij_call_mono. }
     iSatClear. intros n'' wi ws hi'' hs'' rf'' b'' Hn'' Hsat; simpl.
     tstep_s. intros w -> Halive. iSatStart.
     iIntros "(Hinv & #Hw & (Hsub & Hv & r) & rf)".
@@ -1285,12 +1285,12 @@ Proof.
     destruct vi; try done; simpl. iDestruct "Hv" as "->". iSatStop.
     tstep_i. destruct cond.
     + apply: IH1; simpl; eauto.
-      { by apply: imp_heap_bij_call_mono. }
-      { by apply: imp_heap_bij_return_mono. }
+      { by apply: rec_heap_bij_call_mono. }
+      { by apply: rec_heap_bij_return_mono. }
       iSatMono. iFrame.
     + apply: IH2; simpl; eauto.
-      { by apply: imp_heap_bij_call_mono. }
-      { by apply: imp_heap_bij_return_mono. }
+      { by apply: rec_heap_bij_call_mono. }
+      { by apply: rec_heap_bij_return_mono. }
       iSatMono. iFrame.
   - simpl. simpl in Hstatic. eapply andb_True in Hstatic as [Hstatic1 Hstatic2].
     apply: IH1; simpl; [eauto..|]; last first.
@@ -1299,11 +1299,11 @@ Proof.
     tstep_s. tstep_i. rewrite -!subst_subst_map_delete.
     apply: IH2; simpl; eauto.
     { set_solver. }
-    { by apply: imp_heap_bij_call_mono. }
-    { by apply: imp_heap_bij_return_mono. }
+    { by apply: rec_heap_bij_call_mono. }
+    { by apply: rec_heap_bij_return_mono. }
     iSatMono. iIntros "(Hinv & Hv & (Hsub & r) & rf)". iFrame.
     iApply (big_sepM2_insert_2 with "[Hv]"); by iFrame.
-  - simpl. apply: (imp_heap_bij_sim_call_bind args nil nil);simpl; eauto.
+  - simpl. apply: (rec_heap_bij_sim_call_bind args nil nil);simpl; eauto.
     + iSatMono. iIntros "($ & $ & $)".
     + clear Hsat. intros vs ws hi' hs' b' n' rf' Hn' Hsat'.
       apply: Hcall; simpl; eauto.
@@ -1320,12 +1320,12 @@ Proof.
   - done.
 Qed.
 
-Lemma imp_heap_bij_imp_refl fns:
-  trefines (MS imp_module (initial_imp_state fns))
-           (MS (imp_heap_bij imp_module)
-               (initial_imp_heap_bij_state imp_module (initial_imp_state fns))).
+Lemma rec_heap_bij_refl fns:
+  trefines (MS rec_module (initial_rec_state fns))
+           (MS (rec_heap_bij rec_module)
+               (initial_rec_heap_bij_state rec_module (initial_rec_state fns))).
 Proof.
-  apply: imp_heap_bij_proof. { done. } { naive_solver. }
+  apply: rec_heap_bij_proof. { done. } { naive_solver. }
   move => n K1 K2 f fn1 fn2 vs1 v2 h1 h2 r rf ????? Hcall Hret. simplify_eq.
   rewrite !subst_l_subst_map //.
   tstep_s. pose proof (heap_alloc_list_fresh (fd_vars fn1).*2 ∅ h2) as [??].
@@ -1335,7 +1335,7 @@ Proof.
   have Hlen2 := (heap_alloc_list_length _ _ _ _ ltac:(done)).
   rewrite fmap_length in Hlen1, Hlen2.
   rewrite !subst_l_subst_map ?fmap_length -?subst_map_subst_map //.
-  apply: imp_heap_bij_sim_refl_static; last first.
+  apply: rec_heap_bij_sim_refl_static; last first.
   - iSatMonoBupd. iIntros "(? & Hvs & ? & ?)".
     iMod (heap_bij_inv_alloc_list with "[$]") as "[$ ?]"; [done..|]. iModIntro. iFrame.
     iSplit; [|iAccu].
@@ -1358,18 +1358,18 @@ Proof.
 Qed.
 
 (** ** Adequacy *)
-Lemma imp_heap_bij_imp_closed m σ:
-  trefines (MS (imp_closed (imp_heap_bij m)) (SMFilter, initial_imp_heap_bij_state m σ, ICStart))
-           (MS (imp_closed m) (SMFilter, σ, ICStart)).
+Lemma rec_heap_bij_rec_closed m σ:
+  trefines (MS (rec_closed (rec_heap_bij m)) (SMFilter, initial_rec_heap_bij_state m σ, RCStart))
+           (MS (rec_closed m) (SMFilter, σ, RCStart)).
 Proof.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { simpl. exact (λ _
           '(σm1, (σf, σ1, (pp, _, r)), σc1)
           '(σm2, σ2, σc2),
            σ1 = σ2 ∧ σc1 = σc2 ∧
-             ((σc1 = ICStart ∧ σf = SMFilter ∧ pp = PPOutside ∧ σm1 = σm2 ∧ σm2 = SMFilter ∧ r = True%I) ∨
+             ((σc1 = RCStart ∧ σf = SMFilter ∧ pp = PPOutside ∧ σm1 = σm2 ∧ σm2 = SMFilter ∧ r = True%I) ∨
               ( ((∃ e, σf = SMProgRecv e ∧ σm2 = SMProgRecv e) ∨ (σf = SMProg ∧ σm2 = SMProg)
-                 ) ∧ σm1 = SMProg ∧ σc1 = ICRunning ∧ pp = PPInside))
+                 ) ∧ σm1 = SMProg ∧ σc1 = RCRunning ∧ pp = PPInside))
                              ). }
   { split!. } { done. }
   move => {}n _ /= Hloop [[σm1 [[σf σ1] [[pp []] r]]] σc1] [[σm2 σ2] σc2] ?.
@@ -1390,10 +1390,10 @@ Proof.
     + tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
       apply: Hloop; [done|]. split!.
   - tstep_both. apply steps_impl_step_end => κ ??. tstep_s. eexists _. apply: steps_spec_step_end; [done|] => ??.
-    case_match; tend; (split!; [done|]). 2: { apply: Hloop; [done|]. split!. }
+    destruct κ as [e|]; tend; (split!; [done|]). 2: { apply: Hloop; [done|]. split!. }
     tstep_i => ? vs *. tstep_both => *.
     apply steps_impl_step_end => ???. inv_all @m_step => ?; simplify_eq.
-    + destruct i as [? [? vs' |]]; simplify_eq/=.
+    + destruct e as [? [? vs' |]]; simplify_eq/=.
       tstep_s. eexists (Some _). split!.
       apply: steps_spec_step_end; [econs|]=> /=??. destruct!/=. tend.
       split!.
@@ -1411,7 +1411,7 @@ Proof.
       tstep_i. eexists [ValNum _]. split!.
       { iSatMono. iIntros!. iFrame. iSplitR; [by iPureIntro|]. instantiate (1:=True%I). done. }
       apply: Hloop; [done|]. split!.
-    + destruct i as [? []]; simplify_eq/=.
+    + destruct e as [? []]; simplify_eq/=.
       tstep_s. eexists (Some _). split!.
       apply: steps_spec_step_end; [econs|]=> /=??. destruct!/=.
       tstep_s. eexists None. apply: steps_spec_step_end; [econs|]=> /=??. destruct!/=.
@@ -1426,29 +1426,29 @@ Proof.
       tstep_i. apply: steps_impl_step_end => ???. inv_all @m_step.
 Qed.
 
-(** ** [imp_heap_bij] is adequate wrt. contextual refinement *)
+(** ** [rec_heap_bij] is adequate wrt. contextual refinement *)
 (** Follows from the lemmas above. *)
-Lemma imp_heap_bij_trefines_implies_ctx_refines fnsi fnss :
+Lemma rec_heap_bij_trefines_implies_ctx_refines fnsi fnss :
   dom fnsi = dom fnss →
-  trefines (MS imp_module (initial_imp_state fnsi))
-           (MS (imp_heap_bij imp_module) (initial_imp_heap_bij_state imp_module (initial_imp_state fnss))) →
-  imp_ctx_refines fnsi fnss.
+  trefines (MS rec_module (initial_rec_state fnsi))
+           (MS (rec_heap_bij rec_module) (initial_rec_heap_bij_state rec_module (initial_rec_state fnss))) →
+  rec_ctx_refines fnsi fnss.
 Proof.
-  move => Hdom Href C. rewrite /imp_syn_link map_difference_union_r (map_difference_union_r fnss).
-  etrans; [|apply imp_heap_bij_imp_closed].
+  move => Hdom Href C. rewrite /rec_syn_link map_difference_union_r (map_difference_union_r fnss).
+  etrans; [|apply rec_heap_bij_rec_closed].
   apply mod_seq_map_trefines. { apply _. } { apply _. }
-  etrans. { apply imp_syn_link_refines_link. apply map_disjoint_difference_r'. }
-  etrans. { apply: imp_link_trefines. 1: done. 1: apply imp_heap_bij_imp_refl. }
-  etrans. { apply imp_heap_bij_combine; apply _. }
+  etrans. { apply rec_syn_link_refines_link. apply map_disjoint_difference_r'. }
+  etrans. { apply: rec_link_trefines. 1: done. 1: apply rec_heap_bij_refl. }
+  etrans. { apply rec_heap_bij_combine; apply _. }
   apply: mod_prepost_trefines.
-  etrans. 2: { apply imp_link_refines_syn_link. apply map_disjoint_difference_r'. }
+  etrans. 2: { apply rec_link_refines_syn_link. apply map_disjoint_difference_r'. }
   rewrite !dom_difference_L Hdom.
   erewrite map_difference_eq_dom_L => //.
   apply _.
 Qed.
 
-(** * Exercising [imp_heap_bij] *)
-Module imp_heap_bij_example.
+(** * Exercising [rec_heap_bij] *)
+Module rec_heap_bij_example.
 
 Local Open Scope Z_scope.
 
@@ -1470,11 +1470,11 @@ Definition bij_alloc_opt : fndef := {|
 |}.
 
 Lemma bij_alloc_opt_refines :
-  trefines (MS imp_module (initial_imp_state (<["f" := bij_alloc_opt]> ∅)))
-           (MS (imp_heap_bij imp_module) (initial_imp_heap_bij_state imp_module
-                                            (initial_imp_state (<["f" := bij_alloc]> ∅)))).
+  trefines (MS rec_module (initial_rec_state (<["f" := bij_alloc_opt]> ∅)))
+           (MS (rec_heap_bij rec_module) (initial_rec_heap_bij_state rec_module
+                                            (initial_rec_state (<["f" := bij_alloc]> ∅)))).
 Proof.
-  apply: imp_heap_bij_proof. { set_solver. }
+  apply: rec_heap_bij_proof. { set_solver. }
   { move => ??. setoid_rewrite lookup_insert_Some. setoid_rewrite lookup_empty. naive_solver. }
   move => n K1 K2 f fn1 fn2 vs1 vs2 h1 h2 r rf Hf1 ???? Hcall Hret.
   move: Hf1. rewrite !lookup_insert_Some => ?; destruct!; simplify_map_eq/=.
@@ -1504,9 +1504,9 @@ Proof.
 Qed.
 
 Lemma bij_alloc_ctx_refines :
-  imp_ctx_refines (<["f" := bij_alloc_opt]> ∅) (<["f" := bij_alloc]> ∅).
+  rec_ctx_refines (<["f" := bij_alloc_opt]> ∅) (<["f" := bij_alloc]> ∅).
 Proof.
-  apply: imp_heap_bij_trefines_implies_ctx_refines. { set_solver. }
+  apply: rec_heap_bij_trefines_implies_ctx_refines. { set_solver. }
   apply bij_alloc_opt_refines.
 Qed.
-End imp_heap_bij_example.
+End rec_heap_bij_example.

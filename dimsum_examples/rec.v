@@ -3,7 +3,7 @@ From dimsum.core Require Import axioms.
 
 Local Open Scope Z_scope.
 
-(** * C-like language language *)
+(** * Rec, a "C-like" language *)
 (** ** Locations *)
 Declare Scope loc_scope.
 Delimit Scope loc_scope with L.
@@ -12,36 +12,36 @@ Open Scope loc_scope.
 Definition prov : Set := Z.
 Definition loc : Set := (prov * Z).
 
-Definition shift_loc (l : loc) (z : Z) : loc := (l.1, l.2 + z).
-Notation "l +ₗ z" := (shift_loc l%L z%Z) (at level 50, left associativity) : loc_scope.
-Global Typeclasses Opaque shift_loc.
+Definition offset_loc (l : loc) (z : Z) : loc := (l.1, l.2 + z).
+Notation "l +ₗ z" := (offset_loc l%L z%Z) (at level 50, left associativity) : loc_scope.
+Global Typeclasses Opaque offset_loc.
 
-Lemma shift_loc_0 l :
+Lemma offset_loc_0 l :
   l +ₗ 0 = l.
-Proof. rewrite /shift_loc. destruct l => /=. f_equal. lia. Qed.
+Proof. rewrite /offset_loc. destruct l => /=. f_equal. lia. Qed.
 
-Lemma shift_loc_assoc l n1 n2 :
+Lemma offset_loc_assoc l n1 n2 :
   l +ₗ n1 +ₗ n2 = l +ₗ (n1 + n2).
-Proof. rewrite /shift_loc. destruct l => /=. f_equal. lia. Qed.
+Proof. rewrite /offset_loc. destruct l => /=. f_equal. lia. Qed.
 
-Global Instance shift_loc_inj_r l : Inj eq eq (λ i, l +ₗ i).
-Proof. move => ??. rewrite /shift_loc /= => ?. simplify_eq. lia. Qed.
+Global Instance offset_loc_inj_r l : Inj eq eq (λ i, l +ₗ i).
+Proof. move => ??. rewrite /offset_loc /= => ?. simplify_eq. lia. Qed.
 
-Global Instance shift_loc_inj_r2 l i : Inj eq eq (λ j, l +ₗ i +ₗ j).
-Proof. move => ??. rewrite /shift_loc /= => ?. simplify_eq. lia. Qed.
+Global Instance offset_loc_inj_r2 l i : Inj eq eq (λ j, l +ₗ i +ₗ j).
+Proof. move => ??. rewrite /offset_loc /= => ?. simplify_eq. lia. Qed.
 
-Lemma shift_loc_S l i :
+Lemma offset_loc_S l i :
   l +ₗ S i = l +ₗ 1 +ₗ i.
-Proof. rewrite /shift_loc /=. f_equal. lia. Qed.
+Proof. rewrite /offset_loc /=. f_equal. lia. Qed.
 
-Lemma shift_loc_add_sub l i j:
+Lemma offset_loc_add_sub l i j:
   i = - j →
   l +ₗ i +ₗ j = l.
-Proof. destruct l. rewrite /shift_loc /= => ?. f_equal. lia. Qed.
+Proof. destruct l. rewrite /offset_loc /= => ?. f_equal. lia. Qed.
 
 (** ** Syntax *)
 Inductive binop : Set :=
-| AddOp | ShiftOp | EqOp | LeOp | LtOp.
+| AddOp | OffsetOp | EqOp | LeOp | LtOp.
 
 Inductive val := | ValNum (z : Z) | ValBool (b : bool) | ValLoc (l : loc).
 Global Instance val_inhabited : Inhabited val := populate (ValNum 0).
@@ -490,8 +490,8 @@ Proof.
   destruct l as [p o], l' as [p' o'] => /=??; subst. apply lookup_union_Some_l.
   apply elem_of_list_to_map_1.
   { rewrite -list_fmap_compose. apply NoDup_fmap; [|apply NoDup_seqZ].
-    move => ??/=. rewrite /shift_loc/= => ?. naive_solver lia. }
-  apply elem_of_list_fmap. eexists (o' - o). rewrite elem_of_seqZ /shift_loc /=.
+    move => ??/=. rewrite /offset_loc/= => ?. naive_solver lia. }
+  apply elem_of_list_fmap. eexists (o' - o). rewrite elem_of_seqZ /offset_loc /=.
   split; [do 2 f_equal; lia | naive_solver lia].
 Qed.
 (* must be Opaque, otherwise simpl takes ages to figure out that it cannot reduce heap_alloc_h. *)
@@ -589,7 +589,7 @@ Lemma heap_alive_alloc h l l' n :
   heap_alive (heap_alloc h l' n) l.
 Proof.
   destruct l as [p o], l' as [p' o'].
-  move => ??. simplify_eq/=. rewrite /heap_alive/=/heap_alloc_h/shift_loc/=.
+  move => ??. simplify_eq/=. rewrite /heap_alive/=/heap_alloc_h/offset_loc/=.
   apply lookup_union_is_Some. left. apply list_to_map_lookup_is_Some.
   eexists 0. apply elem_of_list_fmap. eexists (o - o').
   split; [do 2 f_equal; lia|]. apply elem_of_seqZ. lia.
@@ -706,41 +706,41 @@ Proof.
 Qed.
 
 (** ** state *)
-Record imp_state := Imp {
+Record rec_state := Rec {
   st_expr : expr;
   st_heap : heap_state;
   st_fns : gmap string fndef;
 }.
-Add Printing Constructor imp_state.
+Add Printing Constructor rec_state.
 
-Definition initial_imp_state (fns : gmap string fndef) : imp_state :=
-  Imp (Waiting false) ∅ fns.
+Definition initial_rec_state (fns : gmap string fndef) : rec_state :=
+  Rec (Waiting false) ∅ fns.
 
-(** ** imp_event *)
-Inductive imp_ev : Type :=
-| EICall (fn : string) (args: list val) (h : heap_state)
-| EIReturn (ret: val) (h : heap_state).
+(** ** rec_event *)
+Inductive rec_ev : Type :=
+| ERCall (fn : string) (args: list val) (h : heap_state)
+| ERReturn (ret: val) (h : heap_state).
 
-Global Instance imp_ev_inhabited : Inhabited imp_ev := populate (EIReturn inhabitant ∅).
+Global Instance rec_ev_inhabited : Inhabited rec_ev := populate (ERReturn inhabitant ∅).
 
-Definition imp_event := io_event imp_ev.
+Definition rec_event := io_event rec_ev.
 
-Definition vals_of_event (e : imp_ev) : list val :=
+Definition vals_of_event (e : rec_ev) : list val :=
   match e with
-  | EICall f vs h => vs
-  | EIReturn v h => [v]
+  | ERCall f vs h => vs
+  | ERReturn v h => [v]
   end.
 
-Definition heap_of_event (e : imp_ev) : heap_state :=
+Definition heap_of_event (e : rec_ev) : heap_state :=
   match e with
-  | EICall f vs h => h
-  | EIReturn v h => h
+  | ERCall f vs h => h
+  | ERReturn v h => h
   end.
 
-Definition event_set_vals_heap (e : imp_ev) (vs : list val) (h : heap_state) : imp_ev :=
+Definition event_set_vals_heap (e : rec_ev) (vs : list val) (h : heap_state) : rec_ev :=
   match e with
-  | EICall f vs' h' => EICall f vs h
-  | EIReturn v' h' => EIReturn (vs !!! 0%nat) h
+  | ERCall f vs' h' => ERCall f vs h
+  | ERReturn v' h' => ERReturn (vs !!! 0%nat) h
   end.
 
 Lemma heap_of_event_event_set_vals_heap e vs h :
@@ -763,7 +763,7 @@ Proof. done. Qed.
 Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
   match op with
   | AddOp => z1 ← val_to_Z v1; z2 ← val_to_Z v2; Some (ValNum (z1 + z2))
-  | ShiftOp => l ← val_to_loc v1; z ← val_to_Z v2; Some (ValLoc (l +ₗ z))
+  | OffsetOp => l ← val_to_loc v1; z ← val_to_Z v2; Some (ValLoc (l +ₗ z))
   | EqOp =>
       match v1 with
       | ValNum z1 => z2 ← val_to_Z v2; Some (ValBool (bool_decide (z1 = z2)))
@@ -774,46 +774,46 @@ Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
   | LtOp => z1 ← val_to_Z v1; z2 ← val_to_Z v2; Some (ValBool (bool_decide (z1 < z2)))
   end.
 
-Inductive head_step : imp_state → option imp_event → (imp_state → Prop) → Prop :=
+Inductive head_step : rec_state → option rec_event → (rec_state → Prop) → Prop :=
 | BinOpS v1 op v2 h fns:
-  head_step (Imp (BinOp (Val v1) op (Val v2)) h fns) None (λ σ',
-    ∃ v, eval_binop op v1 v2 = Some v ∧ σ' = Imp (Val v) h fns)
+  head_step (Rec (BinOp (Val v1) op (Val v2)) h fns) None (λ σ',
+    ∃ v, eval_binop op v1 v2 = Some v ∧ σ' = Rec (Val v) h fns)
 | LoadS v1 h fns:
-  head_step (Imp (Load (Val v1)) h fns) None (λ σ',
-    ∃ l v, v1 = ValLoc l ∧ h.(h_heap) !! l = Some v ∧ σ' = Imp (Val v) h fns)
+  head_step (Rec (Load (Val v1)) h fns) None (λ σ',
+    ∃ l v, v1 = ValLoc l ∧ h.(h_heap) !! l = Some v ∧ σ' = Rec (Val v) h fns)
 | StoreS v1 v h fns:
-  head_step (Imp (Store (Val v1) (Val v)) h fns) None (λ σ',
-    ∃ l, v1 = ValLoc l ∧ heap_alive h l ∧ σ' = Imp (Val v) (heap_update h l v) fns)
+  head_step (Rec (Store (Val v1) (Val v)) h fns) None (λ σ',
+    ∃ l, v1 = ValLoc l ∧ heap_alive h l ∧ σ' = Rec (Val v) (heap_update h l v) fns)
 | IfS v fns e1 e2 h:
-  head_step (Imp (If (Val v) e1 e2) h fns) None (λ σ,
-       ∃ b, val_to_bool v = Some b ∧ σ = Imp (if b then e1 else e2) h fns)
+  head_step (Rec (If (Val v) e1 e2) h fns) None (λ σ,
+       ∃ b, val_to_bool v = Some b ∧ σ = Rec (if b then e1 else e2) h fns)
 | LetS x v e fns h:
-  head_step (Imp (LetE x (Val v) e) h fns) None (λ σ, σ = Imp (subst x v e) h fns)
+  head_step (Rec (LetE x (Val v) e) h fns) None (λ σ, σ = Rec (subst x v e) h fns)
 | VarES fns h v: (* unbound variable *)
-  head_step (Imp (Var v) h fns) None (λ σ, False)
+  head_step (Rec (Var v) h fns) None (λ σ, False)
 | AllocAS h h' fns ls xs e:
   heap_alloc_list xs.*2 ls h h' →
-  head_step (Imp (AllocA xs e) h fns) None (λ σ',
-    Forall (λ x, 0 < x) xs.*2 ∧ σ' = Imp (FreeA (zip ls xs.*2) (subst_l xs.*1 (ValLoc <$> ls) e)) h' fns)
+  head_step (Rec (AllocA xs e) h fns) None (λ σ',
+    Forall (λ x, 0 < x) xs.*2 ∧ σ' = Rec (FreeA (zip ls xs.*2) (subst_l xs.*1 (ValLoc <$> ls) e)) h' fns)
 | FreeAS h fns ls v:
-  head_step (Imp (FreeA ls (Val v)) h fns) None (λ σ',
-    ∃ h', heap_free_list ls h h' ∧ σ' = Imp (Val v) h' fns)
+  head_step (Rec (FreeA ls (Val v)) h fns) None (λ σ',
+    ∃ h', heap_free_list ls h h' ∧ σ' = Rec (Val v) h' fns)
 | CallInternalS f fn fns vs h:
   fns !! f = Some fn →
-  head_step (Imp (Call f (Val <$> vs)) h fns) None (λ σ,
+  head_step (Rec (Call f (Val <$> vs)) h fns) None (λ σ,
    length vs = length fn.(fd_args) ∧
-   σ = Imp (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body))) h fns)
+   σ = Rec (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body))) h fns)
 | CallExternalS f fns vs h:
   fns !! f = None →
-  head_step (Imp (Call f (Val <$> vs)) h fns) (Some (Outgoing, EICall f vs h)) (λ σ, σ = Imp (Waiting true) h fns)
+  head_step (Rec (Call f (Val <$> vs)) h fns) (Some (Outgoing, ERCall f vs h)) (λ σ, σ = Rec (Waiting true) h fns)
 | ReturnS fns v b h:
-  head_step (Imp (ReturnExt b (Val v)) h fns) (Some (Outgoing, EIReturn v h)) (λ σ, σ = (Imp (Waiting b) h fns))
+  head_step (Rec (ReturnExt b (Val v)) h fns) (Some (Outgoing, ERReturn v h)) (λ σ, σ = (Rec (Waiting b) h fns))
 | RecvCallS fns f fn vs b h h':
   fns !! f = Some fn →
-  head_step (Imp (Waiting b) h fns) (Some (Incoming, EICall f vs h')) (λ σ,
-    σ = (Imp (ReturnExt b (Call f (Val <$> vs))) h' fns))
+  head_step (Rec (Waiting b) h fns) (Some (Incoming, ERCall f vs h')) (λ σ,
+    σ = (Rec (ReturnExt b (Call f (Val <$> vs))) h' fns))
 | RecvReturnS fns v h h':
-  head_step (Imp (Waiting true) h fns) (Some (Incoming, EIReturn v h')) (λ σ, σ = (Imp (Val v) h' fns))
+  head_step (Rec (Waiting true) h fns) (Some (Incoming, ERReturn v h')) (λ σ, σ = (Rec (Val v) h' fns))
 .
 
 Definition sub_redexes_are_values (e : expr) :=
@@ -833,16 +833,16 @@ Ltac solve_sub_redexes_are_values := apply sub_redexes_are_values_item; case; na
 Global Instance expr_fill_inj K : Inj (=) (=) (expr_fill K).
 Proof. induction K as [|Ki K IH]; rewrite /Inj; naive_solver. Qed.
 
-Lemma val_head_stuck e1 h σ1 κ Pσ : head_step (Imp e1 h σ1) κ Pσ → to_val e1 = None.
+Lemma val_head_stuck e1 h σ1 κ Pσ : head_step (Rec e1 h σ1) κ Pσ → to_val e1 = None.
 Proof. by inversion 1. Qed.
 
 Lemma head_ctx_step_val Ki e h σ1 κ Pσ :
-  head_step (Imp (expr_fill_item Ki e) h σ1) κ Pσ → is_Some (to_val e).
+  head_step (Rec (expr_fill_item Ki e) h σ1) κ Pσ → is_Some (to_val e).
 Proof. destruct Ki; inversion 1; simplify_eq => //; by apply: list_expr_val_inv. Qed.
 
 Lemma head_fill_step_val K e h σ1 κ Pσ :
   to_val e = None →
-  head_step (Imp (expr_fill K e) h σ1) κ Pσ →
+  head_step (Rec (expr_fill K e) h σ1) κ Pσ →
   K = [].
 Proof.
   elim/rev_ind: K => //=????. rewrite expr_fill_app /= => /head_ctx_step_val /fill_val[??].
@@ -852,7 +852,7 @@ Qed.
 Lemma step_by_val K K' e1' e1_redex h σ1 κ Pσ :
   expr_fill K e1' = expr_fill K' e1_redex →
   to_val e1' = None →
-  head_step (Imp e1_redex h σ1) κ Pσ →
+  head_step (Rec e1_redex h σ1) κ Pσ →
   ∃ K'', K' = K'' ++ K.
 Proof.
   assert (fill_val : ∀ K e, is_Some (to_val (expr_fill K e)) → is_Some (to_val e)).
@@ -872,17 +872,17 @@ Proof.
   exists K''. by rewrite assoc.
 Qed.
 
-Inductive prim_step : imp_state → option imp_event → (imp_state → Prop) → Prop :=
+Inductive prim_step : rec_state → option rec_event → (rec_state → Prop) → Prop :=
   Ectx_step K e e' fns κ Pσ h:
     e = expr_fill K e' →
-    head_step (Imp e' h fns) κ Pσ →
-    prim_step (Imp e h fns) κ (λ σ, ∃ e2 h2 fns2, Pσ (Imp e2 h2 fns2) ∧ σ = Imp (expr_fill K e2) h2 fns2).
+    head_step (Rec e' h fns) κ Pσ →
+    prim_step (Rec e h fns) κ (λ σ, ∃ e2 h2 fns2, Pσ (Rec e2 h2 fns2) ∧ σ = Rec (expr_fill K e2) h2 fns2).
 
 Lemma prim_step_inv K e fns κ h Pσ:
-  prim_step (Imp (expr_fill K e) h fns) κ Pσ →
+  prim_step (Rec (expr_fill K e) h fns) κ Pσ →
   to_val e = None →
-  ∃ K' e' Pσ', e = expr_fill K' e' ∧ head_step (Imp e' h fns) κ Pσ' ∧
-      Pσ = (λ σ, ∃ e2 h2 fns2, Pσ' (Imp e2 h2 fns2) ∧ σ = Imp (expr_fill (K' ++ K) e2) h2 fns2).
+  ∃ K' e' Pσ', e = expr_fill K' e' ∧ head_step (Rec e' h fns) κ Pσ' ∧
+      Pσ = (λ σ, ∃ e2 h2 fns2, Pσ' (Rec e2 h2 fns2) ∧ σ = Rec (expr_fill (K' ++ K) e2) h2 fns2).
 Proof.
   inversion 1; simplify_eq => ?.
   revert select (expr_fill _ _ = expr_fill _ _) => Heq. move: (Heq) => /step_by_val Hg.
@@ -891,11 +891,11 @@ Proof.
 Qed.
 
 Lemma prim_step_inv_head K e fns h κ Pσ:
-  prim_step (Imp (expr_fill K e) h fns) κ Pσ →
+  prim_step (Rec (expr_fill K e) h fns) κ Pσ →
   sub_redexes_are_values e →
   to_val e = None →
-  ∃ Pσ', head_step (Imp e h fns) κ Pσ' ∧
-      Pσ = (λ σ, ∃ e2 h2 fns2, Pσ' (Imp e2 h2 fns2) ∧ σ = Imp (expr_fill K e2) h2 fns2).
+  ∃ Pσ', head_step (Rec e h fns) κ Pσ' ∧
+      Pσ = (λ σ, ∃ e2 h2 fns2, Pσ' (Rec e2 h2 fns2) ∧ σ = Rec (expr_fill K e2) h2 fns2).
 Proof.
   move => Hprim Hsub ?.
   move: Hprim => /prim_step_inv[|?[?[?[?[Hstep ?]]]]]. { done. } subst.
@@ -903,9 +903,9 @@ Proof.
   naive_solver.
 Qed.
 
-Definition imp_module := Mod prim_step.
+Definition rec_module := Mod prim_step.
 
-Global Instance imp_vis_no_all: VisNoAll imp_module.
+Global Instance rec_vis_no_all: VisNoAll rec_module.
 Proof. move => *. inv_all @m_step; inv_all head_step; naive_solver. Qed.
 
 (** * Deeply embedded static expressions  *)
@@ -1018,8 +1018,8 @@ Definition fndef_to_static_fndef (fn : fndef) : static_fndef := {|
    sfd_body := expr_to_static_expr fn.(fd_body);
 |}.
 
-Definition initial_imp_sstate (fns : gmap string static_fndef) : imp_state :=
-  initial_imp_state (static_fndef_to_fndef <$> fns).
+Definition initial_rec_sstate (fns : gmap string static_fndef) : rec_state :=
+  initial_rec_state (static_fndef_to_fndef <$> fns).
 
 Lemma static_fndef_to_fndef_to_static_fndef fn :
   static_fndef_to_fndef (fndef_to_static_fndef fn) = fn.
@@ -1053,149 +1053,149 @@ Proof. constructor. rewrite right_id_L. done. Qed.
 Global Hint Resolve as_vals_fmap : typeclass_instances.
 
 
-(** ** ImpExprFill *)
-Class ImpExprFill (e : expr) (K : list expr_ectx) (e' : expr) := {
-    imp_expr_fill_proof : e = expr_fill K e'
+(** ** RecExprFill *)
+Class RecExprFill (e : expr) (K : list expr_ectx) (e' : expr) := {
+    rec_expr_fill_proof : e = expr_fill K e'
 }.
-Global Hint Mode ImpExprFill ! - - : typeclass_instances.
+Global Hint Mode RecExprFill ! - - : typeclass_instances.
 
-Lemma imp_expr_fill_end e :
-  ImpExprFill e [] e.
+Lemma rec_expr_fill_end e :
+  RecExprFill e [] e.
 Proof. done. Qed.
-Global Hint Resolve imp_expr_fill_end | 100 : typeclass_instances.
+Global Hint Resolve rec_expr_fill_end | 100 : typeclass_instances.
 
-Lemma imp_expr_fill_expr_fill e K K' e' `{!ImpExprFill e K' e'} :
-  ImpExprFill (expr_fill K e) (K' ++ K) e'.
-Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_expr_fill : typeclass_instances.
+Lemma rec_expr_fill_expr_fill e K K' e' `{!RecExprFill e K' e'} :
+  RecExprFill (expr_fill K e) (K' ++ K) e'.
+Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply rec_expr_fill_proof. Qed.
+Global Hint Resolve rec_expr_fill_expr_fill : typeclass_instances.
 
-Lemma imp_expr_fill_BinOpL e1 e2 op K e' `{!ImpExprFill e1 K e'} :
-  ImpExprFill (BinOp e1 op e2) (K ++ [BinOpLCtx op e2]) e'.
-Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_BinOpL : typeclass_instances.
+Lemma rec_expr_fill_BinOpL e1 e2 op K e' `{!RecExprFill e1 K e'} :
+  RecExprFill (BinOp e1 op e2) (K ++ [BinOpLCtx op e2]) e'.
+Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply rec_expr_fill_proof. Qed.
+Global Hint Resolve rec_expr_fill_BinOpL : typeclass_instances.
 
-Lemma imp_expr_fill_BinOpR (v1 : val) e2 op K e' `{!ImpExprFill e2 K e'} :
-  ImpExprFill (BinOp (Val v1) op e2) (K ++ [BinOpRCtx v1 op]) e'.
-Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_BinOpR : typeclass_instances.
+Lemma rec_expr_fill_BinOpR (v1 : val) e2 op K e' `{!RecExprFill e2 K e'} :
+  RecExprFill (BinOp (Val v1) op e2) (K ++ [BinOpRCtx v1 op]) e'.
+Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply rec_expr_fill_proof. Qed.
+Global Hint Resolve rec_expr_fill_BinOpR : typeclass_instances.
 
-Lemma imp_expr_fill_Load e1 K e' `{!ImpExprFill e1 K e'} :
-  ImpExprFill (Load e1) (K ++ [LoadCtx]) e'.
-Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_Load : typeclass_instances.
+Lemma rec_expr_fill_Load e1 K e' `{!RecExprFill e1 K e'} :
+  RecExprFill (Load e1) (K ++ [LoadCtx]) e'.
+Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply rec_expr_fill_proof. Qed.
+Global Hint Resolve rec_expr_fill_Load : typeclass_instances.
 
-Lemma imp_expr_fill_StoreL e1 e2 K e' `{!ImpExprFill e1 K e'} :
-  ImpExprFill (Store e1 e2) (K ++ [StoreLCtx e2]) e'.
-Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_StoreL : typeclass_instances.
+Lemma rec_expr_fill_StoreL e1 e2 K e' `{!RecExprFill e1 K e'} :
+  RecExprFill (Store e1 e2) (K ++ [StoreLCtx e2]) e'.
+Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply rec_expr_fill_proof. Qed.
+Global Hint Resolve rec_expr_fill_StoreL : typeclass_instances.
 
-Lemma imp_expr_fill_StoreR (v1 : val) e2 K e' `{!ImpExprFill e2 K e'} :
-  ImpExprFill (Store (Val v1) e2) (K ++ [StoreRCtx v1]) e'.
-Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_StoreR : typeclass_instances.
+Lemma rec_expr_fill_StoreR (v1 : val) e2 K e' `{!RecExprFill e2 K e'} :
+  RecExprFill (Store (Val v1) e2) (K ++ [StoreRCtx v1]) e'.
+Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply rec_expr_fill_proof. Qed.
+Global Hint Resolve rec_expr_fill_StoreR : typeclass_instances.
 
-Lemma imp_expr_fill_FreeA e1 K e' ls `{!ImpExprFill e1 K e'} :
-  ImpExprFill (FreeA ls e1) (K ++ [FreeACtx ls]) e'.
-Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_FreeA : typeclass_instances.
+Lemma rec_expr_fill_FreeA e1 K e' ls `{!RecExprFill e1 K e'} :
+  RecExprFill (FreeA ls e1) (K ++ [FreeACtx ls]) e'.
+Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply rec_expr_fill_proof. Qed.
+Global Hint Resolve rec_expr_fill_FreeA : typeclass_instances.
 
-Lemma imp_expr_fill_If e e2 e3 K e' `{!ImpExprFill e K e'} :
-  ImpExprFill (If e e2 e3) (K ++ [IfCtx e2 e3]) e'.
-Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_If : typeclass_instances.
+Lemma rec_expr_fill_If e e2 e3 K e' `{!RecExprFill e K e'} :
+  RecExprFill (If e e2 e3) (K ++ [IfCtx e2 e3]) e'.
+Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply rec_expr_fill_proof. Qed.
+Global Hint Resolve rec_expr_fill_If : typeclass_instances.
 
-Lemma imp_expr_fill_LetE v e1 e2 K e' `{!ImpExprFill e1 K e'} :
-  ImpExprFill (LetE v e1 e2) (K ++ [LetECtx v e2]) e'.
-Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_LetE : typeclass_instances.
+Lemma rec_expr_fill_LetE v e1 e2 K e' `{!RecExprFill e1 K e'} :
+  RecExprFill (LetE v e1 e2) (K ++ [LetECtx v e2]) e'.
+Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply rec_expr_fill_proof. Qed.
+Global Hint Resolve rec_expr_fill_LetE : typeclass_instances.
 
-Lemma imp_expr_fill_Call e K e' f es vs es' `{!AsVals es vs (Some (e, es')) } `{!ImpExprFill e K e'} :
-  ImpExprFill (Call f es) (K ++ [CallCtx f vs es']) e'.
+Lemma rec_expr_fill_Call e K e' f es vs es' `{!AsVals es vs (Some (e, es')) } `{!RecExprFill e K e'} :
+  RecExprFill (Call f es) (K ++ [CallCtx f vs es']) e'.
 Proof.
-  destruct AsVals0, ImpExprFill0. subst.
+  destruct AsVals0, RecExprFill0. subst.
   constructor => /=. rewrite expr_fill_app /=. done.
 Qed.
-Global Hint Resolve imp_expr_fill_Call : typeclass_instances.
+Global Hint Resolve rec_expr_fill_Call : typeclass_instances.
 
-Lemma imp_expr_fill_ReturnExt b e K e' `{!ImpExprFill e K e'} :
-  ImpExprFill (ReturnExt b e) (K ++ [ReturnExtCtx b]) e'.
-Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply imp_expr_fill_proof. Qed.
-Global Hint Resolve imp_expr_fill_ReturnExt : typeclass_instances.
+Lemma rec_expr_fill_ReturnExt b e K e' `{!RecExprFill e K e'} :
+  RecExprFill (ReturnExt b e) (K ++ [ReturnExtCtx b]) e'.
+Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply rec_expr_fill_proof. Qed.
+Global Hint Resolve rec_expr_fill_ReturnExt : typeclass_instances.
 
 (** ** instances *)
-(* This pattern of using ImpExprFill at each rule is quite expensive
+(* This pattern of using RecExprFill at each rule is quite expensive
 but we don't care at the moment. *)
-Lemma imp_step_Var_s fns h e K v `{!ImpExprFill e K (Var v)}:
-  TStepS imp_module (Imp e h fns) (λ G, G None (λ G', True)).
+Lemma rec_step_Var_s fns h e K v `{!RecExprFill e K (Var v)}:
+  TStepS rec_module (Rec e h fns) (λ G, G None (λ G', True)).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. eexists _, _. split; [done|] => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?. naive_solver.
 Qed.
-Global Hint Resolve imp_step_Var_s : typeclass_instances.
+Global Hint Resolve rec_step_Var_s : typeclass_instances.
 
-Lemma imp_step_Waiting_i fns h K e b `{!ImpExprFill e K (Waiting b)}:
-  TStepI imp_module (Imp e h fns) (λ G,
+Lemma rec_step_Waiting_i fns h K e b `{!RecExprFill e K (Waiting b)}:
+  TStepI rec_module (Rec e h fns) (λ G,
     (∀ f fn vs h', fns !! f = Some fn →
-      G true (Some (Incoming, EICall f vs h')) (λ G',  G'
-          (Imp (expr_fill K (ReturnExt b (Call f (Val <$> vs)))) h' fns))) ∧
-    ∀ v h', b → G true (Some (Incoming, EIReturn v h')) (λ G', G' (Imp (expr_fill K (Val v)) h' fns))
+      G true (Some (Incoming, ERCall f vs h')) (λ G',  G'
+          (Rec (expr_fill K (ReturnExt b (Call f (Val <$> vs)))) h' fns))) ∧
+    ∀ v h', b → G true (Some (Incoming, ERReturn v h')) (λ G', G' (Rec (expr_fill K (Val v)) h' fns))
    ).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
   inv_all head_step.
   - naive_solver.
   - naive_solver.
 Qed.
-Global Hint Resolve imp_step_Waiting_i : typeclass_instances.
+Global Hint Resolve rec_step_Waiting_i : typeclass_instances.
 
-Lemma imp_step_Waiting_s fns h e K b `{!ImpExprFill e K (Waiting b)}:
-  TStepS imp_module (Imp e h fns) (λ G,
+Lemma rec_step_Waiting_s fns h e K b `{!RecExprFill e K (Waiting b)}:
+  TStepS rec_module (Rec e h fns) (λ G,
     (∃ f fn vs h', fns !! f = Some fn ∧
-      G (Some (Incoming, EICall f vs h')) (λ G', G'
-          (Imp (expr_fill K (ReturnExt b (Call f (Val <$> vs)))) h' fns))) ∨
-    ∃ v h', b ∧ G (Some (Incoming, EIReturn v h')) (λ G', G' (Imp (expr_fill K (Val v)) h' fns))
+      G (Some (Incoming, ERCall f vs h')) (λ G', G'
+          (Rec (expr_fill K (ReturnExt b (Call f (Val <$> vs)))) h' fns))) ∨
+    ∃ v h', b ∧ G (Some (Incoming, ERReturn v h')) (λ G', G' (Rec (expr_fill K (Val v)) h' fns))
    ).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. destruct!; (split!; [done|]) => /= ??. 2: destruct b => //.
   all: apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?; destruct!; done.
 Qed.
-Global Hint Resolve imp_step_Waiting_s : typeclass_instances.
+Global Hint Resolve rec_step_Waiting_s : typeclass_instances.
 
-Lemma imp_step_ReturnExt_i fns h e K b (v : val) `{!ImpExprFill e K (ReturnExt b (Val v))}:
-  TStepI imp_module (Imp e h fns) (λ G,
-    (G true (Some (Outgoing, EIReturn v h)) (λ G', G' (Imp (expr_fill K (Waiting b)) h fns)))).
+Lemma rec_step_ReturnExt_i fns h e K b (v : val) `{!RecExprFill e K (ReturnExt b (Val v))}:
+  TStepI rec_module (Rec e h fns) (λ G,
+    (G true (Some (Outgoing, ERReturn v h)) (λ G', G' (Rec (expr_fill K (Waiting b)) h fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
   inv_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_ReturnExt_i : typeclass_instances.
+Global Hint Resolve rec_step_ReturnExt_i : typeclass_instances.
 
-Lemma imp_step_ReturnExt_s fns h e K b (v : val) `{!ImpExprFill e K (ReturnExt b (Val v))}:
-  TStepS imp_module (Imp e h fns) (λ G,
-    (G (Some (Outgoing, EIReturn v h)) (λ G', G' (Imp (expr_fill K (Waiting b)) h fns)))).
+Lemma rec_step_ReturnExt_s fns h e K b (v : val) `{!RecExprFill e K (ReturnExt b (Val v))}:
+  TStepS rec_module (Rec e h fns) (λ G,
+    (G (Some (Outgoing, ERReturn v h)) (λ G', G' (Rec (expr_fill K (Waiting b)) h fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct!. done.
 Qed.
-Global Hint Resolve imp_step_ReturnExt_s : typeclass_instances.
+Global Hint Resolve rec_step_ReturnExt_s : typeclass_instances.
 
-Lemma imp_step_Call_i fns h e K f vs es `{!ImpExprFill e K (imp.Call f es)} `{!AsVals es vs None}:
-  TStepI imp_module (Imp e h fns) (λ G,
+Lemma rec_step_Call_i fns h e K f vs es `{!RecExprFill e K (rec.Call f es)} `{!AsVals es vs None}:
+  TStepI rec_module (Rec e h fns) (λ G,
     (∀ fn, fns !! f = Some fn → G true None (λ G', length vs = length fn.(fd_args) ∧
-         G' (Imp (expr_fill K (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))) h fns))) ∧
-    (fns !! f = None → G true (Some (Outgoing, EICall f vs h)) (λ G',
-           G' (Imp (expr_fill K (Waiting true)) h fns)))).
+         G' (Rec (expr_fill K (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))) h fns))) ∧
+    (fns !! f = None → G true (Some (Outgoing, ERCall f vs h)) (λ G',
+           G' (Rec (expr_fill K (Waiting true)) h fns)))).
 Proof.
-  destruct AsVals0, ImpExprFill0; subst.
+  destruct AsVals0, RecExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[Hstep ?]]. {
     apply sub_redexes_are_values_item; case; try naive_solver.
     move => /= ??? e' [_ Heq]. rewrite right_id_L in Heq. by apply: list_expr_val_inv.
@@ -1204,270 +1204,270 @@ Proof.
   - naive_solver.
   - naive_solver.
 Qed.
-Global Hint Resolve imp_step_Call_i : typeclass_instances.
+Global Hint Resolve rec_step_Call_i : typeclass_instances.
 
-Lemma imp_step_Call_s fns h e K f vs `{!ImpExprFill e K (imp.Call f es)} `{!AsVals es vs None}:
-  TStepS imp_module (Imp e h fns) (λ G,
+Lemma rec_step_Call_s fns h e K f vs `{!RecExprFill e K (rec.Call f es)} `{!AsVals es vs None}:
+  TStepS rec_module (Rec e h fns) (λ G,
     (∃ fn, fns !! f = Some fn ∧ G None (λ G', length vs = length fn.(fd_args) → G'
-             (Imp (expr_fill K (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))) h fns))) ∨
-    (fns !! f = None ∧ G (Some (Outgoing, EICall f vs h)) (λ G',
-           G' (Imp (expr_fill K (Waiting true)) h fns)))).
+             (Rec (expr_fill K (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)))) h fns))) ∨
+    (fns !! f = None ∧ G (Some (Outgoing, ERCall f vs h)) (λ G',
+           G' (Rec (expr_fill K (Waiting true)) h fns)))).
 Proof.
-  destruct AsVals0, ImpExprFill0; subst. rewrite right_id_L.
+  destruct AsVals0, RecExprFill0; subst. rewrite right_id_L.
   constructor => ? HG. destruct!; (split!; [done|]); move => /= ??.
   all: apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   all: destruct!; naive_solver.
 Qed.
-Global Hint Resolve imp_step_Call_s : typeclass_instances.
+Global Hint Resolve rec_step_Call_s : typeclass_instances.
 
-Lemma imp_step_Binop_i fns h e K (v1 v2 : val) op `{!ImpExprFill e K (BinOp (Val v1) op (Val v2))}:
-  TStepI imp_module (Imp e h fns) (λ G,
-    (G true None (λ G', ∃ v', eval_binop op v1 v2 = Some v' ∧ G' (Imp (expr_fill K (Val v')) h fns)))).
+Lemma rec_step_Binop_i fns h e K (v1 v2 : val) op `{!RecExprFill e K (BinOp (Val v1) op (Val v2))}:
+  TStepI rec_module (Rec e h fns) (λ G,
+    (G true None (λ G', ∃ v', eval_binop op v1 v2 = Some v' ∧ G' (Rec (expr_fill K (Val v')) h fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
   inv_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_Binop_i | 10 : typeclass_instances.
+Global Hint Resolve rec_step_Binop_i | 10 : typeclass_instances.
 
-Lemma imp_step_Binop_s fns h e K (v1 v2 : val) op `{!ImpExprFill e K (BinOp (Val v1) op (Val v2))}:
-  TStepS imp_module (Imp e h fns) (λ G,
-    (G None (λ G', ∀ v', eval_binop op v1 v2 = Some v' → G' (Imp (expr_fill K (Val v')) h fns)))).
+Lemma rec_step_Binop_s fns h e K (v1 v2 : val) op `{!RecExprFill e K (BinOp (Val v1) op (Val v2))}:
+  TStepS rec_module (Rec e h fns) (λ G,
+    (G None (λ G', ∀ v', eval_binop op v1 v2 = Some v' → G' (Rec (expr_fill K (Val v')) h fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct!. naive_solver.
 Qed.
-Global Hint Resolve imp_step_Binop_s | 10 : typeclass_instances.
+Global Hint Resolve rec_step_Binop_s | 10 : typeclass_instances.
 
-Lemma imp_step_BinopAdd_i fns h e K n1 n2 `{!ImpExprFill e K (BinOp (Val (ValNum n1)) AddOp (Val (ValNum n2)))}:
-  TStepI imp_module (Imp e h fns) (λ G,
-    (G true None (λ G', G' (Imp (expr_fill K (Val (ValNum (n1 + n2)))) h fns)))).
+Lemma rec_step_BinopAdd_i fns h e K n1 n2 `{!RecExprFill e K (BinOp (Val (ValNum n1)) AddOp (Val (ValNum n2)))}:
+  TStepI rec_module (Rec e h fns) (λ G,
+    (G true None (λ G', G' (Rec (expr_fill K (Val (ValNum (n1 + n2)))) h fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. tstep_i => ???. split! => ?. naive_solver.
 Qed.
-Global Hint Resolve imp_step_BinopAdd_i | 5 : typeclass_instances.
+Global Hint Resolve rec_step_BinopAdd_i | 5 : typeclass_instances.
 
-Lemma imp_step_BinopAdd_s fns h e K (v1 v2 : val) `{!ImpExprFill e K (BinOp (Val v1) AddOp (Val v2))}:
-  TStepS imp_module (Imp e h fns) (λ G,
-    (G None (λ G', ∀ n1 n2, v1 = ValNum n1 → v2 = ValNum n2 → G' (Imp (expr_fill K (Val (ValNum (n1 + n2)))) h fns)))).
+Lemma rec_step_BinopAdd_s fns h e K (v1 v2 : val) `{!RecExprFill e K (BinOp (Val v1) AddOp (Val v2))}:
+  TStepS rec_module (Rec e h fns) (λ G,
+    (G None (λ G', ∀ n1 n2, v1 = ValNum n1 → v2 = ValNum n2 → G' (Rec (expr_fill K (Val (ValNum (n1 + n2)))) h fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??. tstep_s. split! => ? /bind_Some[?[? /bind_Some[?[??]]]].
   destruct v1, v2 => //. simplify_eq/=. naive_solver.
 Qed.
-Global Hint Resolve imp_step_BinopAdd_s | 5 : typeclass_instances.
+Global Hint Resolve rec_step_BinopAdd_s | 5 : typeclass_instances.
 
-Lemma imp_step_BinopShift_i fns h e K l z `{!ImpExprFill e K (BinOp (Val (ValLoc l)) ShiftOp (Val (ValNum z)))}:
-  TStepI imp_module (Imp e h fns) (λ G,
-    (G true None (λ G', G' (Imp (expr_fill K (Val (ValLoc (l +ₗ z)))) h fns)))).
+Lemma rec_step_BinopOffset_i fns h e K l z `{!RecExprFill e K (BinOp (Val (ValLoc l)) OffsetOp (Val (ValNum z)))}:
+  TStepI rec_module (Rec e h fns) (λ G,
+    (G true None (λ G', G' (Rec (expr_fill K (Val (ValLoc (l +ₗ z)))) h fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. tstep_i => ???. split! => ?. naive_solver.
 Qed.
-Global Hint Resolve imp_step_BinopShift_i | 5 : typeclass_instances.
+Global Hint Resolve rec_step_BinopOffset_i | 5 : typeclass_instances.
 
-Lemma imp_step_BinopShift_s fns h e K (v1 v2 : val) `{!ImpExprFill e K (BinOp (Val v1) ShiftOp (Val v2))}:
-  TStepS imp_module (Imp e h fns) (λ G,
-    (G None (λ G', ∀ l z, v1 = ValLoc l → v2 = ValNum z → G' (Imp (expr_fill K (Val (ValLoc (l +ₗ z)))) h fns)))).
+Lemma rec_step_BinopOffset_s fns h e K (v1 v2 : val) `{!RecExprFill e K (BinOp (Val v1) OffsetOp (Val v2))}:
+  TStepS rec_module (Rec e h fns) (λ G,
+    (G None (λ G', ∀ l z, v1 = ValLoc l → v2 = ValNum z → G' (Rec (expr_fill K (Val (ValLoc (l +ₗ z)))) h fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??. tstep_s. split! => ? /bind_Some[?[? /bind_Some[?[??]]]].
   destruct v1, v2 => //. simplify_eq/=. naive_solver.
 Qed.
-Global Hint Resolve imp_step_BinopShift_s | 5 : typeclass_instances.
+Global Hint Resolve rec_step_BinopOffset_s | 5 : typeclass_instances.
 
-Lemma imp_step_Load_i fns h e K l `{!ImpExprFill e K (Load (Val (ValLoc l)))}:
-  TStepI imp_module (Imp e h fns) (λ G,
-    (G true None (λ G', ∃ v', h.(h_heap) !! l = Some v' ∧ G' (Imp (expr_fill K (Val v')) h fns)))).
+Lemma rec_step_Load_i fns h e K l `{!RecExprFill e K (Load (Val (ValLoc l)))}:
+  TStepI rec_module (Rec e h fns) (λ G,
+    (G true None (λ G', ∃ v', h.(h_heap) !! l = Some v' ∧ G' (Rec (expr_fill K (Val v')) h fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
   inv_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_Load_i : typeclass_instances.
+Global Hint Resolve rec_step_Load_i : typeclass_instances.
 
-Lemma imp_step_Load_s fns h e K v `{!ImpExprFill e K (Load (Val v))}:
-  TStepS imp_module (Imp e h fns) (λ G,
-    (G None (λ G', ∀ l v', v = ValLoc l → h.(h_heap) !! l = Some v' → G' (Imp (expr_fill K (Val v')) h fns)))).
+Lemma rec_step_Load_s fns h e K v `{!RecExprFill e K (Load (Val v))}:
+  TStepS rec_module (Rec e h fns) (λ G,
+    (G None (λ G', ∀ l v', v = ValLoc l → h.(h_heap) !! l = Some v' → G' (Rec (expr_fill K (Val v')) h fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct!. naive_solver.
 Qed.
-Global Hint Resolve imp_step_Load_s : typeclass_instances.
+Global Hint Resolve rec_step_Load_s : typeclass_instances.
 
-Lemma imp_step_Store_i fns h e K l v `{!ImpExprFill e K (Store (Val (ValLoc l)) (Val v))}:
-  TStepI imp_module (Imp e h fns) (λ G,
-    (G true None (λ G', heap_alive h l ∧ G' (Imp (expr_fill K (Val v)) (heap_update h l v) fns)))).
+Lemma rec_step_Store_i fns h e K l v `{!RecExprFill e K (Store (Val (ValLoc l)) (Val v))}:
+  TStepI rec_module (Rec e h fns) (λ G,
+    (G true None (λ G', heap_alive h l ∧ G' (Rec (expr_fill K (Val v)) (heap_update h l v) fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
   inv_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_Store_i : typeclass_instances.
+Global Hint Resolve rec_step_Store_i : typeclass_instances.
 
-Lemma imp_step_Store_s fns h e K v1 v `{!ImpExprFill e K (Store (Val v1) (Val v))}:
-  TStepS imp_module (Imp e h fns) (λ G,
+Lemma rec_step_Store_s fns h e K v1 v `{!RecExprFill e K (Store (Val v1) (Val v))}:
+  TStepS rec_module (Rec e h fns) (λ G,
     (G None (λ G', ∀ l, v1 = ValLoc l → heap_alive h l → G'
-      (Imp (expr_fill K (Val v)) (heap_update h l v) fns)))).
+      (Rec (expr_fill K (Val v)) (heap_update h l v) fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct!. naive_solver.
 Qed.
-Global Hint Resolve imp_step_Store_s : typeclass_instances.
+Global Hint Resolve rec_step_Store_s : typeclass_instances.
 
-Lemma imp_step_AllocA_i fns h e K e' vs `{!ImpExprFill e K (AllocA vs e')}:
-  TStepI imp_module (Imp e h fns) (λ G, ∀ ls h', heap_alloc_list vs.*2 ls h h' →
+Lemma rec_step_AllocA_i fns h e K e' vs `{!RecExprFill e K (AllocA vs e')}:
+  TStepI rec_module (Rec e h fns) (λ G, ∀ ls h', heap_alloc_list vs.*2 ls h h' →
     (G true None (λ G', Forall (λ z, 0 < z) vs.*2 ∧
-           G' (Imp (expr_fill K (FreeA (zip ls vs.*2) (subst_l vs.*1 (ValLoc <$> ls) e'))) h' fns)))).
+           G' (Rec (expr_fill K (FreeA (zip ls vs.*2) (subst_l vs.*1 (ValLoc <$> ls) e'))) h' fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
   inv_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_AllocA_i : typeclass_instances.
+Global Hint Resolve rec_step_AllocA_i : typeclass_instances.
 
-Lemma imp_step_Alloc_s fns h e e' K vs `{!ImpExprFill e K (AllocA vs e')}:
-  TStepS imp_module (Imp e h fns) (λ G,
+Lemma rec_step_Alloc_s fns h e e' K vs `{!RecExprFill e K (AllocA vs e')}:
+  TStepS rec_module (Rec e h fns) (λ G,
     (G None (λ G', ∃ ls h', heap_alloc_list vs.*2 ls h h' ∧
-      (Forall (λ z, 0 < z) vs.*2 → G' (Imp (expr_fill K (FreeA (zip ls vs.*2) (subst_l vs.*1 (ValLoc <$> ls) e'))) h' fns))))).
+      (Forall (λ z, 0 < z) vs.*2 → G' (Rec (expr_fill K (FreeA (zip ls vs.*2) (subst_l vs.*1 (ValLoc <$> ls) e'))) h' fns))))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ?[?[?[??]]].
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct!. naive_solver.
 Qed.
-Global Hint Resolve imp_step_Alloc_s : typeclass_instances.
+Global Hint Resolve rec_step_Alloc_s : typeclass_instances.
 
-Lemma imp_step_FreeA_i fns h e K v ls `{!ImpExprFill e K (FreeA ls (Val v))}:
-  TStepI imp_module (Imp e h fns) (λ G,
-    (G true None (λ G', ∃ h', heap_free_list ls h h' ∧ G' (Imp (expr_fill K (Val v)) h' fns)))).
+Lemma rec_step_FreeA_i fns h e K v ls `{!RecExprFill e K (FreeA ls (Val v))}:
+  TStepI rec_module (Rec e h fns) (λ G,
+    (G true None (λ G', ∃ h', heap_free_list ls h h' ∧ G' (Rec (expr_fill K (Val v)) h' fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
   inv_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_FreeA_i : typeclass_instances.
+Global Hint Resolve rec_step_FreeA_i : typeclass_instances.
 
-Lemma imp_step_FreeA_s fns h e K ls v `{!ImpExprFill e K (FreeA ls (Val v))}:
-  TStepS imp_module (Imp e h fns) (λ G,
-    (G None (λ G', ∀ h', heap_free_list ls h h' → G' (Imp (expr_fill K (Val v)) h' fns)))).
+Lemma rec_step_FreeA_s fns h e K ls v `{!RecExprFill e K (FreeA ls (Val v))}:
+  TStepS rec_module (Rec e h fns) (λ G,
+    (G None (λ G', ∀ h', heap_free_list ls h h' → G' (Rec (expr_fill K (Val v)) h' fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct!. naive_solver.
 Qed.
-Global Hint Resolve imp_step_FreeA_s : typeclass_instances.
+Global Hint Resolve rec_step_FreeA_s : typeclass_instances.
 
-Lemma imp_step_LetE_i fns h e K x v e1 `{!ImpExprFill e K (LetE x (Val v) e1)}:
-  TStepI imp_module (Imp e h fns) (λ G,
-    (G true None (λ G', G' (Imp (expr_fill K (subst x v e1)) h fns)))).
+Lemma rec_step_LetE_i fns h e K x v e1 `{!RecExprFill e K (LetE x (Val v) e1)}:
+  TStepI rec_module (Rec e h fns) (λ G,
+    (G true None (λ G', G' (Rec (expr_fill K (subst x v e1)) h fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
   inv_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_LetE_i : typeclass_instances.
+Global Hint Resolve rec_step_LetE_i : typeclass_instances.
 
-Lemma imp_step_LetE_s fns h e K x v e1 `{!ImpExprFill e K (LetE x (Val v) e1)}:
-  TStepS imp_module (Imp e h fns) (λ G,
-    (G None (λ G', G' (Imp (expr_fill K (subst x v e1)) h fns)))).
+Lemma rec_step_LetE_s fns h e K x v e1 `{!RecExprFill e K (LetE x (Val v) e1)}:
+  TStepS rec_module (Rec e h fns) (λ G,
+    (G None (λ G', G' (Rec (expr_fill K (subst x v e1)) h fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct!. naive_solver.
 Qed.
-Global Hint Resolve imp_step_LetE_s : typeclass_instances.
+Global Hint Resolve rec_step_LetE_s : typeclass_instances.
 
-Lemma imp_step_If_i fns h b K e1 e2 `{!ImpExprFill e K (If (Val (ValBool b)) e1 e2)}:
-  TStepI imp_module (Imp e h fns) (λ G,
-    (G true None (λ G', G' (Imp (expr_fill K (if b then e1 else e2)) h fns)))).
+Lemma rec_step_If_i fns h b K e1 e2 `{!RecExprFill e K (If (Val (ValBool b)) e1 e2)}:
+  TStepI rec_module (Rec e h fns) (λ G,
+    (G true None (λ G', G' (Rec (expr_fill K (if b then e1 else e2)) h fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
   inv_all head_step.
   naive_solver.
 Qed.
-Global Hint Resolve imp_step_If_i | 10 : typeclass_instances.
+Global Hint Resolve rec_step_If_i | 10 : typeclass_instances.
 
-Lemma imp_step_If_s fns h v K e1 e2 `{!ImpExprFill e K (If (Val v) e1 e2)}:
-  TStepS imp_module (Imp e h fns) (λ G,
-    (G None (λ G', ∀ b, v = ValBool b → G' (Imp (expr_fill K (if b then e1 else e2)) h fns)))).
+Lemma rec_step_If_s fns h v K e1 e2 `{!RecExprFill e K (If (Val v) e1 e2)}:
+  TStepS rec_module (Rec e h fns) (λ G,
+    (G None (λ G', ∀ b, v = ValBool b → G' (Rec (expr_fill K (if b then e1 else e2)) h fns)))).
 Proof.
-  destruct ImpExprFill0; subst.
+  destruct RecExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
   destruct!. destruct v => //. naive_solver.
 Qed.
-Global Hint Resolve imp_step_If_s | 10 : typeclass_instances.
+Global Hint Resolve rec_step_If_s | 10 : typeclass_instances.
 
-(** * proof techniques for prepost *)
-Definition imp_proof_call (n : trace_index) (fns1 fns2 : gmap string fndef) :=
+(** * Proof techniques *)
+Definition rec_proof_call (n : trace_index) (fns1 fns2 : gmap string fndef) :=
   (∀ n' f es1' es2' K1' K2' es1 es2 vs1' vs2' h1' h2' b,
-      ImpExprFill es1' K1' (Call f es1) →
-      ImpExprFill es2' K2' (Call f es2) →
+      RecExprFill es1' K1' (Call f es1) →
+      RecExprFill es2' K2' (Call f es2) →
       n' ⊆ n →
       Forall2 (λ e v, e = Val v) es1 vs1' →
       Forall2 (λ e v, e = Val v) es2 vs2' →
       vs1' = vs2' →
       h1' = h2' →
       (∀ v'' h'',
-          Imp (expr_fill K1' (Val v'')) h'' fns1
+          Rec (expr_fill K1' (Val v'')) h'' fns1
               (* TODO: it possible to make it b instead of false? *)
-              ⪯{imp_module, imp_module, n', false}
-              Imp (expr_fill K2' (Val v'')) h'' fns2) →
-      Imp es1' h1' fns1
-          ⪯{imp_module, imp_module, n', b}
-      Imp es2' h2' fns2).
+              ⪯{rec_module, rec_module, n', false}
+              Rec (expr_fill K2' (Val v'')) h'' fns2) →
+      Rec es1' h1' fns1
+          ⪯{rec_module, rec_module, n', b}
+      Rec es2' h2' fns2).
 
-Lemma imp_proof fns1 fns2:
+Lemma rec_proof fns1 fns2:
   (∀ f, fns1 !! f = None ↔ fns2 !! f = None) →
   (∀ n K1 K2 f fn1 vs h,
       fns1 !! f = Some fn1 →
       ∃ fn2, fns2 !! f = Some fn2 ∧ length (fd_args fn1) = length (fd_args fn2) ∧ (
         length vs = length (fd_args fn1) →
       (* Call *)
-      imp_proof_call n fns1 fns2 →
+      rec_proof_call n fns1 fns2 →
       (* Return *)
       (∀ n' v1' v2' h1' h2' b,
          n' ⊆ n →
          v1' = v2' →
          h1' = h2' →
-         Imp (expr_fill K1 (Val v1')) h1' fns1
-             ⪯{imp_module, imp_module, n', b}
-         Imp (expr_fill K2 (Val v2')) h2' fns2) →
+         Rec (expr_fill K1 (Val v1')) h1' fns1
+             ⪯{rec_module, rec_module, n', b}
+         Rec (expr_fill K2 (Val v2')) h2' fns2) →
 
-       Imp (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs (fd_body fn1))) h fns1
-           ⪯{imp_module, imp_module, n, false}
-       Imp (expr_fill K2 (AllocA fn2.(fd_vars) $ subst_l fn2.(fd_args) vs (fd_body fn2))) h fns2)) →
+       Rec (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs (fd_body fn1))) h fns1
+           ⪯{rec_module, rec_module, n, false}
+       Rec (expr_fill K2 (AllocA fn2.(fd_vars) $ subst_l fn2.(fd_args) vs (fd_body fn2))) h fns2)) →
 
-  trefines (MS imp_module (initial_imp_state fns1))
-           (MS imp_module (initial_imp_state fns2)).
+  trefines (MS rec_module (initial_rec_state fns1))
+           (MS rec_module (initial_rec_state fns2)).
 Proof.
   move => Hf Hc.
   apply: tsim_implies_trefines => n0 /=.
-  unshelve eapply tsim_remember. { simpl. exact (λ n' '(Imp e1 h1 fns1') '(Imp e2 h2 fns2'),
+  unshelve eapply tsim_remember. { simpl. exact (λ n' '(Rec e1 h1 fns1') '(Rec e2 h2 fns2'),
      ∃ K1 K2 b,
        fns1' = fns1 ∧
        fns2' = fns2 ∧
@@ -1476,9 +1476,9 @@ Proof.
        e2 = expr_fill K2 (Waiting b) ∧
        ∀ v' h',
          b →
-         Imp (expr_fill K1 (Val v')) h' fns1
-             ⪯{imp_module, imp_module, n', false}
-         Imp (expr_fill K2 (Val v')) h' fns2
+         Rec (expr_fill K1 (Val v')) h' fns1
+             ⪯{rec_module, rec_module, n', false}
+         Rec (expr_fill K2 (Val v')) h' fns2
 
   ). } { eexists [], []. split!. }
   { move => /= ?? [???] [???] *. destruct!. split!; [done..|].
@@ -1492,7 +1492,7 @@ Proof.
   have ? : length (fd_args fn1) = length (fd_args fn2).
   { move: (Hc n0 [] [] f fn1 [] h). naive_solver. }
   tstep_i. split!; [|naive_solver]. move => ??. simplify_eq/=. split; [congruence|].
-  unshelve eapply tsim_remember. { simpl. exact (λ n' '(Imp e1 h1 fns1') '(Imp e2 h2 fns2'),
+  unshelve eapply tsim_remember. { simpl. exact (λ n' '(Rec e1 h1 fns1') '(Rec e2 h2 fns2'),
      ∃ K1 K2 f vs fn1 fn2,
        fns1' = fns1 ∧
        fns2' = fns2 ∧
@@ -1503,9 +1503,9 @@ Proof.
        e2 = expr_fill K2 (AllocA fn2.(fd_vars) $ subst_l (fd_args fn2) vs (fd_body fn2)) ∧
        length vs = length (fd_args fn1) ∧
        ∀ v' h',
-         Imp (expr_fill K1 (Val v')) h' fns1
-             ⪯{imp_module, imp_module, n', false}
-         Imp (expr_fill K2 (Val v')) h' fns2
+         Rec (expr_fill K1 (Val v')) h' fns1
+             ⪯{rec_module, rec_module, n', false}
+         Rec (expr_fill K2 (Val v')) h' fns2
 
   ). }
   { eexists (ReturnExtCtx _ :: _), (ReturnExtCtx _ :: _). split!; [try done; congruence..|].
@@ -1532,15 +1532,15 @@ Proof.
   - move => *. subst. apply: tsim_mono; [|done]. apply tsim_mono_b_false. naive_solver.
 Qed.
 
-Lemma imp_prepost_proof {S} {M : ucmra} R `{!∀ b, PreOrder (R b)} i o fns1 fns2 s0 (r0 : uPred M):
+Lemma rec_prepost_proof {S} {M : ucmra} R `{!∀ b, PreOrder (R b)} i o fns1 fns2 s0 (r0 : uPred M):
   (* R true: public transition relation, R false: private transition relation *)
   (∀ s r s' r', R true (s, r) (s', r') → R false (s, r) (s', r')) →
   (∀ n K1 K2 f fn1 vs1 h1 s1 r1,
       R false (s0, r0) (s1, r1) →
       fns1 !! f = Some fn1 →
-      pp_to_all (i (Incoming, EICall f vs1 h1) s1) (λ '(e', s2) r2, ∀ r2',
+      pp_to_all (i (Incoming, ERCall f vs1 h1) s1) (λ '(e', s2) r2, ∀ r2',
       satisfiable (r1 ∗ r2 ∗ r2') →
-      ∃ vs2 h2 fn2, e' = (Incoming, EICall f vs2 h2) ∧ fns2 !! f = Some fn2 ∧ (
+      ∃ vs2 h2 fn2, e' = (Incoming, ERCall f vs2 h2) ∧ fns2 !! f = Some fn2 ∧ (
         length vs2 = length (fd_args fn2) →
           length vs1 = length (fd_args fn1) ∧ (
       (* Call *)
@@ -1550,40 +1550,40 @@ Lemma imp_prepost_proof {S} {M : ucmra} R `{!∀ b, PreOrder (R b)} i o fns1 fns
          fns2 !! f = None →
          Forall2 (λ e v, e = Val v) es1 vs1' →
          Forall2 (λ e v, e = Val v) es2 vs2' →
-         pp_to_ex (o (Outgoing, EICall f vs2' h2') s3) (λ '(e''', s4) r4, ∃ r4',
-            e''' = (Outgoing, EICall f vs1' h1') ∧ R false (s1, r1) (s4, r4') ∧
+         pp_to_ex (o (Outgoing, ERCall f vs2' h2') s3) (λ '(e''', s4) r4, ∃ r4',
+            e''' = (Outgoing, ERCall f vs1' h1') ∧ R false (s1, r1) (s4, r4') ∧
             satisfiable (r4' ∗ r4 ∗ r3) ∧
            ∀ v1'' h1'' s5 r5, R true (s4, r4') (s5, r5) →
-                   pp_to_all (i (Incoming, EIReturn v1'' h1'') s5) (λ '(e''''', s6) r6, ∀ r6',
+                   pp_to_all (i (Incoming, ERReturn v1'' h1'') s5) (λ '(e''''', s6) r6, ∀ r6',
                      satisfiable (r5 ∗ r6 ∗ r6') →
-            ∃ v2'' h2'', e''''' = (Incoming, EIReturn v2'' h2'') ∧
-          Imp (expr_fill K1' (Val v1'')) h1'' fns1
-              ⪯{imp_module, mod_prepost i o imp_module, n', true}
-          (SMProg, Imp (expr_fill K2' (Val v2'')) h2'' fns2, (PPInside, s6, r6')))) →
+            ∃ v2'' h2'', e''''' = (Incoming, ERReturn v2'' h2'') ∧
+          Rec (expr_fill K1' (Val v1'')) h1'' fns1
+              ⪯{rec_module, mod_prepost i o rec_module, n', true}
+          (SMProg, Rec (expr_fill K2' (Val v2'')) h2'' fns2, (PPInside, s6, r6')))) →
 
-          Imp (expr_fill K1' (Call f es1)) h1' fns1
-              ⪯{imp_module, mod_prepost i o imp_module, n', b}
-          (SMProg, Imp (expr_fill K2' (Call f es2)) h2' fns2, (PPInside, s3, r3))) →
+          Rec (expr_fill K1' (Call f es1)) h1' fns1
+              ⪯{rec_module, mod_prepost i o rec_module, n', b}
+          (SMProg, Rec (expr_fill K2' (Call f es2)) h2' fns2, (PPInside, s3, r3))) →
       (* Return *)
       (∀ n' v1 v2 h1' h2' b s3 r3,
          n' ⊆ n →
-         pp_to_ex (o (Outgoing, EIReturn v2 h2') s3) (λ '(e''', s4) r4, ∃ r4',
-               e''' = (Outgoing, EIReturn v1 h1') ∧ R true (s1, r1) (s4, r4') ∧ satisfiable (r4' ∗ r4 ∗ r3)) →
-          Imp (expr_fill K1 (Val v1)) h1' fns1
-              ⪯{imp_module, mod_prepost i o imp_module, n', b}
-          (SMProg, Imp (expr_fill K2 (Val v2)) h2' fns2, (PPInside, s3, r3))) →
-      Imp (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs1 fn1.(fd_body))) h1 fns1
-          ⪯{imp_module, mod_prepost i o imp_module, n, false}
-          (SMProg, Imp (expr_fill K2 (AllocA fn2.(fd_vars) $  subst_l fn2.(fd_args) vs2 fn2.(fd_body))) h2 fns2, (PPInside, s2, r2')))))) →
-  trefines (MS imp_module (initial_imp_state fns1))
-           (MS (mod_prepost (S:=S) i o imp_module)
-               (SMFilter, initial_imp_state fns2, (PPOutside, s0, r0))).
+         pp_to_ex (o (Outgoing, ERReturn v2 h2') s3) (λ '(e''', s4) r4, ∃ r4',
+               e''' = (Outgoing, ERReturn v1 h1') ∧ R true (s1, r1) (s4, r4') ∧ satisfiable (r4' ∗ r4 ∗ r3)) →
+          Rec (expr_fill K1 (Val v1)) h1' fns1
+              ⪯{rec_module, mod_prepost i o rec_module, n', b}
+          (SMProg, Rec (expr_fill K2 (Val v2)) h2' fns2, (PPInside, s3, r3))) →
+      Rec (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs1 fn1.(fd_body))) h1 fns1
+          ⪯{rec_module, mod_prepost i o rec_module, n, false}
+          (SMProg, Rec (expr_fill K2 (AllocA fn2.(fd_vars) $  subst_l fn2.(fd_args) vs2 fn2.(fd_body))) h2 fns2, (PPInside, s2, r2')))))) →
+  trefines (MS rec_module (initial_rec_state fns1))
+           (MS (mod_prepost (S:=S) i o rec_module)
+               (SMFilter, initial_rec_state fns2, (PPOutside, s0, r0))).
 Proof.
   move => HR Hc.
   apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember_call.
-  { simpl. exact (λ d b '((Imp ei1 hi1 fnsi1), (ips1, Imp es1 hs1 fnss1, (pp1, s1, r1)))
-                    '((Imp ei2 hi2 fnsi2), (ips2, Imp es2 hs2 fnss2, (pp2, s2, r2))),
+  { simpl. exact (λ d b '((Rec ei1 hi1 fnsi1), (ips1, Rec es1 hs1 fnss1, (pp1, s1, r1)))
+                    '((Rec ei2 hi2 fnsi2), (ips2, Rec es2 hs2 fnss2, (pp2, s2, r2))),
     ∃ Ki Ks,
       fnsi2 = fns1 ∧
       fnss2 = fns2 ∧
@@ -1598,8 +1598,8 @@ Proof.
       else
         True
                  ). }
-  { simpl. exact (λ  '(Imp ei1 hi1 fnsi1) '(ips1, Imp es1 hs1 fnss1, (pp1, s1, r1))
-                     '(Imp ei2 hi2 fnsi2) '(ips2, Imp es2 hs2 fnss2, (pp2, s2, r2)),
+  { simpl. exact (λ  '(Rec ei1 hi1 fnsi1) '(ips1, Rec es1 hs1 fnss1, (pp1, s1, r1))
+                     '(Rec ei2 hi2 fnsi2) '(ips2, Rec es2 hs2 fnss2, (pp2, s2, r2)),
     ∃ Ki b v,
       fnsi2 = fnsi1 ∧
       fnss2 = fnss1 ∧
@@ -1608,7 +1608,7 @@ Proof.
       ei2 = expr_fill Ki (Val v) ∧
       ips2 = SMFilter ∧
       hs2 = hs1 ∧
-      pp2 = PPRecv1 (Incoming, EIReturn v hi2) ∧
+      pp2 = PPRecv1 (Incoming, ERReturn v hi2) ∧
       s2 = s1 ∧
       r2 = r1). }
   { move => ??? *. destruct!. repeat case_match; naive_solver. }
@@ -1647,148 +1647,148 @@ Proof.
 Qed.
 (** * closing *)
 (**
-module imp_event:
+module rec_event:
 Incoming, Call f vs h -> Outgoing, Call f' vs' h' → Incoming, Return v h' -> Outgoing, Return v' h''
 
 
-module imp_closed_event:
+module rec_closed_event:
 Start f vs            -> Call f' vs' v                                     -> Return v'
 *)
 
-Inductive imp_closed_event : Type :=
-| EICStart (f : string) (args: list Z)
-| EICCall (f : string) (args: list Z) (ret : Z)
-| EICEnd (ret : val)
+Inductive rec_closed_event : Type :=
+| ERCStart (f : string) (args: list Z)
+| ERCCall (f : string) (args: list Z) (ret : Z)
+| ERCEnd (ret : val)
 .
 
-Inductive imp_closed_state :=
-| ICStart
-| ICRecvStart (f : string) (vs : list Z)
-| ICRunning
-| ICRecvCall1 (f : string) (args : list val) (h : heap_state)
-| ICRecvCall2 (f : string) (args : list Z) (h : heap_state)
-| ICRecvRet (v : Z) (h : heap_state)
-| ICRecvEnd1 (v : val)
-| ICRecvEnd2 (v : Z)
-| ICEnd.
+Inductive rec_closed_state :=
+| RCStart
+| RCRecvStart (f : string) (vs : list Z)
+| RCRunning
+| RCRecvCall1 (f : string) (args : list val) (h : heap_state)
+| RCRecvCall2 (f : string) (args : list Z) (h : heap_state)
+| RCRecvRet (v : Z) (h : heap_state)
+| RCRecvEnd1 (v : val)
+| RCRecvEnd2 (v : Z)
+| RCEnd.
 
-Inductive imp_closed_step :
-  imp_closed_state → option (sm_event imp_event imp_closed_event) → (imp_closed_state → Prop) → Prop :=
-| ICStartS f vs:
-  imp_closed_step ICStart (Some (SMEEmit (EICStart f vs))) (λ σ, σ = ICRecvStart f vs)
-| ICRecvStartS f vs:
-  imp_closed_step (ICRecvStart f vs)
-                  (Some (SMEReturn (Some (Incoming, EICall f (ValNum <$> vs) ∅)))) (λ σ, σ = ICRunning)
-| ICRunningS f vs h:
-  imp_closed_step ICRunning (Some (SMERecv (Outgoing, EICall f vs h))) (λ σ, σ = ICRecvCall1 f vs h)
-| ICRecvCall1S f vs h:
-  imp_closed_step (ICRecvCall1 f vs h) None (λ σ,
-         ∃ vs', vs = ValNum <$> vs' ∧ σ = ICRecvCall2 f vs' h)
-| ICRecvCall2S f vs rv h:
-  imp_closed_step (ICRecvCall2 f vs h)
-                  (Some (SMEEmit (EICCall f vs rv))) (λ σ, σ = ICRecvRet rv h)
-| ICRecvRetS v h:
-  imp_closed_step (ICRecvRet v h)
-                  (Some (SMEReturn (Some (Incoming, EIReturn (ValNum v) h)))) (λ σ, σ = ICRunning)
-| ICRunningEndS v h:
-  imp_closed_step ICRunning (Some (SMERecv (Outgoing, EIReturn v h))) (λ σ, σ = ICRecvEnd1 v)
-| ICRecvEnd1EndS v:
-  imp_closed_step (ICRecvEnd1 v) None (λ σ, ∃ v', v = ValNum v' ∧ σ = ICRecvEnd2 v')
-| ICEndS v:
-  imp_closed_step (ICRecvEnd2 v) (Some (SMEEmit (EICEnd v))) (λ σ, σ = ICEnd)
+Inductive rec_closed_step :
+  rec_closed_state → option (sm_event rec_event rec_closed_event) → (rec_closed_state → Prop) → Prop :=
+| RCStartS f vs:
+  rec_closed_step RCStart (Some (SMEEmit (ERCStart f vs))) (λ σ, σ = RCRecvStart f vs)
+| RCRecvStartS f vs:
+  rec_closed_step (RCRecvStart f vs)
+                  (Some (SMEReturn (Some (Incoming, ERCall f (ValNum <$> vs) ∅)))) (λ σ, σ = RCRunning)
+| RCRunningS f vs h:
+  rec_closed_step RCRunning (Some (SMERecv (Outgoing, ERCall f vs h))) (λ σ, σ = RCRecvCall1 f vs h)
+| RCRecvCall1S f vs h:
+  rec_closed_step (RCRecvCall1 f vs h) None (λ σ,
+         ∃ vs', vs = ValNum <$> vs' ∧ σ = RCRecvCall2 f vs' h)
+| RCRecvCall2S f vs rv h:
+  rec_closed_step (RCRecvCall2 f vs h)
+                  (Some (SMEEmit (ERCCall f vs rv))) (λ σ, σ = RCRecvRet rv h)
+| RCRecvRetS v h:
+  rec_closed_step (RCRecvRet v h)
+                  (Some (SMEReturn (Some (Incoming, ERReturn (ValNum v) h)))) (λ σ, σ = RCRunning)
+| RCRunningEndS v h:
+  rec_closed_step RCRunning (Some (SMERecv (Outgoing, ERReturn v h))) (λ σ, σ = RCRecvEnd1 v)
+| RCRecvEnd1EndS v:
+  rec_closed_step (RCRecvEnd1 v) None (λ σ, ∃ v', v = ValNum v' ∧ σ = RCRecvEnd2 v')
+| RCEndS v:
+  rec_closed_step (RCRecvEnd2 v) (Some (SMEEmit (ERCEnd v))) (λ σ, σ = RCEnd)
 .
 
-Definition imp_closed_filter_module : module (sm_event imp_event imp_closed_event) :=
-  Mod imp_closed_step.
+Definition rec_closed_filter_module : module (sm_event rec_event rec_closed_event) :=
+  Mod rec_closed_step.
 
-Global Instance imp_closed_filter_module_vis_no_all : VisNoAll imp_closed_filter_module.
+Global Instance rec_closed_filter_module_vis_no_all : VisNoAll rec_closed_filter_module.
 Proof. move => ????. inv_all @m_step; naive_solver. Qed.
 
-Definition imp_closed (m : module imp_event) : module imp_closed_event :=
-  mod_seq_map m imp_closed_filter_module.
+Definition rec_closed (m : module rec_event) : module rec_closed_event :=
+  mod_seq_map m rec_closed_filter_module.
 
 (** * Linking *)
 (** ** Syntactic linking *)
-Definition imp_syn_link (fns1 fns2 : gmap string fndef) : gmap string fndef :=
+Definition rec_syn_link (fns1 fns2 : gmap string fndef) : gmap string fndef :=
   fns1 ∪ fns2.
 
-Definition imp_ctx_refines (fnsi fnss : gmap string fndef) :=
-  ∀ C, trefines (MS (imp_closed imp_module) (SMFilter, initial_imp_state (imp_syn_link fnsi C), ICStart))
-                (MS (imp_closed imp_module) (SMFilter, initial_imp_state (imp_syn_link fnss C), ICStart)).
+Definition rec_ctx_refines (fnsi fnss : gmap string fndef) :=
+  ∀ C, trefines (MS (rec_closed rec_module) (SMFilter, initial_rec_state (rec_syn_link fnsi C), RCStart))
+                (MS (rec_closed rec_module) (SMFilter, initial_rec_state (rec_syn_link fnss C), RCStart)).
 
 (** ** Semantic linking *)
-Definition imp_link_filter (fns1 fns2 : gset string) : seq_product_state → list seq_product_state → imp_ev → seq_product_state → list seq_product_state → imp_ev → bool → Prop :=
+Definition rec_link_filter (fns1 fns2 : gset string) : seq_product_state → list seq_product_state → rec_ev → seq_product_state → list seq_product_state → rec_ev → bool → Prop :=
   λ p cs e p' cs' e' ok,
     e' = e ∧
     ok = true ∧
     match e with
-    | EICall f vs h =>
+    | ERCall f vs h =>
         p' = (if bool_decide (f ∈ fns1) then SPLeft else if bool_decide (f ∈ fns2) then SPRight else SPNone) ∧
         (cs' = p::cs) ∧
         p ≠ p'
-    | EIReturn v h =>
+    | ERReturn v h =>
         cs = p'::cs' ∧
         p ≠ p'
     end.
-Arguments imp_link_filter _ _ _ _ _ _ _ _ /.
+Arguments rec_link_filter _ _ _ _ _ _ _ _ /.
 
-Definition imp_link (fns1 fns2 : gset string) (m1 m2 : module imp_event) : module imp_event :=
-  mod_link (imp_link_filter fns1 fns2) m1 m2.
+Definition rec_link (fns1 fns2 : gset string) (m1 m2 : module rec_event) : module rec_event :=
+  mod_link (rec_link_filter fns1 fns2) m1 m2.
 
 (* TODO: use this more *)
-Definition initial_imp_link_state (m1 m2 : module imp_event) (σ1 : m1.(m_state)) (σ2 : m2.(m_state)) :=
-  (@MLFNone imp_ev, @nil seq_product_state, σ1, σ2).
+Definition initial_rec_link_state (m1 m2 : module rec_event) (σ1 : m1.(m_state)) (σ2 : m2.(m_state)) :=
+  (@MLFNone rec_ev, @nil seq_product_state, σ1, σ2).
 
-Lemma imp_link_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
+Lemma rec_link_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
   trefines (MS m1 σ1) (MS m1' σ1') →
   trefines (MS m2 σ2) (MS m2' σ2') →
-  trefines (MS (imp_link ins1 ins2 m1 m2) (σ, σ1, σ2))
-           (MS (imp_link ins1 ins2 m1' m2') (σ, σ1', σ2')).
+  trefines (MS (rec_link ins1 ins2 m1 m2) (σ, σ1, σ2))
+           (MS (rec_link ins1 ins2 m1' m2') (σ, σ1', σ2')).
 Proof. move => ??. by apply mod_link_trefines. Qed.
 
 (** ** Relating semantic and syntactic linking *)
-Inductive imp_link_combine_ectx :
-  nat → bool → bool → mod_link_state imp_ev → list seq_product_state → list expr_ectx → list expr_ectx → list expr_ectx → Prop :=
-| IPCENil:
-  imp_link_combine_ectx 0 false false MLFNone [] [] [] []
-| IPCENoneToLeft n cs K Kl Kr bl br:
-  imp_link_combine_ectx n bl br MLFNone cs K Kl Kr →
-  imp_link_combine_ectx (S n) bl br MLFLeft (SPNone :: cs)
+Inductive rec_link_combine_ectx :
+  nat → bool → bool → mod_link_state rec_ev → list seq_product_state → list expr_ectx → list expr_ectx → list expr_ectx → Prop :=
+| RPCENil:
+  rec_link_combine_ectx 0 false false MLFNone [] [] [] []
+| RPCENoneToLeft n cs K Kl Kr bl br:
+  rec_link_combine_ectx n bl br MLFNone cs K Kl Kr →
+  rec_link_combine_ectx (S n) bl br MLFLeft (SPNone :: cs)
                              (ReturnExtCtx (bl || br)::K) (ReturnExtCtx bl::Kl) Kr
-| IPCENoneToRight n cs K Kl Kr bl br:
-  imp_link_combine_ectx n bl br MLFNone cs K Kl Kr →
-  imp_link_combine_ectx (S n) bl br MLFRight (SPNone :: cs)
+| RPCENoneToRight n cs K Kl Kr bl br:
+  rec_link_combine_ectx n bl br MLFNone cs K Kl Kr →
+  rec_link_combine_ectx (S n) bl br MLFRight (SPNone :: cs)
                              (ReturnExtCtx (bl || br)::K) Kl (ReturnExtCtx br::Kr)
-| IPCELeftToRight n cs K Kl Kl' Kr bl br:
-  imp_link_combine_ectx n bl br MLFLeft cs K Kl Kr →
+| RPCELeftToRight n cs K Kl Kl' Kr bl br:
+  rec_link_combine_ectx n bl br MLFLeft cs K Kl Kr →
   is_static_expr true (expr_fill Kl' (Var "")) →
-  imp_link_combine_ectx (S n) true br MLFRight (SPLeft :: cs)
+  rec_link_combine_ectx (S n) true br MLFRight (SPLeft :: cs)
                              (Kl' ++ K) (Kl' ++ Kl) (ReturnExtCtx br::Kr)
-| IPCELeftToNone n cs K Kl Kl' Kr bl br:
-  imp_link_combine_ectx n bl br MLFLeft cs K Kl Kr →
+| RPCELeftToNone n cs K Kl Kl' Kr bl br:
+  rec_link_combine_ectx n bl br MLFLeft cs K Kl Kr →
   is_static_expr true (expr_fill Kl' (Var "")) →
-  imp_link_combine_ectx (S n) true br MLFNone (SPLeft :: cs)
+  rec_link_combine_ectx (S n) true br MLFNone (SPLeft :: cs)
                              (Kl' ++ K) (Kl' ++ Kl) Kr
-| IPCERightToLeft n cs K Kl Kr' Kr bl br:
-  imp_link_combine_ectx n bl br MLFRight cs K Kl Kr →
+| RPCERightToLeft n cs K Kl Kr' Kr bl br:
+  rec_link_combine_ectx n bl br MLFRight cs K Kl Kr →
   is_static_expr true (expr_fill Kr' (Var "")) →
-  imp_link_combine_ectx (S n) bl true MLFLeft (SPRight :: cs)
+  rec_link_combine_ectx (S n) bl true MLFLeft (SPRight :: cs)
                              (Kr' ++ K) (ReturnExtCtx bl::Kl) (Kr' ++ Kr)
-| IPCERightToNone n cs K Kl Kr' Kr bl br:
-  imp_link_combine_ectx n bl br MLFRight cs K Kl Kr →
+| RPCERightToNone n cs K Kl Kr' Kr bl br:
+  rec_link_combine_ectx n bl br MLFRight cs K Kl Kr →
   is_static_expr true (expr_fill Kr' (Var "")) →
-  imp_link_combine_ectx (S n) bl true MLFNone (SPRight :: cs)
+  rec_link_combine_ectx (S n) bl true MLFNone (SPRight :: cs)
                              (Kr' ++ K) Kl (Kr' ++ Kr)
 .
 
-Definition imp_link_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : imp_module.(m_state)) (σ2 : mod_link_state imp_ev * list seq_product_state * imp_state * imp_state) : Prop :=
-  let 'Imp e1 h1 fns1' := σ1 in
-  let '(σf, cs, Imp el hl fnsl, Imp er hr fnsr) := σ2 in
+Definition rec_link_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : rec_module.(m_state)) (σ2 : mod_link_state rec_ev * list seq_product_state * rec_state * rec_state) : Prop :=
+  let 'Rec e1 h1 fns1' := σ1 in
+  let '(σf, cs, Rec el hl fnsl, Rec er hr fnsr) := σ2 in
   ∃ n K Kl Kr e1' el' er' bl br,
   fns1' = fns1 ∪ fns2 ∧
   fnsl = fns1 ∧
   fnsr = fns2 ∧
-  imp_link_combine_ectx n bl br σf cs K Kl Kr ∧
+  rec_link_combine_ectx n bl br σf cs K Kl Kr ∧
   e1 = expr_fill K e1' ∧
   el = expr_fill Kl el' ∧
   er = expr_fill Kr er' ∧
@@ -1802,20 +1802,20 @@ Definition imp_link_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : imp_m
   end.
 
 
-Lemma imp_syn_link_refines_link fns1 fns2:
+Lemma rec_syn_link_refines_link fns1 fns2:
   fns1 ##ₘ fns2 →
-  trefines (MS imp_module (initial_imp_state (imp_syn_link fns1 fns2)))
-           (MS (imp_link (dom fns1) (dom fns2) imp_module imp_module)
-               (initial_imp_link_state imp_module imp_module (initial_imp_state fns1) (initial_imp_state fns2))).
+  trefines (MS rec_module (initial_rec_state (rec_syn_link fns1 fns2)))
+           (MS (rec_link (dom fns1) (dom fns2) rec_module rec_module)
+               (initial_rec_link_state rec_module rec_module (initial_rec_state fns1) (initial_rec_state fns2))).
 Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
-  unshelve apply: tsim_remember. { exact: (λ _, imp_link_inv true fns1 fns2). }
+  unshelve apply: tsim_remember. { exact: (λ _, rec_link_inv true fns1 fns2). }
   { split!. 1: by econs. all: done. } { done. }
   move => /= {}n _ Hloop [e1 h1 fns1'] [[[ipfs cs] [el hl fnsl]] [er hr fnsr]] [m [K [Kl [Kr ?]]]].
   have {}Hloop : ∀ σi σs,
-            imp_link_inv false fns1 fns2 σi σs
-            → σi ⪯{imp_module, imp_link (dom fns1) (dom fns2) imp_module imp_module, n, true} σs. {
+            rec_link_inv false fns1 fns2 σi σs
+            → σi ⪯{rec_module, rec_link (dom fns1) (dom fns2) rec_module rec_module, n, true} σs. {
     clear -Hloop. move => [e1 h1 fns1'] [[[ipfs cs] [el hl fnsl]] [er hr fnsr]].
     move => [m [K [Kl [Kr [e1' [el' [er' [bl [br [?[?[?[HK[?[?[? Hm]]]]]]]]]]]]]]]]; simplify_eq.
     elim/lt_wf_ind: m ipfs h1 hl hr cs K Kl Kr e1' el' er' bl br HK Hm => m IHm.
@@ -1909,40 +1909,40 @@ Proof.
   - tstep_i. split.
     + move => f fn vs h' /lookup_union_Some_raw[?|[??]].
       * have ?: fns2 !! f = None by apply: map_disjoint_Some_l.
-        tstep_s. eexists (EICall _ _ _) => /=. simpl. simpl_map_decide. split!.
+        tstep_s. eexists (ERCall _ _ _) => /=. simpl. simpl_map_decide. split!.
         tstep_s. split!.
         apply Hloop. split!; [by econs|done..| ]. apply is_static_expr_forallb.
-      * tstep_s. eexists (EICall _ _ _) => /=. simpl. simpl_map_decide. split!.
+      * tstep_s. eexists (ERCall _ _ _) => /=. simpl. simpl_map_decide. split!.
         tstep_s. split!.
         apply Hloop. split!; [by econs|done..| ]. apply is_static_expr_forallb.
     + move => v h' ?.
-      revert select (imp_link_combine_ectx _ _ _ _ _ _ _ _) => HK.
+      revert select (rec_link_combine_ectx _ _ _ _ _ _ _ _) => HK.
       inversion HK; clear HK; simplify_eq/= => //.
-      * tstep_s. eexists (EIReturn _ _) => /=. split!.
+      * tstep_s. eexists (ERReturn _ _) => /=. split!.
         tstep_s. split!.
         apply Hloop. rewrite !expr_fill_app. split!; [done..|].
         by apply is_static_expr_expr_fill.
-      * tstep_s. eexists (EIReturn _ _) => /=. split!.
+      * tstep_s. eexists (ERReturn _ _) => /=. split!.
         tstep_s. split!.
         apply Hloop. rewrite !expr_fill_app. split!; [done..|].
         by apply is_static_expr_expr_fill.
 Qed.
 
-Lemma imp_link_refines_syn_link fns1 fns2:
+Lemma rec_link_refines_syn_link fns1 fns2:
   fns1 ##ₘ fns2 →
-  trefines (MS (imp_link (dom fns1) (dom fns2) imp_module imp_module)
-               (initial_imp_link_state imp_module imp_module (initial_imp_state fns1) (initial_imp_state fns2)))
-           (MS imp_module (initial_imp_state (imp_syn_link fns1 fns2))).
+  trefines (MS (rec_link (dom fns1) (dom fns2) rec_module rec_module)
+               (initial_rec_link_state rec_module rec_module (initial_rec_state fns1) (initial_rec_state fns2)))
+           (MS rec_module (initial_rec_state (rec_syn_link fns1 fns2))).
 Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
-  unshelve apply: tsim_remember. { exact: (λ _, flip (imp_link_inv false fns1 fns2)). }
+  unshelve apply: tsim_remember. { exact: (λ _, flip (rec_link_inv false fns1 fns2)). }
   { split!. 1: by econs. all: done. } { done. }
   move => /= {}n _ Hloop [[[ipfs cs] [el hl fnsl]] [er hr fnsr]] [e1 h1 fns1'] [m [K [Kl [Kr ?]]]].
   destruct!/=. case_match; destruct!.
   - destruct (to_val el') eqn:?.
     + destruct el'; simplify_eq/=.
-      revert select (imp_link_combine_ectx _ _ _ _ _ _ _ _) => HK.
+      revert select (rec_link_combine_ectx _ _ _ _ _ _ _ _) => HK.
       inversion HK; clear HK; simplify_eq/=.
       * tstep_i => *; destruct!. tstep_s. split!.
         apply: Hloop; [done|]. by split!.
@@ -1986,7 +1986,7 @@ Proof.
            tend. split!. apply: Hloop; [done|]. split!; [by econs|done..].
   - destruct (to_val er') eqn:?.
     + destruct er'; simplify_eq/=.
-      revert select (imp_link_combine_ectx _ _ _ _ _ _ _ _) => HK. inv/= HK.
+      revert select (rec_link_combine_ectx _ _ _ _ _ _ _ _) => HK. inv/= HK.
       * tstep_i => *; destruct!. tstep_s. split!.
         apply: Hloop; [done|]. by split!.
       * tstep_i => *; destruct!/=.
@@ -2028,7 +2028,7 @@ Proof.
         -- tstep_s. right. split!; [apply lookup_union_None;split!;by apply not_elem_of_dom|done|].
            tend. split!. apply: Hloop; [done|]. split!; [by econs|rewrite ?orb_true_r; done..].
   - tstep_i => *.
-    repeat match goal with | x : imp_ev |- _ => destruct x end; simplify_eq/=; destruct!/=.
+    repeat match goal with | x : rec_ev |- _ => destruct x end; simplify_eq/=; destruct!/=.
     + tstep_s. left. repeat case_bool_decide => //.
       all: revert select (_ ∈ dom _) => /elem_of_dom[??]; split!;
                [rewrite lookup_union_Some //; naive_solver |].
@@ -2037,7 +2037,7 @@ Proof.
       * tstep_i. split => *; destruct!/=.
         apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_forallb.
     + tstep_s. right.
-      revert select (imp_link_combine_ectx _ _ _ _ _ _ _ _) => HK.
+      revert select (rec_link_combine_ectx _ _ _ _ _ _ _ _) => HK.
       inversion HK; clear HK; simplify_eq; rewrite ?orb_true_r.
       * split!. tstep_i. split => *; destruct!/=.
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done|done..|].
@@ -2047,17 +2047,17 @@ Proof.
         by apply is_static_expr_expr_fill.
 Qed.
 
-Lemma imp_trefines_implies_ctx_refines fnsi fnss :
+Lemma rec_trefines_implies_ctx_refines fnsi fnss :
   dom fnsi = dom fnss →
-  trefines (MS imp_module (initial_imp_state fnsi)) (MS imp_module (initial_imp_state fnss)) →
-  imp_ctx_refines fnsi fnss.
+  trefines (MS rec_module (initial_rec_state fnsi)) (MS rec_module (initial_rec_state fnss)) →
+  rec_ctx_refines fnsi fnss.
 Proof.
-  move => Hdom Href C. rewrite /imp_syn_link map_difference_union_r (map_difference_union_r fnss).
+  move => Hdom Href C. rewrite /rec_syn_link map_difference_union_r (map_difference_union_r fnss).
   apply mod_seq_map_trefines. { apply _. } { apply _. }
-  etrans. { apply imp_syn_link_refines_link. apply map_disjoint_difference_r'. }
-  etrans. 2: { apply imp_link_refines_syn_link. apply map_disjoint_difference_r'. }
+  etrans. { apply rec_syn_link_refines_link. apply map_disjoint_difference_r'. }
+  etrans. 2: { apply rec_link_refines_syn_link. apply map_disjoint_difference_r'. }
   rewrite !dom_difference_L Hdom.
-  apply imp_link_trefines; [apply _..| |].
+  apply rec_link_trefines; [apply _..| |].
   - apply: Href.
   - erewrite map_difference_eq_dom_L => //. apply _.
 Qed.
@@ -2065,22 +2065,22 @@ Qed.
 (** ** Commuting and associativity of semantic linking (WIP) *)
 (*
 (* TODO: track a stack of this and compute every thing from it (also keep an optional event) *)
-Inductive imp_prod_assoc_state :=
+Inductive rec_prod_assoc_state :=
 | IPA1 | IPA2 | IPA3 | IPANone.
 
-(* Inductive imp_prod_assoc_stack (m1 m2 m3 : module imp_event) : *)
-(*   mod_link_state imp_ev → list seq_product_state → mod_link_state imp_ev → list seq_product_state → *)
-(*   mod_link_state imp_ev → list seq_product_state → mod_link_state imp_ev → list seq_product_state → Prop := *)
+(* Inductive rec_prod_assoc_stack (m1 m2 m3 : module rec_event) : *)
+(*   mod_link_state rec_ev → list seq_product_state → mod_link_state rec_ev → list seq_product_state → *)
+(*   mod_link_state rec_ev → list seq_product_state → mod_link_state rec_ev → list seq_product_state → Prop := *)
 (* | IPASNil : *)
-(*   imp_prod_assoc_stack m1 m2 m3 MLFNone [] MLFNone [] MLFNone [] MLFNone [] *)
+(*   rec_prod_assoc_stack m1 m2 m3 MLFNone [] MLFNone [] MLFNone [] MLFNone [] *)
 (* | IPASNil : *)
-(*   imp_prod_assoc_stack m1 m2 m3 MLFNone [] MLFNone [] MLFNone [] MLFNone [] *)
+(*   rec_prod_assoc_stack m1 m2 m3 MLFNone [] MLFNone [] MLFNone [] MLFNone [] *)
 (* . *)
 
-Definition imp_prod_assoc_inv (fns1 fns2 fns3 : gset string) (m1 m2 m3 : module imp_event)
-  (σ1 : mod_link_state imp_ev * list seq_product_state * m1.(m_state) *
-          (mod_link_state imp_ev * list seq_product_state * m2.(m_state) * m3.(m_state)))
-  (σ2 : mod_link_state imp_ev * list seq_product_state * (mod_link_state imp_ev * list seq_product_state * m1.(m_state) * m2.(m_state)) * m3.(m_state)) : Prop :=
+Definition rec_prod_assoc_inv (fns1 fns2 fns3 : gset string) (m1 m2 m3 : module rec_event)
+  (σ1 : mod_link_state rec_ev * list seq_product_state * m1.(m_state) *
+          (mod_link_state rec_ev * list seq_product_state * m2.(m_state) * m3.(m_state)))
+  (σ2 : mod_link_state rec_ev * list seq_product_state * (mod_link_state rec_ev * list seq_product_state * m1.(m_state) * m2.(m_state)) * m3.(m_state)) : Prop :=
   let '(σfi1, csi1, σi1, (σfi2, csi2, σi2, σi3)) := σ1 in
   let '(σfs1, css1, (σfs2, css2, σs1, σs2), σs3) := σ2 in
   ∃ ipacur,
@@ -2093,25 +2093,25 @@ Definition imp_prod_assoc_inv (fns1 fns2 fns3 : gset string) (m1 m2 m3 : module 
   | IPA3 => False
   | IPANone => σfi1 = MLFNone ∧ σfi2 = MLFNone ∧ σfs1 = MLFNone ∧ σfs2 = MLFNone
   end.
-  (* imp_prod_assoc_stack m1 m2 m3 σfi1 csi1 σfi2 csi2 σfs1 css1 σfs2 css2. *)
+  (* rec_prod_assoc_stack m1 m2 m3 σfi1 csi1 σfi2 csi2 σfs1 css1 σfs2 css2. *)
 
 
-Lemma imp_prod_assoc1 fns1 fns2 fns3 m1 m2 m3 σ1 σ2 σ3:
+Lemma rec_prod_assoc1 fns1 fns2 fns3 m1 m2 m3 σ1 σ2 σ3:
   fns1 ## fns2 →
-  trefines (MS (imp_link fns1 (fns2 ∪ fns3) m1 (imp_link fns2 fns3 m2 m3))
-              (initial_imp_link_state m1 (imp_link _ _ m2 m3) σ1
-                  (initial_imp_link_state m2 m3 σ2 σ3)))
-           (MS (imp_link (fns1 ∪ fns2) fns3 (imp_link fns1 fns2 m1 m2) m3)
-               (initial_imp_link_state (imp_link _ _ m1 m2) m3
-                  (initial_imp_link_state m1 m2 σ1 σ2) σ3)
+  trefines (MS (rec_link fns1 (fns2 ∪ fns3) m1 (rec_link fns2 fns3 m2 m3))
+              (initial_rec_link_state m1 (rec_link _ _ m2 m3) σ1
+                  (initial_rec_link_state m2 m3 σ2 σ3)))
+           (MS (rec_link (fns1 ∪ fns2) fns3 (rec_link fns1 fns2 m1 m2) m3)
+               (initial_rec_link_state (rec_link _ _ m1 m2) m3
+                  (initial_rec_link_state m1 m2 σ1 σ2) σ3)
            ).
 Proof.
   move => Hdisj12.
   apply tsim_implies_trefines => n /=.
-  unshelve apply: tsim_remember. { exact: (λ _, imp_prod_assoc_inv fns1 fns2 fns3 m1 m2 m3). }
+  unshelve apply: tsim_remember. { exact: (λ _, rec_prod_assoc_inv fns1 fns2 fns3 m1 m2 m3). }
   { eexists IPANone. split!. } { done. }
   move => ?? IH [[[??]?][[[??]?]?]] [[[??][[[??]?]?]]?] /= ?. destruct!.
-  (* revert select (imp_prod_assoc_stack _ _ _ _ _ _ _ _ _ _ _) => Hstack. inversion Hstack; simplify_eq. *)
+  (* revert select (rec_prod_assoc_stack _ _ _ _ _ _ _ _ _ _ _) => Hstack. inversion Hstack; simplify_eq. *)
   case_match; destruct!.
   tstep_i => *. case_match; destruct!.
   tstep_s. split!; [repeat case_bool_decide; set_solver|].

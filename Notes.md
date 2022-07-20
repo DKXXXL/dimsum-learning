@@ -1,16 +1,14 @@
 # TODOs
 
 Cleanup:
-- [ ] use gset in definition of heap_state
 - [ ] make combinators define mod_state instead of initial state
   - [ ] Rename mod_state? Rename module?
-- [ ] clean up disabled warnings in _CoqProject
-- [ ] Use notation for trefines?
-- [ ] Make ImmediateOp and RegisterOp coercions
-- [ ] Update itree? (leads to universe problem)
 - [ ] rename imp to rec
+- [ ] update README
+- [ ] Use notation for trefines?
 
 Optional:
+- [ ] Update itree? (leads to universe problem)
 - [ ] Add ghost state for f2i and add values of f2i to initial ownership (one persistent map)
 - [ ] Add fnptrs to imp (should be easy when one has ghost state for f2i)
 - [ ] Make receiving calls for non-existent functions / instructions UB instead of NB

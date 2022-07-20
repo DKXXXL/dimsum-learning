@@ -1,6 +1,6 @@
 From dimsum.core Require Export proof_techniques.
 From dimsum.core Require Import itree.
-From dimsum.examples Require Import imp asm imp_to_asm.
+From dimsum.examples Require Import rec asm rec_to_asm.
 From dimsum.examples.compiler Require Import compiler.
 
 Local Open Scope Z_scope.
@@ -25,16 +25,16 @@ Definition int_to_ptr_fns : gset string :=
 Definition int_to_ptr_f2i : gmap string Z :=
   <["cast_int_to_ptr" := 400]> $ <["cast_ptr_to_int" := 401]> $ ∅.
 
-Definition int_to_ptr_itree : itree (moduleE imp_event (gmap prov Z)) unit :=
+Definition int_to_ptr_itree : itree (moduleE rec_event (gmap prov Z)) unit :=
   ITree.forever (
-      '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, EICall f vs h));;;
+      '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));;;
       if bool_decide (f = "cast_int_to_ptr") then
         z ← TAll Z;;;
         TAssume (vs = [ValNum z]);;;;
         l ← TAll loc;;;
         ps ← TGet;;;
         TAssume (ps !! l.1 = Some (z - l.2));;;;
-        TVis (Outgoing, EIReturn (ValLoc l) h)
+        TVis (Outgoing, ERReturn (ValLoc l) h)
       else if bool_decide (f = "cast_ptr_to_int") then
         l ← TAll loc;;;
         TAssume (vs = [ValLoc l]);;;;
@@ -42,7 +42,7 @@ Definition int_to_ptr_itree : itree (moduleE imp_event (gmap prov Z)) unit :=
         ps ← TGet;;;
         let ps' := <[l.1 := (default z (ps !! l.1))]> ps in
         TPut ps';;;;
-        TVis (Outgoing, EIReturn (ValNum (ps' !!! l.1 + l.2)) h)
+        TVis (Outgoing, ERReturn (ValNum (ps' !!! l.1 + l.2)) h)
       else
         TNb).
 
@@ -78,24 +78,24 @@ Local Ltac go_i :=
 (*
   asm_module(int_to_ptr_asm) {asm_event}
     <= {asm_event}
-  imp_to_asm(itree_module(int_to_ptr_itree {imp_event}) {imp_event}) {asm_event}
+  rec_to_asm(itree_module(int_to_ptr_itree {rec_event}) {rec_event}) {asm_event}
 *)
 
 Lemma int_to_ptr_asm_refines_itree :
   trefines (MS asm_module (initial_asm_state int_to_ptr_asm))
-           (MS (imp_to_asm (dom int_to_ptr_asm) int_to_ptr_fns int_to_ptr_f2i
-                           (mod_itree imp_event (gmap prov Z)))
-               (initial_imp_to_asm_state ∅ (mod_itree _ _) (int_to_ptr_itree, ∅))).
+           (MS (rec_to_asm (dom int_to_ptr_asm) int_to_ptr_fns int_to_ptr_f2i
+                           (mod_itree rec_event (gmap prov Z)))
+               (initial_rec_to_asm_state ∅ (mod_itree _ _) (int_to_ptr_itree, ∅))).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
-  unshelve eapply tsim_remember. { simpl. exact (λ _ σa '(σf, (t, ps), (pp, σi2a, P)),
+  unshelve eapply tsim_remember. { simpl. exact (λ _ σa '(σf, (t, ps), (pp, σr2a, P)),
     t ≈ int_to_ptr_itree ∧
     σa.(asm_cur_instr) = AWaiting ∧
     σa.(asm_instrs) = int_to_ptr_asm ∧
-    σi2a.(i2a_calls) = [] ∧
+    σr2a.(r2a_calls) = [] ∧
     σf = SMFilter ∧
     pp = PPOutside ∧
-    (P ⊢ [∗ map] p↦z∈ps, i2a_heap_shared p z)). }
+    (P ⊢ [∗ map] p↦z∈ps, r2a_heap_shared p z)). }
   { split!. iIntros!. by rewrite big_sepM_empty. } { done. }
   move => n _ Hloop [????] [[?[? ps]][[??]?]] ?. destruct!/=.
   tstep_i => ????? Hi. tstep_s. split!.
@@ -112,15 +112,15 @@ Proof.
     go_s => ?. go.
     go_s. go_s => ?. go.
     iSatStart. iIntros!.
-    iDestruct (i2a_args_intro with "[$]") as "?"; [done|].
-    rewrite i2a_args_cons ?i2a_args_nil; [|done]. iDestruct!.
+    iDestruct (r2a_args_intro with "[$]") as "?"; [done|].
+    rewrite r2a_args_cons ?r2a_args_nil; [|done]. iDestruct!.
     iDestruct (HP with "[$]") as "HP".
     iDestruct (big_sepM_lookup with "HP") as "#?"; [done|].
     iSatStop.
     tstep_i => ??. simplify_map_eq'.
     go_s. go_s. split!.
     { by simplify_map_eq'. }
-    { instantiate (1:=[_]). unfold i2a_regs_ret; split!; simplify_map_eq'; split!.
+    { instantiate (1:=[_]). unfold r2a_regs_ret; split!; simplify_map_eq'; split!.
       - apply map_preserved_insert_r_not_in; [|done]. compute_done.
     }
     { apply map_scramble_insert_r_in; [compute_done|done]. }
@@ -131,21 +131,21 @@ Proof.
     go_s => l. go.
     go_s => ?. go.
     iSatStart. iIntros!.
-    iDestruct (i2a_args_intro with "[$]") as "?"; [done|].
-    rewrite i2a_args_cons ?i2a_args_nil; [|done]. iDestruct!.
+    iDestruct (r2a_args_intro with "[$]") as "?"; [done|].
+    rewrite r2a_args_cons ?r2a_args_nil; [|done]. iDestruct!.
     iDestruct (HP with "[$]") as "HP".
     iAssert ⌜z = default z (ps !! l.1)⌝%I as %Hz.
     { destruct (ps !! l.1) as [z'|] eqn:Hp => //=.
       iDestruct (big_sepM_lookup with "HP") as "?"; [done|].
       iAssert ⌜z' = z⌝%I as %?; [|done].
-      by iApply (i2a_heap_shared_ag with "[$]"). }
+      by iApply (r2a_heap_shared_ag with "[$]"). }
     iSatStop.
     go_s. eexists z. go.
     go_s. go_s. go_s.
     tstep_i => ??. simplify_map_eq'.
     go_s. split!.
     { by simplify_map_eq'. }
-    { instantiate (1:=[_]). unfold i2a_regs_ret; split!; simplify_map_eq'; split!.
+    { instantiate (1:=[_]). unfold r2a_regs_ret; split!; simplify_map_eq'; split!.
       - apply map_preserved_insert_r_not_in; [|done]. compute_done.
     }
     { apply map_scramble_insert_r_in; [compute_done|done]. }
@@ -171,38 +171,38 @@ void main () {
 
 *)
 
-Definition main_imp : fndef := {|
+Definition main_rec : fndef := {|
   fd_args := [];
   fd_vars := [("l", 1)];
   fd_body := LetE "_" (Store (Var "l") (Val 1)) $
-             LetE "z" (imp.Call "cast_ptr_to_int" [(Var "l")]) $
+             LetE "z" (rec.Call "cast_ptr_to_int" [(Var "l")]) $
              LetE "z'" (BinOp (BinOp (Var "z") AddOp (Val (-1))) AddOp (Val 1)) $
-             LetE "l'" (imp.Call "cast_int_to_ptr" [(Var "z")]) $
-             imp.Call "exit" [(Load (Var "l'"))];
+             LetE "l'" (rec.Call "cast_int_to_ptr" [(Var "z")]) $
+             rec.Call "exit" [(Load (Var "l'"))];
   fd_static := I
 |}.
 
-Definition main_imp_prog : gmap string fndef :=
-  <[ "main" := main_imp ]> ∅.
+Definition main_rec_prog : gmap string fndef :=
+  <[ "main" := main_rec ]> ∅.
 
-Definition main_itree : itree (moduleE imp_event unit) unit :=
-  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, EICall f vs h));;;
+Definition main_itree : itree (moduleE rec_event unit) unit :=
+  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));;;
   TAssume (f = "main");;;;
   TAssume (vs = []);;;;
   h' ← TExist (heap_state);;;
-  TVis (Outgoing, EICall "exit" [ValNum 1] h');;;;
+  TVis (Outgoing, ERCall "exit" [ValNum 1] h');;;;
   TUb.
 
 (*
-  imp_module(main_imp) {imp_event} +imp itree_module(int_to_ptr_itree {imp_event}) {imp_event}
-      <= {imp_event}
-  itree_module(main_itree {imp_event}) {imp_event}
+  rec_module(main_rec) {rec_event} +rec itree_module(int_to_ptr_itree {rec_event}) {rec_event}
+      <= {rec_event}
+  itree_module(main_itree {rec_event}) {rec_event}
 *)
 
 Lemma main_int_to_ptr_refines_itree :
-  trefines (MS (imp_link (dom main_imp_prog) int_to_ptr_fns
-                         imp_module (mod_itree _ _))
-               (initial_imp_link_state imp_module (mod_itree _ _) (initial_imp_state main_imp_prog) (int_to_ptr_itree, ∅)))
+  trefines (MS (rec_link (dom main_rec_prog) int_to_ptr_fns
+                         rec_module (mod_itree _ _))
+               (initial_rec_link_state rec_module (mod_itree _ _) (initial_rec_state main_rec_prog) (int_to_ptr_itree, ∅)))
            (MS (mod_itree _ _) (main_itree, tt)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
@@ -211,7 +211,7 @@ Proof.
   go_s => ?. go. go_s => ?. go. simplify_eq. rewrite bool_decide_true; [|compute_done].
   tstep_i. split! => ???? Hf ?. simplify_eq.
   change (@nil expr) with (Val <$> []).
-  tstep_i. split!. move => ??. simplify_eq. unfold main_imp_prog in Hf. simplify_map_eq. split!.
+  tstep_i. split!. move => ??. simplify_eq. unfold main_rec_prog in Hf. simplify_map_eq. split!.
   tstep_i => ???. destruct!. split!. { repeat econs. }
   tstep_i. split. { apply heap_alive_alloc; [done|lia]. }
   tstep_i. change ([Val (ValLoc l)]) with (Val <$> [ValLoc l]).
@@ -257,7 +257,7 @@ Qed.
 Definition main_f2i : gmap string Z := <["main" := 200]> $ <["exit" := 100]> int_to_ptr_f2i .
 
 Definition main_asm : gmap Z asm_instr :=
-  deep_to_asm_instrs 200 ltac:(i2a_compile main_f2i main_imp).
+  deep_to_asm_instrs 200 ltac:(r2a_compile main_f2i main_rec).
 
 (* We need to lock this, otherwise simpl goes crazy. *)
 Definition main_asm_dom : gset Z := locked dom main_asm.
@@ -265,13 +265,13 @@ Definition main_asm_dom : gset Z := locked dom main_asm.
 (*
   asm_module(main_asm) {asm_event}
     <= {asm_event}
-  imp_to_asm(imp_module(main_imp) {imp_event}) {asm_event}
+  rec_to_asm(rec_module(main_rec) {rec_event}) {asm_event}
 *)
 
-Lemma main_asm_refines_imp :
+Lemma main_asm_refines_rec :
   trefines (MS asm_module (initial_asm_state main_asm))
-           (MS (imp_to_asm (dom main_asm) {["main"]} main_f2i imp_module)
-               (initial_imp_to_asm_state ∅ imp_module (initial_imp_state main_imp_prog))).
+           (MS (rec_to_asm (dom main_asm) {["main"]} main_f2i rec_module)
+               (initial_rec_to_asm_state ∅ rec_module (initial_rec_state main_rec_prog))).
 Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
 
 (* https://thog.github.io/syscalls-table-aarch64/latest.html *)
@@ -354,7 +354,7 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
   TAssume (rs !!! "PC" = 200);;;;
   TAssume (rs !!! "R30" ∉ main_asm_dom ∪ dom int_to_ptr_asm);;;;
-  TAssume (∃ ssz, i2a_mem_stack_mem (rs !!! "SP") ssz ⊆ mem);;;;
+  TAssume (∃ ssz, r2a_mem_stack_mem (rs !!! "SP") ssz ⊆ mem);;;;
   args ← TExist _;;;
   mem ← TExist _;;;
   TAssert (length args = length syscall_arg_regs);;;;
@@ -365,7 +365,7 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   TNb.
 
 (*
-   imp_to_asm(itree_module(main_itree {imp_event}) {imp_event}) {asm_event}
+   rec_to_asm(itree_module(main_itree {rec_event}) {rec_event}) {asm_event}
     +asm
    itree_module(exit_itree {asm_event}) {asm_event}
       <= {asm_event}
@@ -374,11 +374,11 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
 
 Lemma top_level_refines_itree :
   trefines (MS (asm_link (main_asm_dom ∪ dom int_to_ptr_asm) (dom exit_asm)
-                         (imp_to_asm (main_asm_dom ∪ dom int_to_ptr_asm)
-                                     (dom main_imp_prog ∪ int_to_ptr_fns)
+                         (rec_to_asm (main_asm_dom ∪ dom int_to_ptr_asm)
+                                     (dom main_rec_prog ∪ int_to_ptr_fns)
                                      main_f2i
                                      (mod_itree _ _)) (mod_itree _ _))
-               (initial_asm_link_state (imp_to_asm _ _ _ _) (mod_itree _ _) (initial_imp_to_asm_state ∅ (mod_itree _ _) (main_itree, tt)) (exit_itree, tt)))
+               (initial_asm_link_state (rec_to_asm _ _ _ _) (mod_itree _ _) (initial_rec_to_asm_state ∅ (mod_itree _ _) (main_itree, tt)) (exit_itree, tt)))
            (MS (mod_itree _ _) (top_level_itree, tt)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
@@ -393,9 +393,9 @@ Proof.
   go_i. eexists true => /=. split; [done|]. eexists ∅, _, [], [], "main".
   split!.
   { by simplify_map_eq'. }
-  { apply: satisfiable_mono; [by eapply (i2a_res_init mem)|].
-    iIntros!. rewrite /i2a_mem_map big_sepM_empty. iFrame. iSplitL; [|iAccu].
-    iApply i2a_mem_stack_init. by iApply big_sepM_subseteq. }
+  { apply: satisfiable_mono; [by eapply (r2a_res_init mem)|].
+    iIntros!. rewrite /r2a_mem_map big_sepM_empty. iFrame. iSplitL; [|iAccu].
+    iApply r2a_mem_stack_init. by iApply big_sepM_subseteq. }
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
@@ -427,8 +427,8 @@ Proof.
   go_i => *. done.
   Unshelve.
   - done.
-  - iSatStart. iIntros!. iDestruct (i2a_args_intro with "[$]") as "?"; [done|].
-    rewrite i2a_args_cons; [|done]. iDestruct!. iSatStop. by simplify_map_eq'.
+  - iSatStart. iIntros!. iDestruct (r2a_args_intro with "[$]") as "?"; [done|].
+    rewrite r2a_args_cons; [|done]. iDestruct!. iSatStop. by simplify_map_eq'.
   - done.
 Qed.
 
@@ -452,14 +452,14 @@ Proof.
       }
       etrans. {
         apply: asm_link_trefines.
-        - apply main_asm_refines_imp.
+        - apply main_asm_refines_rec.
         - apply int_to_ptr_asm_refines_itree.
       }
       etrans. {
-        apply: imp_to_asm_combine; compute_done.
+        apply: rec_to_asm_combine; compute_done.
       }
       etrans. {
-        apply: imp_to_asm_trefines.
+        apply: rec_to_asm_trefines.
         apply main_int_to_ptr_refines_itree.
       }
       have -> : (main_f2i ∪ int_to_ptr_f2i) = main_f2i by compute_done.

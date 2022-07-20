@@ -1,9 +1,9 @@
 From dimsum.core Require Export proof_techniques.
-From dimsum.examples Require Import imp asm imp_to_asm.
+From dimsum.examples Require Import rec asm rec_to_asm.
 
 Local Open Scope Z_scope.
 
-(** * Some examples for testing [imp_to_asm] *)
+(** * Some examples for testing [rec_to_asm] *)
 
 Definition asm_add : gmap Z asm_instr :=
   <[ 100 := [
@@ -16,15 +16,15 @@ Definition asm_add : gmap Z asm_instr :=
         WriteReg "PC" (λ rs, rs !!! "R30")
     ] ]> $ ∅.
 
-Definition imp_add : fndef := {|
+Definition rec_add : fndef := {|
   fd_args := ["a"; "b"];
   fd_vars := [];
   fd_body := (BinOp (Var "a") AddOp (Var "b"));
   fd_static := I
 |}.
 
-Definition imp_add_prog : gmap string fndef :=
-  <[ "add" := imp_add ]> ∅.
+Definition rec_add_prog : gmap string fndef :=
+  <[ "add" := rec_add ]> ∅.
 
 Definition asm_add_client : gmap Z asm_instr :=
   <[ 200 := [
@@ -59,39 +59,39 @@ Definition asm_add_client : gmap Z asm_instr :=
         WriteReg "PC" (λ rs, rs !!! "R30")
     ] ]> $ ∅.
 
-Definition imp_add_client : fndef := {|
+Definition rec_add_client : fndef := {|
   fd_args := [];
   fd_vars := [("tmp", 1)];
   fd_body := (LetE "_" (Store (Var "tmp") (Val 1))
              (LetE "v" (Load (Var "tmp"))
-             (imp.Call "add" [Val 1; Var "v"])));
+             (rec.Call "add" [Val 1; Var "v"])));
   fd_static := I
 |}.
 
-Definition imp_add_client_prog : gmap string fndef :=
-  <[ "add_client" := imp_add_client ]> ∅.
+Definition rec_add_client_prog : gmap string fndef :=
+  <[ "add_client" := rec_add_client ]> ∅.
 
 Definition full_asm_add : gmap Z asm_instr :=
   asm_add ∪ asm_add_client.
 
-Definition full_imp_add_prog : gmap string fndef :=
-  imp_add_prog ∪ imp_add_client_prog.
+Definition full_rec_add_prog : gmap string fndef :=
+  rec_add_prog ∪ rec_add_client_prog.
 
 Local Ltac go := destruct!/=.
 Local Ltac go_i := tstep_i; go.
 Local Ltac go_s := tstep_s; go.
 
 
-Lemma asm_add_refines_imp_add :
+Lemma asm_add_refines_rec_add :
   trefines (MS asm_module (initial_asm_state asm_add))
-           (MS (imp_to_asm (dom asm_add) (dom imp_add_prog) (<["add" := 100]> ∅) imp_module) (initial_imp_to_asm_state ∅ imp_module (initial_imp_state imp_add_prog))).
+           (MS (rec_to_asm (dom asm_add) (dom rec_add_prog) (<["add" := 100]> ∅) rec_module) (initial_rec_to_asm_state ∅ rec_module (initial_rec_state rec_add_prog))).
 Proof.
-  apply imp_to_asm_proof; [set_solver..|].
+  apply rec_to_asm_proof; [set_solver..|].
   move => n i rs mem K f fn vs h cs pc ssz rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? Hcall Hret.
-  unfold imp_add_prog in Hf. unfold asm_add in Hi.
+  unfold rec_add_prog in Hf. unfold asm_add in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct!; simplify_map_eq/=.
   destruct vs as [|v1 [|v2 []]] => //=.
-  iSatStart. iIntros!. rewrite i2a_args_cons ?i2a_args_cons; [|done..].
+  iSatStart. iIntros!. rewrite r2a_args_cons ?r2a_args_cons; [|done..].
   iDestruct!. iSatStop.
   tstep_i => ??. simplify_map_eq'.
   tstep_i.
@@ -104,19 +104,19 @@ Proof.
   iSatStart. simpl. iDestruct!. iSatStop.
   apply: Hret. 1: by simplify_map_eq'.
   1: { simplify_map_eq'. iSatMono. iFrame. done. }
-  1: { unfold i2a_regs_ret; split!; simplify_map_eq' => //; by simplify_map_list. }
+  1: { unfold r2a_regs_ret; split!; simplify_map_eq' => //; by simplify_map_list. }
   1: by simplify_map_list.
 Qed.
 
-Lemma asm_add_client_refines_imp_add_client :
+Lemma asm_add_client_refines_rec_add_client :
   trefines (MS asm_module (initial_asm_state asm_add_client))
-           (MS (imp_to_asm (dom asm_add_client) (dom imp_add_client_prog)
-                           (<["add_client" := 200]> $ <["add" := 100]> ∅) imp_module)
-               (initial_imp_to_asm_state ∅ imp_module (initial_imp_state imp_add_client_prog) )).
+           (MS (rec_to_asm (dom asm_add_client) (dom rec_add_client_prog)
+                           (<["add_client" := 200]> $ <["add" := 100]> ∅) rec_module)
+               (initial_rec_to_asm_state ∅ rec_module (initial_rec_state rec_add_client_prog) )).
 Proof.
-  apply imp_to_asm_proof; [set_solver..|].
+  apply rec_to_asm_proof; [set_solver..|].
   move => n i rs mem K f fn vs h cs pc ssz rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? Hcall Hret.
-  unfold imp_add_client_prog in Hf. unfold asm_add_client in Hi.
+  unfold rec_add_client_prog in Hf. unfold asm_add_client in Hi.
   move: Hf2i. rewrite !lookup_insert_Some => ?; destruct!; simplify_map_eq/=.
   destruct vs as [|] => //=.
   iSatStart. iIntros!. iSatStop.
@@ -129,7 +129,7 @@ Proof.
   tstep_i => ??. simplify_map_eq'.
   tstep_i; simplify_map_eq'.
   iSatStart.
-  iDestruct (i2a_mem_exists 1 with "[$]") as %[??]; [done|].
+  iDestruct (r2a_mem_exists 1 with "[$]") as %[??]; [done|].
   iSatStop.
   tstep_i; simplify_map_eq'. split!. case_match; [|by tstep_i].
   tstep_i; simplify_map_eq'.
@@ -142,16 +142,16 @@ Proof.
   tstep_s.
   tstep_s => ???. simplify_map_eq. rewrite heap_alloc_h_lookup; [|done|lia] => ?; simplify_map_eq.
   tstep_s.
-  change (FreeA [(heap_fresh ∅ h, 1)] (imp.Call "add" [Val 1; Val 1])) with (expr_fill [FreeACtx [(heap_fresh ∅ h, 1)]] (imp.Call "add" [Val 1; Val 1])).
+  change (FreeA [(heap_fresh ∅ h, 1)] (rec.Call "add" [Val 1; Val 1])) with (expr_fill [FreeACtx [(heap_fresh ∅ h, 1)]] (rec.Call "add" [Val 1; Val 1])).
   apply: Hcall. { repeat econs. } { by simplify_map_eq. } { simplify_map_eq'. set_solver. } { by simplify_map_eq'. }
   { iSatMonoBupd.
-    iMod (i2a_mem_alloc with "[$]") as (?) "[? Hp]"; [done|done|].
+    iMod (r2a_mem_alloc with "[$]") as (?) "[? Hp]"; [done|done|].
     iDestruct "Hp" as "[[% ?] _]" => /=. rewrite Z.add_0_l.
-    iMod (i2a_mem_update with "[$] [$]") as "[? ?]". simplify_map_eq'.
-    iMod (i2a_heap_alloc _ (heap_fresh ∅ h) 1 with "[$]") as "[??]". { apply heap_fresh_is_fresh. }
-    iMod (i2a_heap_update with "[$] [$]") as "[? ?]".
+    iMod (r2a_mem_update with "[$] [$]") as "[? ?]". simplify_map_eq'.
+    iMod (r2a_heap_alloc _ (heap_fresh ∅ h) 1 with "[$]") as "[??]". { apply heap_fresh_is_fresh. }
+    iMod (r2a_heap_update with "[$] [$]") as "[? ?]".
     iModIntro. iFrame. iSplit; [|iAccu].
-    rewrite !i2a_args_cons ?i2a_args_nil; [|done..].
+    rewrite !r2a_args_cons ?r2a_args_nil; [|done..].
     iSplit!; by simplify_map_eq'.
   }
   { split!; by simplify_map_eq'. }
@@ -161,8 +161,8 @@ Proof.
   move: Hr => [? Hm]; simplify_map_eq'.
   tstep_i => ??. simplify_map_eq'.
   iSatStart. iIntros!.
-  iDestruct select (i2a_mem_constant _ _) as "Hret".
-  iDestruct (i2a_mem_lookup with "[$] [$]") as %?.
+  iDestruct select (r2a_mem_constant _ _) as "Hret".
+  iDestruct (r2a_mem_lookup with "[$] [$]") as %?.
   iSatStop.
   tstep_i; simplify_map_eq'. simplify_map_list. simplify_map_eq'. split!.
   tstep_i; simplify_map_eq'.
@@ -174,37 +174,37 @@ Proof.
   apply: Hret.
   1: { by simplify_map_eq'. }
   1: { iSatMonoBupd.
-       iMod (i2a_mem_delete 1 with "[$] [Hret]") as "?"; [done|..].
+       iMod (r2a_mem_delete 1 with "[$] [Hret]") as "?"; [done|..].
        { iSplitL; [|done]. iExists _. iFrame. }
-       iMod (i2a_heap_free _ (heap_fresh ∅ h) with "[$] [$]") as "?".
+       iMod (r2a_heap_free _ (heap_fresh ∅ h) with "[$] [$]") as "?".
        iModIntro. iFrame. simplify_map_eq'.
        by rewrite Z.sub_add.
   }
-  1: { unfold i2a_regs_ret; split!; simplify_map_eq' => //; by simplify_map_list. }
+  1: { unfold r2a_regs_ret; split!; simplify_map_eq' => //; by simplify_map_list. }
   1: { by simplify_map_list. }
 Qed.
 
 Lemma full_add_stack :
   trefines (MS asm_module (initial_asm_state full_asm_add))
-           (MS (imp_to_asm {[ 100; 101; 200; 201; 202; 203; 204; 205 ]} {[ "add"; "add_client" ]}
-                           (<["add_client" := 200]> $ <["add" := 100]> ∅) imp_module)
-               (initial_imp_to_asm_state ∅ imp_module (initial_imp_state full_imp_add_prog))).
+           (MS (rec_to_asm {[ 100; 101; 200; 201; 202; 203; 204; 205 ]} {[ "add"; "add_client" ]}
+                           (<["add_client" := 200]> $ <["add" := 100]> ∅) rec_module)
+               (initial_rec_to_asm_state ∅ rec_module (initial_rec_state full_rec_add_prog))).
 Proof.
   etrans. {
     apply asm_syn_link_refines_link. { unfold asm_add, asm_add_client. eauto with map_disjoint. }
     all: compute_done. }
   etrans. {
     apply: asm_link_trefines.
-    - apply asm_add_refines_imp_add.
-    - apply asm_add_client_refines_imp_add_client.
+    - apply asm_add_refines_rec_add.
+    - apply asm_add_client_refines_rec_add_client.
   }
   etrans. {
-    apply: imp_to_asm_combine; compute_done.
+    apply: rec_to_asm_combine; compute_done.
   }
   etrans. {
-    apply: imp_to_asm_trefines.
-    apply imp_link_refines_syn_link.
-    unfold imp_add_prog, imp_add_client_prog. eauto with map_disjoint.
+    apply: rec_to_asm_trefines.
+    apply rec_link_refines_syn_link.
+    unfold rec_add_prog, rec_add_client_prog. eauto with map_disjoint.
   }
   rewrite left_id.
   done.
@@ -231,6 +231,6 @@ set_secret :
 
 The interesting property to prove here would be to prove that SECRET is 1 when calling ext
 and showing that this can be proven even if one refines c_code to Call "set_secret".
-This requires exploiting the fact that imp_to_asm guarantees that the C code only touches
+This requires exploiting the fact that rec_to_asm guarantees that the C code only touches
 certain registers.
 *)
