@@ -4,6 +4,43 @@ From dimsum.examples Require Import imp asm imp_to_asm imp_heap_bij.
 
 Local Open Scope Z_scope.
 
+(** * Vertical compositionality of [imp_to_asm] and [imp_heap_bij] *)
+(** Overview of the structure of the proof:
+
+There are three heaps / memories involved:
+- the inner heap, seen by the inner module [m],
+- the middle heap, after applying [imp_heap_bij], but before [imp_to_asm]
+- the outer memory, after applying both [imp_heap_bij] and [imp_to_asm]
+
+Additionally, there are the following translations:
+- [ih : gmap prov imp_to_asm_elem] : inner heap ↔ asm memory
+- [iha : gmap prov imp_to_asm_elem] : middle heap ↔ asm memory
+- [bijb : heap_bij] : inner heap ↔ middle heap
+
+There are allow the following private states:
+- [ho] : private locations of the program in the inner heap
+- [hob] : private locations of the environment in the inner heap
+
+
+They are related as depicted by the following diagram:
+
+  memory              middle heap                inner heap
+    -----------------------|-------------------------|------------------------
+    |    i2a_shared iha    |                         | i2a_shared ih         |
+    -----------------------|     hb_shared bijb      |------------------------
+        |                  |                         | i2a_constant ih (ho)  |
+        | i2a_constant iha |--------------------------------------------------
+        |                  |                |
+    -----------------------| hb_priv_i bijb |
+    |   i2a_shared iha     |                |
+    --------------------------------------------------------------------------
+                                    |                | i2a_constant ih (ho)  |
+                                    | hb_priv_s bijb |------------------------
+                                    |                | i2a_constant ih (hob) |
+                                    ------------------------------------------
+*)
+
+
 (** * through bij *)
 Definition val_through_bij (bij : heap_bij) (vs : val) : val :=
   match vs with
@@ -805,17 +842,9 @@ Proof.
 
     iSatStartBupd HPb. iIntros!.
     rewrite i2a_combine_priv_diff // (map_difference_difference_add (hb_priv_s bijb)).
-    (* TODO: clean up *)
-    have Hsubs : (∀ i x1 x2, ho !! i = Some x1 → hb_priv_s bijb !! i = Some x2 → x1 = x2) →
-        ho ∖ (ho ∖ hb_priv_s bijb) ⊆ hb_priv_s bijb. {
-      clear.
-      move => Hin.
-      apply map_subseteq_spec => ??.
-      rewrite !lookup_difference_Some !lookup_difference_None /is_Some. naive_solver.
-    }
 
-    iMod (heap_bij_update_all bijb' with "[$] [$] [$]") as "[?[#Hs ?]]". (* TRICKY! *) {
-      apply Hsubs. move => j x1 x2 Hho.
+    iMod (heap_bij_update_all bijb' with "[$] [$] [$]") as "[?[#Hs ?]]". {
+      apply map_difference_difference_subseteq. move => j x1 x2 Hho.
       have : i2a_combine_priv (i2a_ih_shared iha) bijb hb !! j = Some x1 by apply: lookup_weaken.
       move => /i2a_combine_priv_Some ? /hb_priv_s_lookup_Some. naive_solver.
     } { done. } { done. } { done. }

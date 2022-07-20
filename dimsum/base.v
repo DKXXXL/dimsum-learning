@@ -627,6 +627,14 @@ Proof.
   setoid_rewrite lookup_difference_Some. naive_solver.
 Qed.
 
+Lemma map_difference_difference_subseteq {A} (m1 m2 : M A) :
+  (∀ i x1 x2, m1 !! i = Some x1 → m2 !! i = Some x2 → x1 = x2) →
+  m1 ∖ (m1 ∖ m2) ⊆ m2.
+Proof.
+  move => Hin.
+  apply map_subseteq_spec => ??.
+  rewrite !lookup_difference_Some !lookup_difference_None /is_Some. naive_solver.
+Qed.
 End theorems.
 
 Section theorems.
