@@ -14,7 +14,7 @@ Definition print_args (z : Z) (args : list Z) : Prop :=
 
 Definition print_asm : gmap Z asm_instr :=
   deep_to_asm_instrs print_addr [
-      Amov "R8" (ImmediateOp __NR_PRINT);
+      Amov "R8" __NR_PRINT;
       ASyscall;
       Aret
     ].

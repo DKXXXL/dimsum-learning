@@ -9,7 +9,7 @@ Definition locle_addr : Z := 400.
 
 Definition locle_asm : gmap Z asm_instr :=
   deep_to_asm_instrs locle_addr [
-      Asle "R0" "R0" (RegisterOp "R1");
+      Asle "R0" "R0" "R1";
       Aret
     ].
 

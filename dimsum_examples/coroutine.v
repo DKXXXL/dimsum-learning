@@ -4,9 +4,6 @@ From dimsum.examples Require Import imp asm imp_to_asm.
 
 Local Open Scope Z_scope.
 
-Local Coercion ImmediateOp: Z >-> asm_operand.
-Local Coercion RegisterOp: string >-> asm_operand.
-
 Local Opaque map_union. (* without this simpl takes very long *)
 
 Definition yield_addr : Z := 2000.

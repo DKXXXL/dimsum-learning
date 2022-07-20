@@ -115,7 +115,7 @@ Definition write_stack (r : string) (slot : N) : M unit :=
   mret tt.
 
 Definition clear_mem (r : string) (sz : Z) : M unit :=
-  cappend [Amov "R1" (ImmediateOp 0)];;
+  cappend [Amov "R1" 0];;
   cmap (seqZ 0 sz) 0 (λ _ o, cappend [Astore "R1" r o]);;
   mret tt.
 
@@ -124,7 +124,7 @@ Definition read_var (r : string) (v : string) : M unit :=
   p ← cassert_opt (UnboundVariable v) (s.(s_places) !! v);
   match p with
   | PReg r' =>
-      cappend [Amov r (RegisterOp r')]
+      cappend [Amov r r']
   | PStack slot =>
       read_stack r slot
   end.
@@ -134,7 +134,7 @@ Definition write_var (r : string) (v : string) : M unit :=
   p ← cassert_opt (UnboundVariable v) (s.(s_places) !! v);
   match p with
   | PReg r' =>
-      cappend [Amov r' (RegisterOp r)]
+      cappend [Amov r' r]
   | PStack slot =>
       write_stack r slot
   end.
@@ -177,7 +177,7 @@ Definition initialize_locals (vars : list (string * Z)) : M unit :=
     s ← cget;
     cassert (AssertionFailed "Not above") (s.(s_sp_above));;
     o ← alloc_stack (Z.to_N a.2);
-    cappend [Aadd "R0" "SP" (ImmediateOp $ - (Z.of_N o + a.2))];;
+    cappend [Aadd "R0" "SP" (- (Z.of_N o + a.2))];;
     clear_mem "R0" a.2;;
     write_var "R0" a.1);;
   mret tt.
@@ -196,7 +196,7 @@ Definition translate_val (v : static_val) : Z :=
 Definition read_var_val (r : string) (e : var_val) : M unit :=
   match e with
   | VVal v =>
-      cappend [Amov r (ImmediateOp (translate_val v))]
+      cappend [Amov r (translate_val v)]
   | VVar v => read_var r v
   end.
 
@@ -213,10 +213,10 @@ Definition translate_lexpr_op (e : lexpr_op) : M unit :=
       read_var_val "R1" v1;;
       read_var_val "R2" v2;;
       match op with
-      | AddOp | ShiftOp => cappend [Aadd "R0" "R1" (RegisterOp "R2")]
-      | EqOp => cappend [Aseq "R0" "R1" (RegisterOp "R2")]
-      | LeOp => cappend [Asle "R0" "R1" (RegisterOp "R2")]
-      | LtOp => cappend [Aslt "R0" "R1" (RegisterOp "R2")]
+      | AddOp | ShiftOp => cappend [Aadd "R0" "R1" "R2"]
+      | EqOp => cappend [Aseq "R0" "R1" "R2"]
+      | LeOp => cappend [Asle "R0" "R1" "R2"]
+      | LtOp => cappend [Aslt "R0" "R1" "R2"]
       end
   | LLoad v1 =>
       read_var_val "R1" v1;;
@@ -252,9 +252,9 @@ Fixpoint translate_lexpr (e : lexpr) : M unit :=
       '(_, a3) ← cscope (translate_lexpr e3);
       cput s;;
       (* + 1 for the branch_eq at the start and + 1 for the branch at the end *)
-      cappend [Abranch_eq false (ImmediateOp (2 + length a2)) "R0" (ImmediateOp 0)];;
+      cappend [Abranch_eq false (2 + length a2) "R0" 0];;
       cappend a2;;
-      cappend [Abranch false (ImmediateOp (1 + length a3))];;
+      cappend [Abranch false (1 + length a3)];;
       cappend a3
   | LEnd e => translate_lexpr_op e
   end.

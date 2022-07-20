@@ -529,6 +529,9 @@ Qed.
 Inductive asm_operand :=
 | RegisterOp (r : string) | ImmediateOp (z : Z).
 
+Coercion ImmediateOp: Z >-> asm_operand.
+Coercion RegisterOp: string >-> asm_operand.
+
 Definition op_lookup (rs : gmap string Z) (op : asm_operand) : Z :=
   match op with
   | RegisterOp r => rs !!! r
