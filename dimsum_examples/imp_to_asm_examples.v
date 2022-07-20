@@ -3,6 +3,8 @@ From dimsum.examples Require Import imp asm imp_to_asm.
 
 Local Open Scope Z_scope.
 
+(** * Some examples for testing [imp_to_asm] *)
+
 Definition asm_add : gmap Z asm_instr :=
   <[ 100 := [
         (* add R0, R0, R1 *)
@@ -182,42 +184,6 @@ Proof.
   1: { by simplify_map_list. }
 Qed.
 
-(*
-The following does not actually hold since the allocation adds a new provenance to h_heap provs
-
-Lemma imp_add_refines_imp_add' :
-  trefines (MS imp_module (initial_imp_state full_imp_add_prog))
-           (MS (mod_prepost prepost_id prepost_id imp_module)
-               (SMFilter, initial_imp_state full_imp_add_prog', (PPOutside, tt))).
-Proof.
-  pose (R := λ (b : bool) (r1 r2 : unit), True).
-  apply: (imp_prepost_proof R); unfold R in *.
-  { done. }
-  unfold full_imp_add_prog. move => n K1 K2 f fn1 vs1 h0 r0 ?.
-  rewrite lookup_union_Some_raw !lookup_insert_Some => ?; destruct_all?; simplify_map_eq/=.
-  all: split! => ?; split! => Hcall Hret.
-  - destruct vs1 as [|? [|??]] => //. by tstep_s.
-  - destruct vs1 => //.
-    tstep_i => *. split!.
-    tstep_i.
-    tstep_i. split!. { by apply heap_alive_alloc. }
-    tstep_i.
-    tstep_i. simplify_map_eq. eexists _.
-    split. { rewrite shift_loc_0. by simplify_map_eq. }
-    tstep_i.
-    tstep_i. split!. { apply heap_alive_update. by apply heap_alive_alloc. }
-    tstep_i.
-    change (imp.Call "add" [Val 1; Val 1]) with (imp.Call "add" (Val <$> [ValNum 1; ValNum 1])).
-    tstep_i. simplify_map_eq. split; [|naive_solver].
-    move => ??. simplify_map_eq. split!.
-    tstep_i.
-    apply Hret; [done|]. split!.
-    f_equal.
-    f_equal.
-    by rewrite heap_free_update // heap_free_alloc // heap_free_fresh.
-Qed.
-*)
-
 Lemma full_add_stack :
   trefines (MS asm_module (initial_asm_state full_asm_add))
            (MS (imp_to_asm {[ 100; 101; 200; 201; 202; 203; 204; 205 ]} {[ "add"; "add_client" ]}
@@ -242,12 +208,6 @@ Proof.
   }
   rewrite left_id.
   done.
-  (* etrans. { *)
-  (*   apply: imp_to_asm_trefines. *)
-  (*   apply: imp_add_refines_imp_add'. *)
-  (* } *)
-  (* etrans. { apply: prepost_id_l. } *)
-  (* done. *)
 Qed.
 
 (* TODO: an interesting example would be to prove

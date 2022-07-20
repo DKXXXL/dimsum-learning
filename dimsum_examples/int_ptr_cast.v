@@ -5,6 +5,8 @@ From dimsum.examples.compiler Require Import compiler.
 
 Local Open Scope Z_scope.
 
+(** * Example for specifying integer pointer casts via angelic choice *)
+
 Definition int_to_ptr_asm : gmap Z asm_instr :=
   (* cast_int_to_ptr *)
   <[ 400 := [
@@ -44,7 +46,8 @@ Definition int_to_ptr_itree : itree (moduleE imp_event (gmap prov Z)) unit :=
       else
         TNb).
 
-(*
+(**
+ Example:
 
  100 <- cast_ptr_to_int(l);
  200 <- cast_ptr_to_int(p);
@@ -157,13 +160,12 @@ Qed.
 
 (*
 void main () {
-  size_t *l = alloc(1);
+  local l[1];
   *l = 1;
   size_t z = cast_ptr_to_int(l);
   size_t z' = z - 1 + 1;
   size_t *l' = cast_int_to_ptr(z');
   size_t r = *l';
-  free(l);
   exit(r);
 }
 
@@ -472,8 +474,3 @@ Proof.
 Qed.
 
 (* Print Assumptions complete_refinement. *)
-
-(* TODO: make asm_module a dem_module, have a dem_mod_itree (that
-makes non-trivial angelic choice UB) and show that the trefines implies
-dem_refines and then use this to prove trace properties about the
-assembly code? This would remove trefines from the TCB *)

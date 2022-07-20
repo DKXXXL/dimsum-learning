@@ -4,7 +4,9 @@ From dimsum.examples Require Import asm.
 
 Local Open Scope Z_scope.
 
-Definition __NR_PRINT : Z := 42.
+(** * Library for calling the PRINT syscall *)
+
+Definition __NR_PRINT : Z := 8.
 Definition print_addr : Z := 500.
 
 Definition print_args (z : Z) (args : list Z) : Prop :=

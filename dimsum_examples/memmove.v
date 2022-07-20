@@ -5,6 +5,10 @@ From dimsum.examples.compiler Require Import compiler.
 
 Local Open Scope Z_scope.
 
+(** * Example for implementing memmove using assembly for pointer comparison *)
+
+(** * locle *)
+
 Definition locle_addr : Z := 400.
 
 Definition locle_asm : gmap Z asm_instr :=
@@ -175,6 +179,7 @@ Proof.
   apply: locle_itree_strong_refines_itree.
 Qed.
 
+(** * Imp code *)
 
 Definition memmove_imp : fndef := {|
   fd_args := ["d"; "s"; "n"];
@@ -582,6 +587,8 @@ Proof.
   go_s. done.
 Qed.
 
+(** * Top-level specification *)
+
 Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
   TAssume (rs !!! "PC" = main_addr);;;;
@@ -730,6 +737,8 @@ Proof.
   go_i. split!. go.
   by go_s.
 Qed.
+
+(** * Overall refinement *)
 
 Lemma complete_refinement :
   trefines (MS asm_module (initial_asm_state (main_asm ∪ memmove_asm ∪ memcpy_asm ∪ locle_asm ∪ print_asm)))

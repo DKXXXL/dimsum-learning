@@ -4,26 +4,8 @@ From dimsum.examples Require Import imp asm imp_to_asm print coroutine.
 From dimsum.examples.compiler Require Import compiler.
 
 Local Open Scope Z_scope.
-(***
-void stream_inner(int n) {
-  gtyield_with_val(n);
-  stream_inner(n+1);
-}
 
-void stream()
-{
-  stream_inner(0);
-}
-
-int main(void)
-{
-  gtgo(stream);
-  for(int i=0; i<5; i++) {
-    int v = gtyield_with_val(-1);
-    printf("v is : %d\n", v);
-  }
-}
-***)
+(** * Example using the coroutine library *)
 
 Definition stream_addr: Z := 700.
 Definition main_addr: Z := 800.
