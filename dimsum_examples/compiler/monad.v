@@ -3,6 +3,9 @@ From dimsum.core Require Import axioms.
 
 Set Default Proof Using "Type".
 
+(** * Monad used by some passes of the compiler *)
+
+(** * Monoid for appending *)
 Record compiler_monoid := {
   cm_car :> Type;
   cm_empty : cm_car;
@@ -30,6 +33,7 @@ Next Obligation. done. Qed.
 Next Obligation. done. Qed.
 Next Obligation. done. Qed.
 
+(** * Success result of the monad *)
 Inductive compiler_success {E R : Type} :=
 | CSuccess (res : R) | CError (err : E).
 Arguments compiler_success : clear implicits.
@@ -68,6 +72,8 @@ Lemma compiler_success_bind_success E RA RB (f : RA → compiler_success E RB) x
   ∃ x', x = CSuccess x' ∧ f x' = CSuccess y.
 Proof. destruct x => //=; naive_solver. Qed.
 
+(** * Monad definition *)
+(** The compiler monad is a combination of state, writer, and error monad. *)
 Record compiler_result {S : Type} {A : compiler_monoid} {E R : Type} := CResult {
   c_state : S;
   c_prog : A;
@@ -249,6 +255,7 @@ Tactic Notation "simplify_crun_eq" :=
               destruct H as (?&?)
           end || simplify_eq/=).
 
+(** * Tests *)
 Module compiler_test.
 
 Local Open Scope Z_scope.

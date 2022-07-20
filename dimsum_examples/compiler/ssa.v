@@ -5,6 +5,11 @@ From dimsum.examples Require Import imp.
 Local Open Scope Z_scope.
 Set Default Proof Using "Type".
 
+(** * SSA pass : Imp -> Imp *)
+(** This pass renames let bindings, function arguments, and local
+variables such that all names are unique. This is used by the
+following passes. *)
+
 Definition ssa_var (s : string) (n : N) : string :=
   s ++ "$" ++ pretty n.
 
@@ -18,6 +23,9 @@ Qed.
 
 Module ci2a_ssa.
 
+(** * pass *)
+(** Since this pass is simple, we don't use the full compiler monad,
+but just hand-roll a state monad. *)
 Fixpoint state_bind {S A} (l : list (S → (S * A))) (s : S) : (S * list A) :=
   match l with
   | [] => (s, [])
@@ -65,8 +73,13 @@ Definition test_fn_1 : fndef := {|
               Var "x");
   fd_static := I;
 |}.
-Compute (pass ∅ (expr_to_static_expr $ test_fn_1.(fd_body)) 0).
+Lemma test_fn_1_test :
+  pass ∅ (expr_to_static_expr $ test_fn_1.(fd_body)) 0 =
+  (4%N, SLetE "x$0" (SLetE "x$1" (SVar "x") (SVar "x$1"))
+       (SLetE "y$2" (SVar "x$0") (SLetE "x$3" (SVar "x$0") (SVar "x$3")))).
+Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
 
+(** * Verification of pass *)
 Lemma pass_state ren s e :
   (pass ren e s).1 = (s + N.of_nat (length (assigned_vars (static_expr_to_expr e))))%N.
 Proof.
@@ -151,6 +164,7 @@ Proof.
       rewrite pass_state. naive_solver lia.
 Qed.
 
+(** * pass_fn *)
 Definition pass_fn (f : static_fndef) : static_fndef :=
   let args := imap (λ n v, ssa_var v (N.of_nat n)) f.(sfd_args) in
   let vars := imap (λ n v, (ssa_var v.1 (N.of_nat (length args + n)), v.2)) f.(sfd_vars) in
@@ -160,8 +174,17 @@ Definition pass_fn (f : static_fndef) : static_fndef :=
      sfd_body := (pass (list_to_map (zip f.(sfd_args) args) ∪ list_to_map (zip f.(sfd_vars).*1 vars.*1)) f.(sfd_body) (N.of_nat (length f.(sfd_args) + length f.(sfd_vars)))).2;
   |}.
 
-Compute pass_fn (fndef_to_static_fndef test_fn_1).
+Lemma test_fn_1_test_pass :
+  pass_fn (fndef_to_static_fndef test_fn_1) = {|
+    sfd_args := ["x$0"];
+    sfd_vars := [("y$1", 1)];
+    sfd_body :=
+      SLetE "x$2" (SLetE "x$3" (SVar "x$0") (SVar "x$3"))
+        (SLetE "y$4" (SVar "x$2") (SLetE "x$5" (SVar "x$2") (SVar "x$5")))
+  |}.
+Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
 
+(** * Verification of pass_fn *)
 Lemma pass_fn_args_NoDup fn:
   NoDup (sfd_args (pass_fn fn) ++ (sfd_vars (pass_fn fn)).*1).
 Proof.

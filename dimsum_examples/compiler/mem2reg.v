@@ -2,12 +2,15 @@ From dimsum.core Require Export proof_techniques.
 From dimsum.examples Require Import imp_heap_bij.
 From dimsum.examples.compiler Require Import monad linear_imp linearize.
 
+(** * Mem2Reg pass : LinearImp -> LinearImp *)
+(** This pass optimizes local variables whose address is not taken to let bindings. *)
+
 Module ci2a_mem2reg.
 
+(** * pass and pass_fn *)
 Inductive error := UsedAsLoc | NotSupported.
 
 Definition M := compiler_monad unit (fn_compiler_monoid (option var_val)) error.
-
 
 Definition is_var (e: var_val) (x: string) :=
   if e is (VVar y) then bool_decide (x = y) else false.
@@ -113,14 +116,12 @@ Lemma pass_fn_args f :
   lfd_args (pass_fn f) = lfd_args f.
 Proof. rewrite /pass_fn. by repeat case_match. Qed.
 
-
+(** * Tests *)
 Definition test_opt_fn (f: fndef) :=
   let s := fndef_to_static_fndef f in
   let c := ci2a_linearize.pass_fn s in
   let d := pass_fn <$> c in
   d.
-
-
 
 Definition test_fn_1 : fndef := {|
   fd_args := ["y"];
@@ -128,9 +129,19 @@ Definition test_fn_1 : fndef := {|
   fd_body := (LetE "_" (Store (Var "x") (Val 1)) (Load (Var "x")));
   fd_static := I;
 |}.
-
-Compute test_opt_fn test_fn_1.
-
+Lemma test_1 :
+  test_opt_fn test_fn_1 =
+  CSuccess
+    {|
+      lfd_args := ["y"];
+      lfd_vars := [];
+      lfd_body :=
+        LLetE "x" (LVarVal (VVal (StaticValNum 0)))
+        (LLetE "$0$" (LVarVal (VVal (StaticValNum 1)))
+        (LLetE "x" (LVarVal (VVal (StaticValNum 1)))
+        (LLetE "_" (LVarVal (VVar "$0$")) (LLetE "$1$" (LVarVal (VVar "x")) (LEnd (LVarVal (VVar "$1$")))))))
+    |}.
+Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
 
 Definition test_fn_2 : fndef := {|
   fd_args := ["y"];
@@ -141,7 +152,23 @@ Definition test_fn_2 : fndef := {|
   fd_static := I;
 |}.
 
-Compute test_opt_fn test_fn_2.
+Lemma test_2 :
+  test_opt_fn test_fn_2 =
+  CSuccess
+    {|
+      lfd_args := ["y"];
+      lfd_vars := [("z", 4%Z)];
+      lfd_body :=
+        LLetE "x" (LVarVal (VVal (StaticValNum 0)))
+        (LLetE "$0$" (LVarVal (VVal (StaticValNum 1)))
+        (LLetE "x" (LVarVal (VVal (StaticValNum 1)))
+        (LLetE "_" (LVarVal (VVar "$0$"))
+        (LLetE "$1$" (LStore (VVar "z") (VVal (StaticValNum 1)))
+        (LLetE "_" (LVarVal (VVar "$1$"))
+        (LLetE "$2$" (LVarVal (VVar "x"))
+        (LLetE "$3$" (LBinOp (VVar "$2$") AddOp (VVar "z")) (LEnd (LVarVal (VVar "$3$"))))))))))
+    |}.
+Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
 
 
 (* TODO: this is kind of a corner case, since the expression has UB, which results in *)
@@ -152,7 +179,20 @@ Definition test_fn_3 : fndef := {|
   fd_static := I;
 |}.
 
-Compute test_opt_fn test_fn_3.
+Lemma test_3 :
+  test_opt_fn test_fn_3 =
+  CSuccess
+    {|
+      lfd_args := ["y"];
+      lfd_vars := [];
+      lfd_body :=
+        LLetE "x" (LVarVal (VVal (StaticValNum 0)))
+          (LLetE "$0$" (LBinOp (VVar "y") ShiftOp (VVal (StaticValNum 2)))
+             (LLetE "$1$" (LVarVal (VVar "x"))
+                (LLetE "$2$" (LCall "f" [VVar "$1$"; VVal (StaticValNum 1)])
+                   (LLetE "$3$" (LBinOp (VVar "$0$") AddOp (VVar "$2$")) (LEnd (LVarVal (VVar "$3$")))))))
+    |}.
+Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
 
 Definition test_fn_4 : fndef := {|
   fd_args := ["x"];
@@ -162,9 +202,24 @@ Definition test_fn_4 : fndef := {|
   fd_static := I;
 |}.
 
-Compute test_opt_fn test_fn_4.
+Lemma test_4 :
+  test_opt_fn test_fn_4 =
+  CSuccess
+    {|
+      lfd_args := ["x"];
+      lfd_vars := [];
+      lfd_body :=
+        LLetE "y" (LVarVal (VVal (StaticValNum 0)))
+        (LLetE "$0$" (LVarVal (VVar "x"))
+        (LLetE "y" (LVarVal (VVar "x"))
+        (LLetE "_" (LVarVal (VVar "$0$"))
+        (LLetE "$1$" (LVarVal (VVar "y"))
+        (LLetE "$2$" (LVarVal (VVar "y"))
+        (LLetE "$3$" (LBinOp (VVar "$1$") AddOp (VVar "$2$")) (LEnd (LVarVal (VVar "$3$")))))))))
+    |}.
+Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
 
-
+(** * Verification of pass and pass_fn *)
 Lemma lexpr_tsim_var_val  v es ei Ks Ki vss vsi x n hi hs fns1 fns2 rf r
   `{Hfill1: !ImpExprFill es Ks (subst_map vss (var_val_to_expr v))}
   `{Hfill2: !ImpExprFill ei Ki (subst_map vsi (var_val_to_expr v))}:

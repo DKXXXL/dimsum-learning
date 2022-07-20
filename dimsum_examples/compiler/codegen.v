@@ -5,41 +5,9 @@ From dimsum.examples.compiler Require Import monad linear_imp.
 Local Open Scope Z_scope.
 
 Set Default Proof Using "Type".
-(*
-optimizations:
 
-fn f() :=
-  local x
-  x ← 1;
-  g(!x + !x);
-  x ← 2;
-  return !x
-
-optimize to:
-
-fn f() :=
-  let x := 1;
-  g(x + x);
-  let x := 2;
-  return x
-
-1 + 1 → 2
-
-if 1 then e1 else e2
-->
-e1
-
-
-compilation chain:
-
-1. make let-names unique (each name is only assigned once)
-2. translate nested expressions to linear expressions
-3. optimize linear
-3.1. propagate values and let-bindings
-3.2. reuse dead let-names
-4. translate to asm
-
-*)
+(** * Codegen pass : LinearImp -> Asm *)
+(** This pass generates Asm code for a Imp program. *)
 
 Module ci2a_codegen.
 
@@ -161,7 +129,7 @@ Fixpoint allocate_places (ns : list string) (regs : list string) : M unit :=
                write_stack r slot;;
                s ← cget;
                cput (s <|s_places := (<[n := PReg r]> $ s.(s_places))|>
-                       <| s_saved_registers := (r, slot) :: s.(s_saved_registers)|> );;
+                       <|s_saved_registers := (r, slot) :: s.(s_saved_registers)|> );;
                allocate_places ns regs
            end
   end.
@@ -284,7 +252,18 @@ Definition test_fn : fndef := {|
   fd_static := I
 |}.
 
-Compute let x := crun (initial_state ∅) (pass test_fn.(fd_args) test_fn.(fd_vars) test_fn_expr) in (x.(c_prog), x.(c_result)).
+Lemma test :
+ let x := crun (initial_state ∅) (pass test_fn.(fd_args) test_fn.(fd_vars) test_fn_expr) in
+ (x.(c_prog), x.(c_result)) =
+  ([Aload "R17" "SP" (-1); Astore "R30" "SP" (-1); Aload "R17" "SP" (-2); Astore "R19" "SP" (-2);
+   Aload "R17" "SP" (-3); Astore "R20" "SP" (-3); Aload "R17" "SP" (-4); Astore "R21" "SP" (-4);
+   Aload "R17" "SP" (-5); Astore "R22" "SP" (-5); Amov "R19" "R0"; Amov "R20" "R1"; Aload "R17" "SP" (-6);
+   Aadd "R0" "SP" (-6); Amov "R1" 0; Astore "R1" "R0" 0; Amov "R21" "R0"; Aadd "SP" "SP" (-6);
+   Amov "R1" "R19"; Amov "R2" "R20"; Aadd "R0" "R1" "R2"; Amov "R22" "R0"; Amov "R1" "R22";
+   Amov "R2" "R21"; Aadd "R0" "R1" "R2"; Amov "R22" "R0"; Amov "R1" "R19"; Amov "R2" "R22";
+   Aadd "R0" "R1" "R2"; Aadd "SP" "SP" 6; Aload "R22" "SP" (-5); Aload "R21" "SP" (-4);
+   Aload "R20" "SP" (-3); Aload "R19" "SP" (-2); Aload "R30" "SP" (-1); Aret], CSuccess ()).
+Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
 
 Definition test2_fn_expr : lexpr :=
   LIf (LVarVal (VVar "a"))
@@ -298,7 +277,16 @@ Definition test2_fn : fndef := {|
   fd_static := I
 |}.
 
-Compute let x := crun (initial_state ∅) (pass test2_fn.(fd_args) test2_fn.(fd_vars) test2_fn_expr) in (x.(c_prog), x.(c_result)).
+Lemma test :
+ let x := crun (initial_state ∅) (pass test2_fn.(fd_args) test2_fn.(fd_vars) test2_fn_expr) in
+ (x.(c_prog), x.(c_result)) =
+  ([Aload "R17" "SP" (-1); Astore "R30" "SP" (-1); Aload "R17" "SP" (-2); Astore "R19" "SP" (-2);
+   Aload "R17" "SP" (-3); Astore "R20" "SP" (-3); Amov "R19" "R0"; Amov "R20" "R1"; Aadd "SP" "SP" (-3);
+   Amov "R0" "R19"; Abranch_eq false 7 "R0" 0; Amov "R0" "R20"; Abranch_eq false 3 "R0" 0;
+   Amov "R0" 1; Abranch false 2; Amov "R0" 2; Abranch false 6; Amov "R0" "R20"; Abranch_eq false 3 "R0" 0;
+   Amov "R0" 3; Abranch false 2; Amov "R0" 4; Aadd "SP" "SP" 3; Aload "R20" "SP" (-3);
+   Aload "R19" "SP" (-2); Aload "R30" "SP" (-1); Aret], CSuccess ()).
+Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
 
 Definition test3_fn_expr : lexpr :=
   LLetE "r" (LCall "test3" [VVar "a"; VVal $ StaticValNum 1]) $
@@ -311,9 +299,17 @@ Definition test3_fn : fndef := {|
   fd_static := I
 |}.
 
-Compute let x := crun (initial_state (<["test3" := 100]> $ ∅)) (pass test3_fn.(fd_args) test3_fn.(fd_vars) test3_fn_expr) in (x.(c_prog), x.(c_result)).
+Lemma test :
+ let x := crun (initial_state (<["test3" := 100]> ∅)) (pass test3_fn.(fd_args) test3_fn.(fd_vars) test3_fn_expr) in
+ (x.(c_prog), x.(c_result)) =
+ ([Aload "R17" "SP" (-1); Astore "R30" "SP" (-1); Aload "R17" "SP" (-2); Astore "R19" "SP" (-2);
+   Aload "R17" "SP" (-3); Astore "R20" "SP" (-3); Aload "R17" "SP" (-4); Astore "R21" "SP" (-4);
+   Amov "R19" "R0"; Amov "R20" "R1"; Aadd "SP" "SP" (-4); Amov "R0" "R19"; Amov "R1" 1;
+   Abranch_link true 100; Amov "R21" "R0"; Amov "R0" "R21"; Aadd "SP" "SP" 4; Aload "R21" "SP" (-4);
+   Aload "R20" "SP" (-3); Aload "R19" "SP" (-2); Aload "R30" "SP" (-1); Aret], CSuccess ()).
+Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
 
-(** * proof *)
+(** * Proof *)
 Class ProofFixedValues := {
   pf_sp : Z;
   pf_ins : gmap Z asm_instr;
@@ -549,7 +545,7 @@ Proof.
   iIntros (????) "??". iSatStop. by tstep_s.
 Qed.
 
-(** rules for operations *)
+(** ** rules for operations *)
 Lemma move_sp_correct s s' p p' r n b e rs ab h h':
   crun s (move_sp ab) = CResult s' p (CSuccess r) →
   (∀ pc' sp',

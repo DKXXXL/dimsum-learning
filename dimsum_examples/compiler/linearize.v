@@ -6,6 +6,11 @@ From dimsum.examples.compiler Require Import monad linear_imp.
 Local Open Scope Z_scope.
 Set Default Proof Using "Type".
 
+(** * Linearize pass : Imp -> LinearImp *)
+(** This pass turns an Imp program into a LinearImp program. It
+assumes that all variable names are unique (as established by the SSA
+pass). *)
+
 Definition tmp_var (n : N) : string :=
   "$" ++ pretty n ++ "$".
 
@@ -17,6 +22,7 @@ Qed.
 
 Module ci2a_linearize.
 
+(** * pass *)
 Inductive error :=.
 
 Definition M := compiler_monad N (fn_compiler_monoid lexpr) error.
@@ -75,43 +81,56 @@ Definition test_fn_1 : fndef := {|
   fd_static := I;
 |}.
 
-Compute crun 0%N (pass (expr_to_static_expr $ test_fn_1.(fd_body))).
-Compute crun 0%N (pass (expr_to_static_expr $ LetE "v" (BinOp (Val 1) AddOp (Val 1)) $ Var "v")).
-Compute crun 0%N (pass
-                    (expr_to_static_expr $  BinOp
-                       (If (Val 1)
-                           (BinOp (Val 1) AddOp (Val 2))
-                           (Val 3))
-                       AddOp (Var "x"))).
-Compute crun 0%N (pass
-                    (expr_to_static_expr $ BinOp
-                       (If (Val 1)
-                           (BinOp (Val 1) AddOp (Val 2))
-                           (If (Val 1) (Val 2) (Val 3)))
-                       AddOp (Var "x"))).
 
-Definition lookup_var_val (vs : gmap string val) (v : var_val) : option val :=
-  match v with
-  | VVal v => Some (static_val_to_val v)
-  | VVar v => vs !! v
-  end.
+Lemma test_1 :
+  crun 0%N (pass (expr_to_static_expr $ test_fn_1.(fd_body))) =
+  CResult 4%N (λ x,
+       LLetE "$0$" (LBinOp (VVar "x") ShiftOp (VVal (StaticValNum 2)))
+         (LLetE "$1$" (LLoad (VVar "x"))
+            (LLetE "$2$" (LCall "f" [VVar "$1$"; VVal (StaticValNum 1)])
+               (LLetE "$3$" (LBinOp (VVar "$0$") AddOp (VVar "$2$")) x)))) (CSuccess (VVar "$3$")).
+Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
 
-Lemma lookup_var_val_to_expr vs v v' :
-  lookup_var_val vs v = Some v' →
-  subst_map vs (var_val_to_expr v) = Val v'.
-Proof. by destruct v => //= ?; simplify_option_eq. Qed.
+Lemma test_2 :
+  crun 0%N (pass (expr_to_static_expr $ LetE "v" (BinOp (Val 1) AddOp (Val 1)) $ Var "v")) =
+  CResult 1%N (λ x,
+       LLetE "$0$" (LBinOp (VVal (StaticValNum 1)) AddOp (VVal (StaticValNum 1)))
+         (LLetE "v" (LVarVal (VVar "$0$")) x)) (CSuccess (VVar "v")).
+Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
 
-Lemma lookup_var_val_to_expr_fmap vs v v' :
-  Forall2 (λ v v', lookup_var_val vs v = Some v') v v' →
-  subst_map vs <$> (var_val_to_expr <$> v) = Val <$> v'.
-Proof. elim => //; csimpl => ???? /lookup_var_val_to_expr -> ? ->. done. Qed.
+Lemma test_3 :
+  crun 0%N (pass (expr_to_static_expr $  BinOp
+                    (If (Val 1)
+                       (BinOp (Val 1) AddOp (Val 2))
+                       (Val 3))
+                    AddOp (Var "x"))) =
+  CResult 3%N (λ x,
+       LIf (LVarVal (VVal (StaticValNum 1)))
+         (LLetE "$0$" (LBinOp (VVal (StaticValNum 1)) AddOp (VVal (StaticValNum 2)))
+            (LLetE "$1$" (LVarVal (VVar "$0$")) (LLetE "$2$" (LBinOp (VVar "$1$") AddOp (VVar "x")) x)))
+         (LLetE "$1$" (LVarVal (VVal (StaticValNum 3))) (LLetE "$2$" (LBinOp (VVar "$1$") AddOp (VVar "x")) x)))
+    (CSuccess (VVar "$2$")).
+Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
 
-Lemma lookup_var_val_mono vs vs' v v':
-  lookup_var_val vs v = Some v' →
-  vs ⊆ vs' →
-  lookup_var_val vs' v = Some v'.
-Proof. destruct v => //. simplify_eq/=. apply lookup_weaken. Qed.
+Lemma test_4 :
+  crun 0%N (pass (expr_to_static_expr $ BinOp
+                    (If (Val 1)
+                       (BinOp (Val 1) AddOp (Val 2))
+                       (If (Val 1) (Val 2) (Val 3)))
+                    AddOp (Var "x"))) =
+  CResult 4%N (λ x,
+       LIf (LVarVal (VVal (StaticValNum 1)))
+         (LLetE "$0$" (LBinOp (VVal (StaticValNum 1)) AddOp (VVal (StaticValNum 2)))
+            (LLetE "$2$" (LVarVal (VVar "$0$")) (LLetE "$3$" (LBinOp (VVar "$2$") AddOp (VVar "x")) x)))
+         (LIf (LVarVal (VVal (StaticValNum 1)))
+            (LLetE "$1$" (LVarVal (VVal (StaticValNum 2)))
+               (LLetE "$2$" (LVarVal (VVar "$1$")) (LLetE "$3$" (LBinOp (VVar "$2$") AddOp (VVar "x")) x)))
+            (LLetE "$1$" (LVarVal (VVal (StaticValNum 3)))
+               (LLetE "$2$" (LVarVal (VVar "$1$")) (LLetE "$3$" (LBinOp (VVar "$2$") AddOp (VVar "x")) x)))))
+    (CSuccess (VVar "$3$")).
+Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
 
+(** * Verification of pass *)
 Lemma pass_state_mono s es s' ei v :
   crun s (pass es) = CResult s' ei (CSuccess v) →
   (s ≤ s')%N.
@@ -309,6 +328,7 @@ Proof.
         move => /Hvsi. set_unfold; naive_solver lia.
 Qed.
 
+(** * pass_fn *)
 Definition pass_fn (f : static_fndef) : compiler_success error lfndef :=
   let x := crun 0%N (pass f.(sfd_body)) in
   (λ v, {|
@@ -317,8 +337,20 @@ Definition pass_fn (f : static_fndef) : compiler_success error lfndef :=
      lfd_body := x.(c_prog) (LEnd $ LVarVal v);
   |} ) <$> x.(c_result).
 
-Compute pass_fn (fndef_to_static_fndef test_fn_1).
+Lemma test_1 :
+  pass_fn (fndef_to_static_fndef test_fn_1) =
+  CSuccess {|
+    lfd_args := ["x"];
+    lfd_vars := [];
+    lfd_body :=
+      LLetE "$0$" (LBinOp (VVar "x") ShiftOp (VVal (StaticValNum 2)))
+        (LLetE "$1$" (LLoad (VVar "x"))
+           (LLetE "$2$" (LCall "f" [VVar "$1$"; VVal (StaticValNum 1)])
+              (LLetE "$3$" (LBinOp (VVar "$0$") AddOp (VVar "$2$")) (LEnd (LVarVal (VVar "$3$"))))))
+  |}.
+Proof. vm_compute. match goal with |- ?x = ?x => idtac end. Abort.
 
+(** * Verification of pass_fn *)
 Lemma pass_fn_args fn fn' :
   pass_fn fn = CSuccess fn' →
   lfd_args fn' = sfd_args fn.
