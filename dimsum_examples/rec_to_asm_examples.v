@@ -83,8 +83,8 @@ Local Ltac go_s := tstep_s; go.
 
 
 Lemma asm_add_refines_rec_add :
-  trefines (MS asm_module (initial_asm_state asm_add))
-           (MS (rec_to_asm (dom asm_add) (dom rec_add_prog) (<["add" := 100]> ∅) rec_module) (initial_rec_to_asm_state ∅ rec_module (initial_rec_state rec_add_prog))).
+  trefines (asm_mod asm_add)
+           (rec_to_asm (dom asm_add) (dom rec_add_prog) (<["add" := 100]> ∅) ∅ (rec_mod rec_add_prog)).
 Proof.
   apply rec_to_asm_proof; [set_solver..|].
   move => n i rs mem K f fn vs h cs pc ssz rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? Hcall Hret.
@@ -109,10 +109,9 @@ Proof.
 Qed.
 
 Lemma asm_add_client_refines_rec_add_client :
-  trefines (MS asm_module (initial_asm_state asm_add_client))
-           (MS (rec_to_asm (dom asm_add_client) (dom rec_add_client_prog)
-                           (<["add_client" := 200]> $ <["add" := 100]> ∅) rec_module)
-               (initial_rec_to_asm_state ∅ rec_module (initial_rec_state rec_add_client_prog) )).
+  trefines (asm_mod asm_add_client)
+           (rec_to_asm (dom asm_add_client) (dom rec_add_client_prog)
+              (<["add_client" := 200]> $ <["add" := 100]> ∅) ∅ (rec_mod rec_add_client_prog)).
 Proof.
   apply rec_to_asm_proof; [set_solver..|].
   move => n i rs mem K f fn vs h cs pc ssz rf rc lr Hpc Hi Hf Hf2i Hsat Hargs ? Hcall Hret.
@@ -185,10 +184,9 @@ Proof.
 Qed.
 
 Lemma full_add_stack :
-  trefines (MS asm_module (initial_asm_state full_asm_add))
-           (MS (rec_to_asm {[ 100; 101; 200; 201; 202; 203; 204; 205 ]} {[ "add"; "add_client" ]}
-                           (<["add_client" := 200]> $ <["add" := 100]> ∅) rec_module)
-               (initial_rec_to_asm_state ∅ rec_module (initial_rec_state full_rec_add_prog))).
+  trefines (asm_mod full_asm_add)
+           (rec_to_asm {[ 100; 101; 200; 201; 202; 203; 204; 205 ]} {[ "add"; "add_client" ]}
+              (<["add_client" := 200]> $ <["add" := 100]> ∅) ∅ (rec_mod full_rec_add_prog)).
 Proof.
   etrans. {
     apply asm_syn_link_refines_link. { unfold asm_add, asm_add_client. eauto with map_disjoint. }

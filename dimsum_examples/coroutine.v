@@ -250,8 +250,7 @@ Local Ltac go_i :=
 
 Lemma yield_asm_refines_itree regs :
   regs !!! "PC" ∉ yield_asm_dom →
-  trefines (MS asm_module (initial_asm_state yield_asm))
-           (MS (mod_itree _ _) (yield_itree, regs)).
+  trefines (asm_mod yield_asm) (itree_mod yield_itree regs).
 Proof.
   move => ?. apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember. { simpl. exact (λ _ σa '(t, rs),
@@ -441,14 +440,14 @@ Proof.
 Qed.
 
 (** * Definition of coroutine linking *)
-Inductive coro_link_filter_state :=
+Inductive coro_link_filter_case :=
 | CPFInit
 | CPFLeft
 | CPFRight.
 
-Global Instance coro_link_filter_state_inhabited : Inhabited coro_link_filter_state := populate CPFRight.
+Global Instance coro_link_filter_case_inhabited : Inhabited coro_link_filter_case := populate CPFRight.
 
-Definition coro_link_filter (fns1 fns2 : gset string) : seq_product_state → coro_link_filter_state * (option string) → rec_ev → seq_product_state → coro_link_filter_state * (option string) → rec_ev → bool → Prop :=
+Definition coro_link_filter (fns1 fns2 : gset string) : seq_product_case → coro_link_filter_case * (option string) → rec_ev → seq_product_case → coro_link_filter_case * (option string) → rec_ev → bool → Prop :=
   λ p s e p' s' e' ok,
     match s.1, p with
     | CPFInit, SPNone =>
@@ -510,22 +509,22 @@ Definition coro_link_filter (fns1 fns2 : gset string) : seq_product_state → co
     end.
 Arguments coro_link_filter _ _ _ _ _ _ _ _ /.
 
-Definition coro_link (fns1 fns2 : gset string) (m1 m2 : module rec_event) : module rec_event :=
-  mod_link (coro_link_filter fns1 fns2) m1 m2.
+Definition coro_link_trans (fns1 fns2 : gset string) (m1 m2 : mod_trans rec_event) : mod_trans rec_event :=
+  link_trans (coro_link_filter fns1 fns2) m1 m2.
 
-Definition initial_coro_link_state (finit : string) (m1 m2 : module rec_event) (σ1 : m1.(m_state)) (σ2 : m2.(m_state)) :=
-  (@MLFNone rec_ev, (CPFInit, (Some finit)), σ1, σ2).
+Definition coro_link (fns1 fns2 : gset string) (finit : string) (m1 m2 : module rec_event) : module rec_event :=
+  Mod (coro_link_trans fns1 fns2 m1.(m_trans) m2.(m_trans))
+    (MLFNone, (CPFInit, (Some finit)), m1.(m_init), m2.(m_init)).
 
-Lemma coro_link_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
-  trefines (MS m1 σ1) (MS m1' σ1') →
-  trefines (MS m2 σ2) (MS m2' σ2') →
-  trefines (MS (coro_link ins1 ins2 m1 m2) (σ, σ1, σ2))
-           (MS (coro_link ins1 ins2 m1' m2') (σ, σ1', σ2')).
-Proof. move => ??. by apply mod_link_trefines. Qed.
+Lemma coro_link_trefines m1 m1' m2 m2' fns1 fns2 finit `{!VisNoAll m1.(m_trans)} `{!VisNoAll m2.(m_trans)}:
+  trefines m1 m1' →
+  trefines m2 m2' →
+  trefines (coro_link fns1 fns2 finit m1 m2) (coro_link fns1 fns2 finit m1' m2').
+Proof. move => ??. by apply link_mod_trefines. Qed.
 
 (** * Main Theorem: Yield library refines coroutine linking *)
-Theorem coro_spec finit regs_init ssz_init m1 m2 σ1 σ2 ins1 ins2 fns1 fns2 f2i1 f2i2
-  `{!VisNoAll m1} `{!VisNoAll m2}:
+Theorem coro_spec finit regs_init ssz_init m1 m2 ins1 ins2 fns1 fns2 f2i1 f2i2
+  `{!VisNoAll m1.(m_trans)} `{!VisNoAll m2.(m_trans)}:
   let fns := {["yield"]} ∪ fns1 ∪ fns2 in
   let ins := yield_asm_dom ∪ ins1 ∪ ins2 in
   let f2i := f2i1 ∪ f2i2 in
@@ -546,19 +545,13 @@ Theorem coro_spec finit regs_init ssz_init m1 m2 σ1 σ2 ins1 ins2 fns1 fns2 f2i
   map_Forall (λ f i, f = "yield" ∨ i ∉ yield_asm_dom) f2i →
   r2a_mem_stack_mem (regs_init !!! "SP") ssz_init ##ₘ coro_regs_mem regs_init →
   trefines
-    (MS (asm_link yield_asm_dom (ins1 ∪ ins2) asm_module
-           (asm_link ins1 ins2 (rec_to_asm ins1 fns1 f2i1 m1) (rec_to_asm ins2 fns2 f2i2 m2)) )
-        (initial_asm_link_state asm_module (asm_link _ _ _ _)
-           (initial_asm_state yield_asm)
-           (initial_asm_link_state (rec_to_asm _ _ _ _) (rec_to_asm _ _ _ _)
-              (initial_rec_to_asm_state ∅ m1 σ1)
-              (initial_rec_to_asm_state ∅ m2 σ2))))
-    (MS (rec_to_asm ins fns f2i (coro_link fns1 fns2 m1 m2))
-       (initial_rec_to_asm_state mo (coro_link _ _ _ _)
-          (initial_coro_link_state finit _ _ σ1 σ2)))
+    (asm_link yield_asm_dom (ins1 ∪ ins2) (asm_mod yield_asm)
+       (asm_link ins1 ins2 (rec_to_asm ins1 fns1 f2i1 ∅ m1) (rec_to_asm ins2 fns2 f2i2 ∅ m2)))
+    (rec_to_asm ins fns f2i mo (coro_link fns1 fns2 finit m1 m2))
 .
 Proof.
   move => fns ins f2i mo Hinit Hfinit Hyf Hidisj Hfdisj Hydisj Hy1 Hy2 Hi1 Hi2 Hag Hf1 Hf2 Hfy Hmo.
+  destruct m1 as [m1 σ1], m2 as [m2 σ2] => /=.
   have {}Hi1 : (∀ f, f ∈ fns1 → ∃ i, i ∈ ins1 ∧ f2i1 !! f = Some i). {
     move => ? /Hi1. case_match => // /bool_decide_unpack. naive_solver.
   }

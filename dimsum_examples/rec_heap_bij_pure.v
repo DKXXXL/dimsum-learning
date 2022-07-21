@@ -614,11 +614,11 @@ Definition rec_heap_bij_post (e : rec_event) (s : rec_heap_bij_state) : prepost 
   pp_prop (heap_preserved (hb_player_s Env bij') s.(rhb_heap_s) hs) $
   pp_end ((e.1, event_set_vals_heap e.2 vsi hi), RecHeapBij bij' hi hs).
 
-Definition rec_heap_bij (m : module rec_event) : module rec_event :=
-  mod_prepost rec_heap_bij_pre rec_heap_bij_post m.
+Definition rec_heap_bij_trans (m : mod_trans rec_event) : mod_trans rec_event :=
+  prepost_trans rec_heap_bij_pre rec_heap_bij_post m.
 
-Definition initial_rec_heap_bij_state (m : module rec_event) (σ : m.(m_state)) :=
-  (@SMFilter rec_event, σ, (@PPOutside rec_event rec_event, RecHeapBij ∅ ∅ ∅, (True%I : uPred unitUR))).
+Definition rec_heap_bij (m : module rec_event) : module rec_event :=
+  Mod (rec_heap_bij_trans m.(m_trans)) (SMFilter, m.(m_init), (PPOutside, RecHeapBij ∅ ∅ ∅, (True%I : uPred unitUR))).
 
 (** * vertical compositionality *)
 (** ** map values and heaps through bij *)
@@ -983,12 +983,9 @@ Proof.
 Qed.
 
 (** ** Proof of vertical compositionality *)
-Lemma rec_heap_bij_vertical m σ `{!VisNoAll m}:
-  trefines (MS (rec_heap_bij (rec_heap_bij m))
-               (initial_rec_heap_bij_state (rec_heap_bij m) (initial_rec_heap_bij_state m σ)))
-           (MS (rec_heap_bij m)
-               (initial_rec_heap_bij_state m σ))
-.
+Lemma rec_heap_bij_vertical m `{!VisNoAll m.(m_trans)}:
+  trefines (rec_heap_bij (rec_heap_bij m))
+           (rec_heap_bij m).
 Proof.
   unshelve apply: mod_prepost_combine. {
     exact (λ pl '(RecHeapBij bija hia hsa) '(RecHeapBij bijb hib hsb) '(RecHeapBij bij hi hs) xa xb x,

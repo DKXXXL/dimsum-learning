@@ -82,10 +82,9 @@ Local Ltac go_i :=
 *)
 
 Lemma int_to_ptr_asm_refines_itree :
-  trefines (MS asm_module (initial_asm_state int_to_ptr_asm))
-           (MS (rec_to_asm (dom int_to_ptr_asm) int_to_ptr_fns int_to_ptr_f2i
-                           (mod_itree rec_event (gmap prov Z)))
-               (initial_rec_to_asm_state ∅ (mod_itree _ _) (int_to_ptr_itree, ∅))).
+  trefines (asm_mod int_to_ptr_asm)
+           (rec_to_asm (dom int_to_ptr_asm) int_to_ptr_fns int_to_ptr_f2i ∅
+              (itree_mod int_to_ptr_itree ∅)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember. { simpl. exact (λ _ σa '(σf, (t, ps), (pp, σr2a, P)),
@@ -200,10 +199,8 @@ Definition main_itree : itree (moduleE rec_event unit) unit :=
 *)
 
 Lemma main_int_to_ptr_refines_itree :
-  trefines (MS (rec_link (dom main_rec_prog) int_to_ptr_fns
-                         rec_module (mod_itree _ _))
-               (initial_rec_link_state rec_module (mod_itree _ _) (initial_rec_state main_rec_prog) (int_to_ptr_itree, ∅)))
-           (MS (mod_itree _ _) (main_itree, tt)).
+  trefines (rec_link (dom main_rec_prog) int_to_ptr_fns (rec_mod main_rec_prog) (itree_mod int_to_ptr_itree ∅))
+           (itree_mod main_itree tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   tstep_i => *. case_match; destruct!.
@@ -269,9 +266,8 @@ Definition main_asm_dom : gset Z := locked dom main_asm.
 *)
 
 Lemma main_asm_refines_rec :
-  trefines (MS asm_module (initial_asm_state main_asm))
-           (MS (rec_to_asm (dom main_asm) {["main"]} main_f2i rec_module)
-               (initial_rec_to_asm_state ∅ rec_module (initial_rec_state main_rec_prog))).
+  trefines (asm_mod main_asm)
+           (rec_to_asm (dom main_asm) {["main"]} main_f2i ∅ (rec_mod main_rec_prog)).
 Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
 
 (* https://thog.github.io/syscalls-table-aarch64/latest.html *)
@@ -311,8 +307,7 @@ Definition exit_itree : itree (moduleE asm_event unit) unit :=
 *)
 
 Lemma exit_asm_refines_itree :
-  trefines (MS asm_module (initial_asm_state exit_asm))
-           (MS (mod_itree _ _) (exit_itree, tt)).
+  trefines (asm_mod exit_asm) (itree_mod exit_itree tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   go_i => ????? Hi.
@@ -373,13 +368,12 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
 *)
 
 Lemma top_level_refines_itree :
-  trefines (MS (asm_link (main_asm_dom ∪ dom int_to_ptr_asm) (dom exit_asm)
-                         (rec_to_asm (main_asm_dom ∪ dom int_to_ptr_asm)
-                                     (dom main_rec_prog ∪ int_to_ptr_fns)
-                                     main_f2i
-                                     (mod_itree _ _)) (mod_itree _ _))
-               (initial_asm_link_state (rec_to_asm _ _ _ _) (mod_itree _ _) (initial_rec_to_asm_state ∅ (mod_itree _ _) (main_itree, tt)) (exit_itree, tt)))
-           (MS (mod_itree _ _) (top_level_itree, tt)).
+  trefines (asm_link (main_asm_dom ∪ dom int_to_ptr_asm) (dom exit_asm)
+              (rec_to_asm (main_asm_dom ∪ dom int_to_ptr_asm)
+                 (dom main_rec_prog ∪ int_to_ptr_fns)
+                 main_f2i ∅
+                 (itree_mod main_itree tt)) (itree_mod exit_itree tt))
+    (itree_mod top_level_itree tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   go_i => ??????. case_match; destruct!.
@@ -439,8 +433,8 @@ Qed.
 *)
 
 Lemma complete_refinement :
-  trefines (MS asm_module (initial_asm_state (main_asm ∪ int_to_ptr_asm ∪ exit_asm)))
-           (MS (mod_itree _ _) (top_level_itree, tt)).
+  trefines (asm_mod (main_asm ∪ int_to_ptr_asm ∪ exit_asm))
+           (itree_mod top_level_itree tt).
 Proof.
   etrans. {
     apply asm_syn_link_refines_link. compute_done.
@@ -456,10 +450,10 @@ Proof.
         - apply int_to_ptr_asm_refines_itree.
       }
       etrans. {
-        apply: rec_to_asm_combine; compute_done.
+        apply rec_to_asm_combine; [apply _|apply _|..]; compute_done.
       }
       etrans. {
-        apply: rec_to_asm_trefines.
+        apply rec_to_asm_trefines; [apply _|].
         apply main_int_to_ptr_refines_itree.
       }
       have -> : (main_f2i ∪ int_to_ptr_f2i) = main_f2i by compute_done.

@@ -184,10 +184,10 @@ Lemma pass_correct ei' Ki ei Ks es es' n h fns1 fns2 v s s' vsi vss
                                 v ∈ assigned_vars (static_expr_to_expr es') ∨
                                 ∃ n, v = tmp_var n ∧ (n < s')%N) →
     Rec (expr_fill Ki $ subst_map vsi' (lexpr_to_expr ei')) h' fns1
-       ⪯{rec_module, rec_module, n, false}
+       ⪯{rec_trans, rec_trans, n, false}
     Rec (expr_fill Ks (Val v')) h' fns2) →
   Rec (expr_fill Ki $ subst_map vsi (lexpr_to_expr (ei ei'))) h fns1
-      ⪯{rec_module, rec_module, n, false}
+      ⪯{rec_trans, rec_trans, n, false}
   Rec es h fns2.
 Proof.
   move => Hcall.
@@ -365,8 +365,7 @@ Lemma pass_fn_correct f fn fn' :
   pass_fn fn = CSuccess fn' →
   NoDup (sfd_args fn ++ (sfd_vars fn).*1 ++ assigned_vars (static_expr_to_expr (sfd_body fn))) →
   (∀ n, tmp_var n ∉ sfd_args fn ++ (sfd_vars fn).*1 ++ assigned_vars (static_expr_to_expr (sfd_body fn))) →
-  trefines (MS rec_module (initial_rec_lstate (<[f := fn']> ∅)))
-           (MS rec_module (initial_rec_sstate (<[f := fn]> ∅))).
+  trefines (linear_rec_mod (<[f := fn']> ∅)) (rec_static_mod (<[f := fn]> ∅)).
 Proof.
   destruct (crun 0%N (pass (sfd_body fn))) as [?? res] eqn: Hsucc.
   unfold pass_fn. rewrite Hsucc => /= /(compiler_success_fmap_success _ _ _ _ _ _)[?[??]]. subst.

@@ -98,5 +98,8 @@ Program Definition lfndef_to_fndef (fn : lfndef) : fndef := {|
 |}.
 Next Obligation. move => ?. apply lexpr_is_static. Qed.
 
-Definition initial_rec_lstate (fns : gmap string lfndef) : rec_state :=
-  initial_rec_state (lfndef_to_fndef <$> fns).
+Definition linear_rec_init (fns : gmap string lfndef) : rec_state :=
+  rec_init (lfndef_to_fndef <$> fns).
+
+Definition linear_rec_mod (fns : gmap string lfndef) : module rec_event :=
+  Mod rec_trans (linear_rec_init fns).

@@ -116,10 +116,10 @@ Lemma pass_correct Ki Ks ei es es' n h fns1 fns2 s vsi vss ren
   (∀ x s', (s ≤ s')%N → vsi !! ssa_var x s' = None) →
   (∀ h' v',
     Rec (expr_fill Ki $ (Val v')) h' fns1
-       ⪯{rec_module, rec_module, n, false}
+       ⪯{rec_trans, rec_trans, n, false}
     Rec (expr_fill Ks (Val v')) h' fns2) →
   Rec ei h fns1
-      ⪯{rec_module, rec_module, n, false}
+      ⪯{rec_trans, rec_trans, n, false}
   Rec es h fns2.
 Proof.
   move => Hcall.
@@ -205,8 +205,8 @@ Proof.
 Qed.
 
 Lemma pass_fn_correct f fn :
-  trefines (MS rec_module (initial_rec_sstate (<[f := pass_fn fn]> ∅)))
-           (MS rec_module (initial_rec_sstate (<[f := fn]> ∅))).
+  trefines (rec_static_mod (<[f := pass_fn fn]> ∅))
+           (rec_static_mod (<[f := fn]> ∅)).
 Proof.
   apply rec_proof. { move => ?. rewrite !lookup_fmap !fmap_None !lookup_insert_None. naive_solver. }
   move => ????? vs ?. rewrite !fmap_insert !fmap_empty /=.

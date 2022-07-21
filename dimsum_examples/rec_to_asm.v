@@ -1176,23 +1176,23 @@ Definition rec_to_asm_post (ins : gset Z) (fns : gset string) (f2i : gmap string
       pp_end ((Outgoing, EAJump rs mem), (R2A cs' s.(r2a_last_regs)))
   end.
 
-Definition rec_to_asm (ins : gset Z) (fns : gset string) (f2i : gmap string Z)
+Definition rec_to_asm_trans (ins : gset Z) (fns : gset string) (f2i : gmap string Z)
+           (m : mod_trans rec_event) : mod_trans asm_event :=
+  prepost_trans (rec_to_asm_pre ins fns f2i) (rec_to_asm_post ins fns f2i) m.
+
+Definition rec_to_asm (ins : gset Z) (fns : gset string) (f2i : gmap string Z) (mo : gmap Z (option Z))
            (m : module rec_event) : module asm_event :=
-  mod_prepost (rec_to_asm_pre ins fns f2i) (rec_to_asm_post ins fns f2i) m.
+  Mod (rec_to_asm_trans ins fns f2i m.(m_trans))
+      (SMFilter, m.(m_init), (PPOutside, R2A [] ∅, (r2a_mem_map mo)%I)).
 
-Definition initial_rec_to_asm_state (mo : gmap Z (option Z)) (m : module rec_event) (σ : m.(m_state)) :=
-  (@SMFilter rec_event, σ, (@PPOutside rec_event asm_event, R2A [] ∅,
-    (r2a_mem_map mo)%I)).
-
-Lemma rec_to_asm_trefines mo m m' σ σ' ins fns f2i `{!VisNoAll m}:
-  trefines (MS m σ) (MS m' σ') →
-  trefines (MS (rec_to_asm ins fns f2i m) (initial_rec_to_asm_state mo m σ))
-           (MS (rec_to_asm ins fns f2i m') (initial_rec_to_asm_state mo m' σ')).
-Proof. move => ?. by apply: mod_prepost_trefines. Qed.
+Lemma rec_to_asm_trefines mo m m' ins fns f2i `{!VisNoAll m.(m_trans)}:
+  trefines m m' →
+  trefines (rec_to_asm ins fns f2i mo m) (rec_to_asm ins fns f2i mo m').
+Proof. move => ?. by apply: prepost_mod_trefines. Qed.
 
 (** * Horizontal compositionality of [rec_to_asm] *)
 Inductive rec_to_asm_combine_stacks (ins1 ins2 : gset Z) :
-  seq_product_state → list seq_product_state →
+  seq_product_case → list seq_product_case →
   list rec_to_asm_stack_item → list rec_to_asm_stack_item → list rec_to_asm_stack_item →
  Prop :=
 | RAC_nil :
@@ -1240,7 +1240,7 @@ Local Ltac r2a_split_go :=
   end.
 Local Tactic Notation "r2a_split!" := split_tac ltac:(r2a_split_go).
 
-Lemma rec_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 mo1 mo2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m2}:
+Lemma rec_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 mo1 mo2 m1 m2 `{!VisNoAll m1.(m_trans)} `{!VisNoAll m2.(m_trans)}:
   ins1 ## ins2 →
   fns1 ## fns2 →
   mo1 ##ₘ mo2 →
@@ -1249,13 +1249,8 @@ Lemma rec_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 mo1 mo2 m1 m2 σ1 σ2 `{!
   map_Forall (λ f i1, Is_true (if f2i2 !! f is Some i2 then bool_decide (i1 = i2) else true)) f2i1 →
   map_Forall (λ f i, f ∈ fns2 ∨ i ∉ ins2) f2i1 →
   map_Forall (λ f i, f ∈ fns1 ∨ i ∉ ins1) f2i2 →
-  trefines (MS (asm_link ins1 ins2 (rec_to_asm ins1 fns1 f2i1 m1) (rec_to_asm ins2 fns2 f2i2 m2))
-               (MLFNone, None, initial_rec_to_asm_state mo1 m1 σ1,
-                 initial_rec_to_asm_state mo2 m2 σ2))
-           (MS (rec_to_asm (ins1 ∪ ins2) (fns1 ∪ fns2) (f2i1 ∪ f2i2) (rec_link fns1 fns2 m1 m2))
-               (initial_rec_to_asm_state (mo1 ∪ mo2) (rec_link _ _ _ _)
-                  (MLFNone, [], σ1, σ2) )
-).
+  trefines (asm_link ins1 ins2 (rec_to_asm ins1 fns1 f2i1 mo1 m1) (rec_to_asm ins2 fns2 f2i2 mo2 m2))
+           (rec_to_asm (ins1 ∪ ins2) (fns1 ∪ fns2) (f2i1 ∪ f2i2) (mo1 ∪ mo2) (rec_link fns1 fns2 m1 m2)).
 Proof.
   move => Hdisji Hdisjf Hdisjm Hin1 Hin2 Hagree Ho1 Ho2.
   have {}Hin1 : (∀ f, f ∈ fns1 → ∃ i, i ∈ ins1 ∧ f2i1 !! f = Some i). {
@@ -1274,7 +1269,7 @@ Proof.
     move => ?? /Ho2. naive_solver.
   }
 
-  unshelve apply: mod_prepost_link. { exact (λ ips '(R2A cs1 lr1) '(R2A cs2 lr2) '(R2A cs lr) x1 x2 x s ics,
+  unshelve apply: prepost_link. { exact (λ ips '(R2A cs1 lr1) '(R2A cs2 lr2) '(R2A cs lr) x1 x2 x s ics,
   rec_to_asm_combine_stacks ins1 ins2 ips ics cs cs1 cs2 ∧ s = None ∧
   ((ips = SPNone ∧ (x ⊣⊢ x1 ∗ x2)) ∨
   ((ips = SPLeft ∧ x1 = (x ∗ x2)%I
@@ -1407,9 +1402,9 @@ Lemma rec_to_asm_proof ins fns ins_dom fns_dom f2i :
                            r2a_val_rel v av ∗ rf'' ∗ r') →
               r2a_regs_ret rs'' rs' av →
               map_scramble touched_registers lr'' rs'' →
-              AsmState (ARunning []) rs'' mem'' ins ⪯{asm_module, rec_to_asm ins_dom fns_dom f2i rec_module, n, true}
+              AsmState (ARunning []) rs'' mem'' ins ⪯{asm_trans, rec_to_asm_trans ins_dom fns_dom f2i rec_trans, n, true}
                (SMProg, Rec (expr_fill K (expr_fill K' (Val v))) h'' fns, (PPInside, R2A cs lr'', rf''))) →
-          AsmState (ARunning []) rs' mem' ins ⪯{asm_module, rec_to_asm ins_dom fns_dom f2i rec_module, n, true}
+          AsmState (ARunning []) rs' mem' ins ⪯{asm_trans, rec_to_asm_trans ins_dom fns_dom f2i rec_trans, n, true}
                (SMProg, Rec (expr_fill K (expr_fill K' (rec.Call f' es))) h' fns, (PPInside, R2A cs lr', rf'))) →
       (* Return *)
       (∀ rs' mem' ssz' av v h' lr' rf',
@@ -1418,14 +1413,12 @@ Lemma rec_to_asm_proof ins fns ins_dom fns_dom f2i :
                       r2a_val_rel v av ∗ rf' ∗ rc) →
           r2a_regs_ret rs' rs av →
           map_scramble touched_registers lr' rs' →
-          AsmState (ARunning []) rs' mem' ins ⪯{asm_module, rec_to_asm ins_dom fns_dom f2i rec_module, n, true}
+          AsmState (ARunning []) rs' mem' ins ⪯{asm_trans, rec_to_asm_trans ins_dom fns_dom f2i rec_trans, n, true}
                (SMProg, Rec (expr_fill K (Val v)) h' fns, (PPInside, R2A cs lr', rf'))) →
-      AsmState (ARunning []) rs mem ins ⪯{asm_module, rec_to_asm ins_dom fns_dom f2i rec_module, n, false}
+      AsmState (ARunning []) rs mem ins ⪯{asm_trans, rec_to_asm_trans ins_dom fns_dom f2i rec_trans, n, false}
                (SMProg, Rec (expr_fill K (AllocA fn.(fd_vars) $ subst_l fn.(fd_args) vs fn.(fd_body))) h fns, (PPInside, R2A cs lr, rf))
 ) →
-  trefines (MS asm_module (initial_asm_state ins))
-           (MS (rec_to_asm ins_dom fns_dom f2i rec_module) (initial_rec_to_asm_state ∅ rec_module
-             (initial_rec_state fns))).
+  trefines (asm_mod ins) (rec_to_asm ins_dom fns_dom f2i ∅ (rec_mod fns)).
 Proof.
   move => ? ? Hf. subst.
   apply: tsim_implies_trefines => n0 /=.
@@ -1491,7 +1484,7 @@ Proof.
                       r2a_val_rel v av ∗ r' ∗ rf') →
           r2a_regs_ret rs' rs1 av  →
           map_scramble touched_registers lr' rs' →
-          AsmState (ARunning []) rs' mem' ins ⪯{asm_module, rec_to_asm (dom ins) (dom fns) f2i rec_module, n, true}
+          AsmState (ARunning []) rs' mem' ins ⪯{asm_trans, rec_to_asm_trans (dom ins) (dom fns) f2i rec_trans, n, true}
                (SMProg, Rec (expr_fill K' (Val v)) h' fns, (PPInside, R2A cs1 lr', rf'))) ). }
     { eexists (ReturnExtCtx _:: _). split! => //. {
         iSatMono. iIntros!. iFrame.

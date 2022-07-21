@@ -254,7 +254,7 @@ Qed.
 
 (** * [trefines] *)
 
-Inductive thas_trace {EV} (m : module EV) : m.(m_state) → trace EV → (m.(m_state) → Prop) → Prop :=
+Inductive thas_trace {EV} (m : mod_trans EV) : m.(m_state) → trace EV → (m.(m_state) → Prop) → Prop :=
 | TTraceEnd σ (Pσ : _ → Prop) κs:
     Pσ σ →
     tnil ⊆ κs →
@@ -272,7 +272,7 @@ Inductive thas_trace {EV} (m : module EV) : m.(m_state) → trace EV → (m.(m_s
 Notation " σ '~{' m , Pκs '}~>ₜ' P " := (thas_trace m σ Pκs P) (at level 40).
 Notation " σ '~{' m , Pκs '}~>ₜ' - " := (thas_trace m σ Pκs (λ _, True)) (at level 40).
 
-Inductive thas_trace_simple {EV} (m : module EV) : m.(m_state) → trace EV → (m.(m_state) → Prop) → Prop :=
+Inductive thas_trace_simple {EV} (m : mod_trans EV) : m.(m_state) → trace EV → (m.(m_state) → Prop) → Prop :=
 | TSTraceEnd σ (Pσ : _ → Prop) κs:
     Pσ σ →
     tnil ⊆ κs →
@@ -286,7 +286,7 @@ Inductive thas_trace_simple {EV} (m : module EV) : m.(m_state) → trace EV → 
 Notation " σ '~{' m , Pκs '}~>ₜₛ' P " := (thas_trace_simple m σ Pκs P) (at level 40).
 Notation " σ '~{' m , Pκs '}~>ₜₛ' - " := (thas_trace_simple m σ Pκs (λ _, True)) (at level 40).
 
-Inductive tnhas_trace {EV} (m : module EV) : m.(m_state) → trace EV → trace_index → (m.(m_state) → Prop) → Prop :=
+Inductive tnhas_trace {EV} (m : mod_trans EV) : m.(m_state) → trace EV → trace_index → (m.(m_state) → Prop) → Prop :=
 | TNTraceEnd σ (Pσ : _ → Prop) κs n:
     Pσ σ →
     tnil ⊆ κs →
@@ -306,13 +306,13 @@ Inductive tnhas_trace {EV} (m : module EV) : m.(m_state) → trace EV → trace_
 Notation " σ '~{' m , Pκs , n '}~>ₜ' P " := (tnhas_trace m σ Pκs n P) (at level 40).
 Notation " σ '~{' m , Pκs , n '}~>ₜ' - " := (tnhas_trace m σ Pκs n (λ _, True)) (at level 40).
 
-Lemma TTraceStepNone {EV} (m : module EV) σ1 Pσ2 Pσ3 κs:
+Lemma TTraceStepNone {EV} (m : mod_trans EV) σ1 Pσ2 Pσ3 κs:
   m_step m σ1 None Pσ2 →
   (∀ σ2, Pσ2 σ2 → σ2 ~{ m, κs }~>ₜ Pσ3) →
   σ1 ~{ m, κs }~>ₜ Pσ3.
 Proof. move => ??. by apply: TTraceStep. Qed.
 
-Lemma TTraceStepSome {EV} (m : module EV) σ1 Pσ2 Pσ3 e κs:
+Lemma TTraceStepSome {EV} (m : mod_trans EV) σ1 Pσ2 Pσ3 e κs:
   m_step m σ1 (Some e) Pσ2 →
   (∀ σ2, Pσ2 σ2 → σ2 ~{ m, κs }~>ₜ Pσ3) →
   σ1 ~{ m, tcons e κs }~>ₜ Pσ3.
@@ -336,7 +336,7 @@ Ltac tend :=
            ]
 .
 
-Global Instance thas_trace_proper {EV} (m : module EV) :
+Global Instance thas_trace_proper {EV} (m : mod_trans EV) :
   Proper ((=) ==> (⊆) ==> (pointwise_relation m.(m_state) impl) ==> impl) (thas_trace m).
 Proof.
   move => ?? -> κs1 κs2 Hκs Pσ1 Pσ2 HP Ht.
@@ -349,18 +349,18 @@ Proof.
   - move => *. eapply TTraceAll. naive_solver. by etrans.
 Qed.
 
-Global Instance thas_trace_proper_flip {EV} (m : module EV) :
+Global Instance thas_trace_proper_flip {EV} (m : mod_trans EV) :
   Proper ((=) ==> (flip (⊆)) ==> (=) ==> flip impl) (thas_trace m).
 Proof. move => ?? -> ?? Hsub ?? -> /=. by rewrite Hsub. Qed.
 
-Lemma thas_trace_mono {EV} {m : module EV} κs' κs (Pσ2' Pσ2 : _ → Prop)  σ1 :
+Lemma thas_trace_mono {EV} {m : mod_trans EV} κs' κs (Pσ2' Pσ2 : _ → Prop)  σ1 :
   σ1 ~{ m, κs' }~>ₜ Pσ2' →
   κs' ⊆ κs →
   (∀ σ, Pσ2' σ → Pσ2 σ) →
   σ1 ~{ m, κs }~>ₜ Pσ2.
 Proof. move => ???. by apply: thas_trace_proper. Qed.
 
-Lemma thas_trace_mono' {EV} {m : module EV} κs' κs (Pσ2 : _ → Prop)  σ1 :
+Lemma thas_trace_mono' {EV} {m : mod_trans EV} κs' κs (Pσ2 : _ → Prop)  σ1 :
   σ1 ~{ m, κs' }~>ₜ Pσ2 →
   κs' ⊆ κs →
   σ1 ~{ m, κs }~>ₜ Pσ2.
@@ -377,17 +377,17 @@ Proof.
   - move => ????? IH Hκ ?? HP. apply: TTraceAll; [|by etrans]. naive_solver.
 Qed.
 
-Lemma thas_trace_all {EV T} f (m : module EV) σ Pσ:
+Lemma thas_trace_all {EV T} f (m : mod_trans EV) σ Pσ:
   (∀ x, σ ~{ m, f x }~>ₜ Pσ) →
   σ ~{ m, tall T f }~>ₜ Pσ.
 Proof. move => ?. by eapply TTraceAll. Qed.
 
-Lemma thas_trace_ex {EV T} x f (m : module EV) σ Pσ:
+Lemma thas_trace_ex {EV T} x f (m : mod_trans EV) σ Pσ:
   σ ~{ m, f x }~>ₜ Pσ →
   σ ~{ m, tex T f }~>ₜ Pσ.
 Proof. move => ?. apply: thas_trace_mono'; [done|]. by econstructor. Qed.
 
-Lemma thas_trace_inv {EV} (m : module EV) κs (Pσ : _ → Prop) σ:
+Lemma thas_trace_inv {EV} (m : mod_trans EV) κs (Pσ : _ → Prop) σ:
   σ ~{ m, κs }~>ₜ Pσ →
   under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ σ) ∨
     ∃ κ κs' Pσ2, m_step m σ κ Pσ2 ∧ (∀ σ2, Pσ2 σ2 → σ2 ~{ m, κs' }~>ₜ Pσ) ∧ tapp (option_trace κ) κs' ⊆ κs).
@@ -398,7 +398,7 @@ Proof.
   - move => ?????? IH ?. apply: UTAll; [|done]. done.
 Qed.
 
-Lemma thas_trace_trans {EV} κs1 κs2 (m : module EV) σ1 Pσ2 Pσ3 :
+Lemma thas_trace_trans {EV} κs1 κs2 (m : mod_trans EV) σ1 Pσ2 Pσ3 :
   σ1 ~{ m, κs1 }~>ₜ Pσ2 →
   (∀ σ2, Pσ2 σ2 → σ2 ~{ m, κs2 }~>ₜ Pσ3) →
   σ1 ~{ m, tapp κs1 κs2 }~>ₜ Pσ3.
@@ -412,7 +412,7 @@ Proof.
     naive_solver.
 Qed.
 
-Lemma thas_trace_nil_inv' {EV} κs (m : module EV) σ1 Pσ3:
+Lemma thas_trace_nil_inv' {EV} κs (m : mod_trans EV) σ1 Pσ3:
   σ1 ~{ m, κs }~>ₜ Pσ3 → κs ⊆ tnil →
   σ1 ~{ m, tnil }~>ₜₛ Pσ3.
 Proof.
@@ -424,12 +424,12 @@ Proof.
   - move => ?????? IH <- Ht. inversion Ht; simplify_K. by apply: IH.
 Qed.
 
-Lemma thas_trace_nil_inv {EV} (m : module EV) σ1 Pσ3:
+Lemma thas_trace_nil_inv {EV} (m : mod_trans EV) σ1 Pσ3:
   σ1 ~{ m, tnil }~>ₜ Pσ3 →
   σ1 ~{ m, tnil }~>ₜₛ Pσ3.
 Proof. move => ?. by apply: thas_trace_nil_inv'. Qed.
 
-Lemma thas_trace_cons_inv' {EV} κs κs' κ (m : module EV) σ1 Pσ3:
+Lemma thas_trace_cons_inv' {EV} κs κs' κ (m : mod_trans EV) σ1 Pσ3:
   σ1 ~{ m, κs }~>ₜ Pσ3 → κs ⊆ tcons κ κs' →
   σ1 ~{ m, tnil }~>ₜ (λ σ2, ∃ Pσ2', m.(m_step) σ2 (Some κ) Pσ2' ∧ ∀ σ2', Pσ2' σ2' → σ2' ~{ m, κs' }~>ₜ Pσ3).
 Proof.
@@ -448,12 +448,12 @@ Proof.
     naive_solver.
 Qed.
 
-Lemma thas_trace_cons_inv {EV} κs' κ (m : module EV) σ1 Pσ3:
+Lemma thas_trace_cons_inv {EV} κs' κ (m : mod_trans EV) σ1 Pσ3:
   σ1 ~{ m, tcons κ κs' }~>ₜ Pσ3 →
   σ1 ~{ m, tnil }~>ₜ (λ σ2, ∃ Pσ2', m.(m_step) σ2 (Some κ) Pσ2' ∧ ∀ σ2', Pσ2' σ2' → σ2' ~{ m, κs' }~>ₜ Pσ3).
 Proof. move => ?. by apply: thas_trace_cons_inv'. Qed.
 
-Lemma thas_trace_ex_inv' {EV} κs T f (m : module EV) σ1 Pσ3:
+Lemma thas_trace_ex_inv' {EV} κs T f (m : mod_trans EV) σ1 Pσ3:
   σ1 ~{ m, κs }~>ₜ Pσ3 → κs ⊆ tex T f →
   σ1 ~{ m, tnil }~>ₜ (λ σ2, ∃ x, σ2 ~{ m, f x }~>ₜ Pσ3).
 Proof.
@@ -479,12 +479,12 @@ Proof.
     by apply: thas_trace_all.
 Qed.
 
-Lemma thas_trace_ex_inv {EV} T f (m : module EV) σ1 Pσ3:
+Lemma thas_trace_ex_inv {EV} T f (m : mod_trans EV) σ1 Pσ3:
   σ1 ~{ m, tex T f }~>ₜ Pσ3 →
   σ1 ~{ m, tnil }~>ₜ (λ σ2, ∃ x, σ2 ~{ m, f x }~>ₜ Pσ3).
 Proof. move => ?. by apply: thas_trace_ex_inv'. Qed.
 
-Lemma thas_trace_all_inv' {EV T} κs f (m : module EV) σ1 Pσ3:
+Lemma thas_trace_all_inv' {EV T} κs f (m : mod_trans EV) σ1 Pσ3:
   σ1 ~{ m, κs }~>ₜ Pσ3 → κs ⊆ tall T f →
   ∀ x, σ1 ~{ m, f x }~>ₜ Pσ3.
 Proof.
@@ -492,12 +492,12 @@ Proof.
   etrans; [done|]. by econstructor.
 Qed.
 
-Lemma thas_trace_all_inv {EV} T f (m : module EV) σ1 Pσ3:
+Lemma thas_trace_all_inv {EV} T f (m : mod_trans EV) σ1 Pσ3:
   σ1 ~{ m, tall T f }~>ₜ Pσ3 →
   ∀ x, σ1 ~{ m, f x }~>ₜ Pσ3.
 Proof. move => ??. by apply: thas_trace_all_inv'. Qed.
 
-Lemma thas_trace_app_inv {EV} κs1 κs2 (m : module EV) σ1 Pσ3 :
+Lemma thas_trace_app_inv {EV} κs1 κs2 (m : mod_trans EV) σ1 Pσ3 :
   σ1 ~{ m, tapp κs1 κs2 }~>ₜ Pσ3 →
   σ1 ~{ m, κs1 }~>ₜ (λ σ2, σ2 ~{ m, κs2 }~>ₜ Pσ3).
 Proof.
@@ -514,7 +514,7 @@ Proof.
     apply: thas_trace_all. naive_solver.
 Qed.
 
-Lemma thas_trace_post {EV} κs (m : module EV) σ1 Pσ2:
+Lemma thas_trace_post {EV} κs (m : mod_trans EV) σ1 Pσ2:
   σ1 ~{ m, κs }~>ₜ Pσ2 →
   σ1 ~{ m, κs }~>ₜ (λ _, False) ∨ ∃ σ, Pσ2 σ.
 Proof.
@@ -534,7 +534,7 @@ Proof.
 Qed.
 
 (** tnhas_trace *)
-Global Instance tnhas_trace_proper {EV} (m : module EV) :
+Global Instance tnhas_trace_proper {EV} (m : mod_trans EV) :
   Proper ((=) ==> (⊆) ==> (⊆) ==> (pointwise_relation m.(m_state) impl) ==> impl) (tnhas_trace m).
 Proof.
   move => ?? -> κs1 κs2 Hκs n1 n2 Hn Pσ1 Pσ2 HP Ht.
@@ -547,11 +547,11 @@ Proof.
   - move => *. eapply TNTraceAll. naive_solver. by etrans. etrans; [|done]. done.
 Qed.
 
-Global Instance tnhas_trace_proper_flip {EV} (m : module EV) :
+Global Instance tnhas_trace_proper_flip {EV} (m : mod_trans EV) :
   Proper ((=) ==> (flip (⊆)) ==> (flip (⊆)) ==> (=) ==> flip impl) (tnhas_trace m).
 Proof. move => ?? -> ?? Hsub ?? Hsub2 ?? -> /=. by rewrite Hsub Hsub2. Qed.
 
-Lemma tnhas_trace_mono {EV} {m : module EV} κs' κs (Pσ2' Pσ2 : _ → Prop)  σ1 n n' :
+Lemma tnhas_trace_mono {EV} {m : mod_trans EV} κs' κs (Pσ2' Pσ2 : _ → Prop)  σ1 n n' :
   σ1 ~{ m, κs', n' }~>ₜ Pσ2' →
   κs' ⊆ κs →
   n' ⊆ n →
@@ -571,7 +571,7 @@ Proof.
     apply: TNTraceAll; [|by etrans |]. naive_solver. econs. done.
 Qed.
 
-Lemma tnhas_trace_inv {EV} (m : module EV) κs (Pσ : _ → Prop) σ n:
+Lemma tnhas_trace_inv {EV} (m : mod_trans EV) κs (Pσ : _ → Prop) σ n:
   σ ~{ m, κs, n }~>ₜ Pσ →
   under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ σ) ∨
     ∃ κ κs' Pσ2 fn, m_step m σ κ Pσ2 ∧ (∀ σ2 (H : Pσ2 σ2), σ2 ~{ m, κs', fn (σ2 ↾ H) }~>ₜ Pσ)
@@ -588,7 +588,7 @@ Proof.
       etrans; [done|]. etrans; [|done]. by econs.
 Qed.
 
-Lemma thas_trace_n_1 {EV} (m : module EV) σ κs Pσ:
+Lemma thas_trace_n_1 {EV} (m : mod_trans EV) σ κs Pσ:
   σ ~{m, κs}~>ₜ Pσ → ∃ n, σ ~{m, κs, n}~>ₜ Pσ.
 Proof.
   elim.
@@ -602,7 +602,7 @@ Proof.
     by apply: TNTraceAll.
 Qed.
 
-Lemma thas_trace_n_2 {EV} (m : module EV) σ κs Pσ n:
+Lemma thas_trace_n_2 {EV} (m : mod_trans EV) σ κs Pσ n:
   σ ~{m, κs, n}~>ₜ Pσ → σ ~{m, κs}~>ₜ Pσ.
 Proof.
   elim.
@@ -611,14 +611,14 @@ Proof.
   - move => *. by apply: TTraceAll.
 Qed.
 
-Lemma thas_trace_n {EV} (m : module EV) σ κs Pσ:
+Lemma thas_trace_n {EV} (m : mod_trans EV) σ κs Pσ:
   σ ~{m, κs}~>ₜ Pσ ↔ ∃ n, σ ~{m, κs, n}~>ₜ Pσ.
 Proof. split; [apply: thas_trace_n_1 | move => [??]; by apply: thas_trace_n_2]. Qed.
 
-Record trefines {EV} (mimpl mspec : mod_state EV) : Prop := {
+Record trefines {EV} (mimpl mspec : module EV) : Prop := {
   tref_subset:
-    ∀ κs, mimpl.(ms_state) ~{ mimpl, κs }~>ₜ - →
-          mspec.(ms_state) ~{ mspec, κs }~>ₜ -
+    ∀ κs, mimpl.(m_init) ~{ mimpl.(m_trans), κs }~>ₜ - →
+          mspec.(m_init) ~{ mspec.(m_trans), κs }~>ₜ -
 }.
 
 Global Instance trefines_preorder EV : PreOrder (@trefines EV).
@@ -632,21 +632,21 @@ Qed.
 (* We need to define steps_spec like this to get a strong induction
 principle for free (which is necessary to prove rewriting with
 eutt) *)
-Definition steps_spec_rec {EV} (m : module EV) (κ : option EV) (Pσ : m.(m_state) → Prop) (R : m.(m_state) → Prop) :
+Definition steps_spec_rec {EV} (m : mod_trans EV) (κ : option EV) (Pσ : m.(m_state) → Prop) (R : m.(m_state) → Prop) :
   m.(m_state) → Prop := λ σ,
     (κ = None ∧ Pσ σ) ∨
       ∃ κ' Pσ', m.(m_step) σ κ' Pσ' ∧
           (if κ' is Some _ then κ = κ' else True) ∧ (∀ σ', Pσ' σ' → (κ = κ' ∧ Pσ σ') ∨ κ' = None ∧ R σ').
 
-Global Instance steps_spec_rec_mono {EV} (m : module EV) κ Pσ: MonoPred (steps_spec_rec m κ Pσ).
+Global Instance steps_spec_rec_mono {EV} (m : mod_trans EV) κ Pσ: MonoPred (steps_spec_rec m κ Pσ).
 Proof. constructor => ??? x [?|?]; destruct!; simplify_eq. { by left. } right. naive_solver. Qed.
 
-Definition steps_spec {EV} (m : module EV) (σ : m.(m_state)) (κ : option EV) (Pσ : m.(m_state) → Prop) :=
+Definition steps_spec {EV} (m : mod_trans EV) (σ : m.(m_state)) (κ : option EV) (Pσ : m.(m_state) → Prop) :=
   prop_least_fixpoint (steps_spec_rec m κ Pσ) σ.
 
 Notation " σ '-{' m , κ '}->ₛ' P " := (steps_spec m σ κ P) (at level 40).
 
-Lemma steps_spec_mono {EV} (m : module EV) σ (Pσ Pσ' : _ → Prop) κ:
+Lemma steps_spec_mono {EV} (m : mod_trans EV) σ (Pσ Pσ' : _ → Prop) κ:
   σ -{ m, κ }->ₛ Pσ' →
   (∀ σ', Pσ' σ' → Pσ σ') →
   σ -{ m, κ }->ₛ Pσ.
@@ -656,12 +656,12 @@ Proof.
   - right. naive_solver.
 Qed.
 
-Lemma steps_spec_end {EV} (m : module EV) σ (Pσ : _ → Prop):
+Lemma steps_spec_end {EV} (m : mod_trans EV) σ (Pσ : _ → Prop):
   Pσ σ →
   σ -{ m, None }->ₛ Pσ.
 Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. left. naive_solver. Qed.
 
-Lemma steps_spec_step_end {EV} (m : module EV) σ (Pσ Pσ' : _ → Prop) κ:
+Lemma steps_spec_step_end {EV} (m : mod_trans EV) σ (Pσ Pσ' : _ → Prop) κ:
   m.(m_step) σ κ Pσ' →
   (∀ σ', Pσ' σ' → Pσ σ') →
   σ -{ m, κ }->ₛ Pσ.
@@ -670,7 +670,7 @@ Proof.
   eexists _, _. split; [done|]. split; [by case_match|]. naive_solver.
 Qed.
 
-Lemma steps_spec_step {EV} (m : module EV) σ (Pσ Pσ' : _ → Prop) κ:
+Lemma steps_spec_step {EV} (m : mod_trans EV) σ (Pσ Pσ' : _ → Prop) κ:
   m.(m_step) σ None Pσ' →
   (∀ σ', Pσ' σ' → σ' -{ m, κ }->ₛ Pσ) →
   σ -{ m, κ }->ₛ Pσ.
@@ -679,7 +679,7 @@ Proof.
   eexists _, _. split; [done|]. split; [done|]. naive_solver.
 Qed.
 
-Lemma steps_spec_has_trace' {EV} (m : module EV) κ σ Pσ :
+Lemma steps_spec_has_trace' {EV} (m : mod_trans EV) κ σ Pσ :
   σ -{ m, κ }->ₛ Pσ →
   σ ~{ m, option_trace κ }~>ₜ Pσ.
 Proof.
@@ -689,7 +689,7 @@ Proof.
   - tstep_None; [done|] => ? /Ht[[??]|[??]]; subst. { tend. } done.
 Qed.
 
-Lemma steps_spec_has_trace_1 {EV} (m : module EV) σ κ (Pσ : _ → Prop) :
+Lemma steps_spec_has_trace_1 {EV} (m : mod_trans EV) σ κ (Pσ : _ → Prop) :
   σ -{ m, κ }->ₛ Pσ →
   σ ~{ m, tnil }~>ₜ (λ σ', if κ is Some _ then ∃ Pσ', m.(m_step) σ' κ Pσ' ∧ ∀ σ', Pσ' σ' → Pσ σ' else Pσ σ').
 Proof.
@@ -699,7 +699,7 @@ Proof.
   + tstep_None; [done|] => ? /Ht[[??]|[??]]; simplify_eq. { tend. } done.
 Qed.
 
-Lemma steps_spec_has_trace_elim' {EV} (m : module EV) σ κ (Pσ Pσ' : _ → Prop) κs:
+Lemma steps_spec_has_trace_elim' {EV} (m : mod_trans EV) σ κ (Pσ Pσ' : _ → Prop) κs:
   σ ~{ m, κs }~>ₜₛ Pσ' →
   κs ⊆ tnil →
   (∀ σ', Pσ' σ' → σ' -{ m, κ }->ₛ Pσ) →
@@ -711,12 +711,12 @@ Proof.
     apply: steps_spec_step; [done|] => ? /IH. naive_solver.
 Qed.
 
-Lemma steps_spec_has_trace_elim {EV} (m : module EV) σ κ (Pσ : _ → Prop) :
+Lemma steps_spec_has_trace_elim {EV} (m : mod_trans EV) σ κ (Pσ : _ → Prop) :
   σ ~{ m, tnil }~>ₜ (λ σ', σ' -{ m, κ }->ₛ Pσ) →
   σ -{ m, κ }->ₛ Pσ.
 Proof. move => ?. apply: steps_spec_has_trace_elim'. { by apply thas_trace_nil_inv. } { done. } done. Qed.
 
-Lemma steps_spec_has_trace_2 {EV} (m : module EV) σ κ (Pσ : _ → Prop) :
+Lemma steps_spec_has_trace_2 {EV} (m : mod_trans EV) σ κ (Pσ : _ → Prop) :
   σ ~{ m, tnil }~>ₜ (λ σ', if κ is Some _ then ∃ Pσ', m.(m_step) σ' κ Pσ' ∧ ∀ σ', Pσ' σ' → Pσ σ' else Pσ σ') →
   σ -{ m, κ }->ₛ Pσ.
 Proof.
@@ -726,14 +726,14 @@ Proof.
   - move => ?. by apply: steps_spec_end.
 Qed.
 
-Lemma steps_spec_has_trace {EV} (m : module EV) σ κ (Pσ : _ → Prop) :
+Lemma steps_spec_has_trace {EV} (m : mod_trans EV) σ κ (Pσ : _ → Prop) :
   σ -{ m, κ }->ₛ Pσ ↔
   σ ~{ m, tnil }~>ₜ (λ σ', if κ is Some _ then ∃ Pσ', m.(m_step) σ' κ Pσ' ∧ ∀ σ', Pσ' σ' → Pσ σ' else Pσ σ').
 Proof.
   split; [apply steps_spec_has_trace_1 | apply steps_spec_has_trace_2].
 Qed.
 
-Lemma steps_spec_step_trans' {EV} (m : module EV) σ κ (Pσ Pσ' : _ → Prop):
+Lemma steps_spec_step_trans' {EV} (m : mod_trans EV) σ κ (Pσ Pσ' : _ → Prop):
   σ -{ m, None }->ₛ Pσ' →
   (∀ σ', Pσ' σ' → σ' -{ m, κ }->ₛ Pσ) →
   σ -{ m, κ }->ₛ Pσ.
@@ -743,7 +743,7 @@ Proof.
   move => /= ??. apply steps_spec_has_trace. naive_solver.
 Qed.
 
-Lemma steps_spec_step_trans {EV} (m : module EV) σ κ (Pσ : _ → Prop):
+Lemma steps_spec_step_trans {EV} (m : mod_trans EV) σ κ (Pσ : _ → Prop):
   σ -{ m, None }->ₛ (λ σ', σ' -{ m, κ }->ₛ Pσ) →
   σ -{ m, κ }->ₛ Pσ.
 Proof. move => ?. by apply: steps_spec_step_trans'. Qed.
@@ -752,42 +752,42 @@ Proof. move => ?. by apply: steps_spec_step_trans'. Qed.
 (* We need to define steps_impl like this to get a strong induction
 principle for free (which is necessary to prove rewriting with
 eutt) *)
-Definition steps_impl_rec {EV} (m : module EV) (R : (m.(m_state) * (bool → option EV → (m.(m_state) → Prop) → Prop)) → Prop)
+Definition steps_impl_rec {EV} (m : mod_trans EV) (R : (m.(m_state) * (bool → option EV → (m.(m_state) → Prop) → Prop)) → Prop)
   : (m.(m_state) * (bool → option EV → (m.(m_state) → Prop) → Prop)) → Prop := λ '(σ, Pσ),
     Pσ false None (σ =.) ∨
       (∀ κ Pσ2, m.(m_step) σ κ Pσ2 →
                 Pσ true κ Pσ2 ∨ ∃ σ2, Pσ2 σ2 ∧ κ = None ∧ R (σ2, (λ _, Pσ true))).
 
-Global Instance steps_impl_rec_mono {EV} (m : module EV): MonoPred (steps_impl_rec m).
+Global Instance steps_impl_rec_mono {EV} (m : mod_trans EV): MonoPred (steps_impl_rec m).
 Proof. constructor => ??? [??] [?|?]; destruct!. { by left. } right. naive_solver. Qed.
 
-Definition steps_impl {EV} (m : module EV) (σ : m.(m_state)) (Pσ : bool → option EV → (m.(m_state) → Prop) → Prop) :=
+Definition steps_impl {EV} (m : mod_trans EV) (σ : m.(m_state)) (Pσ : bool → option EV → (m.(m_state) → Prop) → Prop) :=
   prop_least_fixpoint (steps_impl_rec m) (σ, Pσ).
 Arguments steps_impl_rec : simpl never.
 
 Notation " σ '-{' m '}->' P " := (steps_impl m σ P) (at level 40).
 
-Lemma steps_impl_end {EV} (m : module EV) σ (Pσ : _ → _ → _ → Prop):
+Lemma steps_impl_end {EV} (m : mod_trans EV) σ (Pσ : _ → _ → _ → Prop):
   Pσ false None (σ =.) →
   σ -{ m }-> Pσ.
 Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. left. naive_solver. Qed.
 
-Lemma steps_impl_step_end {EV} (m : module EV) σ (Pσ : _ → _ → _ → Prop):
+Lemma steps_impl_step_end {EV} (m : mod_trans EV) σ (Pσ : _ → _ → _ → Prop):
   (∀ κ Pσ2, m.(m_step) σ κ Pσ2 → Pσ true κ Pσ2) →
   σ -{ m }-> Pσ.
 Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. right => ???. left. naive_solver. Qed.
 
-Lemma steps_impl_step {EV} (m : module EV) σ (Pσ : _ → _ → _ → Prop):
+Lemma steps_impl_step {EV} (m : mod_trans EV) σ (Pσ : _ → _ → _ → Prop):
   (∀ κ Pσ2, m.(m_step) σ κ Pσ2 → Pσ true κ Pσ2 ∨ ∃ σ2, Pσ2 σ2 ∧ κ = None ∧ σ2 -{ m }-> (λ _, Pσ true)) →
   σ -{ m }-> Pσ.
 Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. right => ???. naive_solver. Qed.
 
-Lemma steps_impl_step_next {EV} (m : module EV) σ (Pσ : _ → _ → _ → Prop):
+Lemma steps_impl_step_next {EV} (m : mod_trans EV) σ (Pσ : _ → _ → _ → Prop):
   (∀ κ Pσ2, m.(m_step) σ κ Pσ2 → ∃ σ2, Pσ2 σ2 ∧ κ = None ∧ σ2 -{ m }-> (λ _, Pσ true)) →
   σ -{ m }-> Pσ.
 Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. right => ???. naive_solver. Qed.
 
-Lemma steps_impl_step_trans' {EV} (m : module EV) σ (Pσ Pσ' : _ → _ → _ → Prop):
+Lemma steps_impl_step_trans' {EV} (m : mod_trans EV) σ (Pσ Pσ' : _ → _ → _ → Prop):
   σ -{ m }-> Pσ' →
   (∀ b e P, Pσ' b e P → ∃ σ', e = None ∧ P σ' ∧ σ' -{ m }-> (λ b', Pσ (b || b'))) →
   σ -{ m }-> Pσ.
@@ -799,12 +799,12 @@ Proof.
   split!; [done|]. apply IH. naive_solver.
 Qed.
 
-Lemma steps_impl_step_trans {EV} (m : module EV) σ (Pσ : _ → _ → _ → Prop):
+Lemma steps_impl_step_trans {EV} (m : mod_trans EV) σ (Pσ : _ → _ → _ → Prop):
   σ -{ m }-> (λ b e P, ∃ σ', e = None ∧ P σ' ∧ σ' -{ m }-> (λ b', Pσ (b || b'))) →
   σ -{ m }-> Pσ.
 Proof. move => ?. by apply: steps_impl_step_trans'. Qed.
 
-Lemma steps_impl_mono {EV} (m : module EV) σ (Pσ Pσ' : _ → _ → _ → Prop):
+Lemma steps_impl_mono {EV} (m : mod_trans EV) σ (Pσ Pσ' : _ → _ → _ → Prop):
   σ -{ m }-> Pσ' →
   (∀ b κ P, Pσ' b κ P → Pσ b κ P) →
   σ -{ m }-> Pσ.
@@ -815,7 +815,7 @@ Proof.
   - apply steps_impl_step. naive_solver.
 Qed.
 
-Lemma steps_impl_elim_n {EV} (m : module EV) κs Pσ σ n:
+Lemma steps_impl_elim_n {EV} (m : mod_trans EV) κs Pσ σ n:
   σ -{ m }-> Pσ →
   σ ~{ m, κs, n }~>ₜ - →
   under_tall κs (λ κs,
@@ -839,7 +839,7 @@ Proof.
     Unshelve. all: done.
 Qed.
 
-Lemma steps_impl_elim {EV} (m : module EV) κs Pσ σ:
+Lemma steps_impl_elim {EV} (m : mod_trans EV) κs Pσ σ:
   σ -{ m }-> Pσ →
   σ ~{ m, κs }~>ₜ - →
   under_tall κs (λ κs,
@@ -852,7 +852,7 @@ Proof.
   apply thas_trace_n. naive_solver.
 Qed.
 
-Lemma steps_impl_submodule {EV1 EV2} (m1 : module EV1) (m2 : module EV2) (f : m1.(m_state) → m2.(m_state)) σ P1 (P2 : _ → _ → _ → Prop):
+Lemma steps_impl_submodule {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) (f : m1.(m_state) → m2.(m_state)) σ P1 (P2 : _ → _ → _ → Prop):
   σ -{m1}-> P1 →
   (∀ b σ, P1 b None (σ =.) → P2 b None ((f σ) =.)) →
   (∀ σ1 κ Pσ2, m2.(m_step) (f σ1) κ Pσ2 →

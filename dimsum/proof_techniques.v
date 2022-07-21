@@ -6,7 +6,7 @@ From dimsum.core Require Import axioms.
 refinement. The development uses mostly [tsim]. *)
 
 (** * [mod_to_trace] *)
-Fixpoint mod_to_trace {EV} (m : module EV) (n : trace_index) (σ : m.(m_state)) : trace EV :=
+Fixpoint mod_to_trace {EV} (m : mod_trans EV) (n : trace_index) (σ : m.(m_state)) : trace EV :=
   match n with
   | tiO => tnb
   | tiS n' => tall { x : option EV * (m.(m_state) → Prop) | m.(m_step) σ x.1 x.2} (λ x,
@@ -14,7 +14,7 @@ Fixpoint mod_to_trace {EV} (m : module EV) (n : trace_index) (σ : m.(m_state)) 
   | tiChoice T fn => tall T (λ x, mod_to_trace m (fn x) σ)
   end.
 
-Lemma thas_trace_mod_to_trace {EV} (m : module EV) n σ :
+Lemma thas_trace_mod_to_trace {EV} (m : mod_trans EV) n σ :
   σ ~{m, mod_to_trace m n σ}~>ₜ -.
 Proof.
   elim: n σ => /=.
@@ -24,7 +24,7 @@ Proof.
   - move => ?? IH σ. apply thas_trace_all. naive_solver.
 Qed.
 
-Lemma mod_to_trace_mono {EV} (m : module EV) n n' σ :
+Lemma mod_to_trace_mono {EV} (m : mod_trans EV) n n' σ :
   n' ⊆ n →
   mod_to_trace m n σ ⊆ mod_to_trace m n' σ.
 Proof.
@@ -40,15 +40,15 @@ Proof.
 Qed.
 
 (** * [inv] *)
-Lemma inv_implies_trefines {EV} (m1 m2 : mod_state EV) (inv : m1.(m_state) → m2.(m_state) → Prop):
-  inv m1.(ms_state) m2.(ms_state) →
+Lemma inv_implies_trefines {EV} (m1 m2 : module EV) (inv : m1.(m_trans).(m_state) → m2.(m_trans).(m_state) → Prop):
+  inv m1.(m_init) m2.(m_init) →
   (∀ σi1 σs1 Pσi2 e,
-      inv σi1 σs1 → m_step m1 σi1 e Pσi2 →
-      σs1 ~{ m2, option_trace e }~>ₜ (λ σs2, ∃ σi2, Pσi2 σi2 ∧ inv σi2 σs2)) →
+      inv σi1 σs1 → m_step m1.(m_trans) σi1 e Pσi2 →
+      σs1 ~{ m2.(m_trans), option_trace e }~>ₜ (λ σs2, ∃ σi2, Pσi2 σi2 ∧ inv σi2 σs2)) →
   trefines m1 m2.
 Proof.
   move => Hinvinit Hinvstep.
-  constructor => // κs. move: m1.(ms_state) m2.(ms_state) Hinvinit => σi1 σs1 Hinv Hsteps.
+  constructor => // κs. move: m1.(m_init) m2.(m_init) Hinvinit => σi1 σs1 Hinv Hsteps.
   elim: Hsteps σs1 Hinv => {σi1 κs}.
   - move => ???????. by constructor.
   - move => σi1 Pσi2 Pσi3 κ κs κs' Hstep Hsteps IH Hcons σs1 Hinv.
@@ -61,17 +61,17 @@ Proof.
     apply: thas_trace_all => ?. naive_solver.
 Qed.
 
-Lemma inv'_implies_trefines {EV} (m1 m2 : mod_state EV) (inv : m1.(m_state) → m2.(m_state) → trace EV → Prop):
-  (∀ κs, ms_state m1 ~{ m1, κs }~>ₜ (λ _, True) → inv m1.(ms_state) m2.(ms_state) κs) →
+Lemma inv'_implies_trefines {EV} (m1 m2 : module EV) (inv : m1.(m_trans).(m_state) → m2.(m_trans).(m_state) → trace EV → Prop):
+  (∀ κs, m_init m1 ~{ m1.(m_trans), κs }~>ₜ (λ _, True) → inv m1.(m_init) m2.(m_init) κs) →
   (∀ σi1 σs1 Pσi2 e κs κs',
-      inv σi1 σs1 κs → m_step m1 σi1 e Pσi2 → tapp (option_trace e) κs' ⊆ κs →
-      σs1 ~{ m2, option_trace e }~>ₜ (λ σs2, ∃ σi2, Pσi2 σi2 ∧ inv σi2 σs2 κs')) →
+      inv σi1 σs1 κs → m_step m1.(m_trans) σi1 e Pσi2 → tapp (option_trace e) κs' ⊆ κs →
+      σs1 ~{ m2.(m_trans), option_trace e }~>ₜ (λ σs2, ∃ σi2, Pσi2 σi2 ∧ inv σi2 σs2 κs')) →
   (∀ σi1 σs1 κs T f,
       inv σi1 σs1 κs → tall T f ⊆ κs → ∀ x, inv σi1 σs1 (f x)) →
   trefines m1 m2.
 Proof.
   move => Hinvinit Hinvstep Hinvall.
-  constructor => // κs. move: m1.(ms_state) m2.(ms_state) (Hinvinit κs) => σi1 σs1 Hinv Hsteps.
+  constructor => // κs. move: m1.(m_init) m2.(m_init) (Hinvinit κs) => σi1 σs1 Hinv Hsteps.
   move: (Hinv Hsteps) => {}Hinv.
   elim: Hsteps σs1 Hinv => {σi1 κs}.
   - move => ???????. by constructor.
@@ -86,7 +86,7 @@ Proof.
 Qed.
 
 (** * [wp] *)
-Inductive wp {EV} (m1 m2 : module EV) : trace_index → m1.(m_state) -> m2.(m_state) -> Prop :=
+Inductive wp {EV} (m1 m2 : mod_trans EV) : trace_index → m1.(m_state) -> m2.(m_state) -> Prop :=
 | Wp_step' σi1 σs1 n:
     (∀ Pσi2 κ n', tiS n' ⊆ n → m_step m1 σi1 κ Pσi2 -> ∃ Pσ2,
       σs1 ~{ m2, option_trace κ }~>ₜ Pσ2 ∧
@@ -94,14 +94,14 @@ Inductive wp {EV} (m1 m2 : module EV) : trace_index → m1.(m_state) -> m2.(m_st
     wp m1 m2 n σi1 σs1
 .
 
-Lemma Wp_step {EV} (m1 m2 : module EV) σi1 σs1 n:
+Lemma Wp_step {EV} (m1 m2 : mod_trans EV) σi1 σs1 n:
   (∀ Pσi2 n' κ, tiS n' ⊆ n → m_step m1 σi1 κ Pσi2 ->
       σs1 ~{ m2, option_trace κ }~>ₜ (λ σs2, ∃ σi2, Pσi2 σi2 ∧ wp m1 m2 n' σi2 σs2)) ->
     wp m1 m2 n σi1 σs1
 .
 Proof. move => ?. constructor. naive_solver. Qed.
 
-Lemma wp_mono {EV} (m1 m2 : module EV) n1 n2 σi σs:
+Lemma wp_mono {EV} (m1 m2 : mod_trans EV) n1 n2 σi σs:
   wp m1 m2 n1 σi σs →
   n2 ⊆ n1 →
   wp m1 m2 n2 σi σs.
@@ -115,8 +115,8 @@ Proof.
   by eexists _.
 Qed.
 
-Lemma wp_implies_refines {EV} (m1 m2 : mod_state EV):
-  (∀ n, wp m1 m2 n m1.(ms_state) m2.(ms_state)) →
+Lemma wp_implies_refines {EV} (m1 m2 : module EV):
+  (∀ n, wp m1.(m_trans) m2.(m_trans) n m1.(m_init) m2.(m_init)) →
   trefines m1 m2.
 Proof.
   destruct m1 as [m1 σi1]. destruct m2 as [m2 σs1]. move => /= Hwp.
@@ -137,9 +137,9 @@ Qed.
 
 (* Print Assumptions wp_implies_refines. *)
 
-Lemma wp_complete {EV} (m1 m2 : mod_state EV):
+Lemma wp_complete {EV} (m1 m2 : module EV):
   trefines m1 m2 →
-  ∀ n, wp m1 m2 n m1.(ms_state) m2.(ms_state).
+  ∀ n, wp m1.(m_trans) m2.(m_trans) n m1.(m_init) m2.(m_init).
 Proof.
   destruct m1 as [m1 σi1]. destruct m2 as [m2 σs1]. move => /= [Href] n.
   have {Href} := Href (mod_to_trace _ n σi1) ltac:(apply thas_trace_mod_to_trace) => /=.
@@ -160,14 +160,14 @@ Qed.
 
 (** * [sim] *)
 (** coinductive version of wp *)
-CoInductive sim {EV} (m1 m2 : module EV) σi1 σs1: Prop :=
+CoInductive sim {EV} (m1 m2 : mod_trans EV) σi1 σs1: Prop :=
 | sim_step  :
     (∀ Pσi2 κ, m_step m1 σi1 κ Pσi2 ->
      ∃ Pσ2, σs1 ~{ m2, option_trace κ }~>ₜ Pσ2 ∧
       ∀ σs2, Pσ2 σs2 → ∃ σi2, Pσi2 σi2 ∧ sim m1 m2 σi2 σs2) ->
     sim m1 m2 σi1 σs1.
 
-Lemma sim_wp {EV} (m1 m2 : module EV) σi σs :
+Lemma sim_wp {EV} (m1 m2 : mod_trans EV) σi σs :
   sim m1 m2 σi σs → ∀ n, wp m1 m2 n σi σs.
 Proof.
   intros Hsim n; induction n in σi, σs, Hsim |-*.
@@ -218,7 +218,7 @@ Lemma forall_forall {X Y: Type} (P: X → Y → Prop):
   (∀ x y, P x y) → (∀ y x, P x y).
 Proof. naive_solver. Qed.
 
-Lemma wp_sim_inner {EV} (m1 m2 : module EV) σi1 σs1:
+Lemma wp_sim_inner {EV} (m1 m2 : mod_trans EV) σi1 σs1:
   (∀ n, wp m1 m2 n σi1 σs1) →
   (∀ Pσi2 κ, m_step m1 σi1 κ Pσi2 ->
   ∃ Pσ2, σs1 ~{ m2, option_trace κ }~>ₜ Pσ2 ∧
@@ -252,7 +252,7 @@ Proof.
   done.
 Qed.
 
-Lemma wp_sim {EV} (m1 m2 : module EV) σi σs :
+Lemma wp_sim {EV} (m1 m2 : mod_trans EV) σi σs :
   (∀ n, wp m1 m2 n σi σs) → sim m1 m2 σi σs.
 Proof.
   revert σi σs. cofix IH; intros σi σs Hwp.
@@ -261,12 +261,12 @@ Proof.
   naive_solver.
 Qed.
 
-Lemma sim_wp_iff {EV} (m1 m2 : module EV) σi σs:
+Lemma sim_wp_iff {EV} (m1 m2 : mod_trans EV) σi σs:
   (∀ n, wp m1 m2 n σi σs) ↔ sim m1 m2 σi σs.
 Proof. split; eauto using sim_wp, wp_sim. Qed.
 
-Lemma sim_trefines {EV} (m1 m2 : mod_state EV):
-  sim m1 m2 m1.(ms_state) m2.(ms_state) ↔ trefines m1 m2.
+Lemma sim_trefines {EV} (m1 m2 : module EV):
+  sim m1.(m_trans) m2.(m_trans) m1.(m_init) m2.(m_init) ↔ trefines m1 m2.
 Proof.
   rewrite -sim_wp_iff.
   split; eauto using wp_implies_refines, wp_complete.
@@ -275,7 +275,7 @@ Qed.
 (* Print Assumptions sim_trefines. *)
 
 (** * [tsim] *)
-Definition tsim {EV} (n : trace_index) (b : bool) (mi ms : module EV) (σi : mi.(m_state)) (κss : trace EV) (σs : ms.(m_state))  :=
+Definition tsim {EV} (n : trace_index) (b : bool) (mi ms : mod_trans EV) (σi : mi.(m_state)) (κss : trace EV) (σs : ms.(m_state))  :=
   ∀ κs n',
     tiS?b n' ⊆ n →
     σi ~{ mi, κs, n' }~>ₜ - →
@@ -286,39 +286,39 @@ Notation "σi ⪯{ mi , ms , n , b , κss } σs" := (tsim n b mi ms σi κss σs
 Notation "σi ⪯{ mi , ms , n , b } σs" := (tsim n b mi ms σi tnil σs) (at level 70,
     format "σi  ⪯{ mi ,  ms ,  n ,  b }  σs") : type_scope.
 
-Lemma tsim_implies_trefines {EV} (mi ms : mod_state EV) :
-  (∀ n, mi.(ms_state) ⪯{mi, ms, n, false} ms.(ms_state)) →
+Lemma tsim_implies_trefines {EV} (mi ms : module EV) :
+  (∀ n, mi.(m_init) ⪯{mi.(m_trans), ms.(m_trans), n, false} ms.(m_init)) →
   trefines mi ms.
 Proof. move => Hsim. constructor => ? /thas_trace_n [??]. by apply: Hsim => /=. Qed.
 
-Lemma trefines_implies_tsim {EV} (mi ms : module EV) σi σs n b:
-  trefines (MS mi σi) (MS ms σs) →
+Lemma trefines_implies_tsim {EV} (mi ms : mod_trans EV) σi σs n b:
+  trefines (Mod mi σi) (Mod ms σs) →
   σi ⪯{mi, ms, n, b} σs.
 Proof. move => [Hr] ??? /=?. apply Hr. by apply: thas_trace_n_2. Qed.
 
-Lemma tsim_mono_to_true {EV} {mi ms : module EV} σi σs n n' κs b:
+Lemma tsim_mono_to_true {EV} {mi ms : mod_trans EV} σi σs n n' κs b:
   σi ⪯{mi, ms, n', true, κs} σs →
   tiS n ⊆ n' →
   σi ⪯{mi, ms, n, b, κs} σs.
 Proof. move => Hsim Hn ???. apply: Hsim. etrans; [|done]. econs. etrans; [|done]. apply ti_le_S_maybe. Qed.
 
-Lemma tsim_mono_to_tiS {EV} {mi ms : module EV} σi σs n κs:
+Lemma tsim_mono_to_tiS {EV} {mi ms : mod_trans EV} σi σs n κs:
   (∀ n', tiS n' ⊆ n → σi ⪯{mi, ms, n', false, κs} σs) →
   σi ⪯{mi, ms, n, true, κs} σs.
 Proof. move => Hsim ??/=?. by apply: Hsim. Qed.
 
-Lemma tsim_mono {EV} {mi ms : module EV} σi σs b n n' κs:
+Lemma tsim_mono {EV} {mi ms : mod_trans EV} σi σs b n n' κs:
   σi ⪯{mi, ms, n', b, κs} σs →
   n ⊆ n' →
   σi ⪯{mi, ms, n, b, κs} σs.
 Proof. move => Hsim Hn ???. apply: Hsim. by destruct b; (etrans; [done|]). Qed.
 
-Lemma tsim_mono_b {EV} {mi ms : module EV} σi σs n κs b:
+Lemma tsim_mono_b {EV} {mi ms : mod_trans EV} σi σs n κs b:
   σi ⪯{mi, ms, n, b, κs} σs →
   σi ⪯{mi, ms, n, true, κs} σs.
 Proof. move => Hsim Hn ??. apply: Hsim. destruct b => //. by apply ti_lt_impl_le. Qed.
 
-Lemma tsim_mono_b_false {EV} {mi ms : module EV} σi σs n κs b:
+Lemma tsim_mono_b_false {EV} {mi ms : mod_trans EV} σi σs n κs b:
   σi ⪯{mi, ms, n, false, κs} σs →
   σi ⪯{mi, ms, n, b, κs} σs.
 Proof. move => Hsim Hn ??. apply: Hsim. destruct b => //. by apply ti_lt_impl_le. Qed.
@@ -327,7 +327,7 @@ Definition Plater (P : bool → Prop) : Prop :=
   P true → P false.
 Arguments Plater _ /.
 
-Lemma tsim_remember' {EV} {mi ms : module EV} (Pσ : _ → _ → _ → Prop) σi σs b n :
+Lemma tsim_remember' {EV} {mi ms : mod_trans EV} (Pσ : _ → _ → _ → Prop) σi σs b n :
   (∀ n', tiS?b n' ⊆ n → Pσ n' σi σs) →
   (∀ n', tiS?b n' ⊆ n →
          (∀ n'' σi σs, n'' ⊆ n' → (∀ n''', tiS n''' ⊆ n'' → Pσ n''' σi σs) → σi ⪯{mi, ms, n'', true} σs) →
@@ -343,7 +343,7 @@ Proof.
   - apply: HP'. by etrans.
 Qed.
 
-Lemma tsim_remember {EV} {mi ms : module EV} (Pσ : _ → _ → _ → Prop) σi σs b n :
+Lemma tsim_remember {EV} {mi ms : mod_trans EV} (Pσ : _ → _ → _ → Prop) σi σs b n :
   Pσ n σi σs →
   (∀ n n' σi σs, tiS?b n' ⊆ n → Pσ n σi σs → Pσ n' σi σs) →
   (∀ n', tiS?b n' ⊆ n →
@@ -357,7 +357,7 @@ Proof.
   change (tiS n3) with (tiS?true n3). by apply tiS_maybe_mono.
 Qed.
 
-Lemma tsim_remember_all {EV A} {mi ms : module EV} σi σs b n:
+Lemma tsim_remember_all {EV A} {mi ms : mod_trans EV} σi σs b n:
   (∀ n', tiS?b n' ⊆ n → Plater (λ b', ∀ x, σi x ⪯{mi, ms, n', b'} σs x)) →
   ∀ x : A, σi x ⪯{mi, ms, n, b} σs x.
 Proof.
@@ -365,7 +365,7 @@ Proof.
   all: naive_solver.
 Qed.
 
-Inductive tsim_remember_call_stack {EV} (n : trace_index) (mi ms : module EV)
+Inductive tsim_remember_call_stack {EV} (n : trace_index) (mi ms : mod_trans EV)
           (R : nat → bool → _ → _ → Prop) (RR : mi.(m_state) → ms.(m_state) → _ → _ → Prop) :
   nat → mi.(m_state) → ms.(m_state) → Prop :=
 | IPSNil σi σs :
@@ -400,7 +400,7 @@ Proof.
   apply: Hcont; [|done]. by etrans.
 Qed.
 
-Lemma tsim_remember_call {EV} (mi ms : module EV) R `{!∀ d b, Transitive (R d b)} σi0 σs0 (RR : _ → _ → _ → _ → Prop) b n0:
+Lemma tsim_remember_call {EV} (mi ms : mod_trans EV) R `{!∀ d b, Transitive (R d b)} σi0 σs0 (RR : _ → _ → _ → _ → Prop) b n0:
   (* d: stack depth *)
   (* R true: public transition relation, R false: private transition relation *)
   (∀ d σi σs σi' σs', R d true (σi, σs) (σi', σs') → R d false (σi, σs) (σi', σs')) →
@@ -460,7 +460,7 @@ Proof.
     naive_solver.
 Qed.
 
-Lemma tsim_mirror {EV1 EV2} (m : module EV1) (σ : m.(m_state)) (fm1 : module EV1 → module EV2) fm2 fσ1 fσ2 n b  :
+Lemma tsim_mirror {EV1 EV2} (m : mod_trans EV1) (σ : m.(m_state)) (fm1 : mod_trans EV1 → mod_trans EV2) fm2 fσ1 fσ2 n b  :
   (∀ σ n',
       tiS?b n' ⊆ n →
       (∀ (P : _ → _ → _ → Prop),
@@ -504,7 +504,7 @@ Ltac tsim_mirror m σ :=
       end
   end.
 
-Lemma tsim_step_l {EV} {mi ms : module EV} σi σs n b :
+Lemma tsim_step_l {EV} {mi ms : mod_trans EV} σi σs n b :
   (∀ κ Pσi,
       mi.(m_step) σi κ Pσi →
       ∃ σi', Pσi σi' ∧ σi' ⪯{mi, ms, n, true, option_trace κ} σs) →
@@ -520,7 +520,7 @@ Proof.
     Unshelve. done.
 Qed.
 
-Lemma tsim_step_r {EV} {mi ms : module EV} σi σs n b κs κs' κs'' :
+Lemma tsim_step_r {EV} {mi ms : mod_trans EV} σi σs n b κs κs' κs'' :
   κs = tapp κs' κs'' →
   σs ~{ ms, κs' }~>ₜ (λ σs', σi ⪯{mi, ms, n, b, κs''} σs') →
   σi ⪯{mi, ms, n, b, κs} σs.
@@ -531,19 +531,19 @@ Qed.
 
 (** * tstep *)
 (* The following sadly causes more problems than it solves since
-module is a dependent pair and [m.(m_state)] cannot be reduced if [m] is
+mod_trans is a dependent pair and [m.(m_state)] cannot be reduced if [m] is
 opaque. *)
-(* Global Hint Constants Opaque : typeclass_instances. *)
-(* Global Hint Variables Opaque : typeclass_instances. *)
+(* Global Hint Constants Opaque : tstep. *)
+(* Global Hint Variables Opaque : tstep. *)
 
-Class TStepI {EV} (mi : module EV) (σi : mi.(m_state)) (P : (bool → option EV → ((mi.(m_state) → Prop) → Prop) → Prop) → Prop) : Prop := {
+Class TStepI {EV} (mi : mod_trans EV) (σi : mi.(m_state)) (P : (bool → option EV → ((mi.(m_state) → Prop) → Prop) → Prop) → Prop) : Prop := {
   tstepi_proof G:
     P G →
     σi -{ mi }-> (λ b κ Pσ, ∃ b' P', G b' κ P' ∧ (b' → b) ∧ ∀ G', P' G' → ∃ σ', Pσ σ' ∧ G' σ')
 }.
 Global Hint Mode TStepI + + ! - : typeclass_instances.
 
-Lemma tsim_tstep_i {EV} (mi : module EV) σi P `{!TStepI mi σi P} ms σs n b:
+Lemma tsim_tstep_i {EV} (mi : mod_trans EV) σi P `{!TStepI mi σi P} ms σs n b:
   P (λ b' κ Pσ, Pσ (λ σi', σi' ⪯{mi, ms, n, b' || b, option_trace κ} σs)) →
   σi ⪯{mi, ms, n, b} σs.
 Proof.
@@ -556,7 +556,7 @@ Proof.
   etrans; [|done]. by apply tiS_maybe_mono.
 Qed.
 
-Lemma tsim_tstep_both {EV} (mi : module EV) σi P `{!TStepI mi σi P} ms σs n b:
+Lemma tsim_tstep_both {EV} (mi : mod_trans EV) σi P `{!TStepI mi σi P} ms σs n b:
   P (λ b' κ Pσ, σs ~{ms, option_trace κ}~>ₜ (λ σs', Pσ (λ σi', σi' ⪯{mi, ms, n, b' || b, tnil} σs'))) →
   σi ⪯{mi, ms, n, b} σs.
 Proof.
@@ -570,7 +570,7 @@ Proof.
   etrans; [|done]. by apply tiS_maybe_mono.
 Qed.
 
-Class TStepS {EV} (ms : module EV) (σs : ms.(m_state)) (P : (option EV → ((ms.(m_state) → Prop) → Prop) → Prop) → Prop) : Prop := {
+Class TStepS {EV} (ms : mod_trans EV) (σs : ms.(m_state)) (P : (option EV → ((ms.(m_state) → Prop) → Prop) → Prop) → Prop) : Prop := {
   tsteps_proof G:
     P G →
     ∃ κ P',
@@ -579,7 +579,7 @@ Class TStepS {EV} (ms : module EV) (σs : ms.(m_state)) (P : (option EV → ((ms
 }.
 Global Hint Mode TStepS + + ! - : typeclass_instances.
 
-Lemma tsim_tstep_s {EV} (ms : module EV) σs κs P `{!TStepS ms σs P} mi σi n b :
+Lemma tsim_tstep_s {EV} (ms : mod_trans EV) σs κs P `{!TStepS ms σs P} mi σi n b :
   P (λ κ P',
       if κ is Some e then
         if κs is tcons e' κs' then e = e' ∧ P' (λ σs', σi ⪯{mi, ms, n, b, κs'} σs') else False
@@ -597,7 +597,7 @@ Proof.
     naive_solver.
 Qed.
 
-Lemma thas_trace_tstep_s {EV} (m : module EV) σ κs Pσ `{!TStepS m σ P} :
+Lemma thas_trace_tstep_s {EV} (m : mod_trans EV) σ κs Pσ `{!TStepS m σ P} :
   P (λ κ P',
       if κ is Some e then
         ∃ κs', tcons e κs' ⊆ κs ∧ P' (λ σ', σ' ~{m, κs'}~>ₜ Pσ)
@@ -617,12 +617,12 @@ Proof.
     naive_solver.
 Qed.
 
-Lemma steps_spec_tstep_s {EV} (m : module EV) σ κ Pσ `{!TStepS m σ P} :
+Lemma steps_spec_tstep_s {EV} (m : mod_trans EV) σ κ Pσ `{!TStepS m σ P} :
   P (λ κ' P', κ = κ' ∧ P' Pσ) →
   σ -{m, κ}->ₛ Pσ.
 Proof. move: TStepS0 => [] /[apply] -[?[?[[? HP] HG']]]. subst. move: HP => /HG'. done. Qed.
 
-Lemma steps_impl_tstep_i {EV} (m : module EV) σ (Pσ : _ → _ → _ → Prop) `{!TStepI m σ P} :
+Lemma steps_impl_tstep_i {EV} (m : mod_trans EV) σ (Pσ : _ → _ → _ → Prop) `{!TStepI m σ P} :
   P (λ b κ' P', ∀ (b' : bool) (Pσ' : _ → Prop), (b → b') → P' (λ σ', Pσ' σ' → Pσ b' κ' Pσ')) →
   σ -{m}-> Pσ.
 Proof.
@@ -647,12 +647,12 @@ Ltac tstep_i :=
 Ltac tstep_both :=
   once (notypeclasses refine (tsim_tstep_both _ _ _ _ _ _ _ _); [eauto_tstep|]); simpl.
 
-Lemma tstep_i_generic EV (m : module EV) σ:
+Lemma tstep_i_generic EV (m : mod_trans EV) σ:
   TStepI m σ (λ G, σ -{ m }-> (λ b κ Pσ, G b κ (λ G', ∃ σ', Pσ σ' ∧ G' σ'))).
 Proof. constructor => ? HG. apply: steps_impl_mono; [done|]. naive_solver. Qed.
 Global Hint Resolve tstep_i_generic | 1000 : typeclass_instances.
 
-Lemma tstep_s_generic EV (m : module EV) σ:
+Lemma tstep_s_generic EV (m : mod_trans EV) σ:
   TStepS m σ (λ G, ∃ κ, G κ (λ G', σ -{m, κ}->ₛ G')).
 Proof. constructor => ? [??]. eexists _, _. split; [done|]. done. Qed.
 Global Hint Resolve tstep_s_generic | 1000 : typeclass_instances.
@@ -664,11 +664,11 @@ Lemma forall_to_ex1 A B (P1 : A → Prop)  P2 (Q : B → Prop):
 Proof. naive_solver. Qed.
 
 (** Exploration of a proof technique that is more complete than other ones: *)
-Lemma trefines_implies_trefines {EV} (m1 m2 : mod_state EV):
+Lemma trefines_implies_trefines {EV} (m1 m2 : module EV):
   trefines m1 m2 → trefines m1 m2.
 Proof.
   move => [/=Hr]. constructor => κs Ht.
-  move: Hr. move: (ms_state m1) (ms_state m2) Ht => σ1 σ2 Ht.
+  move: Hr. move: (m_init m1) (m_init m2) Ht => σ1 σ2 Ht.
   move: σ2. apply: forall_to_ex1.
   elim: Ht.
   - move => ?????. eexists tnil. split; [ by apply: TTraceEnd|]. move => ??. by apply: TTraceEnd.
@@ -700,25 +700,25 @@ Lemma forall_to_ex2 A B1 B2 (P1 : A → Prop)  P2 (Q : B1 → B2 → Prop) R:
  (∃ n : A, P1 n ∧ (∀ y1 y2, R y1 y2 → P2 n y1 y2 → Q y1 y2)) -> (∀ y1 y2, R y1 y2 → (∀ n : A, P1 n → P2 n y1 y2) → Q y1 y2).
 Proof. naive_solver. Qed.
 
-Lemma trefines1_implies_trefines2 {EV1 EV2} (mi1 ms1 : mod_state EV1) (mi2 ms2 : mod_state EV2)
-      (iinv : mi1.(m_state) → mi2.(m_state) → Prop)
-      (sinv : ms1.(m_state) → ms2.(m_state) → Prop):
+Lemma trefines1_implies_trefines2 {EV1 EV2} (mi1 ms1 : module EV1) (mi2 ms2 : module EV2)
+      (iinv : mi1.(m_trans).(m_state) → mi2.(m_trans).(m_state) → Prop)
+      (sinv : ms1.(m_trans).(m_state) → ms2.(m_trans).(m_state) → Prop):
   trefines mi1 ms1 →
-  iinv mi1.(ms_state) mi2.(ms_state) →
-  sinv ms1.(ms_state) ms2.(ms_state) →
-  (∀ σ1 σ2 κ Pσ2, iinv σ1 σ2 → m_step mi2 σ2 κ Pσ2 → ∃ κ',
+  iinv mi1.(m_init) mi2.(m_init) →
+  sinv ms1.(m_init) ms2.(m_init) →
+  (∀ σ1 σ2 κ Pσ2, iinv σ1 σ2 → m_step mi2.(m_trans) σ2 κ Pσ2 → ∃ κ',
     (if κ' is Some e then
-       ∀ σs1 σs2 Pσs1, sinv σs1 σs2 → m_step ms1 σs1 κ' Pσs1 →
-          σs2 ~{ ms2, option_trace κ }~>ₜ (λ σs2', ∃ σs1', Pσs1 σs1' ∧ sinv σs1' σs2')
+       ∀ σs1 σs2 Pσs1, sinv σs1 σs2 → m_step ms1.(m_trans) σs1 κ' Pσs1 →
+          σs2 ~{ ms2.(m_trans), option_trace κ }~>ₜ (λ σs2', ∃ σs1', Pσs1 σs1' ∧ sinv σs1' σs2')
      else κ = None) ∧
-       σ1 ~{ mi1, option_trace κ' }~>ₜ (λ σ1', ∃ σ2', Pσ2 σ2' ∧ iinv σ1' σ2')) →
-  (∀ σ1 σ2 Pσ1, sinv σ1 σ2 → m_step ms1 σ1 None Pσ1 →
-                σ2 ~{ ms2, tnil }~>ₜ (λ σ2', ∃ σ1', Pσ1 σ1' ∧ sinv σ1' σ2')) →
+       σ1 ~{ mi1.(m_trans), option_trace κ' }~>ₜ (λ σ1', ∃ σ2', Pσ2 σ2' ∧ iinv σ1' σ2')) →
+  (∀ σ1 σ2 Pσ1, sinv σ1 σ2 → m_step ms1.(m_trans) σ1 None Pσ1 →
+                σ2 ~{ ms2.(m_trans), tnil }~>ₜ (λ σ2', ∃ σ1', Pσ1 σ1' ∧ sinv σ1' σ2')) →
   trefines mi2 ms2.
 Proof.
   move => [/=Hr] Hiinvinit Hsinvinit Histep Hsnil.
-  have {}Hsnil: (∀ σ1 σ2 Pσ1, sinv σ1 σ2 → σ1 ~{ ms1, tnil }~>ₜ Pσ1 →
-                σ2 ~{ ms2, tnil }~>ₜ (λ σ2', ∃ σ1', Pσ1 σ1' ∧ sinv σ1' σ2')). {
+  have {}Hsnil: (∀ σ1 σ2 Pσ1, sinv σ1 σ2 → σ1 ~{ ms1.(m_trans), tnil }~>ₜ Pσ1 →
+                σ2 ~{ ms2.(m_trans), tnil }~>ₜ (λ σ2', ∃ σ1', Pσ1 σ1' ∧ sinv σ1' σ2')). {
     clear -Hsnil.
     move => σ1 σ2 Pσ1 Hsinv /thas_trace_nil_inv.
     have : @tnil EV1 ⊆ tnil by done. move: {1 3}(@tnil EV1) => κs Hκs Ht.
@@ -730,14 +730,14 @@ Proof.
       apply: (thas_trace_trans tnil); naive_solver.
   }
   constructor => κs Ht. move: Hiinvinit Hsinvinit Hr.
-  move: (ms_state mi1) (ms_state mi2) (ms_state ms1) (ms_state ms2) Ht => σi1 σi2 σs1 σs2 Ht Hiinit Hsinit.
+  move: (m_init mi1) (m_init mi2) (m_init ms1) (m_init ms2) Ht => σi1 σi2 σs1 σs2 Ht Hiinit Hsinit.
   move: σs1 σs2 Hsinit. apply: forall_to_ex2.
   elim: Ht σi1 Hiinit.
   - move => ???????. eexists tnil. split; [ by apply: TTraceEnd|]. move => ????. by apply: TTraceEnd.
   - move => ? Pσ2 ? κ ? κs' Hstep ? IH ? ? Hiinv.
     have [κ' [Hsend Hsteps]]:= Histep _ _ _ _ Hiinv Hstep.
-    have {}IH : ∀ σi1, (∃ σ2', Pσ2 σ2' ∧ iinv σi1 σ2') → ∃ n, σi1 ~{ mi1, n }~>ₜ (λ _, True) ∧
-       (∀ y1 y2, sinv y1 y2 → y1 ~{ ms1, n }~>ₜ (λ _, True) → y2 ~{ ms2, κs' }~>ₜ (λ _, True)).
+    have {}IH : ∀ σi1, (∃ σ2', Pσ2 σ2' ∧ iinv σi1 σ2') → ∃ n, σi1 ~{ mi1.(m_trans), n }~>ₜ (λ _, True) ∧
+       (∀ y1 y2, sinv y1 y2 → y1 ~{ ms1.(m_trans), n }~>ₜ (λ _, True) → y2 ~{ ms2.(m_trans), κs' }~>ₜ (λ _, True)).
     { move => ?. naive_solver. }
     have [f Hf]:= AxChoice1 IH.
     eexists (tapp (option_trace κ') (tex _ f)). split.

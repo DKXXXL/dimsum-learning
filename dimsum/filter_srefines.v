@@ -17,7 +17,7 @@ Module filter_example.
   Arguments test_filter _ _ /.
 
 Lemma mod_ang_comm1_filter_traces Pκs:
-  0 ~{mod_filter mod_ang_comm1 test_filter, Pκs}~>ₛ (λ _, True) ↔
+  0 ~{filter_trans mod_ang_comm1_trans test_filter, Pκs}~>ₛ (λ _, True) ↔
     Pκs [] ∧
   (Pκs [Nb] ∨
    ∃ n, (n = 4 ∨ n = 5) ∧
@@ -63,7 +63,7 @@ Proof.
 Qed.
 
 Lemma mod_ang_comm2_filter_traces Pκs:
-  0 ~{mod_filter mod_ang_comm2 test_filter, Pκs}~>ₛ (λ _, True) ↔
+  0 ~{filter_trans mod_ang_comm2_trans test_filter, Pκs}~>ₛ (λ _, True) ↔
     Pκs [] ∧
   (Pκs [Nb] ∨
    ∃ n1 n2, (n1 = 4 ∨ n1 = 5) ∧ (n2 = 4 ∨ n2 = 5) ∧
@@ -125,7 +125,7 @@ Proof.
 Qed.
 
 Lemma mod_ang_comm2_filter_not_refines_mod_ang_comm1_filter:
-  ¬ srefines (MS (mod_filter mod_ang_comm2 test_filter) 0) (MS (mod_filter mod_ang_comm1 test_filter) 0).
+  ¬ srefines (filter_mod mod_ang_comm2 test_filter) (filter_mod mod_ang_comm1 test_filter).
 Proof.
   move => [/=].
   setoid_rewrite mod_ang_comm1_filter_traces.
@@ -157,8 +157,8 @@ Inductive filter_trace_rel {EV1 EV2} (R : EV1 → option EV2 → Prop) : list (e
     filter_trace_rel R [Ub] κs'
 .
 
-Lemma mod_filter_to_mod {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pσ:
-  σ ~{ mod_filter m R, Pκs }~>ₛ Pσ →
+Lemma mod_filter_to_mod {EV1 EV2} (m : mod_trans EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pσ:
+  σ ~{ filter_trans m R, Pκs }~>ₛ Pσ →
   σ ~{ m, λ κs, ∃ κs', filter_trace_rel R κs κs' ∧ Pκs κs' }~>ₛ Pσ.
 Proof.
   elim.
@@ -175,7 +175,7 @@ Proof.
       split; [constructor => //; constructor|]. by rewrite right_id_L.
 Qed.
 
-Lemma mod_to_mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pκs' Pσ:
+Lemma mod_to_mod_filter {EV1 EV2} (m : mod_trans EV1) (R : EV1 → option EV2 → Prop) σ Pκs Pκs' Pσ:
 (* The first condition states that [mod_filter] does not add more
 non-determinism. This condition (or maybe something slightly weaker)
 sadly is necessary, because this definition of refinement allows to
@@ -203,7 +203,7 @@ See also the example above.
   (∀ κ1 κ2 κ2', R κ1 κ2 → R κ1 κ2' → κ2 = κ2') →
   σ ~{ m, Pκs }~>ₛ Pσ →
   (∀ x, Pκs x → (λ κs, ∃ κs', filter_trace_rel R κs κs' ∧ Pκs' κs') x) →
-  σ ~{ mod_filter m R, Pκs' }~>ₛ Pσ.
+  σ ~{ filter_trans m R, Pκs' }~>ₛ Pσ.
 Proof.
   move => HR Ht. elim: Ht Pκs'.
   - move => ????[??]? HP.
@@ -227,10 +227,10 @@ Proof.
       move => σ2 ?. by apply: IH.
 Qed.
 
-Lemma mod_filter_srefines {EV1 EV2} (m1 m2 : module EV1) (R : EV1 → option EV2 → Prop) σ1 σ2 :
+Lemma mod_filter_srefines {EV1 EV2} (m1 m2 : module EV1) (R : EV1 → option EV2 → Prop) :
   (∀ κ1 κ2 κ2', R κ1 κ2 → R κ1 κ2' → κ2 = κ2') →
-  srefines (MS m1 σ1) (MS m2 σ2) →
-  srefines (MS (mod_filter m1 R) σ1) (MS (mod_filter m2 R) σ2).
+  srefines m1 m2 →
+  srefines (filter_mod m1 R) (filter_mod m2 R).
 Proof.
   move => ? [/= Hr]. constructor => /= ? /mod_filter_to_mod/Hr Hm. apply: mod_to_mod_filter; [done|done|].
   move => ??. naive_solver.

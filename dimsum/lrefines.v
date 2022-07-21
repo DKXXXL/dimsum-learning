@@ -42,7 +42,7 @@ But they don't seems essential.)
 
 *)
 
-Inductive lhas_trace {EV} (m : module EV) :
+Inductive lhas_trace {EV} (m : mod_trans EV) :
   m.(m_state) → list EV → (m.(m_state) → Prop) → Prop :=
 | LTraceEnd σ (Pσ : _ → Prop):
     Pσ σ →
@@ -56,10 +56,10 @@ Inductive lhas_trace {EV} (m : module EV) :
 Notation " σ '~{' m , κs '}~>ₗ' P " := (lhas_trace m σ κs P) (at level 40).
 Notation " σ '~{' m , κs '}~>ₗ' - " := (lhas_trace m σ κs (λ _, True)) (at level 40).
 
-Record lrefines {EV} (mimpl mspec : mod_state EV) : Prop := {
+Record lrefines {EV} (mimpl mspec : module EV) : Prop := {
   lref_subset:
-    ∀ κs, mimpl.(ms_state) ~{ mimpl, κs }~>ₗ - →
-          mspec.(ms_state) ~{ mspec, κs }~>ₗ -
+    ∀ κs, mimpl.(m_init) ~{ mimpl.(m_trans), κs }~>ₗ - →
+          mspec.(m_init) ~{ mspec.(m_trans), κs }~>ₗ -
 }.
 
 Global Instance lrefines_preorder EV : PreOrder (@lrefines EV).

@@ -50,15 +50,13 @@ Definition stream_asm_dom : gset Z := locked dom stream_asm.
 Definition main_asm_dom : gset Z := locked dom main_asm.
 
 Lemma stream_asm_refines_rec :
-  trefines (MS asm_module (initial_asm_state stream_asm))
-           (MS (rec_to_asm (dom stream_asm) {["stream"]} all_f2i rec_module)
-               (initial_rec_to_asm_state ∅ rec_module (initial_rec_state (<["stream" := stream_rec]> ∅)))).
+  trefines (asm_mod stream_asm)
+           (rec_to_asm (dom stream_asm) {["stream"]} all_f2i ∅ (rec_mod (<["stream" := stream_rec]> ∅))).
 Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
 
 Lemma main_asm_refines_rec :
-  trefines (MS asm_module (initial_asm_state main_asm))
-           (MS (rec_to_asm (dom main_asm) {["main"]} all_f2i rec_module)
-               (initial_rec_to_asm_state ∅ rec_module (initial_rec_state (<["main" := main_rec]> ∅)))).
+  trefines (asm_mod main_asm)
+           (rec_to_asm (dom main_asm) {["main"]} all_f2i ∅ (rec_mod (<["main" := main_rec]> ∅))).
 Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
 
 Definition main_itree : itree (moduleE rec_event unit) unit :=
@@ -83,10 +81,8 @@ Local Ltac go_i :=
   tstep_i; go.
 
 Lemma main_refines_itree :
-  trefines (MS (coro_link {["main"]} {["stream"]} rec_module rec_module)
-              (initial_coro_link_state "stream" rec_module rec_module
-              (initial_rec_state main_prog) (initial_rec_state stream_prog)))
-           (MS (mod_itree _ _) (main_itree, tt)).
+  trefines (coro_link {["main"]} {["stream"]} "stream" (rec_mod main_prog) (rec_mod stream_prog))
+    (itree_mod main_itree tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=. unfold main_prog, stream_prog.
   tstep_i => *. destruct!/=.
@@ -183,17 +179,12 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   TUb.
 
 Lemma top_level_refines_itree :
-  trefines (MS (asm_link (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom)
-                         (dom print_asm)
-                         (rec_to_asm (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom)
-                                     {["yield"; "main"; "stream"]}
-                                     all_f2i
-                                     (mod_itree _ _)) (mod_itree _ _))
-              (initial_asm_link_state (rec_to_asm _ _ _ _) (mod_itree _ _)
-                 (initial_rec_to_asm_state
-                    (r2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init)
-                    (mod_itree _ _) (main_itree, tt)) (print_itree, tt)))
-           (MS (mod_itree _ _) (top_level_itree, tt)).
+  trefines (asm_link (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom) (dom print_asm)
+              (rec_to_asm (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom)
+                {["yield"; "main"; "stream"]} all_f2i
+                (r2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init)
+                (itree_mod main_itree tt)) (itree_mod print_itree tt))
+           (itree_mod top_level_itree tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   tstep_i => *. case_match; destruct!/=.
@@ -332,8 +323,8 @@ Proof.
 Qed.
 
 Lemma complete_refinement :
-  trefines (MS asm_module (initial_asm_state (yield_asm ∪ (main_asm ∪ stream_asm) ∪ print_asm)))
-           (MS (mod_itree _ _) (top_level_itree, tt)).
+  trefines (asm_mod (yield_asm ∪ (main_asm ∪ stream_asm) ∪ print_asm))
+           (itree_mod top_level_itree tt).
 Proof.
   etrans. {
     apply asm_syn_link_refines_link. rewrite /yield_asm. unlock. compute_done.
@@ -358,12 +349,13 @@ Proof.
       etrans. {
         rewrite dom_union_L.
         have ->: dom yield_asm = yield_asm_dom by rewrite /yield_asm_dom; unlock.
-        apply: (coro_spec "stream" stream_regs_init stream_ssz).
+        apply (coro_spec "stream" stream_regs_init stream_ssz).
+        1, 2: apply _.
         all: unfold yield_asm_dom, yield_asm, r2a_mem_stack_mem; unlock.
         all: compute_done.
       }
       etrans. {
-        apply: rec_to_asm_trefines.
+        apply rec_to_asm_trefines; [apply _|].
         apply: main_refines_itree.
       }
       done.

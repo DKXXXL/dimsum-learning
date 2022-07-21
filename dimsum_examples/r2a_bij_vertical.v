@@ -739,12 +739,9 @@ Qed.
 
 (** * Main vertical compositionality theorem:  *)
 
-Lemma r2a_bij_vertical m σ moinit `{!VisNoAll m} ins fns f2i:
-  trefines (MS (rec_to_asm ins fns f2i (rec_heap_bij m))
-               (initial_rec_to_asm_state moinit (rec_heap_bij m) (initial_rec_heap_bij_state m σ)))
-           (MS (rec_to_asm ins fns f2i m)
-               (initial_rec_to_asm_state moinit m σ))
-.
+Lemma r2a_bij_vertical m moinit `{!VisNoAll m.(m_trans)} ins fns f2i:
+  trefines (rec_to_asm ins fns f2i moinit (rec_heap_bij m))
+           (rec_to_asm ins fns f2i moinit m).
 Proof.
   unshelve apply: mod_prepost_combine. {
     exact (λ pl '(R2A csa lra) _ '(R2A cs lr) Pa Pb P,
@@ -1077,10 +1074,8 @@ Qed.
 
 (* Print Assumptions r2a_bij_vertical. *)
 
-Lemma r2a_bij_vertical_N m σ moinit `{!VisNoAll m} ins fns f2i n:
-  trefines (MS (rec_to_asm ins fns f2i (rec_heap_bij_N n m))
-               (initial_rec_to_asm_state moinit (rec_heap_bij_N n m) (initial_rec_heap_bij_state_N n m σ)))
-           (MS (rec_to_asm ins fns f2i m)
-               (initial_rec_to_asm_state moinit m σ))
+Lemma r2a_bij_vertical_N m moinit `{!VisNoAll m.(m_trans)} ins fns f2i n:
+  trefines (rec_to_asm ins fns f2i moinit (rec_heap_bij_N n m))
+           (rec_to_asm ins fns f2i moinit m)
 .
 Proof. elim: n => //= ??. etrans; [by apply: r2a_bij_vertical|done]. Qed.

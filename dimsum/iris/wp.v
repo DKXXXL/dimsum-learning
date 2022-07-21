@@ -11,9 +11,9 @@ Structure language := Language {
   expr : Type;
   state : Type;
   events : Type;
-  lang_module : module events;
-  to_expr : lang_module.(m_state) → expr;
-  to_state : lang_module.(m_state) → state;
+  lang_trans : mod_trans events;
+  to_expr : lang_trans.(m_state) → expr;
+  to_state : lang_trans.(m_state) → state;
 }.
 Definition exprO {Λ : language} := leibnizO (expr Λ).
 
@@ -25,8 +25,8 @@ Class refirisPreG (Σ : gFunctors) := RefirisPreG {
 Class refirisGS (Λ : language) (Σ : gFunctors) := RefirisGS {
   refiris_invGS :> invGS Σ;
   refiris_ord_laterGS :> ord_laterGS Σ;
-  spec_module : module (events Λ);
-  state_interp : state Λ → spec_module.(m_state) → iProp Σ;
+  spec_trans : mod_trans (events Λ);
+  state_interp : state Λ → spec_trans.(m_state) → iProp Σ;
 }.
 Global Opaque refiris_invGS.
 
@@ -35,8 +35,8 @@ Definition wp_pre `{!refirisGS Λ Σ}
     leibnizO coPset -d> exprO -d> (exprO -d> iPropO Σ) -d> iPropO Σ := λ E e1 Φ,
   (∀ σ σs, ⌜e1 = to_expr Λ σ⌝ -∗ ord_later_ctx -∗ state_interp (to_state Λ σ) σs ={E}=∗
     (state_interp (to_state Λ σ) σs ∗ Φ e1) ∨
-    ∀ κ Pσ, ⌜(lang_module Λ).(m_step) σ κ Pσ⌝ ={E,∅}=∗ ▷ₒ
-      ∃ Pσs, ⌜σs ~{spec_module, option_trace κ}~>ₜ Pσs⌝ ∗
+    ∀ κ Pσ, ⌜(lang_trans Λ).(m_step) σ κ Pσ⌝ ={E,∅}=∗ ▷ₒ
+      ∃ Pσs, ⌜σs ~{spec_trans, option_trace κ}~>ₜ Pσs⌝ ∗
         ∀ σs', ⌜Pσs σs'⌝ ={∅, E}=∗
           ∃ σ', ⌜Pσ σ'⌝ ∗ (state_interp (to_state Λ σ') σs' ∗ wp E (to_expr Λ σ') Φ))%I.
 
@@ -146,7 +146,7 @@ Theorem wp_adequacy Σ Λ `{!refirisPreG Σ} mspec σi σs :
        in
        stateI (to_state Λ σi) σs ∗
        WP (to_expr Λ σi) @ ⊤ {{ _, |={⊤, ∅}=> False }}) →
-  trefines (MS (lang_module Λ) σi) (MS mspec σs).
+  trefines (Mod (lang_trans Λ) σi) (Mod mspec σs).
 Proof.
   intros Hwp. constructor => κs /thas_trace_n [n Htrace].
   apply (step_fupdN_soundness_no_lc _ 0 0) => ?? /=. simpl in *. iIntros "_".

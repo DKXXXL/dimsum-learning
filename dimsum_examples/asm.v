@@ -47,7 +47,7 @@ Inductive asm_state := AsmState {
 }.
 Add Printing Constructor asm_state.
 
-Definition initial_asm_state (ins : gmap Z asm_instr) := AsmState AWaiting ∅ ∅ ins.
+Definition asm_init (ins : gmap Z asm_instr) := AsmState AWaiting ∅ ∅ ins.
 
 Inductive asm_ev :=
 | EAJump (regs : gmap string Z) (mem : gmap Z (option Z))
@@ -102,14 +102,15 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
            (λ σ', σ' = AsmState (ARunning []) regs' mem' instrs)
 .
 
-Definition asm_module := Mod asm_step.
+Definition asm_trans := ModTrans asm_step.
+Definition asm_mod (ins : gmap Z asm_instr) := Mod asm_trans (asm_init ins).
 
-Global Instance asm_vis_no_all: VisNoAll asm_module.
+Global Instance asm_vis_no_all: VisNoAll asm_trans.
 Proof. move => *. inv_all @m_step; naive_solver. Qed.
 
 (** * tstep *)
 Lemma asm_step_WriteReg_i r f es rs ins mem:
-  TStepI asm_module (AsmState (ARunning (WriteReg r f::es)) rs mem ins)
+  TStepI asm_trans (AsmState (ARunning (WriteReg r f::es)) rs mem ins)
             (λ G, G true None (λ G', G' (AsmState (ARunning es) (<[r:=f rs]>rs) mem ins))).
 Proof.
   constructor => ? ?. apply steps_impl_step_end => ???.
@@ -119,7 +120,7 @@ Qed.
 Global Hint Resolve asm_step_WriteReg_i : typeclass_instances.
 
 Lemma asm_step_WriteReg_s r f es rs ins mem:
-  TStepS asm_module (AsmState (ARunning (WriteReg r f::es)) rs mem ins)
+  TStepS asm_trans (AsmState (ARunning (WriteReg r f::es)) rs mem ins)
             (λ G, G None (λ G', G' (AsmState (ARunning es) (<[r:=f rs]>rs) mem ins))).
 Proof.
   constructor => ??. eexists _, _. split; [done|] => ? /= ?.
@@ -129,7 +130,7 @@ Qed.
 Global Hint Resolve asm_step_WriteReg_s : typeclass_instances.
 
 Lemma asm_step_ReadMem_i r1 r2 f es rs ins mem:
-  TStepI asm_module (AsmState (ARunning (ReadMem r1 r2 f::es)) rs mem ins)
+  TStepI asm_trans (AsmState (ARunning (ReadMem r1 r2 f::es)) rs mem ins)
             (λ G, G true None (λ G',
              ∃ mv, mem !! f (rs !!! r2) = Some mv ∧
                       G' (if mv is Some v then
@@ -145,7 +146,7 @@ Qed.
 Global Hint Resolve asm_step_ReadMem_i : typeclass_instances.
 
 Lemma asm_step_ReadMem_s r1 r2 f es rs ins mem:
-  TStepS asm_module (AsmState (ARunning (ReadMem r1 r2 f::es)) rs mem ins)
+  TStepS asm_trans (AsmState (ARunning (ReadMem r1 r2 f::es)) rs mem ins)
             (λ G, G None (λ G', ∀ mv, mem !! f (rs !!! r2) = Some mv →
       G' (if mv is Some v then
             AsmState (ARunning (es)) (<[r1:=v]>rs) mem ins
@@ -159,7 +160,7 @@ Qed.
 Global Hint Resolve asm_step_ReadMem_s : typeclass_instances.
 
 Lemma asm_step_WriteMem_i r1 r2 f es rs ins mem:
-  TStepI asm_module (AsmState (ARunning (WriteMem r1 r2 f::es)) rs mem ins)
+  TStepI asm_trans (AsmState (ARunning (WriteMem r1 r2 f::es)) rs mem ins)
             (λ G, G true None (λ G',
              ∃ mv, mem !! f (rs !!! r2) = Some mv ∧
                       G' (if mv is Some mv' then
@@ -174,7 +175,7 @@ Qed.
 Global Hint Resolve asm_step_WriteMem_i : typeclass_instances.
 
 Lemma asm_step_WriteMem_s r1 r2 f es rs ins mem:
-  TStepS asm_module (AsmState (ARunning (WriteMem r1 r2 f::es)) rs mem ins)
+  TStepS asm_trans (AsmState (ARunning (WriteMem r1 r2 f::es)) rs mem ins)
             (λ G, G None (λ G', ∀ mv, mem !! f (rs !!! r2) = Some mv →
                       G' (if mv is Some mv' then
                             AsmState (ARunning es) rs (<[f (rs !!! r2):=Some (rs !!! r1)]>mem) ins
@@ -188,7 +189,7 @@ Qed.
 Global Hint Resolve asm_step_WriteMem_s : typeclass_instances.
 
 Lemma asm_step_Syscall_call_i es rs ins mem:
-  TStepI asm_module (AsmState (ARunning (Syscall::es)) rs mem ins)
+  TStepI asm_trans (AsmState (ARunning (Syscall::es)) rs mem ins)
             (λ G, G true (Some (Outgoing, EASyscallCall (extract_syscall_args rs) mem))
                     (λ G', G' (AsmState (AWaitingSyscall es) rs mem ins))).
 Proof.
@@ -199,7 +200,7 @@ Qed.
 Global Hint Resolve asm_step_Syscall_call_i : typeclass_instances.
 
 Lemma asm_step_Syscall_call_s es rs ins mem:
-  TStepS asm_module (AsmState (ARunning (Syscall :: es)) rs mem ins)
+  TStepS asm_trans (AsmState (ARunning (Syscall :: es)) rs mem ins)
             (λ G, G (Some (Outgoing, EASyscallCall (extract_syscall_args rs) mem))
                     (λ G', G' (AsmState (AWaitingSyscall es) rs mem ins))).
 Proof.
@@ -209,7 +210,7 @@ Qed.
 Global Hint Resolve asm_step_Syscall_call_s : typeclass_instances.
 
 Lemma asm_step_Syscall_ret_i es rs ins mem:
-  TStepI asm_module (AsmState (AWaitingSyscall es) rs mem ins)
+  TStepI asm_trans (AsmState (AWaitingSyscall es) rs mem ins)
             (λ G, ∀ ret mem', G true (Some (Incoming, EASyscallRet ret mem'))
                     (λ G', G' (AsmState (ARunning es) (<["R0" := ret]> rs) mem' ins))).
 Proof.
@@ -220,7 +221,7 @@ Qed.
 Global Hint Resolve asm_step_Syscall_ret_i : typeclass_instances.
 
 Lemma asm_step_Syscall_ret_s es rs ins mem:
-  TStepS asm_module (AsmState (AWaitingSyscall es) rs mem ins)
+  TStepS asm_trans (AsmState (AWaitingSyscall es) rs mem ins)
             (λ G, ∃ ret mem', G (Some (Incoming, EASyscallRet ret mem'))
                     (λ G', G' (AsmState (ARunning es) (<["R0":=ret]> rs) mem' ins))).
 Proof.
@@ -230,7 +231,7 @@ Qed.
 Global Hint Resolve asm_step_Syscall_ret_s : typeclass_instances.
 
 Lemma asm_step_Jump_i rs ins mem:
-  TStepI asm_module (AsmState (ARunning []) rs mem ins) (λ G,
+  TStepI asm_trans (AsmState (ARunning []) rs mem ins) (λ G,
     ∀ pc, rs !!! "PC" = pc →
           if ins !! pc is Some i then
             G true None (λ G', G' (AsmState (ARunning i) rs mem ins))
@@ -245,7 +246,7 @@ Qed.
 Global Hint Resolve asm_step_Jump_i : typeclass_instances.
 
 Lemma asm_step_Jump_s rs ins mem:
-  TStepS asm_module (AsmState (ARunning []) rs mem ins) (λ G,
+  TStepS asm_trans (AsmState (ARunning []) rs mem ins) (λ G,
     ∃ pc, rs !!! "PC" = pc ∧
       if ins !! pc is Some i then
         G None (λ G', G' (AsmState (ARunning i) rs mem ins))
@@ -259,7 +260,7 @@ Qed.
 Global Hint Resolve asm_step_Jump_s : typeclass_instances.
 
 Lemma asm_step_AWaiting_i rs ins mem:
-  TStepI asm_module (AsmState AWaiting rs mem ins) (λ G,
+  TStepI asm_trans (AsmState AWaiting rs mem ins) (λ G,
     ∀ pc i rs' mem',
       rs' !!! "PC" = pc →
       ins !! pc = Some i →
@@ -272,7 +273,7 @@ Qed.
 Global Hint Resolve asm_step_AWaiting_i : typeclass_instances.
 
 Lemma asm_step_AWaiting_s rs mem ins:
-  TStepS asm_module (AsmState AWaiting rs mem ins) (λ G,
+  TStepS asm_trans (AsmState AWaiting rs mem ins) (λ G,
     ∃ pc i rs' mem', rs' !!! "PC" = pc ∧
       ins !! pc = Some i ∧
       G (Some (Incoming, EAJump rs' mem')) (λ G', G' (AsmState (ARunning []) rs' mem' ins))).
@@ -283,7 +284,7 @@ Qed.
 Global Hint Resolve asm_step_AWaiting_s : typeclass_instances.
 
 Lemma asm_step_AHalted_i rs ins mem:
-  TStepI asm_module (AsmState AHalted rs mem ins) (λ G, True).
+  TStepI asm_trans (AsmState AHalted rs mem ins) (λ G, True).
 Proof.
   constructor => ? HG. apply steps_impl_step_end => ???. inv_all @m_step.
 Qed.
@@ -320,12 +321,8 @@ Definition asm_closed_post (e : asm_event) (s : bool) :
   | _ => pp_prop False (pp_quant $ λ e', pp_end e')
   end.
 
-Definition asm_closed (m : module asm_event) : module asm_closed_event :=
-  mod_prepost asm_closed_pre asm_closed_post m.
-
-Definition initial_asm_closed_state (m : module asm_event) (σ : m.(m_state)) :=
-  (@SMFilter asm_event, σ, (@PPOutside asm_event asm_closed_event, false, (True : uPred unitUR)%I)).
-
+Definition asm_closed_mod (m : module asm_event) : module asm_closed_event :=
+  prepost_mod asm_closed_pre asm_closed_post m false True%I.
 
 (** * Linking *)
 (** ** Syntactic linking *)
@@ -333,16 +330,14 @@ Definition asm_syn_link (instrs1 instrs2 : gmap Z asm_instr) : gmap Z asm_instr 
   instrs1 ∪ instrs2.
 
 Definition asm_ctx_refines (instrsi instrss : gmap Z asm_instr) :=
-  ∀ C, trefines (MS (asm_closed asm_module)
-                    (initial_asm_closed_state asm_module (initial_asm_state (asm_syn_link instrsi C))))
-                (MS (asm_closed asm_module)
-                    (initial_asm_closed_state asm_module (initial_asm_state (asm_syn_link instrss C)))).
+  ∀ C, trefines (asm_closed_mod (asm_mod (asm_syn_link instrsi C)))
+                (asm_closed_mod (asm_mod (asm_syn_link instrss C))).
 
 (** ** Semantic linking *)
 (* State s says whether we are currently in the environment and
 expecting a syscall return. Some SPNone means that the program
 executed a page fault and is not waiting for any return. *)
-Definition asm_link_filter (ins1 ins2 : gset Z) : seq_product_state → option seq_product_state → asm_ev → seq_product_state → option seq_product_state → asm_ev → bool → Prop :=
+Definition asm_link_filter (ins1 ins2 : gset Z) : seq_product_case → option seq_product_case → asm_ev → seq_product_case → option seq_product_case → asm_ev → bool → Prop :=
   λ p s e p' s' e' ok,
     e' = e ∧
     ok = true ∧
@@ -365,22 +360,20 @@ Definition asm_link_filter (ins1 ins2 : gset Z) : seq_product_state → option s
     end.
 Arguments asm_link_filter _ _ _ _ _ _ _ _ /.
 
+Definition asm_link_trans (ins1 ins2 : gset Z) (m1 m2 : mod_trans asm_event) : mod_trans asm_event :=
+  link_trans (asm_link_filter ins1 ins2) m1 m2.
+
 Definition asm_link (ins1 ins2 : gset Z) (m1 m2 : module asm_event) : module asm_event :=
-  mod_link (asm_link_filter ins1 ins2) m1 m2.
+  Mod (asm_link_trans ins1 ins2 m1.(m_trans) m2.(m_trans)) (MLFNone, None, m1.(m_init), m2.(m_init)).
 
-(* TODO: use this more *)
-Definition initial_asm_link_state (m1 m2 : module asm_event) (σ1 : m1.(m_state)) (σ2 : m2.(m_state)) :=
-  (@MLFNone asm_ev, @None seq_product_state, σ1, σ2).
-
-Lemma asm_link_trefines m1 m1' m2 m2' σ1 σ1' σ2 σ2' σ ins1 ins2 `{!VisNoAll m1} `{!VisNoAll m2}:
-  trefines (MS m1 σ1) (MS m1' σ1') →
-  trefines (MS m2 σ2) (MS m2' σ2') →
-  trefines (MS (asm_link ins1 ins2 m1 m2) (σ, σ1, σ2))
-           (MS (asm_link ins1 ins2 m1' m2') (σ, σ1', σ2')).
-Proof. move => ??. by apply mod_link_trefines. Qed.
+Lemma asm_link_trefines m1 m1' m2 m2' ins1 ins2 `{!VisNoAll m1.(m_trans)} `{!VisNoAll m2.(m_trans)}:
+  trefines m1 m1' →
+  trefines m2 m2' →
+  trefines (asm_link ins1 ins2 m1 m2) (asm_link ins1 ins2 m1' m2').
+Proof. move => ??. by apply link_mod_trefines. Qed.
 
 (** ** Relating semantic and syntactic linking *)
-Definition asm_link_inv (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_module.(m_state)) (σ2 : mod_link_state asm_ev * option seq_product_state * asm_state * asm_state) : Prop :=
+Definition asm_link_inv (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_trans.(m_state)) (σ2 : link_case asm_ev * option seq_product_case * asm_state * asm_state) : Prop :=
   let 'AsmState i1 rs1 mem1 ins1' := σ1 in
   let '(σf, s, AsmState il rsl meml insl, AsmState ir rsr memr insr) := σ2 in
   ins1' = ins1 ∪ ins2 ∧
@@ -396,9 +389,8 @@ Definition asm_link_inv (ins1 ins2 : gmap Z asm_instr) (σ1 : asm_module.(m_stat
 
 Lemma asm_syn_link_refines_link ins1 ins2:
   ins1 ##ₘ ins2 →
-  trefines (MS asm_module (initial_asm_state (asm_syn_link ins1 ins2)))
-           (MS (asm_link (dom ins1) (dom ins2) asm_module asm_module)
-               (initial_asm_link_state asm_module asm_module (initial_asm_state ins1) (initial_asm_state ins2))).
+  trefines (asm_mod (asm_syn_link ins1 ins2))
+           (asm_link (dom ins1) (dom ins2) (asm_mod ins1) (asm_mod ins2)).
 Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
@@ -452,9 +444,8 @@ Qed.
 
 Lemma asm_link_refines_syn_link ins1 ins2:
   ins1 ##ₘ ins2 →
-  trefines (MS (asm_link (dom ins1) (dom ins2) asm_module asm_module)
-               (initial_asm_link_state asm_module asm_module (initial_asm_state ins1) (initial_asm_state ins2)))
-           (MS asm_module (initial_asm_state (asm_syn_link ins1 ins2))).
+  trefines (asm_link (dom ins1) (dom ins2) (asm_mod ins1) (asm_mod ins2))
+           (asm_mod (asm_syn_link ins1 ins2)).
 Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
@@ -508,11 +499,11 @@ Qed.
 
 Lemma asm_trefines_implies_ctx_refines insi inss :
   dom insi = dom inss →
-  trefines (MS asm_module (initial_asm_state insi)) (MS asm_module (initial_asm_state inss)) →
+  trefines (asm_mod insi) (asm_mod inss) →
   asm_ctx_refines insi inss.
 Proof.
   move => Hdom Href C. rewrite /asm_syn_link map_difference_union_r (map_difference_union_r inss).
-  apply mod_seq_map_trefines. { apply _. } { apply _. }
+  apply prepost_mod_trefines. { apply _. }
   etrans. {
     apply asm_syn_link_refines_link. apply map_disjoint_difference_r'.
   }
@@ -716,22 +707,22 @@ Lemma tsim_asm_loop n b rs mem ins t insaddrs:
           (∀ pc''' rs''' mem''' i,
               rs''' !!! "PC" = pc''' →
               ins !! pc''' = Some i →
-              AsmState (ARunning i) rs''' mem''' ins ⪯{asm_module, mod_itree asm_event (), n, b} (h' (rs''', mem'''), ())) →
+              AsmState (ARunning i) rs''' mem''' ins ⪯{asm_trans, itree_trans asm_event (), n, b} (h' (rs''', mem'''), ())) →
           (AsmState (ARunning []) rs1'' mem1'' ins)
-            ⪯{asm_module, mod_itree asm_event (), n, true}
+            ⪯{asm_trans, itree_trans asm_event (), n, true}
           (y ← rec rc (Some (rs2'', mem2''));;; h' y, ())) →
       (∀ pc rs1 rs2 mem1 mem2,
           rs1 = rs2 →
           mem1 = mem2 →
           rs1 !!! "PC" = pc →
-          tsim n true asm_module (mod_itree asm_event ()) (AsmState (ARunning []) rs1 mem1 ins) tnil (k (rs2, mem2), ())) →
-    AsmState (ARunning i) rs' mem' ins ⪯{asm_module, mod_itree asm_event (), n, true}
+          tsim n true asm_trans (itree_trans asm_event ()) (AsmState (ARunning []) rs1 mem1 ins) tnil (k (rs2, mem2), ())) →
+    AsmState (ARunning i) rs' mem' ins ⪯{asm_trans, itree_trans asm_event (), n, true}
        (r ← interp (recursive rc) (t rs' mem');;; k r, ())) →
   (** Then we can prove an asm_loop *)
-  AsmState AWaiting rs mem ins ⪯{asm_module, mod_itree asm_event (), n, b} (asm_loop insaddrs t, ()).
+  AsmState AWaiting rs mem ins ⪯{asm_trans, itree_trans asm_event (), n, b} (asm_loop insaddrs t, ()).
 Proof.
   rewrite /asm_loop => Hins Hl. set rc := (X in (rec X)).
-  apply (tsim_remember_rec (mi:=asm_module)
+  apply (tsim_remember_rec (mi:=asm_trans)
    (λ a σi s,
      if a is Some (rs, mem) then
        σi = AsmState (ARunning []) rs mem ins
@@ -819,9 +810,9 @@ Module asm_examples.
 
 
   Lemma asm_mul_refines_itree :
-    trefines (MS asm_module (initial_asm_state asm_mul)) (MS (mod_itree _ _) (itree_mul, tt)).
+    trefines (asm_mod asm_mul) (itree_mod itree_mul tt).
   Proof.
-    apply tsim_implies_trefines => /= n. rewrite /initial_asm_state.
+    apply tsim_implies_trefines => /= n. rewrite /asm_init.
     rewrite {1}/itree_mul.
     apply tsim_asm_loop. {
       move => z. rewrite !elem_of_cons elem_of_nil.
@@ -888,9 +879,9 @@ Module asm_examples.
 
 
   Lemma asm_mul_client_refines_itree :
-    trefines (MS asm_module (initial_asm_state asm_mul_client)) (MS (mod_itree _ _) (itree_mul_client, tt)).
+    trefines (asm_mod asm_mul_client) (itree_mod itree_mul_client tt).
   Proof.
-    apply tsim_implies_trefines => /= n. rewrite /initial_asm_state.
+    apply tsim_implies_trefines => /= n. rewrite /asm_init.
     rewrite {1}/itree_mul_client.
     apply tsim_asm_loop. {
       move => z. rewrite !elem_of_cons elem_of_nil.

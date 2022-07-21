@@ -49,9 +49,7 @@ Theorem compile_correct f2i f fn dins ins a:
   ins = deep_to_asm_instrs a dins →
   f2i !! f = Some a →
   map_Forall (λ f' i', ins !! i' = None ↔ f' ≠ f) f2i →
-  trefines (MS asm_module (initial_asm_state ins))
-           (MS (rec_to_asm (dom ins) {[f]} f2i rec_module)
-               (initial_rec_to_asm_state ∅ rec_module (initial_rec_state (<[f := fn]> ∅)))).
+  trefines (asm_mod ins) (rec_to_asm (dom ins) {[f]} f2i ∅ (rec_mod (<[f := fn]> ∅))).
 Proof.
   unfold compile.
   move => /compiler_success_bind_success[?[/compiler_success_fmap_success[?[/compiler_success_fmap_error_success ??]] /compiler_success_fmap_error_success?]]. simplify_eq.
@@ -63,13 +61,13 @@ Proof.
     erewrite cr2a_linearize.pass_fn_vars; [|done]. apply cr2a_ssa.pass_fn_args_NoDup.
   }
   etrans. {
-    apply: rec_to_asm_trefines.
+    apply rec_to_asm_trefines. 1: apply _.
     apply cr2a_mem2reg.pass_fn_correct.
     erewrite cr2a_linearize.pass_fn_args; [|done].
     erewrite cr2a_linearize.pass_fn_vars; [|done].
     apply cr2a_ssa.pass_fn_args_NoDup.
   }
-  etrans. { apply: r2a_bij_vertical_N. }
+  etrans. { apply r2a_bij_vertical_N, _. }
   apply rec_to_asm_trefines; [apply _|].
   etrans. {
     apply: cr2a_linearize.pass_fn_correct; [done|..]; rewrite cr2a_ssa.pass_fn_vars.
@@ -77,7 +75,7 @@ Proof.
     - move => ? /elem_of_lookup_imap[?[?[??]]]. by apply: tmp_var_ne_ssa_var.
   }
   etrans. { apply: cr2a_ssa.pass_fn_correct. }
-  rewrite /initial_rec_sstate fmap_insert fmap_empty static_fndef_to_fndef_to_static_fndef.
+  rewrite /rec_static_mod /rec_mod/rec_static_init fmap_insert fmap_empty static_fndef_to_fndef_to_static_fndef.
   done.
 Qed.
 

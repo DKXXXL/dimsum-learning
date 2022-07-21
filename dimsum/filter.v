@@ -2,9 +2,9 @@ From dimsum.core Require Export proof_techniques.
 From dimsum.core Require Import srefines.
 From dimsum.core Require Import axioms.
 
-(** * [mod_filter] *)
+(** * filter *)
 
-Inductive filter_step {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) :
+Inductive filter_step {EV1 EV2} (m : mod_trans EV1) (R : EV1 → option EV2 → Prop) :
   m.(m_state) → option EV2 → (m.(m_state) → Prop) → Prop :=
 | FilterStep σ e e' Pσ:
     m.(m_step) σ e Pσ →
@@ -13,12 +13,15 @@ Inductive filter_step {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Pro
     (if e is Some κ then R κ e' else e' = None) →
     filter_step m R σ e' Pσ.
 
-Definition mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) : module EV2 :=
-  Mod (filter_step m R).
+Definition filter_trans {EV1 EV2} (m : mod_trans EV1) (R : EV1 → option EV2 → Prop) : mod_trans EV2 :=
+  ModTrans (filter_step m R).
 
-Global Instance filter_vis_no_all {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) `{!VisNoAll m}:
-  VisNoAll (mod_filter m R).
+Global Instance filter_vis_no_all {EV1 EV2} (m : mod_trans EV1) (R : EV1 → option EV2 → Prop) `{!VisNoAll m}:
+  VisNoAll (filter_trans m R).
 Proof. move => *. inv_all/= @m_step; case_match; simplify_eq. by apply: vis_no_all. Qed.
+
+Definition filter_mod {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) :=
+  Mod (filter_trans m.(m_trans) R) m.(m_init).
 
 (** ** trefines for [mod_filter] *)
 Fixpoint trace_bind {EV1 EV2} (f : EV1 → trace EV2) (κs : trace EV1) : trace EV2 :=
@@ -51,8 +54,8 @@ Lemma filtered_trace_mono {EV1 EV2} (R : EV1 → option EV2 → Prop) κs1 κs2 
   filtered_trace R κs1 ⊆ filtered_trace R κs2.
 Proof. apply trace_bind_mono. Qed.
 
-Lemma tmod_filter_to_mod {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σi Pσ κs:
-  σi ~{ mod_filter m R, κs }~>ₜ Pσ →
+Lemma tmod_filter_to_mod {EV1 EV2} (m : mod_trans EV1) (R : EV1 → option EV2 → Prop) σi Pσ κs:
+  σi ~{ filter_trans m R, κs }~>ₜ Pσ →
   ∃ κs', filtered_trace R κs' ⊆ κs ∧ σi ~{ m, κs' }~>ₜ Pσ.
 Proof.
   elim.
@@ -81,9 +84,9 @@ Proof.
     + apply: thas_trace_all. naive_solver.
 Qed.
 
-Lemma tmod_to_mod_filter {EV1 EV2} (m : module EV1) (R : EV1 → option EV2 → Prop) σi Pσ κs:
+Lemma tmod_to_mod_filter {EV1 EV2} (m : mod_trans EV1) (R : EV1 → option EV2 → Prop) σi Pσ κs:
   σi ~{ m, κs }~>ₜ Pσ →
-  σi ~{ mod_filter m R, filtered_trace R κs }~>ₜ Pσ.
+  σi ~{ filter_trans m R, filtered_trace R κs }~>ₜ Pσ.
 Proof.
   elim.
   - move => ?????. constructor. done. by apply: (filtered_trace_mono _ tnil).
@@ -100,20 +103,20 @@ Proof.
     apply: thas_trace_all. naive_solver.
 Qed.
 
-Lemma mod_filter_trefines {EV1 EV2} (R : EV1 → option EV2 → Prop) mi ms σi σs:
-  trefines (MS mi σi) (MS ms σs) →
-  trefines (MS (mod_filter mi R) σi) (MS (mod_filter ms R) σs).
+Lemma filter_mod_trefines {EV1 EV2} (R : EV1 → option EV2 → Prop) mi ms:
+  trefines mi ms →
+  trefines (filter_mod mi R) (filter_mod ms R).
 Proof.
   move => [/=Hr]. constructor => /=? /tmod_filter_to_mod[?[? /Hr/tmod_to_mod_filter?]].
   by apply: thas_trace_mono.
 Qed.
 
 (** A significantly simpler proof using [trefines1_implies_trefines2] *)
-Lemma mod_filter_trefines' {EV1 EV2} (R : EV1 → option EV2 → Prop) mi ms σi σs:
-  trefines (MS mi σi) (MS ms σs) →
-  trefines (MS (mod_filter mi R) σi) (MS (mod_filter ms R) σs).
+Lemma mod_filter_trefines' {EV1 EV2} (R : EV1 → option EV2 → Prop) mi ms:
+  trefines mi ms →
+  trefines (filter_mod mi R) (filter_mod ms R).
 Proof.
-  move => Hr. eapply (trefines1_implies_trefines2 (MS mi _) (MS ms _) (MS (mod_filter mi R) _) (MS (mod_filter ms R) _) (λ σ1 σ2, σ1 = σ2) (λ σ1 σ2, σ1 = σ2)); [done.. | |] => /=.
+  move => Hr. eapply (trefines1_implies_trefines2 mi ms (filter_mod mi R) (filter_mod ms R) (λ σ1 σ2, σ1 = σ2) (λ σ1 σ2, σ1 = σ2)); [done.. | |] => /=.
   - move => ???? -> Hstep. inversion Hstep; simplify_eq. eexists e.
     split.
     + case_match; simplify_eq => //.

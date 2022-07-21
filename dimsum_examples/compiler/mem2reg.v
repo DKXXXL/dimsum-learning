@@ -231,11 +231,11 @@ Lemma lexpr_tsim_var_val  v es ei Ks Ki vss vsi x n hi hs fns1 fns2 rf r
       subst_map vss (var_val_to_expr v) = Val w' →
       satisfiable (([∗ map] vi;vs ∈ (delete x vsi); (delete x vss), val_in_bij vi vs) ∗ val_in_bij v' w' ∗ r) →
       Rec (expr_fill Ki (Val v')) hi fns1
-        ⪯{rec_module, rec_heap_bij rec_module, n, true}
+        ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, true}
       (SMProg, Rec (expr_fill Ks (Val w')) hs fns2, (PPInside, (), rf))
     ) →
     Rec ei hi fns1
-      ⪯{rec_module, rec_heap_bij rec_module, n, true}
+      ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, true}
     (SMProg, Rec es hs fns2, (PPInside, (), rf)).
 Proof.
  intros Hdom Hne Hsat Hcont; destruct Hfill1 as [->], Hfill2 as [->].
@@ -266,11 +266,11 @@ Lemma lexpr_tsim_var_val_call vs' ws' ys es ei Ks Ki vss vsi x n hi hs fns1 fns2
     (∀ vs ws,
       satisfiable (([∗ map] vi;vs ∈ (delete x vsi); (delete x vss), val_in_bij vi vs) ∗ ([∗ list] v; w ∈ vs' ++ vs; ws' ++ ws, val_in_bij v w) ∗ r) →
       Rec (expr_fill Ki (Call f (Val <$> (vs' ++ vs)))) hi fns1
-        ⪯{rec_module, rec_heap_bij rec_module, n, true}
+        ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, true}
       (SMProg, Rec (expr_fill Ks (Call f (Val <$> (ws' ++ ws)))) hs fns2, (PPInside, (), rf))
     ) →
     Rec ei hi fns1
-      ⪯{rec_module, rec_heap_bij rec_module, n, true}
+      ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, true}
     (SMProg, Rec es hs fns2, (PPInside, (), rf)).
 Proof.
  intros Hdom Hall Hsat Hcont;destruct Hfill1 as [->], Hfill2 as [->].
@@ -312,7 +312,7 @@ Lemma pass_lexpr_op_correct ei' Ki ei Ks es es' x k (l: loc) n hi hs fns1 fns2 v
     l.2 = 0 →
     crun () (lexpr_op_pass x es') = CResult () f (CSuccess ei') →
     Rec ei hi fns1
-      ⪯{rec_module, rec_heap_bij rec_module, n, true}
+      ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, true}
     (SMProg, Rec es hs fns2, (PPInside, (), rf)).
 Proof.
   intros Hcalls Hcont Hsat Hxs Hxi Hsub Hl Hrun.
@@ -400,10 +400,10 @@ Lemma LLetM_sim Ki Ks vsi vss x o ei es n hi hs fns1 fns2 rf vi wi:
   vsi !! x = Some vi →
   default (Val vi) (subst_map vsi <$> (var_val_to_expr <$> o)) = Val wi →
   Rec (expr_fill Ki (subst_map (<[x := wi]> vsi) (lexpr_to_expr ei))) hi fns1
-    ⪯{rec_module, rec_heap_bij rec_module, n, true}
+    ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, true}
   (SMProg, Rec (expr_fill Ks (subst_map vss (lexpr_to_expr es))) hs fns2, (PPInside, (), rf)) →
   Rec (expr_fill Ki (subst_map vsi (lexpr_to_expr (LLetM x o ei)))) hi fns1
-    ⪯{rec_module, rec_heap_bij rec_module, n, true}
+    ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, true}
   (SMProg, Rec (expr_fill Ks (subst_map vss (lexpr_to_expr es))) hs fns2, (PPInside, (), rf)).
 Proof.
   destruct o; simpl.
@@ -427,7 +427,7 @@ Lemma pass_correct  r rf ei' Ki ei Ks es es' x (l: loc) n k h h' fns1 fns2 vsi v
                 val_in_bij vi vs ∗ ([∗ map] v1;v2 ∈ (delete x vsi);(delete x vss), val_in_bij v1 v2) ∗ r ∗ rf) →
     crun () (pass x es') = CResult () r_p (CSuccess ei') →
     Rec ei h fns1
-      ⪯{rec_module, rec_heap_bij rec_module, n, true}
+      ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, true}
     (SMProg, Rec es h' fns2, (PPInside, (), rf)).
 Proof.
   intros Hl; destruct Hfill1 as [->]. destruct Hfill2 as [->].
@@ -628,19 +628,12 @@ Lemma pass_correct_refines f x args vars exprs i k cont expri:
   (NoDup (args ++ (vars.*1))) →
   crun () (pass x exprs) = CResult () cont (CSuccess expri) →
   trefines
-    (MS rec_module
-      (initial_rec_state
-            (lfndef_to_fndef <$>
-              <[f:={|
+    (linear_rec_mod (<[f:={|
                     lfd_args := args;
                     lfd_vars := delete i vars;
                     lfd_body := LLetE x (LVarVal (VVal (StaticValNum 0))) expri
-                  |}]> ∅)))
-    (MS (rec_heap_bij rec_module)
-      (initial_rec_heap_bij_state rec_module
-          (initial_rec_state
-            (lfndef_to_fndef <$>
-              <[f:={| lfd_args := args; lfd_vars := vars; lfd_body := exprs |}]> ∅)))).
+                  |}]> ∅))
+    (rec_heap_bij (linear_rec_mod (<[f:={| lfd_args := args; lfd_vars := vars; lfd_body := exprs |}]> ∅))).
 Proof.
   intros Heq Hnodup Hrun. apply: rec_heap_bij_proof.
   - set_solver.
@@ -773,14 +766,8 @@ Lemma pass_single_var_correct f x args exprs varss expri varsi :
   (NoDup (args ++ (varss.*1))) →
   pass_single_var x exprs varss = (expri, varsi) →
   trefines
-  (MS rec_module (initial_rec_state
-    (lfndef_to_fndef <$>
-    <[f:={| lfd_args := args; lfd_vars := varsi; lfd_body := expri |}]> ∅)))
-  (MS (rec_heap_bij rec_module)
-     (initial_rec_heap_bij_state rec_module
-        (initial_rec_state
-           (lfndef_to_fndef <$>
-            <[f:={| lfd_args := args; lfd_vars := varss; lfd_body := exprs |}]> ∅)))).
+  (linear_rec_mod (<[f:={| lfd_args := args; lfd_vars := varsi; lfd_body := expri |}]> ∅))
+  (rec_heap_bij (linear_rec_mod (<[f:={| lfd_args := args; lfd_vars := varss; lfd_body := exprs |}]> ∅))).
 Proof.
   intros Hnd. rewrite /pass_single_var.
   destruct list_find as [[i [y n]]|] eqn: Hfind;
@@ -851,15 +838,10 @@ Lemma pass_body_correct f args varss exprs expri varsi:
   pass_body exprs varss = (expri, varsi) →
   NoDup (args ++ varss.*1) →
   trefines
-    (MS rec_module (initial_rec_state
-      (lfndef_to_fndef <$>
-      <[f:={| lfd_args := args; lfd_vars := varsi; lfd_body := expri |}]> ∅)))
-    (MS (rec_heap_bij_N (length varss) rec_module)
-       (initial_rec_heap_bij_state_N _ rec_module
-          (initial_rec_lstate
-             (<[f:={| lfd_args := args; lfd_vars := varss; lfd_body := exprs |}]> ∅)))).
+    (linear_rec_mod (<[f:={| lfd_args := args; lfd_vars := varsi; lfd_body := expri |}]> ∅))
+    (rec_heap_bij_N (length varss) (linear_rec_mod (<[f:={| lfd_args := args; lfd_vars := varss; lfd_body := exprs |}]> ∅))).
 Proof.
-  rewrite /pass_body. remember varss as L. rewrite {1 3 6}HeqL. clear HeqL.
+  rewrite /pass_body. remember varss as L. rewrite {1 3 5}HeqL. clear HeqL.
   induction L as [|[x n] L IH] in varss, varsi, exprs, expri |-*; simpl.
   - injection 1 as ??. subst; reflexivity.
   - destruct foldr as [expri' varsi'] eqn: Hbody.
@@ -893,9 +875,8 @@ Qed.
 
 Lemma pass_fn_correct f fn :
   NoDup (fn.(lfd_args) ++ fn.(lfd_vars).*1) →
-  trefines (MS rec_module (initial_rec_lstate (<[f := pass_fn fn]> ∅)))
-           (MS (rec_heap_bij_N (length fn.(lfd_vars)) rec_module) (initial_rec_heap_bij_state_N _ rec_module
-                                            (initial_rec_lstate (<[f := fn]> ∅)))).
+  trefines (linear_rec_mod (<[f := pass_fn fn]> ∅))
+           (rec_heap_bij_N (length fn.(lfd_vars)) (linear_rec_mod (<[f := fn]> ∅))).
 Proof.
   rewrite /pass_fn. destruct pass_body as [expri varsi] eqn: Hpass.
   revert Hpass. destruct fn as [args varss exprs]; simpl.

@@ -1,4 +1,4 @@
 #!/bin/bash
 
 make -j8
-# sed -i "s/\bshift_loc/offset_loc/g" README.md _CoqProject dimsum_examples/*.v dimsum_examples/compiler/*.v
+# sed -i "s/\bmod_prepost_link\b/prepost_link/g" dimsum/*.v dimsum_examples/*.v dimsum_examples/compiler/*.v

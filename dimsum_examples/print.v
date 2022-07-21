@@ -43,8 +43,7 @@ Local Ltac go_i :=
   tstep_i; go.
 
 Lemma print_asm_refines_itree :
-  trefines (MS asm_module (initial_asm_state print_asm))
-           (MS (mod_itree _ _) (print_itree, tt)).
+  trefines (asm_mod print_asm) (itree_mod print_itree tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember. { simpl. exact (λ _ σa '(t, _),

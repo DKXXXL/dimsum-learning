@@ -106,7 +106,8 @@ Inductive prod_mod1_step : nat → option nat → (nat → Prop) → Prop :=
 | PM1S5: prod_mod1_step 5 (Some 4) (λ σ', σ' = 6)
 .
 
-Definition prod_mod1 : module nat := Mod prod_mod1_step.
+Definition prod_mod1_trans : mod_trans nat := ModTrans prod_mod1_step.
+Definition prod_mod1 : module nat := Mod prod_mod1_trans 0.
 
 Inductive prod_modA_step : nat → option nat → (nat → Prop) → Prop :=
 | PMAS0 : prod_modA_step 0 (Some 10) (λ σ', σ' = 1)
@@ -118,7 +119,8 @@ Inductive prod_modA_step : nat → option nat → (nat → Prop) → Prop :=
 | PMAS6 : prod_modA_step 6 (Some 11) (λ σ', σ' = 7)
 .
 
-Definition prod_modA : module nat := Mod prod_modA_step.
+Definition prod_modA_trans : mod_trans nat := ModTrans prod_modA_step.
+Definition prod_modA : module nat := Mod prod_modA_trans 0.
 
 Inductive prod_modB_step : nat → option nat → (nat → Prop) → Prop :=
 | PMBS0: prod_modB_step 0 None (λ σ', σ' = 1 ∨ σ' = 5)
@@ -130,7 +132,8 @@ Inductive prod_modB_step : nat → option nat → (nat → Prop) → Prop :=
 | PMBS7: prod_modB_step 7 (Some 4) (λ σ', σ' = 8)
 .
 
-Definition prod_modB : module nat := Mod prod_modB_step.
+Definition prod_modB_trans : mod_trans nat := ModTrans prod_modB_step.
+Definition prod_modB : module nat := Mod prod_modB_trans 0.
 
 Inductive prod_modB'_step : nat → option nat → (nat → Prop) → Prop :=
 | PMB'S0: prod_modB'_step 0 (Some 10) (λ σ', σ' = 1)
@@ -140,7 +143,8 @@ Inductive prod_modB'_step : nat → option nat → (nat → Prop) → Prop :=
 | PMB'S5: prod_modB'_step 5 (Some 4) (λ σ', σ' = 6)
 .
 
-Definition prod_modB' : module nat := Mod (prod_modB'_step).
+Definition prod_modB'_trans : mod_trans nat := ModTrans prod_modB'_step.
+Definition prod_modB' : module nat := Mod prod_modB'_trans 0.
 
 Definition filterR (e1 : (option nat * option nat)) (e2 : option nat) : Prop :=
     (e1 = (Some 10, Some 10) ∧ e2 = None)
@@ -150,11 +154,11 @@ Definition filterR (e1 : (option nat * option nat)) (e2 : option nat) : Prop :=
   ∨ (e1 = (None, Some 3) ∧ e2 = Some 3)
   ∨ (e1 = (None, Some 4) ∧ e2 = Some 4).
 Arguments filterR _ _ /.
-Definition prod_mod : module nat := mod_filter (mod_product prod_modA prod_modB) filterR.
-Definition prod_mod' : module nat := mod_filter (mod_product prod_modA prod_modB') filterR.
+Definition prod_mod : module nat := filter_mod (product_mod prod_modA prod_modB) filterR.
+Definition prod_mod' : module nat := filter_mod (product_mod prod_modA prod_modB') filterR.
 
 Lemma prod_mod1_srefines_prod_mod:
-  srefines (MS prod_mod1 0) (MS prod_mod (0, 0)).
+  srefines prod_mod1 prod_mod.
 Proof.
   constructor => Pκs /= Himpl.
   inversion Himpl; simplify_eq. 1: by apply: STraceEnd.
@@ -203,7 +207,7 @@ Proof.
 Qed.
 
 Lemma prod_mod1_not_refines_prod_mod':
-  ¬ srefines (MS prod_mod1 0) (MS prod_mod' (0, 0)).
+  ¬ srefines prod_mod1 prod_mod'.
 Proof.
   move => [/=Hr].
   feed pose proof (Hr (λ κs, κs = [] ∨ κs = [Vis 1] ∨ κs = [Vis 1; Vis 3] ∨ κs = [Vis 1; Vis 3; Nb] ∨
@@ -235,15 +239,15 @@ End product_example.
 product respects srefines, but they are all doomed to fail because it
 does not hold. *)
 Module failed_product_proof_attempts.
-Inductive mod_product_rel1 {EV1 EV2} (m2 : module EV2) : list (event EV1) → m2.(m_state) → list (event (option EV1 * option EV2)) → Prop :=
+Inductive mod_product_rel1 {EV1 EV2} (m2 : mod_trans EV2) : list (event EV1) → m2.(m_state) → list (event (option EV1 * option EV2)) → Prop :=
 |MPR1_nil σ:
    mod_product_rel1 m2 [] σ []
 |MPR1_nb σ:
    mod_product_rel1 m2 [Nb] σ [Nb]
 .
 
-Lemma mod_product_to_mod_1 {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ Pσ Pκs:
-  σ ~{ mod_product m1 m2, Pκs }~>ₛ Pσ →
+Lemma mod_product_to_mod_1 {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ Pσ Pκs:
+  σ ~{ product_trans m1 m2, Pκs }~>ₛ Pσ →
   σ.1 ~{ m1, λ κs, ∃ κs', mod_product_rel1 m2 κs σ.2 κs' ∧ Pκs κs' }~>ₛ (λ _, True).
 Proof.
   elim.
@@ -297,8 +301,8 @@ Inductive mod_product_rel2 {EV1 EV2} : ((list (event (option EV1 * option EV2)))
 .
 *)
 
-Lemma mod_product_to_mods {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ Pσ κs:
-  σ ~{ mod_product m1 m2, κs }~>ₛ Pσ → ∃ κs', mod_product_rel2 κs κs'.1 κs'.2 ∧
+Lemma mod_product_to_mods {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ Pσ κs:
+  σ ~{ product_trans m1 m2, κs }~>ₛ Pσ → ∃ κs', mod_product_rel2 κs κs'.1 κs'.2 ∧
     σ.1 ~{ m1, κs'.1 }~>ₛ (λ _, True) ∧ σ.2 ~{ m2, κs'.2 }~>ₛ (λ _, True).
 Proof.
   elim.

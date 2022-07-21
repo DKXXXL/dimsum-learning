@@ -98,7 +98,7 @@ Lemma thas_trace_rel_nil {EV} Pκs (κs : trace EV) :
   Pκs [].
 Proof. inversion 1; by simplify_eq. Qed.
 
-Lemma shas_trace_thas_trace {EV} (m : module EV) σ Pσ (Pκs : _ → Prop):
+Lemma shas_trace_thas_trace {EV} (m : mod_trans EV) σ Pσ (Pκs : _ → Prop):
   σ ~{ m, Pκs }~>ₛ Pσ ↔ ∃ κs, thas_trace_rel Pκs κs ∧ σ ~{ m, κs }~>ₜ Pσ.
 Proof.
   split.
@@ -131,7 +131,7 @@ Proof.
       Unshelve. done.
 Qed.
 
-Lemma trefines_srefines {EV} (m1 m2 : mod_state EV):
+Lemma trefines_srefines {EV} (m1 m2 : module EV):
   trefines m1 m2 → srefines m1 m2.
 Proof.
   move => [?]. constructor => ? /shas_trace_thas_trace[?[??]].
@@ -148,7 +148,7 @@ Fixpoint trace_to_set {EV} (κs : trace EV) : list (event EV) → Prop :=
   end.
 
 (* The following cannot be provable since [refines m1 m2 → trefines m1 m2] does not hold. *)
-Lemma thas_trace_has_trace {EV} (m : module EV) σ Pσ κs:
+Lemma thas_trace_has_trace {EV} (m : mod_trans EV) σ Pσ κs:
   σ ~{ m, κs }~>ₜ Pσ ↔ σ ~{ m, trace_to_set κs }~>ₛ Pσ.
 Proof.
   rewrite shas_trace_thas_trace. split.
@@ -179,7 +179,7 @@ Proof.
 Abort.
 
 Lemma srefines_not_trefines:
-  ¬ (∀ EV (m1 m2 : mod_state EV), srefines m1 m2 → trefines m1 m2).
+  ¬ (∀ EV (m1 m2 : module EV), srefines m1 m2 → trefines m1 m2).
 Proof.
   move => Hr. apply: mod_ang_comm_not_trefines. apply: Hr.
   apply mod_ang_comm_sequiv.
@@ -217,7 +217,7 @@ Proof.
   - move => ???? Hsub. constructor. by apply: Hsub.
 Qed.
 
-Lemma shas_trace_dem_has_trace {EV} (m : dem_module EV) σ Pσ Pκs:
+Lemma shas_trace_dem_has_trace {EV} (m : dem_mod_trans EV) σ Pσ Pκs:
   σ ~{ m, Pκs }~>ₛ Pσ ↔ ∃ κs, dem_trace_to_set κs Pκs ∧ σ ~{ m, κs }~>ₘ Pσ.
 Proof.
   split.
@@ -294,7 +294,7 @@ Proof.
          eexists (_:: _) => /=. split; by apply: prefix_cons.
 Qed.
 
-Lemma dem_has_trace_shas_trace {EV} (m : dem_module EV) σ Pσ κs:
+Lemma dem_has_trace_shas_trace {EV} (m : dem_mod_trans EV) σ Pσ κs:
   σ ~{ m, κs }~>ₘ Pσ ↔ σ ~{ m, events_to_set κs}~>ₛ Pσ.
 Proof.
   rewrite shas_trace_dem_has_trace.
@@ -305,14 +305,14 @@ Proof.
     by apply: dem_has_trace_trans.
 Qed.
 
-Lemma dem_refines_srefines {EV} (m1 m2 : dem_mod_state EV):
+Lemma dem_refines_srefines {EV} (m1 m2 : dem_module EV):
   dem_refines m1 m2 → srefines m1 m2.
 Proof.
   move => [?]. constructor => ? /shas_trace_dem_has_trace?.
   apply/shas_trace_dem_has_trace. naive_solver.
 Qed.
 
-Lemma srefines_dem_refines {EV} (m1 m2 : dem_mod_state EV):
+Lemma srefines_dem_refines {EV} (m1 m2 : dem_module EV):
   srefines m1 m2 → dem_refines m1 m2.
 Proof.
   move => [?]. constructor => ?.
@@ -322,7 +322,7 @@ Qed.
 
 (** * Proof that srefines implies lrefines (but not vice versa) *)
 
-Lemma lhas_trace_shas_trace {EV} (m : module EV) σ κs Pσ:
+Lemma lhas_trace_shas_trace {EV} (m : mod_trans EV) σ κs Pσ:
   σ ~{m, κs}~>ₗ Pσ ↔ ∃ Pκs' : _ → Prop, (∀ κs', Pκs' κs' → events_to_set (DVis <$> κs) κs') ∧ σ ~{m, Pκs'}~>ₛ Pσ.
 Proof.
   split.
@@ -338,7 +338,7 @@ Proof.
       * econs; naive_solver.
 Qed.
 
-Lemma srefines_lrefines {EV} (m1 m2 : mod_state EV):
+Lemma srefines_lrefines {EV} (m1 m2 : module EV):
   srefines m1 m2 → lrefines m1 m2.
 Proof.
   move => [?]. constructor => ? /lhas_trace_shas_trace[?[??]].
@@ -348,7 +348,7 @@ Qed.
 (* Print Assumptions srefines_lrefines. *)
 
 Lemma lrefines_not_srefines:
-  ¬ (∀ EV (m1 m2 : mod_state EV), lrefines m1 m2 → srefines m1 m2).
+  ¬ (∀ EV (m1 m2 : module EV), lrefines m1 m2 → srefines m1 m2).
 Proof.
   move => Hr. apply: mod12_ang_not_srefines_mod3'. apply: Hr.
   apply mod12_ang_lrefines_mod3'.
@@ -361,7 +361,7 @@ Fixpoint list_to_trace {EV} (κs : list EV) : trace EV :=
   | κ::κs => tcons κ (list_to_trace κs)
   end.
 
-Lemma lhas_trace_thas_trace {EV} (m : module EV) σ κs Pσ:
+Lemma lhas_trace_thas_trace {EV} (m : mod_trans EV) σ κs Pσ:
   σ ~{m, κs}~>ₗ Pσ ↔ ∃ κs', κs' ⊆ list_to_trace κs ∧ σ ~{m, κs'}~>ₜ Pσ.
 Proof.
   split.
@@ -377,7 +377,7 @@ Proof.
       inversion Hs; simplify_K; try by destruct κs. naive_solver.
 Qed.
 
-Lemma trefines_lrefines {EV} (m1 m2 : mod_state EV):
+Lemma trefines_lrefines {EV} (m1 m2 : module EV):
   trefines m1 m2 → lrefines m1 m2.
 Proof.
   move => [?]. constructor => ? /lhas_trace_thas_trace[?[??]].
@@ -387,5 +387,5 @@ Qed.
 (* Print Assumptions trefines_lrefines. *)
 
 Lemma lrefines_not_trefines:
-  ¬ (∀ EV (m1 m2 : mod_state EV), lrefines m1 m2 → trefines m1 m2).
+  ¬ (∀ EV (m1 m2 : module EV), lrefines m1 m2 → trefines m1 m2).
 Proof. move => Hr. apply lrefines_not_srefines => ????. apply trefines_srefines. naive_solver. Qed.

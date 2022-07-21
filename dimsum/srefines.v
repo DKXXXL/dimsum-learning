@@ -15,7 +15,7 @@ Arguments Vis {_}.
 non-deterministically generates all events and the program that has
 UB. In particular, the NB program would be equivalent to the UB
 program if EV is not inhabited if we don't use [event EV] *)
-Inductive shas_trace {EV} (m : module EV) :
+Inductive shas_trace {EV} (m : mod_trans EV) :
   m.(m_state) → (list (event EV) → Prop) → (m.(m_state) → Prop) → Prop :=
 | STraceEnd σ (Pκs Pσ : _ → Prop):
     Pσ σ →
@@ -31,7 +31,7 @@ Inductive shas_trace {EV} (m : module EV) :
 .
 Notation " σ '~{' m , Pκs '}~>ₛ' P " := (shas_trace m σ Pκs P) (at level 40).
 
-Global Instance shas_trace_proper {EV} (m : module EV) :
+Global Instance shas_trace_proper {EV} (m : mod_trans EV) :
   Proper ((=) ==> (pointwise_relation _ impl) ==> (pointwise_relation m.(m_state) impl) ==> impl) (shas_trace m).
 Proof.
   move => ?? -> Pκs1 Pκs2 Hκs Pσ1 Pσ2 HP Ht.
@@ -41,44 +41,45 @@ Proof.
     move => ??. apply: IH => // ??. by apply: Hκs.
 Qed.
 
-Lemma shas_trace_mono {EV} {m : module EV} (Pκs' Pσ2' Pκs Pσ2 : _ → Prop)  σ1 :
+Lemma shas_trace_mono {EV} {m : mod_trans EV} (Pκs' Pσ2' Pκs Pσ2 : _ → Prop)  σ1 :
   σ1 ~{ m, Pκs' }~>ₛ Pσ2' →
   (∀ κs, Pκs' κs → Pκs κs) →
   (∀ σ, Pσ2' σ → Pσ2 σ) →
   σ1 ~{ m, Pκs }~>ₛ Pσ2.
 Proof. move => ???. by apply: shas_trace_proper. Qed.
 
-Lemma shas_trace_exists {EV} {A} {m : module EV} Pκs Pσ σ1 :
+Lemma shas_trace_exists {EV} {A} {m : mod_trans EV} Pκs Pσ σ1 :
   (∃ x, σ1 ~{ m, Pκs x}~>ₛ Pσ) →
   σ1 ~{ m, λ κs, ∃ x : A, Pκs x κs }~>ₛ Pσ.
 Proof. move => [??]. apply: shas_trace_mono; [done| |done]. naive_solver. Qed.
 
-Lemma shas_trace_or {EV} {m : module EV} Pκs1 Pκs2 Pσ σ1 :
+Lemma shas_trace_or {EV} {m : mod_trans EV} Pκs1 Pκs2 Pσ σ1 :
   (σ1 ~{ m, Pκs1 }~>ₛ Pσ ∨ σ1 ~{ m, Pκs2 }~>ₛ Pσ) →
   σ1 ~{ m, λ κs, Pκs1 κs ∨ Pκs2 κs}~>ₛ Pσ.
 Proof. move => [?|?]; (apply: shas_trace_mono; [done| |done]); naive_solver. Qed.
 
-Lemma shas_trace_forall_inv {EV} {A} {m : module EV} (Pκs : A → _ → Prop) Pσ σ1 :
+Lemma shas_trace_forall_inv {EV} {A} {m : mod_trans EV} (Pκs : A → _ → Prop) Pσ σ1 :
   (σ1 ~{ m, λ κs, ∀ x : A, Pκs x κs}~>ₛ Pσ) →
   ∀ x, σ1 ~{ m, Pκs x }~>ₛ Pσ.
 Proof. move => ??. apply: shas_trace_mono; [done| |done]. naive_solver. Qed.
 
-Record srefines {EV} (mimpl mspec : mod_state EV) : Prop := {
+Record srefines {EV} (mimpl mspec : module EV) : Prop := {
   sref_subset:
-    ∀ Pκs, mimpl.(ms_state) ~{ mimpl, Pκs }~>ₛ (λ _, True) → mspec.(ms_state) ~{ mspec, Pκs }~>ₛ (λ _, True)
+    ∀ Pκs, mimpl.(m_init) ~{ mimpl.(m_trans), Pκs }~>ₛ (λ _, True) →
+           mspec.(m_init) ~{ mspec.(m_trans), Pκs }~>ₛ (λ _, True)
 }.
 
-Definition srefines_equiv {EV} (m1 m2 : mod_state EV) : Prop := srefines m1 m2 ∧ srefines m2 m1.
+Definition srefines_equiv {EV} (m1 m2 : module EV) : Prop := srefines m1 m2 ∧ srefines m2 m1.
 
-Lemma srefines_equiv_equiv {EV} (m1 m2 : mod_state EV) :
-  (∀ Pκs, m1.(ms_state) ~{ m1, Pκs }~>ₛ (λ _, True) ↔ m2.(ms_state) ~{ m2, Pκs }~>ₛ (λ _, True)) →
+Lemma srefines_equiv_equiv {EV} (m1 m2 : module EV) :
+  (∀ Pκs, m1.(m_init) ~{ m1.(m_trans), Pκs }~>ₛ (λ _, True) ↔ m2.(m_init) ~{ m2.(m_trans), Pκs }~>ₛ (λ _, True)) →
   srefines_equiv m1 m2.
 Proof. move => ?. split; constructor => ?; naive_solver. Qed.
 
-Definition ssafe {EV} (m : mod_state EV) (P : (list (event EV) → Prop) → Prop) :=
-  ∀ Pκs, m.(ms_state) ~{ m, Pκs }~>ₛ (λ _, True) → P Pκs.
+Definition ssafe {EV} (m : module EV) (P : (list (event EV) → Prop) → Prop) :=
+  ∀ Pκs, m.(m_init) ~{ m.(m_trans), Pκs }~>ₛ (λ _, True) → P Pκs.
 
-Lemma srefines_preserves_safe EV (mspec mimpl : mod_state EV) P:
+Lemma srefines_preserves_safe EV (mspec mimpl : module EV) P:
   ssafe mspec P →
   srefines mimpl mspec →
   ssafe mimpl P.

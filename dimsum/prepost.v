@@ -3,9 +3,9 @@ From dimsum.core Require Import link.
 
 Set Default Proof Using "Type".
 
-(** * [mod_prepost] *)
+(** * Prepost *)
 
-(** * prepost *)
+(** * [prepost] *)
 Section prepost.
 Context {R : Type}.
 Context {M : ucmra}.
@@ -86,9 +86,8 @@ Section prepost.
   Context {EV1 EV2 S : Type}.
   Context {M : ucmra}.
   Implicit Types (i : EV2 → S → prepost (EV1 * S) M) (o : EV1 → S → prepost (EV2 * S) M).
-  Implicit Types (m : module EV1).
 
-  Inductive pp_state : Type :=
+  Inductive pp_case : Type :=
   | PPOutside
   | PPRecv1 (e : EV2)
   | PPRecv2 (e : EV1)
@@ -98,7 +97,7 @@ Section prepost.
   .
 
   Inductive pp_filter_step i o :
-    (pp_state * S * uPred M) → option (sm_event EV1 EV2) → ((pp_state * S * uPred M) → Prop) → Prop :=
+    (pp_case * S * uPred M) → option (sm_event EV1 EV2) → ((pp_case * S * uPred M) → Prop) → Prop :=
   | PPOutsideS s x e:
     (* TODO: Add a user-defined predicate here to rule out choosing
     non-sensical events? E.g. allow only Incoming events or prevent
@@ -119,27 +118,31 @@ Section prepost.
     pp_filter_step i o (PPSend2 e, s, x) (Some (SMEEmit e)) (λ σ, σ = (PPOutside, s, x))
   .
 
-  Definition mod_prepost_filter i o :=
-    Mod (pp_filter_step i o).
+  Definition prepost_filter_trans i o := ModTrans (pp_filter_step i o).
 
-  Global Instance mod_prepost_filter_vis_no_all i o : VisNoAll (mod_prepost_filter i o).
+  Global Instance prepost_filter_vis_no_all i o : VisNoAll (prepost_filter_trans i o).
   Proof. move => ????. inv_all @m_step; naive_solver. Qed.
 
-  Definition mod_prepost i o m : module EV2 :=
-    mod_seq_map m (mod_prepost_filter i o).
+  Definition prepost_trans i o (m : mod_trans EV1) : mod_trans EV2 :=
+    seq_map_trans m (prepost_filter_trans i o).
 
-  Global Instance mod_prepost_vis_no_all i o m `{!VisNoAll m}: VisNoAll (mod_prepost i o m).
+  Global Instance prepost_vis_no_all i o m `{!VisNoAll m}: VisNoAll (prepost_trans i o m).
   Proof. apply _. Qed.
 
-  Lemma mod_prepost_trefines i o m m' σ σ' σm s `{!VisNoAll m}:
-    trefines (MS m σ) (MS m' σ') →
-    trefines (MS (mod_prepost i o m) (σm, σ, s)) (MS (mod_prepost i o m') (σm, σ', s)).
+  (* If one needs a version of prepost_mod that starts on the inside,
+  one can define prepost_mod_inside or similar. *)
+  Definition prepost_mod i o (m : module EV1) (s : S) (x : uPred M) : module EV2 :=
+    Mod (prepost_trans i o m.(m_trans)) (SMFilter, m.(m_init), (PPOutside, s, x)).
+
+  Lemma prepost_mod_trefines i o (m m' : module EV1) σm s `{!VisNoAll m.(m_trans)}:
+    trefines m m' →
+    trefines (prepost_mod i o m σm s) (prepost_mod i o m' σm s).
   Proof.
-    move => ?. apply mod_seq_map_trefines => //. apply _.
+    move => ?. apply: (seq_map_mod_trefines (Mod _ _) (Mod _ _) (Mod _ _)). destruct m, m' => //.
   Qed.
 
-  Lemma mod_prepost_step_Outside_i i o m σ s x:
-    TStepI (mod_prepost i o m) (SMFilter, σ, (PPOutside, s, x)) (λ G,
+  Lemma prepost_trans_step_Outside_i i o m σ s x:
+    TStepI (prepost_trans i o m) (SMFilter, σ, (PPOutside, s, x)) (λ G,
         ∀ e, G true (Some e) (λ G', G' (SMFilter, σ, (PPRecv1 e, s, x)))).
   Proof.
     constructor => G /= ?. tstep_i.
@@ -147,8 +150,8 @@ Section prepost.
     naive_solver.
   Qed.
 
-  Lemma mod_prepost_step_Recv1_i i o m σ s e x:
-    TStepI (mod_prepost i o m) (SMFilter, σ, (PPRecv1 e, s, x)) (λ G,
+  Lemma prepost_trans_step_Recv1_i i o m σ s e x:
+    TStepI (prepost_trans i o m) (SMFilter, σ, (PPRecv1 e, s, x)) (λ G,
         pp_to_ex (i e s) (λ r y, ∃ x', satisfiable (x ∗ y ∗ x') ∧
                       G true None (λ G', G' (SMProgRecv r.1, σ, (PPInside, r.2, x'))))).
   Proof.
@@ -158,8 +161,8 @@ Section prepost.
     apply steps_impl_step_end => ???. inv_all @m_step => ???. naive_solver.
   Qed.
 
-  Lemma mod_prepost_step_Inside_i i o m σ s e x:
-    TStepI (mod_prepost i o m) (SMFilterRecv e, σ, (PPInside, s, x)) (λ G,
+  Lemma prepost_trans_step_Inside_i i o m σ s e x:
+    TStepI (prepost_trans i o m) (SMFilterRecv e, σ, (PPInside, s, x)) (λ G,
         pp_to_all (o e s) (λ r y, ∀ x', satisfiable (x' ∗ y ∗ x) →
             G true (Some (r.1)) (λ G', G' (SMFilter, σ, (PPOutside, r.2, x'))))).
   Proof.
@@ -172,8 +175,8 @@ Section prepost.
     split!; [naive_solver|by destruct b|]. naive_solver.
   Qed.
 
-  Lemma mod_prepost_step_Outside_s i o m σ s x:
-    TStepS (mod_prepost i o m) (SMFilter, σ, (PPOutside, s, x)) (λ G,
+  Lemma prepost_trans_step_Outside_s i o m σ s x:
+    TStepS (prepost_trans i o m) (SMFilter, σ, (PPOutside, s, x)) (λ G,
         ∃ e, G (Some e) (λ G', G' (SMFilter, σ, (PPRecv1 e, s, x)))).
   Proof.
     constructor => G /= [??]. split!; [done|] => /= ??. tstep_s. eexists (Some (SMEEmit _)). split!.
@@ -181,8 +184,8 @@ Section prepost.
   Qed.
 
 
-  Lemma mod_prepost_step_Recv1_s i o m σ s e x:
-    TStepS (mod_prepost i o m) (SMFilter, σ, (PPRecv1 e, s, x)) (λ G,
+  Lemma prepost_trans_step_Recv1_s i o m σ s e x:
+    TStepS (prepost_trans i o m) (SMFilter, σ, (PPRecv1 e, s, x)) (λ G,
         G None (λ G', pp_to_all (i e s) (λ r y, ∀ x', satisfiable (x ∗ y ∗ x') →
              G' (SMProgRecv r.1, σ, (PPInside, r.2, x'))))).
   Proof.
@@ -194,8 +197,8 @@ Section prepost.
     apply: steps_spec_step_end; [econs|]. naive_solver.
   Qed.
 
-  Lemma mod_prepost_step_Inside_s i o m σ s e x:
-    TStepS (mod_prepost i o m) (SMFilterRecv e, σ, (PPInside, s, x)) (λ G,
+  Lemma prepost_trans_step_Inside_s i o m σ s e x:
+    TStepS (prepost_trans i o m) (SMFilterRecv e, σ, (PPInside, s, x)) (λ G,
         pp_to_ex (o e s) (λ r y, ∃ x', satisfiable (x' ∗ y ∗ x) ∧
            G (Some (r.1)) (λ G', G' (SMFilter, σ, (PPOutside, r.2, x'))))).
   Proof.
@@ -209,12 +212,12 @@ Section prepost.
 End prepost.
 
 Global Hint Resolve
-       mod_prepost_step_Outside_i
-       mod_prepost_step_Recv1_i
-       mod_prepost_step_Inside_i
-       mod_prepost_step_Outside_s
-       mod_prepost_step_Recv1_s
-       mod_prepost_step_Inside_s
+       prepost_trans_step_Outside_i
+       prepost_trans_step_Recv1_i
+       prepost_trans_step_Inside_i
+       prepost_trans_step_Outside_s
+       prepost_trans_step_Recv1_s
+       prepost_trans_step_Inside_s
  | 3 : typeclass_instances.
 
 (** * Lemmas for proving refinements of prepost  *)
@@ -222,10 +225,10 @@ Global Hint Resolve
 Definition prepost_id {EV} : EV → unit → prepost (EV * unit) unitUR :=
   λ x _, pp_end (x, tt).
 
-Lemma prepost_id_l M S EV1 EV2 (m : module EV1) σ i o s x:
-  trefines (MS (mod_prepost i o (mod_prepost prepost_id prepost_id m))
-               (SMFilter, (SMFilter, σ, (PPOutside, tt, True%I)), (PPOutside, s, x)))
-           (MS (mod_prepost (M:=M) (S:=S) (EV2:=EV2) i o m) (SMFilter, σ, (PPOutside, s, x))).
+Lemma prepost_id_l M S EV1 EV2 (m : module EV1) i o s x:
+  trefines (prepost_mod i o
+              (prepost_mod prepost_id prepost_id m tt True) s x)
+           (prepost_mod (M:=M) (S:=S) (EV2:=EV2) i o m s x).
 Proof.
   apply tsim_implies_trefines => /= n.
   tstep_i => ?.
@@ -266,21 +269,21 @@ Qed.
 
 Section prepost.
 
-  Lemma mod_prepost_link
+  Lemma prepost_link
         {EV1 EV2 S1 S2 S' Sr1 Sr2 : Type}
         {M : ucmra}
-        (INV : seq_product_state → S1 → S2 → S' → uPred M → uPred M → uPred M → Sr1 → Sr2 → Prop)
+        (INV : seq_product_case → S1 → S2 → S' → uPred M → uPred M → uPred M → Sr1 → Sr2 → Prop)
         (i1 : io_event EV2 → S1 → prepost (io_event EV1 * S1) M)
         (o1 : io_event EV1 → S1 → prepost (io_event EV2 * S1) M)
         (i2 : io_event EV2 → S2 → prepost (io_event EV1 * S2) M)
         (o2 : io_event EV1 → S2 → prepost (io_event EV2 * S2) M)
         (i : io_event EV2 → S' → prepost (io_event EV1 * S') M)
         (o : io_event EV1 → S' → prepost (io_event EV2 * S') M)
-        (R1 : seq_product_state → Sr1 → EV2 → seq_product_state → Sr1 → EV2 → bool → Prop)
-        (R2 : seq_product_state → Sr2 → EV1 → seq_product_state → Sr2 → EV1 → bool → Prop)
+        (R1 : seq_product_case → Sr1 → EV2 → seq_product_case → Sr1 → EV2 → bool → Prop)
+        (R2 : seq_product_case → Sr2 → EV1 → seq_product_case → Sr2 → EV1 → bool → Prop)
         (m1 m2 : module (io_event EV1))
-        σ1 σ2 s1 s2 x1 x2 x sr1 sr2 s
-        `{!VisNoAll m1} `{!VisNoAll m2}
+        s1 s2 x1 x2 x sr1 sr2 s
+        `{!VisNoAll m1.(m_trans)} `{!VisNoAll m2.(m_trans)}
         :
 
        (∀ p s e p' s' e' ok1, R1 p s e p' s' e' ok1 → p ≠ p') →
@@ -371,10 +374,8 @@ Section prepost.
                  r2.1.1 = Outgoing ∧
                  r2.1.2 = e' ∧
                  INV SPNone s1 r1.2 r2.2 x1 x' x'2 sr1' sr2'))) →
-    trefines (MS (mod_link R1 (mod_prepost i1 o1 m1) (mod_prepost i2 o2 m2))
-                 (MLFNone, sr1, (SMFilter, σ1, (PPOutside, s1, x1)), (SMFilter, σ2, (PPOutside, s2, x2))))
-             (MS (mod_prepost i o (mod_link R2 m1 m2))
-                 (SMFilter, (MLFNone, sr2, σ1, σ2), (PPOutside, s, x))).
+    trefines (link_mod R1 (prepost_mod i1 o1 m1 s1 x1) (prepost_mod i2 o2 m2 s2 x2) sr1)
+             (prepost_mod i o (link_mod R2 m1 m2 sr2) s x).
     Proof.
       move => Hneq Hinv HN2L HN2R HL2R HL2N HR2L HR2N.
       apply tsim_implies_trefines => /= n.
@@ -432,7 +433,7 @@ Section prepost.
           split!; [done..|] => /=.
           destruct ok2; [|by tstep_s].
           apply: Hloop; [done|]. split!; eauto.
-      - tsim_mirror m1 σ1'. (* TODO: use tsim_mirror more *)
+      - tsim_mirror m1.(m_trans) σ1'. (* TODO: use tsim_mirror more *)
         move => ??? Hs. tstep_both. apply Hs => ????.
         case_match.
         2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
@@ -530,8 +531,8 @@ Section prepost.
         (o2 : EV → S2 → prepost (EV2 * S2) M2)
         (i : EV1 → S → prepost (EV * S) M)
         (o : EV → S → prepost (EV1 * S) M)
-        σ s1 s2 s x1 x2 x
-        `{!VisNoAll m}
+        s1 s2 s x1 x2 x
+        `{!VisNoAll m.(m_trans)}
         :
         INV Env s1 s2 s x1 x2 x →
        (∀ s1 s2 s x1 x2 x e,
@@ -554,10 +555,8 @@ Section prepost.
                  satisfiable (x' ∗ y ∗ x) ∧
                  r.1 = r1.1 ∧
                  INV Env r1.2 r2.2 r.2 x1' x2' x')))) →
-    trefines (MS ((mod_prepost i1 o1 (mod_prepost i2 o2 m)) )
-                 (SMFilter, (SMFilter, σ, (PPOutside, s2, x2)), (PPOutside, s1, x1)))
-             (MS (mod_prepost i o m)
-                 (SMFilter, σ, (PPOutside, s, x))).
+    trefines (prepost_mod i1 o1 (prepost_mod i2 o2 m s2 x2) s1 x1)
+             (prepost_mod i o m s x).
     Proof.
       move => Hinv Henv Hprog.
       apply tsim_implies_trefines => /= n.
@@ -613,8 +612,8 @@ Section prepost.
         (o_i : EV2 → Si → prepost (EV1 * Si) Mi)
         (i_s : EV1 → Ss → prepost (EV2 * Ss) Ms)
         (o_s : EV2 → Ss → prepost (EV1 * Ss) Ms)
-        σ si ss xi xs
-        `{!VisNoAll m}
+        si ss xi xs
+        `{!VisNoAll m.(m_trans)}
         :
         INV Env si ss xi xs →
        (∀ si ss xi xs e,
@@ -633,10 +632,8 @@ Section prepost.
                satisfiable (xs' ∗ ys ∗ xs) ∧
                rs.1 = ri.1 ∧
                INV Env ri.2 rs.2 xi' xs'))) →
-    trefines (MS ((mod_prepost i_i o_i m) )
-                 (SMFilter, σ, (PPOutside, si, xi)))
-             (MS (mod_prepost i_s o_s m)
-                 (SMFilter, σ, (PPOutside, ss, xs))).
+    trefines (prepost_mod i_i o_i m si xi)
+             (prepost_mod i_s o_s m ss xs).
     Proof.
       move => Hinv Henv Hprog.
       apply tsim_implies_trefines => /= n.

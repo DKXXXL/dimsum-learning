@@ -8,7 +8,7 @@ Inductive dem_event (EV : Type) : Type :=
 Arguments DUb {_}.
 Arguments DVis {_}.
 
-Record dem_module (EV : Type) : Type := {
+Record dem_mod_trans (EV : Type) : Type := {
   dem_state : Type;
   dem_step : dem_state → option EV → dem_state → Prop;
   dem_is_ub : dem_state → Prop;
@@ -17,7 +17,7 @@ Arguments dem_state {_}.
 Arguments dem_step {_}.
 Arguments dem_is_ub {_}.
 
-Inductive dem_has_trace {EV} (m : dem_module EV) : m.(dem_state) → list (dem_event EV) → (m.(dem_state) → Prop) → Prop :=
+Inductive dem_has_trace {EV} (m : dem_mod_trans EV) : m.(dem_state) → list (dem_event EV) → (m.(dem_state) → Prop) → Prop :=
 | DTraceEnd σ (Pσ : _ → Prop):
     Pσ σ →
     dem_has_trace m σ [] Pσ
@@ -31,7 +31,7 @@ Inductive dem_has_trace {EV} (m : dem_module EV) : m.(dem_state) → list (dem_e
 .
 Notation " σ '~{' m , κ '}~>ₘ' P " := (dem_has_trace m σ κ P) (at level 40).
 
-Global Instance dem_has_trace_proper {EV} (m : dem_module EV) :
+Global Instance dem_has_trace_proper {EV} (m : dem_mod_trans EV) :
   Proper ((=) ==> (=) ==> (pointwise_relation m.(dem_state) impl) ==> impl) (dem_has_trace m).
 Proof.
   move => ?? -> ?? -> Pσ1 Pσ2 HP Ht.
@@ -41,36 +41,36 @@ Proof.
   - move => ??????. by apply: DTraceUb.
 Qed.
 
-Lemma dem_has_trace_mono {EV} (m : dem_module EV) σ1 (Pσ2 Pσ2' : _ → Prop) κs:
+Lemma dem_has_trace_mono {EV} (m : dem_mod_trans EV) σ1 (Pσ2 Pσ2' : _ → Prop) κs:
   σ1 ~{ m, κs }~>ₘ Pσ2' →
   (∀ σ, Pσ2' σ → Pσ2 σ) →
   σ1 ~{ m, κs }~>ₘ Pσ2.
 Proof. move => ??. by apply: dem_has_trace_proper. Qed.
 
-Lemma DTraceEnd' {EV} (m : dem_module EV) σ :
+Lemma DTraceEnd' {EV} (m : dem_mod_trans EV) σ :
   σ ~{ m, [] }~>ₘ (σ =.).
 Proof. by apply: DTraceEnd. Qed.
 
-Lemma DTraceStepNone {EV} κs (m : dem_module EV) σ2 σ1 Pσ3 :
+Lemma DTraceStepNone {EV} κs (m : dem_mod_trans EV) σ2 σ1 Pσ3 :
   m.(dem_step) σ1 None σ2 →
   σ2 ~{ m, κs }~>ₘ Pσ3 →
   σ1 ~{ m, κs }~>ₘ Pσ3.
 Proof. move => ??. by apply: (DTraceStep _ _ _ _ None). Qed.
 
-Lemma DTraceStepSome {EV} κs (m : dem_module EV) σ2 σ1 Pσ3 κ :
+Lemma DTraceStepSome {EV} κs (m : dem_mod_trans EV) σ2 σ1 Pσ3 κ :
   m.(dem_step) σ1 (Some κ) σ2 →
   σ2 ~{ m, κs }~>ₘ Pσ3 →
   σ1 ~{ m, DVis κ :: κs }~>ₘ Pσ3.
 Proof. move => ??. by apply: (DTraceStep _ _ _ _ (Some _)). Qed.
 
-Lemma DTraceStep' {EV} κs κs' (m : dem_module EV) σ2 σ1 Pσ3 κ :
+Lemma DTraceStep' {EV} κs κs' (m : dem_mod_trans EV) σ2 σ1 Pσ3 κ :
   m.(dem_step) σ1 κ σ2 →
   κs = option_list (DVis <$> κ) ++ κs' →
   σ2 ~{ m, κs' }~>ₘ Pσ3 →
   σ1 ~{ m, κs }~>ₘ Pσ3.
 Proof. move => ? -> ?. by apply: DTraceStep. Qed.
 
-Lemma dem_has_trace_trans {EV} κs1 κs2 (m : dem_module EV) σ1 Pσ2 Pσ3 :
+Lemma dem_has_trace_trans {EV} κs1 κs2 (m : dem_mod_trans EV) σ1 Pσ2 Pσ3 :
   σ1 ~{ m, κs1 }~>ₘ Pσ2 →
   (∀ σ2, Pσ2 σ2 → σ2 ~{ m, κs2 }~>ₘ Pσ3) →
   σ1 ~{ m, κs1 ++ κs2 }~>ₘ Pσ3.
@@ -81,17 +81,17 @@ Proof.
   - move => ?????. by apply: DTraceUb.
 Qed.
 
-Lemma dem_has_trace_trans' {EV} κs1 κs2 (m : dem_module EV) σ1 Pσ3 :
+Lemma dem_has_trace_trans' {EV} κs1 κs2 (m : dem_mod_trans EV) σ1 Pσ3 :
   σ1 ~{ m, κs1 }~>ₘ (λ σ2, σ2 ~{ m, κs2 }~>ₘ Pσ3) →
   σ1 ~{ m, κs1 ++ κs2 }~>ₘ Pσ3.
 Proof. move => ?. by apply: dem_has_trace_trans. Qed.
 
-Lemma dem_has_trace_add_empty {EV} κs1 (m : dem_module EV) σ1 σ2 :
+Lemma dem_has_trace_add_empty {EV} κs1 (m : dem_mod_trans EV) σ1 σ2 :
   σ1 ~{ m, κs1 ++ [] }~>ₘ σ2 →
   σ1 ~{ m, κs1 }~>ₘ σ2.
 Proof. by rewrite -{2}[κs1](right_id_L [] (++)). Qed.
 
-Lemma dem_has_trace_inv {EV} κs (m : dem_module EV) σ1 Pσ2:
+Lemma dem_has_trace_inv {EV} κs (m : dem_mod_trans EV) σ1 Pσ2:
   σ1 ~{ m, κs }~>ₘ Pσ2 →
   ∃ σ2, σ1 ~{ m, κs }~>ₘ (σ2 =.) ∧ (m.(dem_is_ub) σ2 ∨ Pσ2 σ2).
 Proof.
@@ -102,7 +102,7 @@ Proof.
   - move => ????. eexists _. split; [by apply: DTraceUb| by left].
 Qed.
 
-Lemma dem_has_trace_ub_inv {EV} κs (m : dem_module EV) σ1 Pσ2:
+Lemma dem_has_trace_ub_inv {EV} κs (m : dem_mod_trans EV) σ1 Pσ2:
   σ1 ~{m, DUb :: κs }~>ₘ Pσ2 →
   σ1 ~{m, [] }~>ₘ (λ _, False).
 Proof.
@@ -113,7 +113,7 @@ Proof.
   - move => ?????. by apply: DTraceUb.
 Qed.
 
-Lemma dem_has_trace_cons_inv {EV} κs κ (m : dem_module EV) σ1 Pσ3:
+Lemma dem_has_trace_cons_inv {EV} κs κ (m : dem_mod_trans EV) σ1 Pσ3:
   σ1 ~{ m, DVis κ :: κs }~>ₘ Pσ3 →
   σ1 ~{ m, [] }~>ₘ (λ σ2, ∃ σ2', m.(dem_step) σ2 (Some κ) σ2' ∧ σ2' ~{ m, κs }~>ₘ Pσ3).
 Proof.
@@ -125,7 +125,7 @@ Proof.
   - move => ?????. by apply: DTraceUb.
 Qed.
 
-Lemma dem_has_trace_app_inv {EV} κs1 κs2 (m : dem_module EV) σ1 Pσ3:
+Lemma dem_has_trace_app_inv {EV} κs1 κs2 (m : dem_mod_trans EV) σ1 Pσ3:
   σ1 ~{ m, κs1 ++ κs2 }~>ₘ Pσ3 →
   σ1 ~{ m, κs1 }~>ₘ (λ σ2, σ2 ~{ m, κs2 }~>ₘ Pσ3).
 Proof.
@@ -137,7 +137,7 @@ Proof.
     apply: DTraceStepSome; [done|]. naive_solver.
 Qed.
 
-Lemma dem_has_trace_ub_app_inv {EV} κs (m : dem_module EV) σ1 Pσ2:
+Lemma dem_has_trace_ub_app_inv {EV} κs (m : dem_mod_trans EV) σ1 Pσ2:
   σ1 ~{ m, κs ++ [DUb] }~>ₘ Pσ2 →
   σ1 ~{ m, κs }~>ₘ (λ _, False).
 Proof.
@@ -147,7 +147,7 @@ Proof.
   apply: dem_has_trace_ub_inv.
 Qed.
 
-Inductive dem_ub_step {EV} (m : dem_module EV) : m.(dem_state) → option EV → (m.(dem_state) → Prop) → Prop :=
+Inductive dem_ub_step {EV} (m : dem_mod_trans EV) : m.(dem_state) → option EV → (m.(dem_state) → Prop) → Prop :=
 | MStepStep σ1 κ σ2:
     m.(dem_step) σ1 κ σ2 →
     dem_ub_step m σ1 κ (λ σ2', σ2' = σ2)
@@ -155,36 +155,37 @@ Inductive dem_ub_step {EV} (m : dem_module EV) : m.(dem_state) → option EV →
     m.(dem_is_ub) σ1 →
     dem_ub_step m σ1 None (λ _, False).
 
-Definition dem_module_to_module {EV} (m : dem_module EV) : module EV := Mod (dem_ub_step m).
-Coercion dem_module_to_module : dem_module >-> module.
+Definition dem_mod_trans_to_mod_trans {EV} (m : dem_mod_trans EV) : mod_trans EV := ModTrans (dem_ub_step m).
+Coercion dem_mod_trans_to_mod_trans : dem_mod_trans >-> mod_trans.
 
-Record dem_mod_state EV := DMS {
-  dms_module : dem_module EV;
-  dms_state : dms_module.(dem_state);
+Record dem_module EV := DMod {
+  dem_trans : dem_mod_trans EV;
+  dem_init : dem_trans.(dem_state);
 }.
-Arguments DMS {_}.
-Arguments dms_module {_}.
-Arguments dms_state {_}.
-Coercion dms_module : dem_mod_state >-> dem_module.
-Add Printing Constructor dem_mod_state.
+Arguments DMod {_}.
+Arguments dem_trans {_}.
+Arguments dem_init {_}.
+(* Coercion dms_module : dem_mod_state >-> dem_mod_trans. *)
+Add Printing Constructor dem_module.
 
-Definition dms_to_ms {EV} (m : dem_mod_state EV) : mod_state EV :=
-  MS m m.(dms_state).
-Coercion dms_to_ms : dem_mod_state >-> mod_state.
+Definition dmod_to_mod {EV} (m : dem_module EV) : module EV :=
+  Mod m.(dem_trans) m.(dem_init).
+Coercion dmod_to_mod : dem_module >-> module.
 
-Record dem_refines {EV} (mimpl mspec : dem_mod_state EV) : Prop := {
+Record dem_refines {EV} (mimpl mspec : dem_module EV) : Prop := {
   dem_ref_subset:
-    ∀ κs, mimpl.(dms_state) ~{ mimpl, κs }~>ₘ (λ _, True) → mspec.(dms_state) ~{ mspec, κs }~>ₘ (λ _, True)
+    ∀ κs, mimpl.(dem_init) ~{ mimpl.(dem_trans), κs }~>ₘ (λ _, True) →
+          mspec.(dem_init) ~{ mspec.(dem_trans), κs }~>ₘ (λ _, True)
 }.
 
-Global Instance sqsubseteq_dem_refines EV : SqSubsetEq (dem_mod_state EV) := dem_refines.
+Global Instance sqsubseteq_dem_refines EV : SqSubsetEq (dem_module EV) := dem_refines.
 
-Definition dem_refines_equiv {EV} (m1 m2 : dem_mod_state EV) : Prop := m1 ⊑ m2 ∧ m2 ⊑ m1.
+Definition dem_refines_equiv {EV} (m1 m2 : dem_module EV) : Prop := m1 ⊑ m2 ∧ m2 ⊑ m1.
 
-Definition dem_safe {EV} (m : dem_mod_state EV) (P : list (dem_event EV) → Prop) :=
-  ∀ κs, m.(dms_state) ~{ m, κs }~>ₘ (λ _, True) → P κs.
+Definition dem_safe {EV} (m : dem_module EV) (P : list (dem_event EV) → Prop) :=
+  ∀ κs, m.(dem_init) ~{ m.(dem_trans), κs }~>ₘ (λ _, True) → P κs.
 
-Lemma dem_refines_preserves_safe EV (mspec mimpl : dem_mod_state EV) P:
+Lemma dem_refines_preserves_safe EV (mspec mimpl : dem_module EV) P:
   dem_safe mspec P →
   mimpl ⊑ mspec →
   dem_safe mimpl P.

@@ -958,30 +958,23 @@ Definition rec_heap_bij_post (e : rec_event) (s : unit) : prepost (rec_event * u
   pp_star (heap_bij_inv hi hs ∗ [∗ list] v1;v2∈vsi;vss, val_in_bij v1 v2) $
   pp_end ((e.1, event_set_vals_heap e.2 vsi hi), tt).
 
+Definition rec_heap_bij_trans (m : mod_trans rec_event) : mod_trans rec_event :=
+  prepost_trans rec_heap_bij_pre rec_heap_bij_post m.
+
 Definition rec_heap_bij (m : module rec_event) : module rec_event :=
-  mod_prepost rec_heap_bij_pre rec_heap_bij_post m.
+  Mod (rec_heap_bij_trans m.(m_trans)) (SMFilter, m.(m_init), (PPOutside, tt, True%I)).
 
-Definition initial_rec_heap_bij_state (m : module rec_event) (σ : m.(m_state)) :=
-  (@SMFilter rec_event, σ, (@PPOutside rec_event rec_event, tt, (True : uPred heap_bijUR)%I)).
-
-Lemma rec_heap_bij_trefines m m' σ σ' `{!VisNoAll m}:
-  trefines (MS m σ) (MS m' σ') →
-  trefines (MS (rec_heap_bij m) (initial_rec_heap_bij_state m σ))
-           (MS (rec_heap_bij m') (initial_rec_heap_bij_state m' σ')).
-Proof. move => ?. by apply: mod_prepost_trefines. Qed.
+Lemma rec_heap_bij_trefines m m' `{!VisNoAll m.(m_trans)}:
+  trefines m m' →
+  trefines (rec_heap_bij m) (rec_heap_bij m').
+Proof. move => ?. by apply: prepost_mod_trefines. Qed.
 
 (** ** rec_heap_bij_N *)
 Definition rec_heap_bij_N n (M: module rec_event) : module rec_event :=
   Nat.iter n rec_heap_bij M.
 
-Fixpoint initial_rec_heap_bij_state_N n (M: module rec_event) (s: M.(m_state)) : (rec_heap_bij_N n M).(m_state) :=
-  match n with
-  | 0 => s
-  | S n => initial_rec_heap_bij_state (rec_heap_bij_N n M) (initial_rec_heap_bij_state_N n M s)
-  end.
-
-Global Instance rec_heap_bij_N_vis_no_all n m `{!VisNoAll m} :
-  VisNoAll (rec_heap_bij_N n m).
+Global Instance rec_heap_bij_N_vis_no_all n m `{!VisNoAll m.(m_trans)} :
+  VisNoAll (rec_heap_bij_N n m).(m_trans).
 Proof. elim: n => //= ??. apply _. Qed.
 
 (** * Proof techniques for [rec_heap_bij] *)
@@ -996,10 +989,10 @@ Definition rec_heap_bij_call (n : trace_index) (fns1 fns2 : gmap string fndef) :
       (∀ v1'' v2'' h1'' h2'' rf'',
         satisfiable (heap_bij_inv h1'' h2'' ∗ val_in_bij v1'' v2'' ∗ r ∗ rf'') →
         Rec (expr_fill K1' (Val v1'')) h1'' fns1
-            ⪯{rec_module, rec_heap_bij rec_module, n', true}
+            ⪯{rec_trans, rec_heap_bij_trans rec_trans, n', true}
         (SMProg, Rec (expr_fill K2' (Val v2'')) h2'' fns2, (PPInside, tt, rf''))) →
       Rec es1' h1' fns1
-          ⪯{rec_module, rec_heap_bij rec_module, n', b}
+          ⪯{rec_trans, rec_heap_bij_trans rec_trans, n', b}
       (SMProg, Rec es2' h2' fns2, (PPInside, tt, rf'))).
 
 Definition rec_heap_bij_return n fns1 fns2 Ki Ks r :=
@@ -1007,7 +1000,7 @@ Definition rec_heap_bij_return n fns1 fns2 Ki Ks r :=
       n' ⊆ n →
       satisfiable (heap_bij_inv h1' h2' ∗ val_in_bij v1 v2 ∗ r ∗ rf') →
       Rec (expr_fill Ki (Val v1)) h1' fns1
-        ⪯{rec_module, rec_heap_bij rec_module, n', b}
+        ⪯{rec_trans, rec_heap_bij_trans rec_trans, n', b}
       (SMProg, Rec (expr_fill Ks (Val v2)) h2' fns2, (PPInside, (), rf'))).
 
 Lemma rec_heap_bij_call_mono n n' fns1 fns2:
@@ -1043,11 +1036,9 @@ Lemma rec_heap_bij_proof fns1 fns2 :
       rec_heap_bij_return n fns1 fns2 K1 K2 r →
 
       Rec (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs1 (fd_body fn1))) h1 fns1
-          ⪯{rec_module, rec_heap_bij rec_module, n, false}
+          ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, false}
       (SMProg, Rec (expr_fill K2 (AllocA fn2.(fd_vars) $ subst_l fn2.(fd_args) vs2 (fd_body fn2))) h2 fns2, (PPInside, tt, rf))) →
-  trefines (MS rec_module (initial_rec_state fns1))
-           (MS (rec_heap_bij rec_module)
-               (initial_rec_heap_bij_state rec_module (initial_rec_state fns2))).
+  trefines (rec_mod fns1) (rec_heap_bij (rec_mod fns2)).
 Proof.
   move => Hdom Hlen Hf.
   rewrite (lock (dom _)) in Hdom.
@@ -1104,16 +1095,11 @@ Qed.
 
 (** * Properties of [rec_heap_bij] *)
 (** ** Horizontal compositionality *)
-Lemma rec_heap_bij_combine fns1 fns2 m1 m2 σ1 σ2 `{!VisNoAll m1} `{!VisNoAll m2}:
-  trefines (MS (rec_link fns1 fns2 (rec_heap_bij m1) (rec_heap_bij m2))
-               (MLFNone, [], initial_rec_heap_bij_state m1 σ1,
-                 initial_rec_heap_bij_state m2 σ2))
-           (MS (rec_heap_bij (rec_link fns1 fns2 m1 m2))
-               (initial_rec_heap_bij_state (rec_link _ _ _ _)
-                  (MLFNone, [], σ1, σ2) )
-).
+Lemma rec_heap_bij_combine fns1 fns2 m1 m2 `{!VisNoAll m1.(m_trans)} `{!VisNoAll m2.(m_trans)}:
+  trefines (rec_link fns1 fns2 (rec_heap_bij m1) (rec_heap_bij m2))
+           (rec_heap_bij (rec_link fns1 fns2 m1 m2)).
 Proof.
-  unshelve apply: mod_prepost_link. { exact
+  unshelve apply: prepost_link. { exact
       (λ ips s1 s2 s x1 x2 x ics1 ics2,
         ics1 = ics2 ∧
         match ips with
@@ -1170,7 +1156,7 @@ Lemma rec_heap_bij_sim_call_bind args vs' ws' es ei Ks Ki vss vsi n b hi hs fns1
       n' ⊆ n →
       satisfiable (heap_bij_inv hi' hs' ∗ ([∗ map] vi;vs ∈ vsi; vss, val_in_bij vi vs) ∗ ([∗ list] v; w ∈ vs' ++ vs; ws' ++ ws, val_in_bij v w) ∗ r ∗ rf') →
       Rec (expr_fill Ki (Call f (Val <$> (vs' ++ vs)))) hi' fns1
-        ⪯{rec_module, rec_heap_bij rec_module, n', b'}
+        ⪯{rec_trans, rec_heap_bij_trans rec_trans, n', b'}
       (SMProg, Rec (expr_fill Ks (Call f (Val <$> (ws' ++ ws)))) hs' fns2, (PPInside, (), rf'))
     ) →
     Forall
@@ -1184,11 +1170,11 @@ Lemma rec_heap_bij_sim_call_bind args vs' ws' es ei Ks Ki vss vsi n b hi hs fns1
                       ([∗ map] v1;v2 ∈ vsi;vss, val_in_bij v1 v2) ∗ r ∗
                       rf)
                       → rec_heap_bij_return n fns1 fns2 Ki Ks r
-                     → Rec ei hi fns1 ⪯{rec_module,
-                     rec_heap_bij rec_module, n, b}
+                     → Rec ei hi fns1 ⪯{rec_trans,
+                     rec_heap_bij_trans rec_trans, n, b}
                      (SMProg, Rec es hs fns2, (PPInside, (), rf))) args →
     Rec ei hi fns1
-      ⪯{rec_module, rec_heap_bij rec_module, n, b}
+      ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, b}
     (SMProg, Rec es hs fns2, (PPInside, (), rf)).
 Proof.
   intros Hsat Hdom Hfuns Hcont Hargs; destruct Hfill1 as [->], Hfill2 as [->].
@@ -1222,7 +1208,7 @@ Lemma rec_heap_bij_sim_refl_static vss vsi e es ei hi hs n b Ki Ks fns1 fns2 r r
   rec_heap_bij_return n fns1 fns2 Ki Ks r →
   is_static_expr false e →
   satisfiable (heap_bij_inv hi hs ∗ ([∗ map] v1;v2 ∈ vsi; vss, val_in_bij v1 v2) ∗ r ∗ rf) →
-  Rec ei hi fns1 ⪯{rec_module, rec_heap_bij rec_module, n, b} (SMProg, Rec es hs fns2, (PPInside, (), rf)).
+  Rec ei hi fns1 ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, b} (SMProg, Rec es hs fns2, (PPInside, (), rf)).
 Proof.
   induction e as [x|v|e1 op e2 IH1 IH2|e IH|e1 e2 IH1 IH2|e e1 e2 IH IH1 IH2| x e1 e2 IH1 IH2| f args IH| | | |] in vss, vsi, hi, hs, n, b, Ks, Ki, es, ei, Hfill1, Hfill2, r, rf |-*;
     intros Hsub Hcall Hcont Hstatic Hsat;
@@ -1321,9 +1307,7 @@ Proof.
 Qed.
 
 Lemma rec_heap_bij_refl fns:
-  trefines (MS rec_module (initial_rec_state fns))
-           (MS (rec_heap_bij rec_module)
-               (initial_rec_heap_bij_state rec_module (initial_rec_state fns))).
+  trefines (rec_mod fns) (rec_heap_bij (rec_mod fns)).
 Proof.
   apply: rec_heap_bij_proof. { done. } { naive_solver. }
   move => n K1 K2 f fn1 fn2 vs1 v2 h1 h2 r rf ????? Hcall Hret. simplify_eq.
@@ -1358,9 +1342,8 @@ Proof.
 Qed.
 
 (** ** Adequacy *)
-Lemma rec_heap_bij_rec_closed m σ:
-  trefines (MS (rec_closed (rec_heap_bij m)) (SMFilter, initial_rec_heap_bij_state m σ, RCStart))
-           (MS (rec_closed m) (SMFilter, σ, RCStart)).
+Lemma rec_heap_bij_rec_closed m:
+  trefines (rec_closed (rec_heap_bij m)) (rec_closed m).
 Proof.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { simpl. exact (λ _
@@ -1430,17 +1413,16 @@ Qed.
 (** Follows from the lemmas above. *)
 Lemma rec_heap_bij_trefines_implies_ctx_refines fnsi fnss :
   dom fnsi = dom fnss →
-  trefines (MS rec_module (initial_rec_state fnsi))
-           (MS (rec_heap_bij rec_module) (initial_rec_heap_bij_state rec_module (initial_rec_state fnss))) →
+  trefines (rec_mod fnsi) (rec_heap_bij (rec_mod fnss)) →
   rec_ctx_refines fnsi fnss.
 Proof.
   move => Hdom Href C. rewrite /rec_syn_link map_difference_union_r (map_difference_union_r fnss).
   etrans; [|apply rec_heap_bij_rec_closed].
-  apply mod_seq_map_trefines. { apply _. } { apply _. }
+  apply seq_map_mod_trefines. { apply _. } { apply _. }
   etrans. { apply rec_syn_link_refines_link. apply map_disjoint_difference_r'. }
-  etrans. { apply: rec_link_trefines. 1: done. 1: apply rec_heap_bij_refl. }
+  etrans. { eapply rec_link_trefines. 1,2: apply _. 1: done. 1: apply rec_heap_bij_refl. }
   etrans. { apply rec_heap_bij_combine; apply _. }
-  apply: mod_prepost_trefines.
+  apply rec_heap_bij_trefines. 1: apply _.
   etrans. 2: { apply rec_link_refines_syn_link. apply map_disjoint_difference_r'. }
   rewrite !dom_difference_L Hdom.
   erewrite map_difference_eq_dom_L => //.
@@ -1470,9 +1452,8 @@ Definition bij_alloc_opt : fndef := {|
 |}.
 
 Lemma bij_alloc_opt_refines :
-  trefines (MS rec_module (initial_rec_state (<["f" := bij_alloc_opt]> ∅)))
-           (MS (rec_heap_bij rec_module) (initial_rec_heap_bij_state rec_module
-                                            (initial_rec_state (<["f" := bij_alloc]> ∅)))).
+  trefines (rec_mod (<["f" := bij_alloc_opt]> ∅))
+           (rec_heap_bij (rec_mod (<["f" := bij_alloc]> ∅))).
 Proof.
   apply: rec_heap_bij_proof. { set_solver. }
   { move => ??. setoid_rewrite lookup_insert_Some. setoid_rewrite lookup_empty. naive_solver. }

@@ -435,7 +435,7 @@ Definition sim (n : trace_index) (b : bool) (dins : list deep_asm_instr) (e : ex
   rf -∗
   cr2a_inv s lr rs mem h' -∗
   iSat_end (AsmState (ARunning []) rs mem pf_ins
-             ⪯{asm_module, rec_to_asm (dom pf_ins) (dom pf_fns) s.(s_f2i) rec_module, n, b}
+             ⪯{asm_trans, rec_to_asm_trans (dom pf_ins) (dom pf_fns) s.(s_f2i) rec_trans, n, b}
            (SMProg, Rec e h pf_fns, (PPInside, R2A pf_cs lr, rf))).
 
 Lemma to_sim n b dins e s rs h h' :
@@ -1342,7 +1342,7 @@ Lemma sim_intro s dins rs mem ins ins_dom fns_dom f2i n b e h fns cs lr rf P:
   satisfiable (rf ∗ cr2a_inv s lr rs mem h ∗ P) →
   (P -∗ sim n b dins e s rs h h) →
   AsmState (ARunning []) rs mem ins
-     ⪯{asm_module, rec_to_asm ins_dom fns_dom f2i rec_module, n, b}
+     ⪯{asm_trans, rec_to_asm_trans ins_dom fns_dom f2i rec_trans, n, b}
   (SMProg, Rec e h fns, (PPInside, R2A cs lr, rf))
 .
 Proof.
@@ -1357,9 +1357,8 @@ Lemma pass_correct a f2i f s' dins ins fn:
   f2i !! f = Some a →
   NoDup (fn.(lfd_args) ++ fn.(lfd_vars).*1) →
   (∀ f' i', f2i !! f' = Some i' → ins !! i' = None ↔ f' ≠ f) →
-  trefines (MS asm_module (initial_asm_state ins))
-           (MS (rec_to_asm (dom ins) {[f]} f2i rec_module) (initial_rec_to_asm_state ∅ rec_module
-             (initial_rec_lstate (<[f := fn]> ∅)))).
+  trefines (asm_mod ins)
+           (rec_to_asm (dom ins) {[f]} f2i ∅ (linear_rec_mod (<[f := fn]> ∅))).
 Proof.
   move => Hrun ? Ha /NoDup_app[?[??]] Hf2i.
   apply rec_to_asm_proof; [done|set_solver|].
@@ -1535,9 +1534,8 @@ Lemma pass_fn_correct a f2i f dins ins fn:
   f2i !! f = Some a →
   NoDup (fn.(lfd_args) ++ fn.(lfd_vars).*1) →
   (∀ f' i', f2i !! f' = Some i' → ins !! i' = None ↔ f' ≠ f) →
-  trefines (MS asm_module (initial_asm_state ins))
-           (MS (rec_to_asm (dom ins) {[f]} f2i rec_module) (initial_rec_to_asm_state ∅ rec_module
-             (initial_rec_lstate (<[f := fn]> ∅)))).
+  trefines (asm_mod ins)
+           (rec_to_asm (dom ins) {[f]} f2i ∅ (linear_rec_mod (<[f := fn]> ∅))).
 Proof.
   unfold pass_fn.
   destruct (crun (initial_state f2i) (pass (lfd_args fn) (lfd_vars fn) (lfd_body fn))) eqn: Hres => /=.

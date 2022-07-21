@@ -2,8 +2,8 @@ From dimsum.core Require Export proof_techniques.
 From dimsum.core Require Import srefines filter.
 From dimsum.core Require Import axioms.
 
-(** * [product] *)
-Inductive product_step {EV1 EV2} (m1 : module EV1) (m2 : module EV2) :
+(** * product *)
+Inductive product_step {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) :
   (m1.(m_state) * m2.(m_state)) → option (option EV1 * option EV2) → ((m1.(m_state) * m2.(m_state)) → Prop) → Prop :=
 | ProductStepL e σ1 σ2 Pσ:
     m1.(m_step) σ1 e Pσ →
@@ -26,11 +26,12 @@ Arguments ProductStepL {_ _ _ _} _ _ _ _ _.
 Arguments ProductStepR {_ _ _ _} _ _ _ _ _.
 Arguments ProductStepBoth {_ _ _ _} _ _ _ _ _.
 
-Definition mod_product {EV1 EV2} (m1 : module EV1) (m2 : module EV2) : module (option EV1 * option EV2) :=
-  Mod (product_step m1 m2).
+Definition product_trans {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2)
+  : mod_trans (option EV1 * option EV2) :=
+  ModTrans (product_step m1 m2).
 
-Global Instance product_vis_no_all {EV1 EV2} (m1 : module EV1) (m2 : module EV2) `{!VisNoAll m1} `{!VisNoAll m2}:
-  VisNoAll (mod_product m1 m2).
+Global Instance product_vis_no_all {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) `{!VisNoAll m1} `{!VisNoAll m2}:
+  VisNoAll (product_trans m1 m2).
 Proof.
   move => [??]???. inv_all @m_step; try case_match => //; simplify_eq.
   - have [??]:= vis_no_all _ _ _ ltac:(done). eexists (_, _) => -[??]. naive_solver.
@@ -39,6 +40,9 @@ Proof.
     have [??]:= vis_no_all _ _ _ ltac:(done).
     eexists (_, _) => -[??]. naive_solver.
 Qed.
+
+Definition product_mod {EV1 EV2} (m1 : module EV1) (m2 : module EV2) :=
+  Mod (product_trans m1.(m_trans) m2.(m_trans)) (m1.(m_init), m2.(m_init)).
 
 (** ** trefines for [product] *)
 Inductive mod_product_rel {EV1 EV2} : trace (option EV1 * option EV2) → trace EV1 → trace EV2 → Prop :=
@@ -98,8 +102,8 @@ Proof.
 Qed.
 
 
-Lemma tmod_product_to_mods {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ Pσ κs:
-  σ ~{ mod_product m1 m2, κs }~>ₜ Pσ → ∃ κs', mod_product_rel κs κs'.1 κs'.2 ∧
+Lemma tmod_product_to_mods {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ Pσ κs:
+  σ ~{ product_trans m1 m2, κs }~>ₜ Pσ → ∃ κs', mod_product_rel κs κs'.1 κs'.2 ∧
     σ.1 ~{ m1, κs'.1 }~>ₜ - ∧ σ.2 ~{ m2, κs'.2 }~>ₜ -.
 Proof.
   elim.
@@ -169,9 +173,9 @@ Proof.
        Unshelve. done. done.
 Qed.
 
-Lemma mod_product_nil_l {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2 Pσ κs:
+Lemma mod_product_nil_l {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Pσ κs:
   σ1 ~{ m1, κs }~>ₜ Pσ → κs ⊆ tnil →
-  (σ1, σ2) ~{ mod_product m1 m2, tnil }~>ₜ (λ σ', Pσ σ'.1 ∧ σ2 = σ'.2).
+  (σ1, σ2) ~{ product_trans m1 m2, tnil }~>ₜ (λ σ', Pσ σ'.1 ∧ σ2 = σ'.2).
 Proof.
   elim.
   - move => ??????. constructor; [|done]. naive_solver.
@@ -184,9 +188,9 @@ Proof.
     pose proof (transitivity Hs1 Hs2) as [??]%subtrace_all_nil_inv. naive_solver.
 Qed.
 
-Lemma mod_product_nil_r {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ1 σ2 Pσ κs:
+Lemma mod_product_nil_r {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Pσ κs:
   σ2 ~{ m2, κs }~>ₜ Pσ → κs ⊆ tnil →
-  (σ1, σ2) ~{ mod_product m1 m2, tnil }~>ₜ (λ σ', Pσ σ'.2 ∧ σ1 = σ'.1).
+  (σ1, σ2) ~{ product_trans m1 m2, tnil }~>ₜ (λ σ', Pσ σ'.2 ∧ σ1 = σ'.1).
 Proof.
   elim.
   - move => ??????. constructor; [|done]. naive_solver.
@@ -199,10 +203,10 @@ Proof.
     pose proof (transitivity Hs1 Hs2) as [??]%subtrace_all_nil_inv. naive_solver.
 Qed.
 
-Lemma tmods_to_mod_product {EV1 EV2} (m1 : module EV1) (m2 : module EV2) σ κs κs1 κs2:
+Lemma tmods_to_mod_product {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ κs κs1 κs2:
   mod_product_rel κs κs1 κs2 →
   σ.1 ~{ m1, κs1 }~>ₜ - → σ.2 ~{ m2, κs2 }~>ₜ - →
-  σ ~{ mod_product m1 m2, κs }~>ₜ -.
+  σ ~{ product_trans m1 m2, κs }~>ₜ -.
 Proof.
   move => Hrel.
   elim: Hrel σ.
@@ -240,21 +244,22 @@ Proof.
     move => [??] /= [??]. subst. naive_solver.
 Qed.
 
-Lemma mod_product_trefines {EV1 EV2} (m1 m1' : module EV1) (m2 m2' : module EV2) σ1 σ1' σ2 σ2':
-  trefines (MS m1 σ1) (MS m1' σ1') →
-  trefines (MS m2 σ2) (MS m2' σ2') →
-  trefines (MS (mod_product m1 m2) (σ1, σ2)) (MS (mod_product m1' m2') (σ1', σ2')).
+Lemma product_mod_trefines {EV1 EV2} (m1 m1' : module EV1) (m2 m2' : module EV2):
+  trefines m1 m1' →
+  trefines m2 m2' →
+  trefines (product_mod m1 m2) (product_mod m1' m2').
 Proof.
   move => [/=Hr1] [/=Hr2]. constructor => κs /= /tmod_product_to_mods[κs1 [κs2 [/Hr1 ? /Hr2 ?]]].
   by apply: tmods_to_mod_product.
 Qed.
 
 (* simpler proof that uses completeness of wp *)
-Lemma mod_product_trefines' {EV1 EV2} (m1 m1' : module EV1) (m2 m2' : module EV2) σ1 σ1' σ2 σ2':
-  trefines (MS m1 σ1) (MS m1' σ1') →
-  trefines (MS m2 σ2) (MS m2' σ2') →
-  trefines (MS (mod_product m1 m2) (σ1, σ2)) (MS (mod_product m1' m2') (σ1', σ2')).
+Lemma product_mod_trefines' {EV1 EV2} (m1 m1' : module EV1) (m2 m2' : module EV2) :
+  trefines m1 m1' →
+  trefines m2 m2' →
+  trefines (product_mod m1 m2) (product_mod m1' m2').
 Proof.
+  destruct m1 as [m1 σ1], m1' as [m1' σ1'], m2 as [m2 σ2], m2' as [m2' σ2'].
   move => /wp_complete /= Hr1 /wp_complete/=Hr2.
   apply wp_implies_refines => n. elim/ti_lt_ind: n σ1 σ1' σ2 σ2' {Hr1 Hr2} (Hr1 n) (Hr2 n).
   move => n IH σ1 σ1' σ2 σ2' Hr1 Hr2.
@@ -289,7 +294,7 @@ Proof.
     have [?[Ht2 HP2]]:= Hr2' _ _ _ ltac:(done) ltac:(done).
     move: Ht1 => /(thas_trace_cons_inv _ _)?.
     apply: (thas_trace_trans tnil); [ by apply: mod_product_nil_l|].
-    move => [??]/= [[?[? HP1']] ?]; subst.
+    move => [??]/= [[?[? HP1']] ?]. simplify_eq/=.
     move: Ht2 => /(thas_trace_cons_inv _ _)?.
     apply: (thas_trace_trans tnil); [ by apply: mod_product_nil_r|].
     move => [??]/= [[?[? HP2']] ?]; subst.
@@ -300,48 +305,55 @@ Proof.
     eexists (_, _). split; [done|]. by apply: IH.
 Qed.
 
-(** * [mod_map] *)
-Definition mod_map_fn EV1 EV2 S :=
+(** * map *)
+Definition map_mod_fn EV1 EV2 S :=
   S → EV1 → option EV2 → S → bool → Prop.
-Inductive mod_map_mod_step {EV1 EV2 S} (f : mod_map_fn EV1 EV2 S) :
+Inductive map_mod_step {EV1 EV2 S} (f : map_mod_fn EV1 EV2 S) :
   (S * bool) → option (EV1 * option EV2) → ((S * bool) → Prop) → Prop :=
 | MapS σ e1 e2 σ' ok:
   f σ e1 e2 σ' ok →
-  mod_map_mod_step f (σ, true) (Some (e1, e2)) (λ σ'', σ'' = (σ', ok))
+  map_mod_step f (σ, true) (Some (e1, e2)) (λ σ'', σ'' = (σ', ok))
 | MapUbS σ:
-  mod_map_mod_step f (σ, false) None (λ _, False).
-Definition mod_map_mod {EV1 EV2 S} (f : mod_map_fn EV1 EV2 S) : module (EV1 * option EV2) :=
-  Mod (mod_map_mod_step f).
+  map_mod_step f (σ, false) None (λ _, False).
+Definition map_mod_trans {EV1 EV2 S} (f : map_mod_fn EV1 EV2 S) : mod_trans (EV1 * option EV2) :=
+  ModTrans (map_mod_step f).
 
-Global Instance mod_map_mod_vis_no_all {EV1 EV2 S} (f : mod_map_fn EV1 EV2 S):
-  VisNoAll (mod_map_mod f).
+Global Instance map_mod_mod_vis_no_all {EV1 EV2 S} (f : map_mod_fn EV1 EV2 S):
+  VisNoAll (map_mod_trans f).
 Proof. move => ????. inv_all @m_step; try case_match => //; simplify_eq. naive_solver. Qed.
 
-Definition mod_map {EV1 EV2 S} (m : module EV1) (f : mod_map_fn EV1 EV2 S) : module EV2 :=
-  mod_filter (mod_product m (mod_map_mod f)) (λ e er, e.2 = (λ x, (x, er)) <$> e.1).
+Definition map_trans {EV1 EV2 S} (m : mod_trans EV1) (f : map_mod_fn EV1 EV2 S) : mod_trans EV2 :=
+  filter_trans (product_trans m (map_mod_trans f)) (λ e er, e.2 = (λ x, (x, er)) <$> e.1).
 
-Lemma mod_map_trefines {EV1 EV2 S} m1 m2 (f : mod_map_fn EV1 EV2 S) σ1 σ2 σf :
-  trefines (MS m1 σ1) (MS m2 σ2) →
-  trefines (MS (mod_map m1 f) (σ1, σf)) (MS (mod_map m2 f) (σ2, σf)).
-Proof. move => ?. apply mod_filter_trefines. by apply mod_product_trefines. Qed.
+Definition map_mod {EV1 EV2 S} (m : module EV1) (f : map_mod_fn EV1 EV2 S) (σf : S) : module EV2 :=
+  Mod (map_trans m.(m_trans) f) (m.(m_init), (σf, true)).
 
-Lemma mod_map_nil {EV1 EV2 S} m (f : mod_map_fn EV1 EV2 S) σ Pσ Pσf σf κs:
+Lemma map_mod_trefines {EV1 EV2 S} m1 m2 (f : map_mod_fn EV1 EV2 S) σf :
+  trefines m1 m2 →
+  trefines (map_mod m1 f σf) (map_mod m2 f σf).
+Proof.
+  move => ?. destruct m1, m2.
+  apply: (filter_mod_trefines _ (Mod _ _) (Mod _ _)).
+  by apply: (product_mod_trefines (Mod _ _) (Mod _ _) (Mod _ _) (Mod _ _) ).
+Qed.
+
+Lemma map_trans_nil {EV1 EV2 S} m (f : map_mod_fn EV1 EV2 S) σ Pσ Pσf σf κs:
   σ ~{ m, tnil }~>ₜ Pσ →
-  (∀ σ', Pσ σ' → (σ', σf) ~{ mod_map m f, κs }~>ₜ Pσf) →
-  (σ, σf) ~{ mod_map m f, κs }~>ₜ Pσf.
+  (∀ σ', Pσ σ' → (σ', σf) ~{ map_trans m f, κs }~>ₜ Pσf) →
+  (σ, σf) ~{ map_trans m f, κs }~>ₜ Pσf.
 Proof.
   move => Hσ Hcont. apply: (thas_trace_trans tnil).
   - apply (tmod_to_mod_filter _ _ _ _ tnil). by apply: mod_product_nil_l.
   - move => [??]/= [??]. naive_solver.
 Qed.
 
-Lemma mod_map_step_i {EV1 EV2 S} m (f : mod_map_fn EV1 EV2 S) σ σf P `{!TStepI m σ P} :
-  TStepI (mod_map m f) (σ, (σf, true)) (λ G, P (λ b κ P',
+Lemma map_trans_step_i {EV1 EV2 S} m (f : map_mod_fn EV1 EV2 S) σ σf P `{!TStepI m σ P} :
+  TStepI (map_trans m f) (σ, (σf, true)) (λ G, P (λ b κ P',
    ∀ κ' σf' ok, (if κ is Some e then f σf e κ' σf' ok else κ' = None ∧ σf' = σf ∧ ok = true) →
                G b κ' (λ G', P' (λ x, G' (x, (σf', ok)))))).
 Proof.
   constructor => G /(@tstepi_proof _ _ _ _ ltac:(done)) HP.
-  apply: (steps_impl_submodule _ (mod_map _ _) (λ x, (x, (σf, true)))); [done| |].
+  apply: (steps_impl_submodule _ (map_trans _ _) (λ x, (x, (σf, true)))); [done| |].
   - move => ?? /= [?[?[HG [? HG']]]]. eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
   - move => ????. inv_all/= @m_step; eexists _, _.
     all: split_and!; [done| |repeat case_match => //;naive_solver].
@@ -349,29 +361,29 @@ Proof.
       eexists _, _. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
     + move => [?[?[HG [? HG']]]]. eexists _,_. split_and!; [by apply HG|done|] => ? /= /HG'[?[??]]. naive_solver.
 Qed.
-Global Hint Resolve mod_map_step_i : typeclass_instances.
+Global Hint Resolve map_trans_step_i : typeclass_instances.
 
-Lemma mod_map_step_s {EV1 EV2 S} m (f : mod_map_fn EV1 EV2 S) σ σf P `{!TStepS m σ P} :
-  TStepS (mod_map m f) (σ, (σf, true)) (λ G, P (λ κ P',
+Lemma map_trans_step_s {EV1 EV2 S} m (f : map_mod_fn EV1 EV2 S) σ σf P `{!TStepS m σ P} :
+  TStepS (map_trans m f) (σ, (σf, true)) (λ G, P (λ κ P',
    ∃ κ' σf' ok, (if κ is Some e then f σf e κ' σf' ok else κ' = None ∧ σf' = σf ∧ ok = true) ∧
                G κ' (λ G', P' (λ x, G' (x, (σf', ok)))))).
 Proof.
   constructor => G /(@tsteps_proof _ _ _ _ ltac:(done)) [κ [? [[? [κ' [?[??]]]] HG']]].
   eexists _, _. split; [done|].
   move => ? /HG'. move => /steps_spec_has_trace_1 Ht. apply steps_spec_has_trace_elim.
-  apply: mod_map_nil; [done|] => ?/=?. tend. destruct κ; destruct!/=.
+  apply: map_trans_nil; [done|] => ?/=?. tend. destruct κ; destruct!/=.
   - apply: steps_spec_step_end. { econs. { apply: ProductStepBoth; [done|]. by econs. } done. }
     move => [??]/=?. naive_solver.
   - by apply steps_spec_end.
 Qed.
-Global Hint Resolve mod_map_step_s : typeclass_instances.
+Global Hint Resolve map_trans_step_s : typeclass_instances.
 
-Lemma mod_map_ub_s {EV1 EV2 S} m (f : mod_map_fn EV1 EV2 S) σ σf:
-  TStepS (mod_map m f) (σ, (σf, false)) (λ G, G None (λ G', True)).
+Lemma map_trans_ub_s {EV1 EV2 S} m (f : map_mod_fn EV1 EV2 S) σ σf:
+  TStepS (map_trans m f) (σ, (σf, false)) (λ G, G None (λ G', True)).
 Proof.
   constructor => G ?. split!; [done|].
   move => *.
   apply: steps_spec_step_end. { econs. { by apply: ProductStepR; econs. } done. }
   move => [??]. naive_solver.
 Qed.
-Global Hint Resolve mod_map_ub_s : typeclass_instances.
+Global Hint Resolve map_trans_ub_s : typeclass_instances.

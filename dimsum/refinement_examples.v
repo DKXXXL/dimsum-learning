@@ -12,10 +12,11 @@ From dimsum.core Require Import axioms.
 Inductive mod1_step : nat → option nat → (nat → Prop) → Prop :=
 | T1S0: mod1_step 0 (Some 1) (λ σ', σ' = 1).
 
-Definition mod1 : module nat := Mod mod1_step.
+Definition mod1_trans : mod_trans nat := ModTrans mod1_step.
+Definition mod1 : module nat := Mod mod1_trans 0.
 
 Lemma mod1_straces Pκs:
-  0 ~{mod1, Pκs}~>ₛ (λ _, True) ↔
+  0 ~{mod1_trans, Pκs}~>ₛ (λ _, True) ↔
   (Pκs [] ∧ Pκs [Nb]) ∨
   (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Nb]).
 Proof.
@@ -31,7 +32,7 @@ Proof.
 Qed.
 
 Lemma mod1_ttraces κs:
-  0 ~{mod1, κs}~>ₜ (λ _, True) ↔
+  0 ~{mod1_trans, κs}~>ₜ (λ _, True) ↔
     tall bool (λ b, if b then tnil else tcons 1 tnil) ⊆ κs.
 Proof.
   split.
@@ -56,10 +57,11 @@ Inductive mod2_step : nat → option nat → (nat → Prop) → Prop :=
 | T2S1: mod2_step 1 (Some 2) (λ σ', σ' = 2)
 .
 
-Definition mod2 : module nat := Mod mod2_step.
+Definition mod2_trans : mod_trans nat := ModTrans mod2_step.
+Definition mod2 : module nat := Mod mod2_trans 0.
 
 Lemma mod2_straces Pκs:
-  0 ~{mod2, Pκs}~>ₛ (λ _, True) ↔
+  0 ~{mod2_trans, Pκs}~>ₛ (λ _, True) ↔
      (Pκs [] ∧ Pκs [Nb])
   ∨ (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Nb])
   ∨ (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Vis 2] ∧ Pκs [Vis 1; Vis 2; Nb]).
@@ -95,7 +97,8 @@ Inductive mod3_step : nat → option nat → (nat → Prop) → Prop :=
 | T3S2: mod3_step 1 (Some 3) (λ σ', σ' = 3)
 .
 
-Definition mod3 : module nat := Mod mod3_step.
+Definition mod3_trans : mod_trans nat := ModTrans mod3_step.
+Definition mod3 : module nat := Mod mod3_trans 0.
 
 (*
     3
@@ -105,10 +108,11 @@ Inductive mod3'_step : nat → option nat → (nat → Prop) → Prop :=
 | T3'S0: mod3'_step 0 (Some 3) (λ σ', σ' = 1)
 .
 
-Definition mod3' : module nat := Mod mod3'_step.
+Definition mod3'_trans : mod_trans nat := ModTrans mod3'_step.
+Definition mod3' : module nat := Mod mod3'_trans 0.
 
 Lemma mod3'_straces Pκs:
-  0 ~{mod3', Pκs}~>ₛ (λ _, True) ↔
+  0 ~{mod3'_trans, Pκs}~>ₛ (λ _, True) ↔
   (Pκs [] ∧ Pκs [Nb]) ∨
   (Pκs [] ∧ Pκs [Vis 3] ∧ Pκs [Vis 3; Nb]).
 Proof.
@@ -132,10 +136,11 @@ Inductive mod1_ub_step : nat → option nat → (nat → Prop) → Prop :=
 | T1US1: mod1_ub_step 1 None (λ σ', False)
 .
 
-Definition mod1_ub : module nat := Mod mod1_ub_step.
+Definition mod1_ub_trans : mod_trans nat := ModTrans mod1_ub_step.
+Definition mod1_ub : module nat := Mod mod1_ub_trans 0.
 
 Lemma mod1ub_straces Pκs:
-  0 ~{mod1_ub, Pκs}~>ₛ (λ _, True) ↔
+  0 ~{mod1_ub_trans, Pκs}~>ₛ (λ _, True) ↔
      (Pκs [] ∧ Pκs [Nb])
   ∨ (Pκs [] ∧ Pκs [Vis 1]).
 Proof.
@@ -160,13 +165,14 @@ Inductive mod_ub_step {EV} : nat → option EV → (nat → Prop) → Prop :=
 | TUS0: mod_ub_step 0 None (λ σ', False)
 .
 
-Definition mod_ub EV : module EV := Mod mod_ub_step.
+Definition mod_ub_trans EV : mod_trans EV := ModTrans mod_ub_step.
+Definition mod_ub EV : module EV := Mod (mod_ub_trans EV) 0.
 
 Lemma modub_straces EV Pκs:
   (* Note that without [event EV], for EV not inhabited, this would be
   equivalent to the program that does not do anything (but does not
   have UB). *)
-  0 ~{mod_ub EV, Pκs}~>ₛ (λ _, True) ↔ Pκs [].
+  0 ~{mod_ub_trans EV, Pκs}~>ₛ (λ _, True) ↔ Pκs [].
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
@@ -181,10 +187,11 @@ Qed.
 Inductive mod_nb_step {EV} : nat → option EV → (nat → Prop) → Prop :=
 .
 
-Definition mod_nb EV : module EV := Mod mod_nb_step.
+Definition mod_nb_trans EV : mod_trans EV := ModTrans mod_nb_step.
+Definition mod_nb EV : module EV := Mod (mod_nb_trans EV) 0.
 
 Lemma modnb_straces EV Pκs:
-  0 ~{mod_nb EV, Pκs}~>ₛ (λ _, True) ↔ Pκs [] ∧ Pκs [Nb].
+  0 ~{mod_nb_trans EV, Pκs}~>ₛ (λ _, True) ↔ Pκs [] ∧ Pκs [Nb].
 Proof.
   split.
   - inversion 1; simplify_eq. 1: naive_solver.
@@ -205,10 +212,11 @@ Inductive mod12_ang_step : nat → option nat → (nat → Prop) → Prop :=
 | T12AS2: mod12_ang_step 2 (Some 2) (λ σ', σ' = 3)
 .
 
-Definition mod12_ang : module nat := Mod mod12_ang_step.
+Definition mod12_ang_trans : mod_trans nat := ModTrans mod12_ang_step.
+Definition mod12_ang : module nat := Mod mod12_ang_trans 0.
 
 Lemma mod12_ang_straces Pκs:
-  0 ~{mod12_ang, Pκs}~>ₛ (λ _, True) ↔
+  0 ~{mod12_ang_trans, Pκs}~>ₛ (λ _, True) ↔
      (Pκs [] ∧ Pκs [Nb])
   ∨ (Pκs [] ∧ Pκs [Vis 1] ∧ Pκs [Vis 1; Nb] ∧ Pκs [Vis 2] ∧ Pκs [Vis 2; Nb] ).
 Proof.
@@ -237,7 +245,7 @@ Qed.
 (** * Refinements *)
 (** NB refines visible events *)
 Lemma mod1_srefines_mod2 :
-  srefines (MS mod1 0) (MS mod2 0).
+  srefines mod1 mod2.
 Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: STraceEnd.
@@ -250,7 +258,7 @@ Qed.
 
 (** NB refines visible events (for trefines) *)
 Lemma mod1_trefines_mod2 :
-  trefines (MS mod1 0) (MS mod2 0).
+  trefines mod1 mod2.
 Proof.
   constructor => κs /= Hs.
   thas_trace_inv. { tend. }
@@ -262,7 +270,7 @@ Proof.
 Qed.
 
 Lemma mod2_srefines_mod3 :
-  srefines (MS mod2 0) (MS mod3 0).
+  srefines mod2 mod3.
 Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: STraceEnd.
@@ -279,7 +287,7 @@ Qed.
 
 (** visible events refine UB *)
 Lemma mod2_srefines_mod1_ub :
-  srefines (MS mod2 0) (MS mod1_ub 0).
+  srefines mod2 mod1_ub.
 Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: STraceEnd.
@@ -293,7 +301,7 @@ Qed.
 
 (** visible events do not refine NB *)
 Lemma mod2_srefines_mod1 :
-  srefines (MS mod2 0) (MS mod1 0).
+  srefines mod2 mod1.
 Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: STraceEnd.
@@ -312,7 +320,7 @@ Abort. (* does not hold *)
 
 (** angelic choice can be resolved on the left side *)
 Lemma mod12_ang_srefines_mod1 :
-  srefines (MS mod12_ang 0) (MS mod1 0).
+  srefines mod12_ang mod1.
 Proof.
   constructor => Pκs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: STraceEnd.
@@ -328,7 +336,7 @@ Qed.
 
 (** angelic choice does not allow coming up with arbitrary events (for srefines) *)
 Lemma mod12_ang_not_srefines_mod3' :
-  ¬ srefines (MS mod12_ang 0) (MS mod3' 0).
+  ¬ srefines mod12_ang mod3'.
 Proof.
   move => -[]/= /(_ (λ κs, κs = [] ∨ κs = [Vis 1] ∨ κs = [Vis 1; Nb] ∨ κs = [Vis 2] ∨ κs = [Vis 2; Nb])).
   rewrite mod12_ang_straces mod3'_straces. naive_solver.
@@ -336,7 +344,7 @@ Qed.
 
 (** But angelic choice leaking into events allows coming up with arbitrary events (for lrefines) *)
 Lemma mod12_ang_lrefines_mod3' :
-  lrefines (MS mod12_ang 0) (MS mod3' 0).
+  lrefines mod12_ang mod3'.
 Proof.
   constructor => κs /= Hs.
   inversion Hs; simplify_eq. 1: by apply: LTraceEnd.
@@ -369,7 +377,8 @@ Inductive mod_ang_comm1_step : nat → option nat → (nat → Prop) → Prop :=
 | TAC1S5: mod_ang_comm1_step 5 (Some 3) (λ σ', σ' = 6)
 .
 
-Definition mod_ang_comm1 : module nat := Mod mod_ang_comm1_step.
+Definition mod_ang_comm1_trans : mod_trans nat := ModTrans mod_ang_comm1_step.
+Definition mod_ang_comm1 : module nat := Mod mod_ang_comm1_trans 0.
 
 (*         A     B
      /- 2 --- 3 --- 4
@@ -385,10 +394,11 @@ Inductive mod_ang_comm2_step : nat → option nat → (nat → Prop) → Prop :=
 | TAC2S6: mod_ang_comm2_step 6 (Some 3) (λ σ', σ' = 7)
 .
 
-Definition mod_ang_comm2 : module nat := Mod mod_ang_comm2_step.
+Definition mod_ang_comm2_trans : mod_trans nat := ModTrans mod_ang_comm2_step.
+Definition mod_ang_comm2 : module nat := Mod mod_ang_comm2_trans 0.
 
 Lemma mod_ang_comm1_straces Pκs:
-  0 ~{mod_ang_comm1, Pκs}~>ₛ (λ _, True) ↔
+  0 ~{mod_ang_comm1_trans, Pκs}~>ₛ (λ _, True) ↔
     Pκs [] ∧
   (Pκs [Nb] ∨
    (Pκs [Vis 1] ∧
@@ -426,7 +436,7 @@ Proof.
 Qed.
 
 Lemma mod_ang_comm2_straces Pκs:
-  0 ~{mod_ang_comm2, Pκs}~>ₛ (λ _, True) ↔
+  0 ~{mod_ang_comm2_trans, Pκs}~>ₛ (λ _, True) ↔
     Pκs [] ∧
   (Pκs [Nb] ∨
    (Pκs [Vis 1] ∧
@@ -469,12 +479,12 @@ Proof.
 Qed.
 
 Lemma mod_ang_comm_sequiv:
-  srefines_equiv (MS mod_ang_comm1 0) (MS mod_ang_comm2 0).
+  srefines_equiv mod_ang_comm1 mod_ang_comm2.
 Proof. apply: srefines_equiv_equiv => ?. rewrite mod_ang_comm1_straces mod_ang_comm2_straces. done. Qed.
 
 (** but not for trefines *)
 Lemma mod_ang_comm_not_trefines:
-  ¬ trefines (MS mod_ang_comm2 0) (MS mod_ang_comm1 0).
+  ¬ trefines mod_ang_comm2 mod_ang_comm1.
 Proof.
   move => [/=Hr]. feed pose proof (Hr (tex bool (λ b, if b then tcons 1 $ tcons 2 tnil else tcons 1 $ tcons 3 tnil))) as Hr2.
   - tstep_None; [ constructor|]. move => ?[->|->].

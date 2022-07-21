@@ -48,10 +48,9 @@ Local Ltac go_i :=
   tstep_i; go.
 
 Lemma locle_asm_refines_itree_strong :
-  trefines (MS asm_module (initial_asm_state locle_asm))
-           (MS (rec_to_asm (dom locle_asm) locle_fns locle_f2i
-                           (mod_itree rec_event (gmap prov Z)))
-               (initial_rec_to_asm_state ∅ (mod_itree _ _) (locle_itree_strong, ∅))).
+  trefines (asm_mod locle_asm)
+           (rec_to_asm (dom locle_asm) locle_fns locle_f2i ∅
+              (itree_mod locle_itree_strong ∅)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember. { simpl. exact (λ _ σa '(σf, (t, ps), (pp, σr2a, P)),
@@ -129,8 +128,8 @@ Definition locle_itree : itree (moduleE rec_event unit) unit :=
       TVis (Outgoing, ERReturn (ValBool b) h)).
 
 Lemma locle_itree_strong_refines_itree :
-  trefines (MS (mod_itree rec_event (gmap prov Z)) (locle_itree_strong, ∅))
-           (MS (mod_itree rec_event unit) (locle_itree, tt)).
+  trefines (itree_mod locle_itree_strong ∅)
+           (itree_mod locle_itree tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember. { simpl. exact (λ _ '(t1, ps) '(t2, _),
@@ -169,13 +168,11 @@ Proof.
 Qed.
 
 Lemma locle_asm_refines_itree :
-  trefines (MS asm_module (initial_asm_state locle_asm))
-           (MS (rec_to_asm (dom locle_asm) locle_fns locle_f2i
-                           (mod_itree rec_event unit))
-               (initial_rec_to_asm_state ∅ (mod_itree _ _) (locle_itree, tt))).
+  trefines (asm_mod locle_asm)
+           (rec_to_asm (dom locle_asm) locle_fns locle_f2i ∅ (itree_mod locle_itree tt)).
 Proof.
   etrans; [apply locle_asm_refines_itree_strong|].
-  apply: rec_to_asm_trefines.
+  apply rec_to_asm_trefines; [apply _|].
   apply: locle_itree_strong_refines_itree.
 Qed.
 
@@ -249,27 +246,24 @@ Definition memmove_asm_dom : gset Z := locked dom memmove_asm.
 Definition memcpy_asm_dom : gset Z := locked dom memcpy_asm.
 
 Lemma main_asm_refines_rec :
-  trefines (MS asm_module (initial_asm_state main_asm))
-           (MS (rec_to_asm main_asm_dom {["main"]} main_f2i rec_module)
-               (initial_rec_to_asm_state ∅ rec_module (initial_rec_state main_prog))).
+  trefines (asm_mod main_asm)
+           (rec_to_asm main_asm_dom {["main"]} main_f2i ∅ (rec_mod main_prog)).
 Proof.
   unfold main_asm_dom; unlock.
   apply: compile_correct; [|done|..]; compute_done.
 Qed.
 
 Lemma memmove_asm_refines_rec :
-  trefines (MS asm_module (initial_asm_state memmove_asm))
-           (MS (rec_to_asm memmove_asm_dom {["memmove"]} main_f2i rec_module)
-               (initial_rec_to_asm_state ∅ rec_module (initial_rec_state memmove_prog))).
+  trefines (asm_mod memmove_asm)
+           (rec_to_asm memmove_asm_dom {["memmove"]} main_f2i ∅ (rec_mod memmove_prog)).
 Proof.
   unfold memmove_asm_dom; unlock.
   apply: compile_correct; [|done|..]; compute_done.
 Qed.
 
 Lemma memcpy_asm_refines_rec :
-  trefines (MS asm_module (initial_asm_state memcpy_asm))
-           (MS (rec_to_asm memcpy_asm_dom {["memcpy"]} main_f2i rec_module)
-               (initial_rec_to_asm_state ∅ rec_module (initial_rec_state memcpy_prog))).
+  trefines (asm_mod memcpy_asm)
+           (rec_to_asm memcpy_asm_dom {["memcpy"]} main_f2i ∅ (rec_mod memcpy_prog)).
 Proof.
   unfold memcpy_asm_dom; unlock.
   apply: compile_correct; [|done|..]; compute_done.
@@ -287,10 +281,10 @@ Lemma memcpy_spec n0 d s d' s' n o K e h m σ1 σ2 b cs hvs `{!RecExprFill e K
   ((MLFLeft, cs, Rec (expr_fill K (Val (ValNum 0)))
                    (heap_update_big h (kmap (λ i, d' +ₗ i) (map_seqZ 0 hvs)))
                    (memmove_prog ∪ memcpy_prog), σ1)
-    ⪯{rec_link {["memmove"; "memcpy"]} {["locle"]} rec_module (mod_itree rec_event ()), m, n0, true}
+    ⪯{rec_link_trans {["memmove"; "memcpy"]} {["locle"]} rec_trans (itree_trans rec_event ()), m, n0, true}
   σ2) →
   (MLFLeft, cs, Rec e h (memmove_prog ∪ memcpy_prog), σ1)
-    ⪯{rec_link {["memmove"; "memcpy"]} {["locle"]} rec_module (mod_itree rec_event ()), m, n0, b}
+    ⪯{rec_link_trans {["memmove"; "memcpy"]} {["locle"]} rec_trans (itree_trans rec_event ()), m, n0, b}
   σ2.
 Proof.
   elim/ti_lt_ind: n0 b d d' s s' n h hvs e K RecExprFill0 => n1 IH b d d' s s' n h hvs e K [->] ? Ho ?? Hle Hhvs Halive Hcont. subst.
@@ -386,10 +380,9 @@ Definition memmove_itree : itree (moduleE rec_event unit) unit :=
     Ret ()).
 
 Lemma memmove_refines_itree :
-  trefines (MS (rec_link {["memmove"; "memcpy"]} {["locle"]} rec_module (mod_itree _ _))
-              (initial_rec_link_state rec_module (mod_itree _ _)
-              (initial_rec_state (memmove_prog ∪ memcpy_prog)) (locle_itree, tt)))
-           (MS (mod_itree _ _) (memmove_itree, tt)).
+  trefines (rec_link {["memmove"; "memcpy"]} {["locle"]} (rec_mod (memmove_prog ∪ memcpy_prog))
+              (itree_mod locle_itree tt))
+           (itree_mod memmove_itree tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember. { simpl. exact (λ _ '(σi, cs, Rec e h fns, (ti, _)) '(t, _),
@@ -469,10 +462,9 @@ Definition main_itree : itree (moduleE rec_event unit) unit :=
   TUb.
 
 Lemma main_refines_itree :
-  trefines (MS (rec_link {["main"]} {["memmove"; "memcpy"; "locle"]} rec_module (mod_itree _ _))
-              (initial_rec_link_state rec_module (mod_itree _ _)
-              (initial_rec_state main_prog) (memmove_itree, tt)))
-           (MS (mod_itree _ _) (main_itree, tt)).
+  trefines (rec_link {["main"]} {["memmove"; "memcpy"; "locle"]}
+              (rec_mod main_prog) (itree_mod memmove_itree tt))
+           (itree_mod main_itree tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   tstep_i => *. case_match; destruct!/=.
@@ -609,15 +601,12 @@ Definition top_level_itree : itree (moduleE asm_event unit) unit :=
   TUb.
 
 Lemma top_level_refines_itree :
-  trefines (MS (asm_link (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm)
-                         (dom print_asm)
-                         (rec_to_asm (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm)
-                                     {["main"; "memmove"; "memcpy"; "locle"]}
-                                     main_f2i
-                                     (mod_itree _ _)) (mod_itree _ _))
-              (initial_asm_link_state (rec_to_asm _ _ _ _) (mod_itree _ _)
-                 (initial_rec_to_asm_state ∅ (mod_itree _ _) (main_itree, tt)) (print_itree, tt)))
-           (MS (mod_itree _ _) (top_level_itree, tt)).
+  trefines (asm_link (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm)
+              (dom print_asm)
+              (rec_to_asm (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm)
+                 {["main"; "memmove"; "memcpy"; "locle"]}
+                 main_f2i ∅ (itree_mod main_itree tt)) (itree_mod print_itree tt))
+           (itree_mod top_level_itree tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   tstep_i => *. case_match; destruct!/=.
@@ -741,8 +730,8 @@ Qed.
 (** * Overall refinement *)
 
 Lemma complete_refinement :
-  trefines (MS asm_module (initial_asm_state (main_asm ∪ memmove_asm ∪ memcpy_asm ∪ locle_asm ∪ print_asm)))
-           (MS (mod_itree _ _) (top_level_itree, tt)).
+  trefines (asm_mod (main_asm ∪ memmove_asm ∪ memcpy_asm ∪ locle_asm ∪ print_asm))
+           (itree_mod top_level_itree tt).
 Proof.
   etrans. {
     have -> : (main_asm ∪ memmove_asm ∪ memcpy_asm ∪ locle_asm ∪ print_asm) =
@@ -777,28 +766,29 @@ Proof.
       apply: asm_link_trefines; [done|].
       apply: asm_link_trefines; [|done].
       rewrite /memmove_asm_dom /memcpy_asm_dom. unlock.
-      apply: rec_to_asm_combine; compute_done.
+      apply rec_to_asm_combine; [apply _|apply _|..]; compute_done.
     }
     rewrite idemp.
     etrans. {
       apply: asm_link_trefines; [|done].
       apply: asm_link_trefines; [done|].
-      apply: rec_to_asm_combine; compute_done.
+      rewrite idemp -dom_union_L.
+      apply rec_to_asm_combine; [apply _|apply _|..]; compute_done.
     }
     rewrite idemp -dom_union_L.
     etrans. {
       apply: asm_link_trefines; [|done].
       rewrite /main_asm_dom. unlock.
-      apply: rec_to_asm_combine; compute_done.
+      apply rec_to_asm_combine; [apply _|apply _|..]; compute_done.
     }
     done.
   }
   etrans. {
     etrans. {
       apply: asm_link_trefines; [|done].
-      apply: rec_to_asm_trefines.
-      apply: rec_link_trefines; [done|].
-      apply: rec_link_trefines; [|done].
+      apply rec_to_asm_trefines; [apply _|].
+      apply rec_link_trefines; [apply _|apply _|done|].
+      apply rec_link_trefines; [apply _|apply _| |done].
       have -> : {["memmove"]} = dom memmove_prog by compute_done.
       have -> : {["memcpy"]} = dom memcpy_prog by compute_done.
       apply: rec_link_refines_syn_link.
@@ -806,15 +796,15 @@ Proof.
     }
     etrans. {
       apply: asm_link_trefines; [|done].
-      apply: rec_to_asm_trefines.
-      apply: rec_link_trefines; [done|].
+      apply rec_to_asm_trefines; [apply _|].
+      apply rec_link_trefines; [apply _|apply _|done|].
       apply memmove_refines_itree.
     }
     done.
   }
   etrans. {
     apply: asm_link_trefines; [|done].
-    apply: rec_to_asm_trefines.
+    apply rec_to_asm_trefines; [apply _|].
     apply main_refines_itree.
   }
   etrans. {
@@ -822,7 +812,7 @@ Proof.
     rewrite /main_asm_dom/memmove_asm_dom/memcpy_asm_dom/locle_fns. unlock.
     rewrite -4!dom_union_L 5!assoc_L idemp_L.
     have -> : (main_f2i ∪ locle_f2i) = main_f2i by compute_done.
-    assert ((∅ ∪ (∅ ∪ ∅)) = ∅) as ->. by rewrite !left_id_L.
+    assert ((∅ ∪ ∅) = ∅) as ->. by rewrite !left_id_L.
     done.
   }
   done.

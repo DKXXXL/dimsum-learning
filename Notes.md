@@ -3,9 +3,8 @@
 Cleanup:
 - [ ] make combinators define mod_state instead of initial state
   - [ ] Rename mod_state? Rename module?
-- [ ] rename imp to rec
-- [ ] update README
 - [ ] Use notation for trefines?
+- [ ] update README
 
 Optional:
 - [ ] Update itree? (leads to universe problem)
@@ -41,6 +40,7 @@ Optional:
     mod_prepost to rule out non-sensical events from the env?
 
 Done:
+- [X] rename imp to rec
 - [X] green-threading example
 - [X] new example from key idea section
 - [X] clean up mem2reg and integrate it into the compiler
