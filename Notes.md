@@ -1,12 +1,7 @@
 # TODOs
 
-Cleanup:
-- [ ] make combinators define mod_state instead of initial state
-  - [ ] Rename mod_state? Rename module?
-- [ ] Use notation for trefines?
-- [ ] update README
-
 Optional:
+- [ ] Use notation for trefines?
 - [ ] Update itree? (leads to universe problem)
 - [ ] Add ghost state for f2i and add values of f2i to initial ownership (one persistent map)
 - [ ] Add fnptrs to imp (should be easy when one has ghost state for f2i)
