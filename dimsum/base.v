@@ -440,6 +440,7 @@ Section map.
   Context `{FinMap K M}.
   Context {A : Type} .
   Implicit Types m : M A.
+(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/395 *)
 Lemma lookup_union_l' (m1 m2 : M A) i :
   m2 !! i = None → (m1 ∪ m2) !! i = m1 !! i.
 Proof. intros Hi. rewrite lookup_union Hi. by destruct (m1 !! i). Qed.
@@ -715,14 +716,22 @@ Lemma snoc_inv {A} (l : list A):
   l = [] ∨ ∃ x l', l = l' ++ [x].
 Proof. destruct l as [|x l'] using rev_ind; eauto. Qed.
 
-(* TODO: upstream *)
+(* TODO: https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/397 *)
 Lemma omap_app {A B} l1 l2 (f : A → option B) :
   omap f (l1 ++ l2) = omap f l1 ++ omap f l2.
 Proof. elim: l1 => //; csimpl => ?? ->. by case_match. Qed.
-(* TODO: upstream *)
+(* TODO: https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/397 *)
 Lemma omap_option_list {A B} (f : A → option B) o :
   omap f (option_list o) = option_list (o ≫= f).
 Proof. by destruct o. Qed.
+
+(* TODO: https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/397 *)
+Lemma list_fmap_delete {X Y: Type} i (f: X → Y) (L: list X):
+  f <$> (delete i L) = delete i (f <$> L).
+Proof.
+  induction L in i |-*; destruct i; simpl; eauto.
+  by erewrite IHL.
+Qed.
 
 Lemma list_elem_of_weaken {A} (xs ys : list A) x:
   x ∈ xs → xs ⊆ ys → x ∈ ys.
@@ -798,13 +807,6 @@ Section fmap.
   Qed.
 End fmap.
 
-Lemma list_fmap_delete {X Y: Type} i (f: X → Y) (L: list X):
-  f <$> (delete i L) = delete i (f <$> L).
-Proof.
-  induction L in i |-*; destruct i; simpl; eauto.
-  by erewrite IHL.
-Qed.
-
 Lemma NoDup_delete {X} p (L: list X):
   NoDup L →
   NoDup (delete p L).
@@ -821,6 +823,7 @@ Qed.
 
 Section imap.
   Context {A B : Type} (f : nat → A → B).
+(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/396 *)
   Lemma list_lookup_imap_Some l i x : imap f l !! i = Some x ↔ ∃ y, l !! i = Some y ∧ x = f i y.
   Proof. rewrite list_lookup_imap fmap_Some. done. Qed.
 End imap.
