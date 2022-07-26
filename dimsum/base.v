@@ -285,7 +285,7 @@ End theorems.
 
 (** * Lemmas about maps *)
 (** ** [map_seqZ] *)
-(* TODO: upstream *)
+(* TODO: https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/391 *)
 Fixpoint map_seqZ `{Insert Z A M, Empty M} (start : Z) (xs : list A) : M :=
   match xs with
   | [] => ∅
@@ -367,7 +367,7 @@ Section map_seqZ.
 End map_seqZ.
 
 (** ** [map_Exists] *)
-(* TODO: upstream *)
+(* TODO: https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/390 *)
 Definition map_Exists `{Lookup K A M} (P : K → A → Prop) : M → Prop :=
   λ m, ∃ i x, m !! i = Some x ∧ P i x.
 
@@ -444,6 +444,7 @@ Lemma lookup_union_l' (m1 m2 : M A) i :
   m2 !! i = None → (m1 ∪ m2) !! i = m1 !! i.
 Proof. intros Hi. rewrite lookup_union Hi. by destruct (m1 !! i). Qed.
 
+(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/394 *)
 Lemma lookup_union_None_1 (m1 m2 : M A) i :
   (m1 ∪ m2) !! i = None → m1 !! i = None ∧ m2 !! i = None.
 Proof. apply lookup_union_None. Qed.
@@ -454,6 +455,7 @@ End map.
 
 Section fin_map_dom.
 Context `{FinMapDom K M D}.
+(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/394 *)
 Lemma not_elem_of_dom_1 {A} (m : M A) i : i ∉ dom m → m !! i = None.
 Proof. apply not_elem_of_dom. Qed.
 End fin_map_dom.
@@ -466,6 +468,7 @@ Section map_filter.
     (∀ x, m !! i = Some x → P (i, x)) → filter P m !! i = m !! i.
   Proof. move => ?. rewrite map_filter_lookup. destruct (m !! i) => //=. case_option_guard; naive_solver. Qed.
 
+(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/394 *)
   Lemma map_filter_empty_iff_2 m :
     map_Forall (λ i x, ¬P (i,x)) m →
     filter P m = ∅.
@@ -603,7 +606,7 @@ Proof.
   setoid_rewrite lookup_difference_Some. naive_solver.
 Qed.
 
-(* TODO: have map_agree as a notion in stdpp, with the same properties as map_disjoint. *)
+(* TODO: use map_agree after https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/392 is merged *)
 Lemma map_difference_difference_subseteq {A} (m1 m2 : M A) :
   (∀ i x1 x2, m1 !! i = Some x1 → m2 !! i = Some x2 → x1 = x2) →
   m1 ∖ (m1 ∖ m2) ⊆ m2.
@@ -686,9 +689,6 @@ Section semi_set.
   Implicit Types x y : A.
   Implicit Types X Y : C.
   Implicit Types Xs Ys : list C.
-
-  Lemma elem_of_subseteq_1 X Y x: X ⊆ Y → x ∈ X → x ∈ Y.
-  Proof. set_solver. Qed.
 
   Lemma not_elem_of_disjoint x X Y:
     x ∈ X →
