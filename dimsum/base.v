@@ -11,6 +11,7 @@ Local Set Default Proof Using "Type*".
 
 (** * Tactics *)
 (** Inspired by inv in CompCert/Coqlib.v *)
+(* TODO: upstream? See https://gitlab.mpi-sws.org/iris/stdpp/-/issues/40 *)
 Ltac inv H := inversion H; clear H; simplify_eq.
 Tactic Notation "inv/=" ident(H) := inversion H; clear H; simplify_eq/=.
 
@@ -32,12 +33,14 @@ Tactic Notation "inv_all/=" constr(f) := inv_all_tac f; simplify_eq/=.
 Tactic Notation "inv_all" constr(f) := inv_all_tac f.
 
 (** "as" variant of case_match  *)
+(* TODO: upstream *)
 Tactic Notation "case_match" "as" ident(Hd) :=
   match goal with
   | H : context [ match ?x with _ => _ end ] |- _ => destruct x eqn:Hd
   | |- context [ match ?x with _ => _ end ] => destruct x eqn:Hd
   end.
 
+(* TODO: make version for case_decide and case_match and upstream  *)
 (** [case_bool_decide] variant that takes a pattern  *)
 Tactic Notation "case_bool_decide" open_constr(pat) "as" ident(Hd) :=
   match goal with
@@ -57,9 +60,11 @@ Tactic Notation "econs" integer(n) := econstructor n.
 
 (** [fast_set_solver] is a faster version of [set_solver] that does
 not call set_unfold and setoid_subst so often. *)
+(* TODO: figure out why this is necessary *)
 Ltac fast_set_solver := set_unfold; naive_solver.
 
 (** exploit from CompCert/Coqlib.v *)
+(* TODO: report bugs for efeed pose proof and efeed destruct. *)
 Lemma tac_exploit: forall (P Q: Prop), P -> (P -> Q) -> Q.
 Proof. naive_solver. Qed.
 
@@ -312,6 +317,7 @@ End theorems.
 
 (** * Lemmas about maps *)
 (** ** [map_seqZ] *)
+(* TODO: upstream *)
 Fixpoint map_seqZ `{Insert Z A M, Empty M} (start : Z) (xs : list A) : M :=
   match xs with
   | [] => ∅
@@ -393,6 +399,7 @@ Section map_seqZ.
 End map_seqZ.
 
 (** ** [map_Exists] *)
+(* TODO: upstream *)
 Definition map_Exists `{Lookup K A M} (P : K → A → Prop) : M → Prop :=
   λ m, ∃ i x, m !! i = Some x ∧ P i x.
 
@@ -611,8 +618,9 @@ Proof.
   by apply: map_disjoint_Some_l.
 Qed.
 
+(* TODO: upstream *)
 Lemma map_difference_fmap {A B} (m1 m2 : M A) (f : A → B) :
-  f <$> m1 ∖ m2 = (f <$> m1) ∖ (f <$> m2).
+  f <$> (m1 ∖ m2) = (f <$> m1) ∖ (f <$> m2).
 Proof.
   apply map_eq => ?. apply option_eq => ?.
   rewrite lookup_fmap fmap_Some. setoid_rewrite lookup_difference_Some.
@@ -627,6 +635,7 @@ Proof.
   setoid_rewrite lookup_difference_Some. naive_solver.
 Qed.
 
+(* TODO: have map_agree as a notion in stdpp, with the same properties as map_disjoint. *)
 Lemma map_difference_difference_subseteq {A} (m1 m2 : M A) :
   (∀ i x1 x2, m1 !! i = Some x1 → m2 !! i = Some x2 → x1 = x2) →
   m1 ∖ (m1 ∖ m2) ⊆ m2.
@@ -719,6 +728,7 @@ Section semi_set.
     x ∉ Y.
   Proof. set_solver. Qed.
 
+  (* TODO: upstream, figure out naming scheme *)
   Lemma disjoint_mono X Y X' Y' :
     X' ## Y' →
     X ⊆ X' →
@@ -735,17 +745,13 @@ End semi_set.
 (** * Lemmas about lists *)
 Lemma snoc_inv {A} (l : list A):
   l = [] ∨ ∃ x l', l = l' ++ [x].
-Proof.
-  destruct l as [|x l']. by left. right.
-  elim: l' x => //. move => x. by eexists _, [].
-  move => x ? IH x'. move: (IH x) => [x'' [l'' ->]].
-  eexists x'', _. by apply: app_comm_cons.
-Qed.
+Proof. destruct l as [|x l'] using rev_ind; eauto. Qed.
 
+(* TODO: upstream *)
 Lemma omap_app {A B} l1 l2 (f : A → option B) :
   omap f (l1 ++ l2) = omap f l1 ++ omap f l2.
 Proof. elim: l1 => //; csimpl => ?? ->. by case_match. Qed.
-
+(* TODO: upstream *)
 Lemma omap_option_list {A B} (f : A → option B) o :
   omap f (option_list o) = option_list (o ≫= f).
 Proof. by destruct o. Qed.
@@ -758,6 +764,7 @@ Lemma list_subseteq_cons_l {A} x (xs ys : list A):
   x ∈ ys → xs ⊆ ys → x :: xs ⊆ ys.
 Proof. set_solver. Qed.
 
+(* TODO: upstream *)
 Global Program Instance list_subseteq_dec {A} `{!EqDecision A} : RelDecision (⊆@{list A}) :=
   λ xs ys, cast_if (decide (Forall (λ x, x ∈ ys) xs)).
 Next Obligation. move => ???? /Forall_forall; set_solver. Qed.
@@ -1257,6 +1264,7 @@ Context {PROP : bi}.
 Implicit Types P Q : PROP.
 Implicit Types Ps Qs : list PROP.
 Implicit Types A : Type.
+(* TODO: upstream, but also add all versions (i.e. where one pullsout equality) *)
 Lemma big_sepL_zip_with_same_length {A B C} (Φ : nat → A → PROP) f (l1 : list B) (l2 : list C) :
   length l1 = length l2 →
   ([∗ list] k↦x ∈ zip_with f l1 l2, Φ k x) ⊣⊢
@@ -1264,9 +1272,8 @@ Lemma big_sepL_zip_with_same_length {A B C} (Φ : nat → A → PROP) f (l1 : li
 Proof.
   intros Hlen.
   rewrite big_sepL2_alt.
-  rewrite zip_with_zip big_sepL_fmap.
-  iSplit. 1: iIntros "?"; iSplit; [done|]. 2: iIntros "[_ ?]".
-  all: iApply (big_sepL_impl with "[$]"); iIntros "!>" (? [??] ?) "$".
+  rewrite zip_with_zip big_sepL_fmap bi.pure_True // left_id.
+  by f_equiv => ? [??].
 Qed.
 End big_op.
 
