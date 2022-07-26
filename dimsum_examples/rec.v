@@ -274,7 +274,7 @@ Lemma expr_fill_item_no_val_inj Ki1 Ki2 e1 e2 :
   expr_fill_item Ki1 e1 = expr_fill_item Ki2 e2 → Ki1 = Ki2.
 Proof.
   destruct Ki1, Ki2 => //= *; simplify_eq => //.
-  efeed pose proof list_expr_val_eq_inv; [| |done|]; naive_solver.
+  exploit list_expr_val_eq_inv; [| |done|]; naive_solver.
 Qed.
 
 Definition expr_fill (K : list expr_ectx) (e : expr) : expr :=
@@ -578,7 +578,7 @@ Lemma heap_alloc_list_fresh xs ps h:
   ∃ h', heap_alloc_list xs (heap_fresh_list xs ps h) h h'.
 Proof.
   elim: xs ps h. { case; naive_solver. }
-  move => a ? IH //= ps h. efeed pose proof IH as Hx. destruct Hx.
+  move => a ? IH //= ps h. exploit IH => -[??].
   split!; [|done]. by apply heap_fresh_is_fresh.
 Qed.
 
@@ -1516,8 +1516,8 @@ Proof.
   { move => /= ?? [???] [???] *. destruct!. split!; [done..|].
     move => ??. apply: tsim_mono; [naive_solver|]. by apply ti_lt_impl_le. }
   move => n2 ? IH2 [???] [???] ?. destruct!.
-  efeed pose proof Hc as Hp; [done|]. move: Hp => [?[?[? Hp]]]. simplify_eq.
-  eapply Hp; [lia|..].
+  exploit Hc; [done|]. move => [?[?[?]]]. simplify_eq.
+  apply; [lia|..].
   - move => n' f' ?? ?? es1 es2 vs1' vs2' ??? [?][?] ? Hall1 Hall2 ???.
     have ?: es1 = Val <$> vs1'. { clear -Hall1. elim: Hall1; naive_solver. } subst.
     have ?: es2 = Val <$> vs2'. { clear -Hall2. elim: Hall2; naive_solver. } subst.

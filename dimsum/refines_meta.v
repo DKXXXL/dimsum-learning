@@ -122,9 +122,9 @@ Proof.
       apply: STraceStep; [done| |].
       * move => ??. apply: IH; [done| ].
         destruct κ => //; simplify_eq/=. 2: by apply: thas_trace_rel_mono_r.
-        efeed pose proof @thas_trace_rel_tcons as H; [done..|]. naive_solver.
+        exploit @thas_trace_rel_tcons; [done..|]. naive_solver.
       * split; [done|]. destruct κ => //; simplify_eq/=.
-        efeed pose proof @thas_trace_rel_tcons as H; [done..|]. naive_solver.
+        exploit @thas_trace_rel_tcons; [done..|]. naive_solver.
     + move => ?????? IH Hall ??.
       have := thas_trace_rel_tall _ _ _ _ ltac:(done) ltac:(done).
       naive_solver.

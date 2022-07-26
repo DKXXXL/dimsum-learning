@@ -716,7 +716,7 @@ Proof.
   right.
   rewrite fresh_map_lookup_None not_elem_of_difference elem_of_hb_shared_s.
   destruct (hb_bij bijb !! ps) eqn:? => /=; [|naive_solver].
-  efeed pose proof heap_bij_merge_extend_env; [done..|]; simplify_eq. naive_solver.
+  exploit heap_bij_merge_extend_env; [done..|]; simplify_eq. naive_solver.
 Qed.
 
 Lemma heap_bij_splitb_bij_bij X bijb bija bij' ps pi:
@@ -1038,8 +1038,7 @@ Proof.
         split. { apply Hh. rewrite heap_bij_merge_shared. naive_solver. }
         move => ???/heap_through_bij_Some[ps'[?[?[??]]]]. simplify_bij.
         move: (Hh pii ps' o) => [|_ Hv]. { rewrite heap_bij_merge_shared. naive_solver. }
-        efeed pose proof Hv as Hv'; [done..|].
-        move: Hv'. rewrite val_in_bij_merge => -[?[Hv1 Hv2]].
+        exploit Hv; [done..|]. rewrite val_in_bij_merge => -[?[Hv1 Hv2]].
         unfold val_in_bij in Hv1, Hv2. repeat case_match => //; destruct!; simplify_option_eq => //.
         split; [done|]. congruence.
       * destruct (h_heap (heap_through_bij bijb' h') !! (pi, o)) as [|] eqn: Hht => /=.
@@ -1078,8 +1077,7 @@ Proof.
         eapply val_through_in_bij => ??.
         move: (Hh pi0 ps0 o) => [|]. { rewrite heap_bij_merge_shared. naive_solver. }
         simplify_option_eq. revert select (h_heap h' !! _ = Some _) => ->. move => [_ [//|v' ?]] Hv.
-        efeed pose proof Hv as Hv'; [done..|]. destruct v' => //; simplify_eq/=.
-        move: Hv'. rewrite heap_bij_merge_shared. naive_solver.
+        exploit Hv; [done..|]. destruct v' => //; simplify_eq/=. rewrite heap_bij_merge_shared. naive_solver.
       * rewrite lookup_union.
         rewrite map_filter_lookup_None_2. 2: { right. move => *. rewrite elem_of_hb_shared_s. naive_solver. }
         rewrite map_filter_lookup_true. 2: { move => *. rewrite elem_of_hb_shared_s. naive_solver. }

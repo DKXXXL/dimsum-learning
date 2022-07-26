@@ -183,10 +183,8 @@ Proof.
     setoid_rewrite lookup_take_Some.
     setoid_rewrite coro_get_regs_lookup_Some.
     split => ?; destruct!; split!; try lia; rewrite lookup_total_insert_ne // => ?; subst.
-    have /NoDup_alt Hx : NoDup coro_saved_regs by compute_done.
-    efeed pose proof Hx; [exact: Hk| done| ]. lia.
-    have /NoDup_alt Hx : NoDup coro_saved_regs by compute_done.
-    efeed pose proof Hx; [exact: Hk| done| ]. lia.
+    all: have /NoDup_alt Hx : NoDup coro_saved_regs by compute_done.
+    all: exploit Hx; [exact: Hk| done| ]; lia.
 Qed.
 
 Lemma coro_regs_mem_n_rs_eq rs1 rs2 n :
@@ -582,7 +580,7 @@ Proof.
   tstep_s. move => -[] //= ? h ssz vs avs f *.
   tstep_s. split!.
   tstep_s => ?.
-  have ? : regs !!! "PC" ∈ ins1. { efeed pose proof Hi1; [done|]. destruct!. naive_solver. }
+  have ? : regs !!! "PC" ∈ ins1. { exploit Hi1; [done|]. naive_solver. }
   rewrite bool_decide_false; [|fast_set_solver].
   rewrite bool_decide_true; [|fast_set_solver].
   tstep_i => *. case_match; destruct!/=.
@@ -757,9 +755,9 @@ Proof.
       tstep_i => ? rs *. destruct!.
       have ?: rs !!! "PC" ∉ ins. {
         set_unfold => -[[?|?]|?].
-        - efeed pose proof Hfy; [apply lookup_union_Some_raw; naive_solver|done|done].
-        - efeed pose proof Hf2; [apply lookup_union_Some_raw; naive_solver|done|done].
-        - efeed pose proof Hf1; [apply lookup_union_Some_raw; naive_solver|done|done].
+        - exploit Hfy; [apply lookup_union_Some_raw; naive_solver|done|done].
+        - exploit Hf2; [apply lookup_union_Some_raw; naive_solver|done|done].
+        - exploit Hf1; [apply lookup_union_Some_raw; naive_solver|done|done].
       }
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.
@@ -901,9 +899,9 @@ Proof.
       }
       have ?: rs !!! "PC" ∉ ins. {
         set_unfold => -[[?|?]|?].
-        - efeed pose proof Hfy; [done|done|done].
-        - efeed pose proof Hf2; [done|done|done].
-        - efeed pose proof Hf1; [done|done|done].
+        - exploit Hfy; [done|done|done].
+        - exploit Hf2; [done|done|done].
+        - exploit Hf1; [done|done|done].
       }
       rewrite bool_decide_false. 2: fast_set_solver.
       rewrite bool_decide_false. 2: fast_set_solver.

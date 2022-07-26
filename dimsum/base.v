@@ -64,46 +64,14 @@ not call set_unfold and setoid_subst so often. *)
 Ltac fast_set_solver := set_unfold; naive_solver.
 
 (** exploit from CompCert/Coqlib.v *)
-(* TODO: report bugs for efeed pose proof and efeed destruct. *)
-Lemma tac_exploit: forall (P Q: Prop), P -> (P -> Q) -> Q.
-Proof. naive_solver. Qed.
+(* TODO: https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/389 *)
+Tactic Notation "feed" "revert" constr(H) :=
+  feed (fun p => let H':=fresh in pose proof p as H'; revert H') H.
+Tactic Notation "efeed" "revert" constr(H) :=
+  efeed H using (fun p => let H':=fresh in pose proof p as H'; revert H').
 
-Ltac exploit x :=
-    refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _ _) _)
- || refine (tac_exploit _ _ (x _ _ _) _)
- || refine (tac_exploit _ _ (x _ _) _)
- || refine (tac_exploit _ _ (x _) _).
+(* TODO: Is this a good idea? *)
+Ltac exploit x := efeed revert x.
 
 (** [specialize_hyps] looks for hypothesis of the form [∀ x, P x → ...] and
  tries to find a unique solution for x. *)
