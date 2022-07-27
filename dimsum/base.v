@@ -749,7 +749,8 @@ Lemma elem_of_drop {A} x n (xs : list A):
   x ∈ drop n xs → x ∈ xs.
 Proof.  move => /elem_of_list_lookup. setoid_rewrite lookup_drop => -[??]. apply elem_of_list_lookup. naive_solver. Qed.
 
-Lemma mjoin_length {A} (xs : list (list A)):
+(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/401 *)
+Lemma join_length {A} (xs : list (list A)):
   length (mjoin xs) = sum_list (length <$> xs).
 Proof. elim: xs => // ???; csimpl. rewrite app_length. lia. Qed.
 
@@ -804,6 +805,7 @@ Section fmap.
   Qed.
 End fmap.
 
+(* TODO: upstream *)
 Lemma NoDup_delete {X} p (L: list X):
   NoDup L →
   NoDup (delete p L).

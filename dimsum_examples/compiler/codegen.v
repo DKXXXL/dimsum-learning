@@ -1500,7 +1500,7 @@ Proof.
     + rewrite app_length fmap_length app_length fmap_length.
       have ->: length (mjoin (zip_with (λ a n, seqZ a n) las (lfd_vars fn).*2)) =
                sum_list_with Z.to_nat (lfd_vars fn).*2;[ |lia].
-      rewrite mjoin_length (sum_list_with_sum_list (Z.to_nat)). f_equal.
+      rewrite join_length (sum_list_with_sum_list (Z.to_nat)). f_equal.
       apply list_eq => {}i. apply option_eq => ?.
       rewrite 2!list_lookup_fmap !fmap_Some.
       setoid_rewrite lookup_zip_with_Some.
