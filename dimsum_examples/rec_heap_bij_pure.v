@@ -245,7 +245,7 @@ Proof.
   - right. revert select (_ ∈ _). rewrite elem_of_hb_shared_i => -[??]. eexists _.
     split; [done|]. split; [done|].
     move => ?. revert select (map_Forall _ _). apply; [|done]. by rewrite hb_shared_lookup_Some.
-  - right. split_and!. { by apply: hb_disj. } { done. }
+  - right. split_and!. { by apply: hb_disj. } 3: { done. }
     + move => ??. rewrite hb_shared_lookup_Some => ? [??]. simplify_bij. naive_solver.
     + rewrite elem_of_hb_shared_i. naive_solver.
 Qed.

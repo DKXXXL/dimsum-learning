@@ -479,10 +479,12 @@ End map_filter.
 Section theorems.
 Context `{FinMap K M}.
 
+(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/399 *)
 Lemma lookup_total_partial_alter {A} `{Inhabited A} (f : option A → option A) (m : M A) i:
   partial_alter f i m !!! i = default inhabitant (f (m !! i)).
 Proof. by rewrite lookup_total_alt lookup_partial_alter. Qed.
 
+(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/399 *)
 Lemma lookup_partial_alter_Some {A} (f : option A → option A) (m : M A) i j x :
   partial_alter f i m !! j = Some x ↔ (i = j ∧ f (m !! i) = Some x) ∨ (i ≠ j ∧ m !! j = Some x).
 Proof.
@@ -491,14 +493,17 @@ Proof.
   - rewrite lookup_partial_alter_ne; naive_solver.
 Qed.
 
+(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/399 *)
 Lemma delete_alter {A} (m : M A) i f :
   delete i (alter f i m) = delete i m.
 Proof. by setoid_rewrite <-partial_alter_compose. Qed.
 
+(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/399 *)
 Lemma alter_insert {A} (m : M A) i f x :
   alter f i (<[i := x]> m) = <[i := f x]> m.
 Proof. by setoid_rewrite <-partial_alter_compose. Qed.
 
+(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/399 *)
 Lemma alter_insert_ne {A} (m : M A) i j f x :
   i ≠ j →
   alter f i (<[j := x]> m) = <[j := x]> (alter f i m).
@@ -517,14 +522,6 @@ Proof.
   by eapply lookup_empty.
 Qed.
 End curry_uncurry.
-
-Lemma lookup_gset_to_gmap_Some {K A} `{Countable K} (X : gset K) (x y: A) i:
-  gset_to_gmap x X !! i = Some y ↔ x = y ∧ i ∈ X.
-Proof. rewrite lookup_gset_to_gmap. case_option_guard; naive_solver. Qed.
-
-Lemma lookup_gset_to_gmap_None {K A} `{Countable K} (X : gset K) (x: A) i:
-  gset_to_gmap x X !! i = None ↔ i ∉ X.
-Proof. rewrite lookup_gset_to_gmap. case_option_guard; naive_solver. Qed.
 
 (** ** Lemmas about map_difference *)
 Section theorems.
@@ -741,7 +738,7 @@ Lemma list_subseteq_cons_l {A} x (xs ys : list A):
   x ∈ ys → xs ⊆ ys → x :: xs ⊆ ys.
 Proof. set_solver. Qed.
 
-(* TODO: upstream *)
+(* TODO: https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/400 *)
 Global Program Instance list_subseteq_dec {A} `{!EqDecision A} : RelDecision (⊆@{list A}) :=
   λ xs ys, cast_if (decide (Forall (λ x, x ∈ ys) xs)).
 Next Obligation. move => ???? /Forall_forall; set_solver. Qed.
