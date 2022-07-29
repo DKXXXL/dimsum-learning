@@ -121,8 +121,8 @@ Section link.
     state_transform_trans (map_trans (seq_product_trans m1 m2) (link_filter R))
       (λ σ σ', σ' = link_state_trans R m1 m2 σ).
 
-  Global Instance link_vis_no_all R (m1 m2 : mod_trans _) `{!VisNoAll m1} `{!VisNoAll m2}:
-    VisNoAll (link_trans R m1 m2).
+  Global Instance link_vis_no_all R (m1 m2 : mod_trans _) `{!VisNoAng m1} `{!VisNoAng m2}:
+    VisNoAng (link_trans R m1 m2).
   Proof.
     apply: mod_state_transform_vis_no_all.
     move => ??? [[[sp σ1]σ2][[σ s] ok]] ??.
@@ -135,7 +135,7 @@ Section link.
   Definition link_mod R (m1 m2 : module (io_event EV)) (σ : S) : module (io_event EV) :=
     Mod (link_trans R m1.(m_trans) m2.(m_trans)) (MLFNone, σ, m1.(m_init), m2.(m_init)).
 
-  Lemma link_mod_trefines R m1 m2 m1' m2' σ `{!VisNoAll m1.(m_trans)} `{!VisNoAll m2.(m_trans)}:
+  Lemma link_mod_trefines R m1 m2 m1' m2' σ `{!VisNoAng m1.(m_trans)} `{!VisNoAng m2.(m_trans)}:
     trefines m1 m1' →
     trefines m2 m2' →
     trefines (link_mod R m1 m2 σ) (link_mod R m1' m2' σ).

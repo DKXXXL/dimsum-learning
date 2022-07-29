@@ -49,7 +49,7 @@ Inductive itree_step EV S : (itree (moduleE EV S) unit * S) → option EV → ((
 
 Definition itree_trans EV S := ModTrans (itree_step EV S).
 
-Global Instance itree_vis_no_all EV S: VisNoAll (itree_trans EV S).
+Global Instance itree_vis_no_all EV S: VisNoAng (itree_trans EV S).
 Proof. move => *. inv_all @m_step; naive_solver. Qed.
 
 Definition itree_mod {EV S} (t : itree (moduleE EV S) unit) (s : S) :=

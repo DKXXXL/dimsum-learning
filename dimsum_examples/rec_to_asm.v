@@ -1185,7 +1185,7 @@ Definition rec_to_asm (ins : gset Z) (fns : gset string) (f2i : gmap string Z) (
   Mod (rec_to_asm_trans ins fns f2i m.(m_trans))
       (SMFilter, m.(m_init), (PPOutside, R2A [] ∅, (r2a_mem_map mo)%I)).
 
-Lemma rec_to_asm_trefines mo m m' ins fns f2i `{!VisNoAll m.(m_trans)}:
+Lemma rec_to_asm_trefines mo m m' ins fns f2i `{!VisNoAng m.(m_trans)}:
   trefines m m' →
   trefines (rec_to_asm ins fns f2i mo m) (rec_to_asm ins fns f2i mo m').
 Proof. move => ?. by apply: prepost_mod_trefines. Qed.
@@ -1240,7 +1240,7 @@ Local Ltac r2a_split_go :=
   end.
 Local Tactic Notation "r2a_split!" := split_tac ltac:(r2a_split_go).
 
-Lemma rec_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 mo1 mo2 m1 m2 `{!VisNoAll m1.(m_trans)} `{!VisNoAll m2.(m_trans)}:
+Lemma rec_to_asm_combine ins1 ins2 fns1 fns2 f2i1 f2i2 mo1 mo2 m1 m2 `{!VisNoAng m1.(m_trans)} `{!VisNoAng m2.(m_trans)}:
   ins1 ## ins2 →
   fns1 ## fns2 →
   mo1 ##ₘ mo2 →

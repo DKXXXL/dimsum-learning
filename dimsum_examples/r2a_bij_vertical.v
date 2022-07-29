@@ -739,7 +739,7 @@ Qed.
 
 (** * Main vertical compositionality theorem:  *)
 
-Lemma r2a_bij_vertical m moinit `{!VisNoAll m.(m_trans)} ins fns f2i:
+Lemma r2a_bij_vertical m moinit `{!VisNoAng m.(m_trans)} ins fns f2i:
   trefines (rec_to_asm ins fns f2i moinit (rec_heap_bij m))
            (rec_to_asm ins fns f2i moinit m).
 Proof.
@@ -1074,7 +1074,7 @@ Qed.
 
 (* Print Assumptions r2a_bij_vertical. *)
 
-Lemma r2a_bij_vertical_N m moinit `{!VisNoAll m.(m_trans)} ins fns f2i n:
+Lemma r2a_bij_vertical_N m moinit `{!VisNoAng m.(m_trans)} ins fns f2i n:
   trefines (rec_to_asm ins fns f2i moinit (rec_heap_bij_N n m))
            (rec_to_asm ins fns f2i moinit m)
 .

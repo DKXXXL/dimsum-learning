@@ -983,7 +983,7 @@ Proof.
 Qed.
 
 (** ** Proof of vertical compositionality *)
-Lemma rec_heap_bij_vertical m `{!VisNoAll m.(m_trans)}:
+Lemma rec_heap_bij_vertical m `{!VisNoAng m.(m_trans)}:
   trefines (rec_heap_bij (rec_heap_bij m))
            (rec_heap_bij m).
 Proof.

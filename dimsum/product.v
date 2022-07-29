@@ -30,8 +30,8 @@ Definition product_trans {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2)
   : mod_trans (option EV1 * option EV2) :=
   ModTrans (product_step m1 m2).
 
-Global Instance product_vis_no_all {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) `{!VisNoAll m1} `{!VisNoAll m2}:
-  VisNoAll (product_trans m1 m2).
+Global Instance product_vis_no_all {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) `{!VisNoAng m1} `{!VisNoAng m2}:
+  VisNoAng (product_trans m1 m2).
 Proof.
   move => [??]???. inv_all @m_step; try case_match => //; simplify_eq.
   - have [??]:= vis_no_all _ _ _ ltac:(done). eexists (_, _) => -[??]. naive_solver.
@@ -319,7 +319,7 @@ Definition map_mod_trans {EV1 EV2 S} (f : map_mod_fn EV1 EV2 S) : mod_trans (EV1
   ModTrans (map_mod_step f).
 
 Global Instance map_mod_mod_vis_no_all {EV1 EV2 S} (f : map_mod_fn EV1 EV2 S):
-  VisNoAll (map_mod_trans f).
+  VisNoAng (map_mod_trans f).
 Proof. move => ????. inv_all @m_step; try case_match => //; simplify_eq. naive_solver. Qed.
 
 Definition map_trans {EV1 EV2 S} (m : mod_trans EV1) (f : map_mod_fn EV1 EV2 S) : mod_trans EV2 :=

@@ -35,9 +35,9 @@ Add Printing Constructor module.
 
 (* Coercion m_trans : module >-> mod_trans. *)
 
-(** [VisNoAll m] encodes that the mod_trans [m] only does trivial angelic choices
+(** [VisNoAng m] encodes that the mod_trans [m] only does trivial angelic choices
 on visible events. *)
-Class VisNoAll {EV} (m : mod_trans EV) : Prop :=
+Class VisNoAng {EV} (m : mod_trans EV) : Prop :=
   vis_no_all σ κ Pσ : m.(m_step) σ (Some κ) Pσ → ∃ σ', ∀ σ'', Pσ σ'' ↔ σ'' = σ'.
 
 (** * Auxiliary definitions *)

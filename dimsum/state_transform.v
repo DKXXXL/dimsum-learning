@@ -11,9 +11,9 @@ Inductive state_transform_step {EV S} (m : mod_trans EV) (R : S → m.(m_state) 
 Definition state_transform_trans {EV S} (m : mod_trans EV) (R : S → m.(m_state) → Prop) :=
   ModTrans (state_transform_step m R).
 
-Lemma mod_state_transform_vis_no_all {EV S} (m : mod_trans EV) (R : S → m.(m_state) → Prop) `{!VisNoAll m}:
+Lemma mod_state_transform_vis_no_all {EV S} (m : mod_trans EV) (R : S → m.(m_state) → Prop) `{!VisNoAng m}:
   (∀ σ e Pσ σ'', m_step m σ (Some e) Pσ → Pσ σ'' → ∃ σs, ∀ σs', R σs' σ'' ↔ σs = σs') →
-  VisNoAll (state_transform_trans m R).
+  VisNoAng (state_transform_trans m R).
 Proof.
   move => Hs ????. inv_all @m_step.
   have [σ'' Hσ'']:= vis_no_all _ _ _ ltac:(done).

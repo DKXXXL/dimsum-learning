@@ -514,7 +514,7 @@ Definition coro_link (fns1 fns2 : gset string) (finit : string) (m1 m2 : module 
   Mod (coro_link_trans fns1 fns2 m1.(m_trans) m2.(m_trans))
     (MLFNone, (CPFInit, (Some finit)), m1.(m_init), m2.(m_init)).
 
-Lemma coro_link_trefines m1 m1' m2 m2' fns1 fns2 finit `{!VisNoAll m1.(m_trans)} `{!VisNoAll m2.(m_trans)}:
+Lemma coro_link_trefines m1 m1' m2 m2' fns1 fns2 finit `{!VisNoAng m1.(m_trans)} `{!VisNoAng m2.(m_trans)}:
   trefines m1 m1' →
   trefines m2 m2' →
   trefines (coro_link fns1 fns2 finit m1 m2) (coro_link fns1 fns2 finit m1' m2').
@@ -522,7 +522,7 @@ Proof. move => ??. by apply link_mod_trefines. Qed.
 
 (** * Main Theorem: Yield library refines coroutine linking *)
 Theorem coro_spec finit regs_init ssz_init m1 m2 ins1 ins2 fns1 fns2 f2i1 f2i2
-  `{!VisNoAll m1.(m_trans)} `{!VisNoAll m2.(m_trans)}:
+  `{!VisNoAng m1.(m_trans)} `{!VisNoAng m2.(m_trans)}:
   let fns := {["yield"]} ∪ fns1 ∪ fns2 in
   let ins := yield_asm_dom ∪ ins1 ∪ ins2 in
   let f2i := f2i1 ∪ f2i2 in
@@ -647,7 +647,7 @@ Proof.
        | _ => False
        end). }
   { split!. { iSplit; iIntros!; iFrame. by iApply big_sepM_empty. } naive_solver. } { done. }
-  clear -Hyf Hidisj Hfdisj Hydisj Hy1 Hy2 Hi1 Hi2 Hag Hf1 Hf2 Hfy Hf1in VisNoAll0 VisNoAll1.
+  clear -Hyf Hidisj Hfdisj Hydisj Hy1 Hy2 Hi1 Hi2 Hag Hf1 Hf2 Hfy Hf1in VisNoAng0 VisNoAng1.
   have ? : yield_addr ∈ yield_asm_dom by rewrite /yield_asm_dom /yield_asm; unlock; compute_done.
   move => n ? Hloop [[[σpy1 σpy2][yt yregs]][[[σpc1 σpc2][[σsm1 σ1][[pp1 [cs1 lr1]]x1]]][[σsm2 σ2][[pp2 [cs2 lr2]]x2]]]].
   move => [[σsm' [[[σlc σc] σ1'] σ2']][[ppc [csc lrc]] xc]] [state ?]. destruct!.

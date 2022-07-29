@@ -964,7 +964,7 @@ Definition rec_heap_bij_trans (m : mod_trans rec_event) : mod_trans rec_event :=
 Definition rec_heap_bij (m : module rec_event) : module rec_event :=
   Mod (rec_heap_bij_trans m.(m_trans)) (SMFilter, m.(m_init), (PPOutside, tt, True%I)).
 
-Lemma rec_heap_bij_trefines m m' `{!VisNoAll m.(m_trans)}:
+Lemma rec_heap_bij_trefines m m' `{!VisNoAng m.(m_trans)}:
   trefines m m' →
   trefines (rec_heap_bij m) (rec_heap_bij m').
 Proof. move => ?. by apply: prepost_mod_trefines. Qed.
@@ -973,8 +973,8 @@ Proof. move => ?. by apply: prepost_mod_trefines. Qed.
 Definition rec_heap_bij_N n (M: module rec_event) : module rec_event :=
   Nat.iter n rec_heap_bij M.
 
-Global Instance rec_heap_bij_N_vis_no_all n m `{!VisNoAll m.(m_trans)} :
-  VisNoAll (rec_heap_bij_N n m).(m_trans).
+Global Instance rec_heap_bij_N_vis_no_all n m `{!VisNoAng m.(m_trans)} :
+  VisNoAng (rec_heap_bij_N n m).(m_trans).
 Proof. elim: n => //= ??. apply _. Qed.
 
 (** * Proof techniques for [rec_heap_bij] *)
@@ -1095,7 +1095,7 @@ Qed.
 
 (** * Properties of [rec_heap_bij] *)
 (** ** Horizontal compositionality *)
-Lemma rec_heap_bij_combine fns1 fns2 m1 m2 `{!VisNoAll m1.(m_trans)} `{!VisNoAll m2.(m_trans)}:
+Lemma rec_heap_bij_combine fns1 fns2 m1 m2 `{!VisNoAng m1.(m_trans)} `{!VisNoAng m2.(m_trans)}:
   trefines (rec_link fns1 fns2 (rec_heap_bij m1) (rec_heap_bij m2))
            (rec_heap_bij (rec_link fns1 fns2 m1 m2)).
 Proof.

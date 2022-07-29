@@ -105,7 +105,7 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
 Definition asm_trans := ModTrans asm_step.
 Definition asm_mod (ins : gmap Z asm_instr) := Mod asm_trans (asm_init ins).
 
-Global Instance asm_vis_no_all: VisNoAll asm_trans.
+Global Instance asm_vis_no_all: VisNoAng asm_trans.
 Proof. move => *. inv_all @m_step; naive_solver. Qed.
 
 (** * tstep *)
@@ -366,7 +366,7 @@ Definition asm_link_trans (ins1 ins2 : gset Z) (m1 m2 : mod_trans asm_event) : m
 Definition asm_link (ins1 ins2 : gset Z) (m1 m2 : module asm_event) : module asm_event :=
   Mod (asm_link_trans ins1 ins2 m1.(m_trans) m2.(m_trans)) (MLFNone, None, m1.(m_init), m2.(m_init)).
 
-Lemma asm_link_trefines m1 m1' m2 m2' ins1 ins2 `{!VisNoAll m1.(m_trans)} `{!VisNoAll m2.(m_trans)}:
+Lemma asm_link_trefines m1 m1' m2 m2' ins1 ins2 `{!VisNoAng m1.(m_trans)} `{!VisNoAng m2.(m_trans)}:
   trefines m1 m1' →
   trefines m2 m2' →
   trefines (asm_link ins1 ins2 m1 m2) (asm_link ins1 ins2 m1' m2').

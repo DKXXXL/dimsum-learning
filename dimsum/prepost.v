@@ -120,13 +120,13 @@ Section prepost.
 
   Definition prepost_filter_trans i o := ModTrans (pp_filter_step i o).
 
-  Global Instance prepost_filter_vis_no_all i o : VisNoAll (prepost_filter_trans i o).
+  Global Instance prepost_filter_vis_no_all i o : VisNoAng (prepost_filter_trans i o).
   Proof. move => ????. inv_all @m_step; naive_solver. Qed.
 
   Definition prepost_trans i o (m : mod_trans EV1) : mod_trans EV2 :=
     seq_map_trans m (prepost_filter_trans i o).
 
-  Global Instance prepost_vis_no_all i o m `{!VisNoAll m}: VisNoAll (prepost_trans i o m).
+  Global Instance prepost_vis_no_all i o m `{!VisNoAng m}: VisNoAng (prepost_trans i o m).
   Proof. apply _. Qed.
 
   (* If one needs a version of prepost_mod that starts on the inside,
@@ -134,7 +134,7 @@ Section prepost.
   Definition prepost_mod i o (m : module EV1) (s : S) (x : uPred M) : module EV2 :=
     Mod (prepost_trans i o m.(m_trans)) (SMFilter, m.(m_init), (PPOutside, s, x)).
 
-  Lemma prepost_mod_trefines i o (m m' : module EV1) σm s `{!VisNoAll m.(m_trans)}:
+  Lemma prepost_mod_trefines i o (m m' : module EV1) σm s `{!VisNoAng m.(m_trans)}:
     trefines m m' →
     trefines (prepost_mod i o m σm s) (prepost_mod i o m' σm s).
   Proof.
@@ -283,7 +283,7 @@ Section prepost.
         (R2 : seq_product_case → Sr2 → EV1 → seq_product_case → Sr2 → EV1 → bool → Prop)
         (m1 m2 : module (io_event EV1))
         s1 s2 x1 x2 x sr1 sr2 s
-        `{!VisNoAll m1.(m_trans)} `{!VisNoAll m2.(m_trans)}
+        `{!VisNoAng m1.(m_trans)} `{!VisNoAng m2.(m_trans)}
         :
 
        (∀ p s e p' s' e' ok1, R1 p s e p' s' e' ok1 → p ≠ p') →
@@ -532,7 +532,7 @@ Section prepost.
         (i : EV1 → S → prepost (EV * S) M)
         (o : EV → S → prepost (EV1 * S) M)
         s1 s2 s x1 x2 x
-        `{!VisNoAll m.(m_trans)}
+        `{!VisNoAng m.(m_trans)}
         :
         INV Env s1 s2 s x1 x2 x →
        (∀ s1 s2 s x1 x2 x e,
@@ -613,7 +613,7 @@ Section prepost.
         (i_s : EV1 → Ss → prepost (EV2 * Ss) Ms)
         (o_s : EV2 → Ss → prepost (EV1 * Ss) Ms)
         si ss xi xs
-        `{!VisNoAll m.(m_trans)}
+        `{!VisNoAng m.(m_trans)}
         :
         INV Env si ss xi xs →
        (∀ si ss xi xs e,

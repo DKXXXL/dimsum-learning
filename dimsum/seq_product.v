@@ -43,8 +43,8 @@ Definition seq_product_trans {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2)
   : mod_trans (seq_product_event EV1 EV2) :=
   ModTrans (seq_product_step m1 m2).
 
-Global Instance seq_product_vis_no_all {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) `{!VisNoAll m1} `{!VisNoAll m2}:
-  VisNoAll (seq_product_trans m1 m2).
+Global Instance seq_product_vis_no_all {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) `{!VisNoAng m1} `{!VisNoAng m2}:
+  VisNoAng (seq_product_trans m1 m2).
 Proof.
   move => [[??]?]???. inv_all @m_step; try case_match => //; simplify_eq.
   - naive_solver.
@@ -111,7 +111,7 @@ Proof.
 Qed.
 
 
-Lemma seq_product_to_mods {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ Pσ κs `{!VisNoAll m1} `{!VisNoAll m2}:
+Lemma seq_product_to_mods {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ Pσ κs `{!VisNoAng m1} `{!VisNoAng m2}:
   σ ~{ seq_product_trans m1 m2, κs }~>ₜ Pσ → ∃ κs', seq_product_rel σ.1.1 κs κs'.1 κs'.2 ∧
     σ.1.2 ~{ m1, κs'.1 }~>ₜ - ∧ σ.2 ~{ m2, κs'.2 }~>ₜ -.
 Proof.
@@ -224,7 +224,7 @@ Proof.
     apply thas_trace_all. naive_solver.
 Qed.
 
-Lemma seq_product_mod_trefines {EV1 EV2} (m1 m1' : module EV1) (m2 m2' : module EV2) σp `{!VisNoAll m1.(m_trans)} `{!VisNoAll m2.(m_trans)}:
+Lemma seq_product_mod_trefines {EV1 EV2} (m1 m1' : module EV1) (m2 m2' : module EV2) σp `{!VisNoAng m1.(m_trans)} `{!VisNoAng m2.(m_trans)}:
   trefines m1 m1' →
   trefines m2 m2' →
   trefines (seq_product_mod m1 m2 σp) (seq_product_mod m1' m2' σp).
@@ -353,8 +353,8 @@ Definition seq_map_trans {EV1 EV2} (m : mod_trans EV1) (f : mod_trans (sm_event 
   (state_transform_trans (map_trans (seq_product_trans m f) seq_map_filter)
                        (λ σ σ', σ' = seq_map_state_trans m f σ)).
 
-Global Instance seq_map_vis_no_all {EV1 EV2} (m : mod_trans EV1) (f : mod_trans (sm_event EV1 EV2)) `{!VisNoAll m} `{!VisNoAll f}:
-  VisNoAll (seq_map_trans m f).
+Global Instance seq_map_vis_no_all {EV1 EV2} (m : mod_trans EV1) (f : mod_trans (sm_event EV1 EV2)) `{!VisNoAng m} `{!VisNoAng f}:
+  VisNoAng (seq_map_trans m f).
 Proof.
   apply: mod_state_transform_vis_no_all.
   move => ??? [[[sp σ1]σf][σ ?]] ??. eexists (σ, σ1, σf) => -[[??]?].
@@ -366,7 +366,7 @@ Qed.
 Definition seq_map_mod {EV1 EV2} (m : module EV1) (f : module (sm_event EV1 EV2)) (σ : seq_map_case EV1) : module EV2 :=
   Mod (seq_map_trans m.(m_trans) f.(m_trans)) (σ, m.(m_init), f.(m_init)).
 
-Lemma seq_map_mod_trefines {EV1 EV2} (m1 m2 : module EV1) (f : module (sm_event EV1 EV2)) σ `{!VisNoAll m1.(m_trans)} `{!VisNoAll f.(m_trans)}:
+Lemma seq_map_mod_trefines {EV1 EV2} (m1 m2 : module EV1) (f : module (sm_event EV1 EV2)) σ `{!VisNoAng m1.(m_trans)} `{!VisNoAng f.(m_trans)}:
   trefines m1 m2 →
   trefines (seq_map_mod m1 f σ) (seq_map_mod m2 f σ).
 Proof.

@@ -906,7 +906,7 @@ Qed.
 Definition rec_trans := ModTrans prim_step.
 Definition rec_mod (fns : gmap string fndef) := Mod rec_trans (rec_init fns).
 
-Global Instance rec_vis_no_all: VisNoAll rec_trans.
+Global Instance rec_vis_no_all: VisNoAng rec_trans.
 Proof. move => *. inv_all @m_step; inv_all head_step; naive_solver. Qed.
 
 (** * Deeply embedded static expressions  *)
@@ -1704,7 +1704,7 @@ Definition rec_closed_filter_trans : mod_trans (sm_event rec_event rec_closed_ev
 Definition rec_closed_filter : module (sm_event rec_event rec_closed_event) :=
   Mod rec_closed_filter_trans RCStart.
 
-Global Instance rec_closed_filter_vis_no_all : VisNoAll rec_closed_filter_trans.
+Global Instance rec_closed_filter_vis_no_all : VisNoAng rec_closed_filter_trans.
 Proof. move => ????. inv_all @m_step; naive_solver. Qed.
 
 Definition rec_closed (m : module rec_event) : module rec_closed_event :=
@@ -1741,7 +1741,7 @@ Definition rec_link_trans (fns1 fns2 : gset string) (m1 m2 : mod_trans rec_event
 Definition rec_link (fns1 fns2 : gset string) (m1 m2 : module rec_event) : module rec_event :=
   Mod (rec_link_trans fns1 fns2 m1.(m_trans) m2.(m_trans)) (MLFNone, [], m1.(m_init), m2.(m_init)).
 
-Lemma rec_link_trefines m1 m1' m2 m2' fns1 fns2 `{!VisNoAll m1.(m_trans)} `{!VisNoAll m2.(m_trans)}:
+Lemma rec_link_trefines m1 m1' m2 m2' fns1 fns2 `{!VisNoAng m1.(m_trans)} `{!VisNoAng m2.(m_trans)}:
   trefines m1 m1' →
   trefines m2 m2' →
   trefines (rec_link fns1 fns2 m1 m2) (rec_link fns1 fns2 m1' m2').
