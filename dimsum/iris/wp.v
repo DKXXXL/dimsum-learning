@@ -23,7 +23,7 @@ Class refirisPreG (Σ : gFunctors) := RefirisPreG {
 }.
 
 Class refirisGS (Λ : language) (Σ : gFunctors) := RefirisGS {
-  refiris_invGS :> invGS Σ;
+  refiris_invGS :> invGS_gen HasNoLc Σ;
   refiris_ord_laterGS :> ord_laterGS Σ;
   spec_trans : mod_trans (events Λ);
   state_interp : state Λ → spec_trans.(m_state) → iProp Σ;
@@ -140,7 +140,7 @@ Qed.
 End wp.
 
 Theorem wp_adequacy Σ Λ `{!refirisPreG Σ} mspec σi σs :
-  (∀ `{Hinv : !invGS Σ} `{Hord : !ord_laterGS Σ},
+  (∀ `{Hinv : !invGS_gen HasNoLc Σ} `{Hord : !ord_laterGS Σ},
     ⊢ |={⊤}=> ∃ (stateI : state Λ → mspec.(m_state) → iProp Σ),
        let _ : refirisGS Λ Σ := RefirisGS _ _ _ _ mspec stateI
        in
@@ -149,7 +149,7 @@ Theorem wp_adequacy Σ Λ `{!refirisPreG Σ} mspec σi σs :
   trefines (Mod (lang_trans Λ) σi) (Mod mspec σs).
 Proof.
   intros Hwp. constructor => κs /thas_trace_n [n Htrace].
-  apply (step_fupdN_soundness_no_lc _ 0 0) => ?? /=. simpl in *. iIntros "_".
+  apply (step_fupdN_soundness_no_lc _ 0 0) => ? /=. simpl in *. iIntros "_".
   iMod (ord_later_alloc n) as (?) "Ha". iDestruct (ord_later_ctx_alloc with "Ha") as "#?".
   iMod Hwp as (stateI) "(Hσ & Hwp)". clear Hwp.
   iInduction Htrace as [????? Hκs|???????? Hstep ?? Hlt Hκs|????????? Hκs Hle] "IH" forall (σs).
