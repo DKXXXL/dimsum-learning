@@ -22,13 +22,13 @@ Proof. solve_inG. Qed.
 Section definitions.
   Context `{!ord_laterGS Σ}.
 
-  Definition ord_later_auth_def (n : trace_index) : iProp Σ :=
+  Definition ord_later_auth_def (n : ordinal) : iProp Σ :=
     own ord_later_name (mono_ord_auth 1 n).
   Definition ord_later_auth_aux : seal (@ord_later_auth_def). Proof. by eexists. Qed.
   Definition ord_later_auth := ord_later_auth_aux.(unseal).
   Definition ord_later_auth_eq : @ord_later_auth = @ord_later_auth_def := ord_later_auth_aux.(seal_eq).
 
-  Definition ord_later_ub_def (n : trace_index) : iProp Σ :=
+  Definition ord_later_ub_def (n : ordinal) : iProp Σ :=
     own ord_later_name (mono_ord_ub n).
   Definition ord_later_ub_aux : seal (@ord_later_ub_def). Proof. by eexists. Qed.
   Definition ord_later_ub := ord_later_ub_aux.(unseal).
@@ -41,7 +41,7 @@ Section definitions.
   Definition ord_later_ctx_eq : @ord_later_ctx = @ord_later_ctx_def := ord_later_ctx_aux.(seal_eq).
 
   Definition ord_later_def (P : iProp Σ) : iProp Σ :=
-    ∀ n, ord_later_auth n -∗ ord_later_auth n ∗ (∀ n', ⌜tiS n' ⊆ n⌝ -∗ ord_later_auth n' -∗ ord_later_auth n' ∗ P).
+    ∀ n, ord_later_auth n -∗ ord_later_auth n ∗ (∀ n', ⌜oS n' ⊆ n⌝ -∗ ord_later_auth n' -∗ ord_later_auth n' ∗ P).
   Definition ord_later_aux : seal (@ord_later_def). Proof. by eexists. Qed.
   Definition ord_later := ord_later_aux.(unseal).
   Definition ord_later_eq : @ord_later = @ord_later_def := ord_later_aux.(seal_eq).
@@ -59,7 +59,7 @@ Local Ltac unseal := rewrite
 
 Section lemmas.
   Context `{!ord_laterGS Σ}.
-  Implicit Types (n : trace_index).
+  Implicit Types (n : ordinal).
 
   Global Instance ord_later_auth_timeless n : Timeless (ord_later_auth n).
   Proof. unseal. apply _. Qed.
@@ -131,7 +131,7 @@ Section lemmas.
     P.
   Proof.
     unseal. iDestruct 1 as (n) "Hub". iIntros "#Hl".
-    iInduction n as [] "IH" using ti_lt_ind.
+    iInduction n as [] "IH" using o_lt_ind.
     iApply "Hl".
     iIntros (n') "Hn'".
     iDestruct (own_valid_2 with "Hn' Hub") as %[_ ?]%mono_ord_both_frac_valid.
@@ -143,7 +143,7 @@ Section lemmas.
   Lemma ord_later_elim P Q n:
     ▷ₒ P -∗
     ord_later_auth n -∗
-    (ord_later_auth n ==∗ ∃ n', ⌜tiS n' ⊆ n⌝ ∗ ord_later_auth n' ∗ (ord_later_auth n' -∗ P ==∗ Q)) -∗
+    (ord_later_auth n ==∗ ∃ n', ⌜oS n' ⊆ n⌝ ∗ ord_later_auth n' ∗ (ord_later_auth n' -∗ P ==∗ Q)) -∗
     |==> Q.
   Proof.
     unseal. iIntros "HP Ha Hwand".

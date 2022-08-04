@@ -1,4 +1,4 @@
-From dimsum.core Require Export module trace_index.
+From dimsum.core Require Export module ordinal.
 From dimsum.core Require Import axioms.
 
 (** * [trefines] *)
@@ -286,7 +286,7 @@ Inductive thas_trace_simple {EV} (m : mod_trans EV) : m.(m_state) → trace EV �
 Notation " σ '~{' m , Pκs '}~>ₜₛ' P " := (thas_trace_simple m σ Pκs P) (at level 40).
 Notation " σ '~{' m , Pκs '}~>ₜₛ' - " := (thas_trace_simple m σ Pκs (λ _, True)) (at level 40).
 
-Inductive tnhas_trace {EV} (m : mod_trans EV) : m.(m_state) → trace EV → trace_index → (m.(m_state) → Prop) → Prop :=
+Inductive tnhas_trace {EV} (m : mod_trans EV) : m.(m_state) → trace EV → ordinal → (m.(m_state) → Prop) → Prop :=
 | TNTraceEnd σ (Pσ : _ → Prop) κs n:
     Pσ σ →
     tnil ⊆ κs →
@@ -294,13 +294,13 @@ Inductive tnhas_trace {EV} (m : mod_trans EV) : m.(m_state) → trace EV → tra
 | TNTraceStep Pσ2 fn σ1 Pσ3 κ κs κs' n:
     m.(m_step) σ1 κ Pσ2 →
     (∀ σ2 (H : Pσ2 σ2), tnhas_trace m σ2 κs' (fn (σ2 ↾ H)) Pσ3) →
-    tiS (tiChoice _ fn) ⊆ n →
+    oS (oChoice _ fn) ⊆ n →
     tapp (option_trace κ) κs' ⊆ κs →
     tnhas_trace m σ1 κs n Pσ3
 | TNTraceAll T fn f σ κs Pσ n:
     (∀ x, tnhas_trace m σ (f x) (fn x) Pσ) →
     tall T f ⊆ κs →
-    tiChoice _ fn ⊆ n →
+    oChoice _ fn ⊆ n →
     tnhas_trace m σ κs n Pσ
 .
 Notation " σ '~{' m , Pκs , n '}~>ₜ' P " := (tnhas_trace m σ Pκs n P) (at level 40).
@@ -575,7 +575,7 @@ Lemma tnhas_trace_inv {EV} (m : mod_trans EV) κs (Pσ : _ → Prop) σ n:
   σ ~{ m, κs, n }~>ₜ Pσ →
   under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ σ) ∨
     ∃ κ κs' Pσ2 fn, m_step m σ κ Pσ2 ∧ (∀ σ2 (H : Pσ2 σ2), σ2 ~{ m, κs', fn (σ2 ↾ H) }~>ₜ Pσ)
-      ∧ tapp (option_trace κ) κs' ⊆ κs ∧ tiS (tiChoice _ fn) ⊆ n).
+      ∧ tapp (option_trace κ) κs' ⊆ κs ∧ oS (oChoice _ fn) ⊆ n).
 Proof.
   elim.
   - move => ??????. econs. naive_solver.
@@ -592,13 +592,13 @@ Lemma thas_trace_n_1 {EV} (m : mod_trans EV) σ κs Pσ:
   σ ~{m, κs}~>ₜ Pσ → ∃ n, σ ~{m, κs, n}~>ₜ Pσ.
 Proof.
   elim.
-  - move => ?????. eexists tiO. tend.
+  - move => ?????. eexists oO. tend.
   - move => ???????? IH ?.
-    have [f Hf]:= AxChoice1 IH. eexists (tiS (tiChoice _ f)).
+    have [f Hf]:= AxChoice1 IH. eexists (oS (oChoice _ f)).
     tstep; [done| |done|done].
     move => ??. apply Hf.
   - move => ?????? IH ?.
-    have [f Hf]:= AxChoice _ _ _ IH. eexists (tiChoice _ f).
+    have [f Hf]:= AxChoice _ _ _ IH. eexists (oChoice _ f).
     by apply: TNTraceAll.
 Qed.
 
@@ -820,7 +820,7 @@ Lemma steps_impl_elim_n {EV} (m : mod_trans EV) κs Pσ σ n:
   σ ~{ m, κs, n }~>ₜ - →
   under_tall κs (λ κs,
      tnil ⊆ κs ∨
-     ∃ b κ κs' Pσ' n', Pσ b κ Pσ' ∧ tapp (option_trace κ) κs' ⊆ κs ∧ tiS? b n' ⊆ n ∧ ∀ σ', Pσ' σ' → σ' ~{ m, κs', n' }~>ₜ -
+     ∃ b κ κs' Pσ' n', Pσ b κ Pσ' ∧ tapp (option_trace κ) κs' ⊆ κs ∧ oS? b n' ⊆ n ∧ ∀ σ', Pσ' σ' → σ' ~{ m, κs', n' }~>ₜ -
   ).
 Proof.
   move => Hd. elim/@prop_least_fixpoint_pair_ind: Hd κs n => {}σ {}Pσ [?|IH] κs n Hs.
@@ -835,7 +835,7 @@ Proof.
     apply: under_tall_mono'. { apply IH. rewrite -Hκs. naive_solver. }
     move => /= κs'' [?|?]; destruct!. { by left. } right.
     eexists _, _, _, _, _. split_and!; [done|done| |done] => /=.
-    etrans; [|done]. econs. econs. etrans; [|done]. apply ti_le_S_maybe.
+    etrans; [|done]. econs. econs. etrans; [|done]. apply o_le_S_maybe.
     Unshelve. all: done.
 Qed.
 

@@ -343,7 +343,7 @@ Proof.
       rewrite map_difference_union_r map_difference_empty_dom ?right_id_L //.
       compute_done.
     } go.
-    apply: Hloop. { etrans; [|done]. apply ti_le_S. }
+    apply: Hloop. { etrans; [|done]. apply o_le_S. }
     split!. by simplify_map_eq'.
   - rewrite lookup_app_l ?Hlen //=.
     have ->: (i * 3)%nat = (i * 3 + 0)%nat by lia.
@@ -710,7 +710,7 @@ Proof.
         2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
         clear Hs Hcont. move => ?. subst.
         tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-        apply: Hloop. { etrans; [|done]. etrans; [|done]. apply ti_le_S. }
+        apply: Hloop. { etrans; [|done]. etrans; [|done]. apply o_le_S. }
         split!.
         { simplify_map_eq'. done. }
         { apply map_preserved_insert_r_not_in; [compute_done|]. done. }
@@ -739,7 +739,7 @@ Proof.
         2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
         clear Hs Hcont. move => ?. subst.
         tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-        apply: Hloop. { etrans; [|done]. etrans; [|done]. apply ti_le_S. }
+        apply: Hloop. { etrans; [|done]. etrans; [|done]. apply o_le_S. }
         split!.
         { simplify_map_eq'. done. }
         { apply map_preserved_insert_r_not_in; [compute_done|]. done. }
@@ -786,7 +786,7 @@ Proof.
       2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
       tstep_s. eexists (Some (Incoming, _)). split!.
       apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-      apply: Hloop. { etrans; [|done]. etrans; [|done]. apply ti_le_S. }
+      apply: Hloop. { etrans; [|done]. etrans; [|done]. apply o_le_S. }
       split!. iSplit; iIntros!; iFrame.
     + (* left return to outside *)
       tstep_i => *. destruct!.
@@ -819,7 +819,7 @@ Proof.
       2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
       clear Hcont Hs. move => ?. subst.
       tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-      apply: Hloop. { etrans; [|done]. etrans; [|done]. apply ti_le_S. }
+      apply: Hloop. { etrans; [|done]. etrans; [|done]. apply o_le_S. }
       split!. { iSplit; iIntros!; iFrame. }
   - tsim_mirror m2 σ2. move => ??? Hcont.
     tstep_both. apply Hcont => κ ? Hstep Hs. destruct κ as [[? e]|].
@@ -879,7 +879,7 @@ Proof.
       2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
       clear Hs Hcont. move => ?. subst.
       tstep_s. eexists (Some (Incoming, _)). split!. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-      apply: Hloop. { etrans; [|done]. etrans; [|done]. apply ti_le_S. }
+      apply: Hloop. { etrans; [|done]. etrans; [|done]. apply o_le_S. }
       split!.
       { etrans; [done|]. etrans; [done|].
         apply map_scramble_insert_r_in; [compute_done|].
@@ -930,7 +930,7 @@ Proof.
       2: { tstep_s. eexists None. apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|]. eauto. }
       tstep_s. eexists (Some (Incoming, _)). split!.
       apply: steps_spec_step_end; [done|] => ??. tend. split!; [done|].
-      apply: Hloop. { etrans; [|done]. etrans; [|done]. apply ti_le_S. }
+      apply: Hloop. { etrans; [|done]. etrans; [|done]. apply o_le_S. }
       split!. iSplit; iIntros!; iFrame.
     + (* right return to outside *) by tstep_s.
  Unshelve.

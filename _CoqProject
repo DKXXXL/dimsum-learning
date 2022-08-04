@@ -6,7 +6,7 @@
 
 dimsum/base.v
 dimsum/axioms.v
-dimsum/trace_index.v
+dimsum/ordinal.v
 dimsum/satisfiable.v
 dimsum/module.v
 dimsum/trefines.v

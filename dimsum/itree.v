@@ -60,7 +60,7 @@ Definition itree_mod {EV S} (t : itree (moduleE EV S) unit) (s : S) :=
 Lemma tnhas_trace_Tau' {EV S} t t' n n' Pσ s κs:
   observe t = TauF t' →
   (t', s) ~{itree_trans EV S, κs, n}~>ₜ Pσ →
-  tiS n ⊆ n' →
+  oS n ⊆ n' →
   (t, s) ~{itree_trans EV S, κs, n'}~>ₜ Pσ.
 Proof.
   move => Htau Ht Hsub. apply: (TNTraceStep _ _ (λ _, n)); [by econs| | |simpl; done].
@@ -69,7 +69,7 @@ Proof.
 Qed.
 Lemma tnhas_trace_Tau {EV S} t n n' Pσ s κs:
   (t, s) ~{itree_trans EV S, κs, n}~>ₜ Pσ →
-  tiS n ⊆ n' →
+  oS n ⊆ n' →
   (Tau t, s) ~{itree_trans EV S, κs, n'}~>ₜ Pσ.
 Proof. by apply tnhas_trace_Tau'. Qed.
 
@@ -87,7 +87,7 @@ Lemma tnhas_trace_Tau_inv' {EV S} t t' n Pσ s κs:
   observe t' = TauF t →
   (t', s) ~{itree_trans EV S, κs, n}~>ₜ Pσ →
   under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (t', s)) ∨
-    ∃ n', tiS n' ⊆ n ∧ (t, s) ~{ itree_trans _ _,  κs, n' }~>ₜ Pσ).
+    ∃ n', oS n' ⊆ n ∧ (t, s) ~{ itree_trans _ _,  κs, n' }~>ₜ Pσ).
 Proof.
   move => Htau Ht. thas_trace_inv Ht. { naive_solver. }
   right. inv_all @m_step; rewrite ->Htau in *; simplify_eq.
@@ -99,7 +99,7 @@ Qed.
 Lemma tnhas_trace_Tau_inv {EV S} t n Pσ s κs:
   (Tau t, s) ~{itree_trans EV S, κs, n}~>ₜ Pσ →
   under_tall κs (λ κs, (tnil ⊆ κs ∧ Pσ (Tau t, s)) ∨
-    ∃ n', tiS n' ⊆ n ∧ (t, s) ~{ itree_trans _ _,  κs, n' }~>ₜ Pσ).
+    ∃ n', oS n' ⊆ n ∧ (t, s) ~{ itree_trans _ _,  κs, n' }~>ₜ Pσ).
 Proof. by apply tnhas_trace_Tau_inv'. Qed.
 
 Lemma thas_trace_Tau_inv' {EV S} t t' Pσ s κs:
@@ -418,7 +418,7 @@ Lemma tnhas_trace_eutt_mono {EV S} t t' s κs Pσ Pσ' b1 n:
   (t', s) ~{ itree_trans EV S, κs, n }~>ₜ Pσ'.
 Proof.
   move => HP Ht Heq.
-  elim/ti_lt_ind: n κs t t' s Ht Heq.
+  elim/o_lt_ind: n κs t t' s Ht Heq.
   move => n IHn κs t t' s Ht Heq.
   punfold Heq. unfold eqit_ in Heq at 1.
   move: Heq. move Hb2: false => b2. move Hot: (observe t) => ot. move Hot': (observe t') => ot' Heq.
@@ -445,7 +445,7 @@ Proof.
       move => ? /= ->. apply: IHn;[|done|].
       * etrans; [|done]. econs. by econs.
       * move: (Hu tt) => [|//]. done.
-    + apply: (TNTraceStep _ _ (const (tiChoice T (λ x, fn ((t'0 x, s) ↾ ex_intro _ x eq_refl))))).
+    + apply: (TNTraceStep _ _ (const (oChoice T (λ x, fn ((t'0 x, s) ↾ ex_intro _ x eq_refl))))).
       { by econs. } 3: simpl; done.
       2: { etrans; [|done]. econs. econs => -[?[??]]. econs => ?. econs. done. }
       move => ? /= [x ->]. apply: IHn;[| |].
@@ -473,7 +473,7 @@ Proof.
     + tend. eapply HP; [|done]. split; [|done] => /=. subst.
       move: REL => /fold_eqitF REL. specialize (REL _ _ ltac:(done) ltac:(done)). etrans; [|done].
       destruct b1 => //. rewrite (itree_eta t) Hot. by apply eqit_Tau_l.
-    + apply: IH => //. apply: tnhas_trace_mono; [done..| by apply: ti_lt_impl_le |done].
+    + apply: IH => //. apply: tnhas_trace_mono; [done..| by apply: o_lt_impl_le |done].
   - move => *. subst. done.
 Qed.
 
@@ -491,7 +491,7 @@ Lemma thas_trace_eutt_mono {EV S} t t' s κs Pσ Pσ' b1 b2:
   (t', s) ~{ itree_trans EV S, κs }~>ₜ Pσ'.
 Proof.
   move => HP /thas_trace_n[n Ht] Heq.
-  elim/ti_lt_ind: n κs t t' s Ht Heq HP.
+  elim/o_lt_ind: n κs t t' s Ht Heq HP.
   move => n IHn κs t t' s Ht Heq HP.
   punfold Heq. unfold eqit_ in Heq at 1.
   move: Heq. move Hot: (observe t) => ot. move Hot': (observe t') => ot' Heq.
@@ -539,7 +539,7 @@ Proof.
     + tend. eapply HP; [|done]. split; [|done] => /=. subst.
       move: REL => /fold_eqitF REL. specialize (REL _ _ ltac:(done) ltac:(done)).
       destruct b1 => //. rewrite (itree_eta t) Hot. by apply eqit_Tau_l.
-    + apply: IH => //. apply: tnhas_trace_mono; [done..| by apply: ti_lt_impl_le |done].
+    + apply: IH => //. apply: tnhas_trace_mono; [done..| by apply: o_lt_impl_le |done].
   - move => ot1 t2 ? REL IH t t' n κs s IHn Ht Hot Hot'.
     tstep_None; [by econs|] => ? ->. by apply: IH.
 Qed.
@@ -658,7 +658,7 @@ Lemma tsim_remember_rec {EV S A B} {mi : mod_trans EV} (PRE : _ → _ → _ → 
       (POST : _ → _ → _ → Prop) (a : A) σi r (h : B → _) s n b:
   PRE a σi s →
   (∀ σi' y s', POST σi' y s' → σi' ⪯{mi, itree_trans EV S, n, b} (h y, s')) →
-  (∀ n', tiS?b n' ⊆ n →
+  (∀ n', oS?b n' ⊆ n →
      Plater (λ b', ∀ σi s h' a, PRE a σi s →
          (∀ σi' y s', POST σi' y s' → σi' ⪯{mi, itree_trans EV S, n', b} (h' y, s')) →
          σi ⪯{mi, itree_trans EV S, n', b'} ((y ← rec r a;;; h' y), s))) →
@@ -669,7 +669,7 @@ Proof.
     (λ n σi '(σt, s), ∃ a h', PRE a σi s ∧ σt = (y ← rec r a;;; h' y) ∧
       ∀ σi' y s', POST σi' y s' → σi' ⪯{mi, itree_trans EV S, n, b} (h' y, s'))). { naive_solver. }
   { move => ???[??]? [?[?[?[?{}Hh]]]]. simplify_eq. split!; [done..|] => ????.
-    apply: tsim_mono; [naive_solver|]. etrans; [|done]. apply ti_le_S_maybe. }
+    apply: tsim_mono; [naive_solver|]. etrans; [|done]. apply o_le_S_maybe. }
   move => n' ? IH ?[??] [?[?[?[??]]]]. simplify_eq.
   apply: Hsim; [done| |done..].
   naive_solver.

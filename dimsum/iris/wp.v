@@ -164,10 +164,10 @@ Proof.
     iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. by apply thas_trace_trans. }
     iModIntro. iIntros (??).
     iMod ("Hwp" with "[//]") as (σi' ?) "[Hstate Hwp]".
-    iMod (ord_later_update with "Ha") as "Ha"; [by apply: ti_le_choice_r|].
+    iMod (ord_later_update with "Ha") as "Ha"; [by apply: o_le_choice_r|].
     iApply ("IH" with "Ha Hstate Hwp").
-    Unshelve. { by apply ti_lt_impl_le. } { done. }
+    Unshelve. { by apply o_lt_impl_le. } { done. }
   - rewrite -Hκs. iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. apply thas_trace_all. }
-    iIntros (?). iMod (ord_later_update with "Ha") as "Ha". { etrans; [|done]. by apply: ti_le_choice_r. }
+    iIntros (?). iMod (ord_later_update with "Ha") as "Ha". { etrans; [|done]. by apply: o_le_choice_r. }
     iApply ("IH" with "Ha Hσ Hwp").
 Qed.

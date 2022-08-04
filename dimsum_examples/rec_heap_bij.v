@@ -978,7 +978,7 @@ Global Instance rec_heap_bij_N_vis_no_all n m `{!VisNoAng m.(m_trans)} :
 Proof. elim: n => //= ??. apply _. Qed.
 
 (** * Proof techniques for [rec_heap_bij] *)
-Definition rec_heap_bij_call (n : trace_index) (fns1 fns2 : gmap string fndef) :=
+Definition rec_heap_bij_call (n : ordinal) (fns1 fns2 : gmap string fndef) :=
   (∀ n' f es1' es2' K1' K2' es1 es2 vs1' vs2' h1' h2' b r rf',
       RecExprFill es1' K1' (Call f es1) →
       RecExprFill es2' K2' (Call f es2) →

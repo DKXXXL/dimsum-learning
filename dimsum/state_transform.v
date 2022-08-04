@@ -50,7 +50,7 @@ Proof.
   move => Heq Hstep Href HR1 HR2.
   apply wp_implies_refines => n.
   move: Href => /wp_complete/(_ n)/=.
-  elim/ti_lt_ind: n σ1 σ2 σ1' σ2' HR1 HR2 => n IH σ1 σ2 σ1' σ2' HR1 HRc2 Hwp.
+  elim/o_lt_ind: n σ1 σ2 σ1' σ2' HR1 HR2 => n IH σ1 σ2 σ1' σ2' HR1 HRc2 Hwp.
   apply Wp_step => Pσ n' κ ??. inv_all @m_step.
   inversion Hwp as [??? Hwp']; simplify_eq.
   have ?: σ' = σ1' by naive_solver. subst σ'.

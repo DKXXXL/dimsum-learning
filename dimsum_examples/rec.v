@@ -1426,7 +1426,7 @@ Qed.
 Global Hint Resolve rec_step_If_s | 10 : typeclass_instances.
 
 (** * Proof techniques *)
-Definition rec_proof_call (n : trace_index) (fns1 fns2 : gmap string fndef) :=
+Definition rec_proof_call (n : ordinal) (fns1 fns2 : gmap string fndef) :=
   (∀ n' f es1' es2' K1' K2' es1 es2 vs1' vs2' h1' h2' b,
       RecExprFill es1' K1' (Call f es1) →
       RecExprFill es2' K2' (Call f es2) →
@@ -1514,7 +1514,7 @@ Proof.
     move => ??. tstep_both. tstep_s. split!; [done|]. tend.
     apply IH; [done|]. by split!. }
   { move => /= ?? [???] [???] *. destruct!. split!; [done..|].
-    move => ??. apply: tsim_mono; [naive_solver|]. by apply ti_lt_impl_le. }
+    move => ??. apply: tsim_mono; [naive_solver|]. by apply o_lt_impl_le. }
   move => n2 ? IH2 [???] [???] ?. destruct!.
   exploit Hc; [done|]. move => [?[?[?]]]. simplify_eq.
   apply; [lia|..].
@@ -1529,7 +1529,7 @@ Proof.
       split! => ?. tend. split; [lia|].
       apply IH2; [done|]. split!; [done..|lia|done].
     + move => ?. tstep_s. right. split!; [naive_solver|done|]. tend.
-      apply IH; [etrans; [done|]; etrans; [|done]; apply ti_le_S|]. split!; [done..|].
+      apply IH; [etrans; [done|]; etrans; [|done]; apply o_le_S|]. split!; [done..|].
       naive_solver.
   - move => *. subst. apply: tsim_mono; [|done]. apply tsim_mono_b_false. naive_solver.
 Qed.

@@ -261,7 +261,7 @@ Lemma product_mod_trefines' {EV1 EV2} (m1 m1' : module EV1) (m2 m2' : module EV2
 Proof.
   destruct m1 as [m1 σ1], m1' as [m1' σ1'], m2 as [m2 σ2], m2' as [m2' σ2'].
   move => /wp_complete /= Hr1 /wp_complete/=Hr2.
-  apply wp_implies_refines => n. elim/ti_lt_ind: n σ1 σ1' σ2 σ2' {Hr1 Hr2} (Hr1 n) (Hr2 n).
+  apply wp_implies_refines => n. elim/o_lt_ind: n σ1 σ1' σ2 σ2' {Hr1 Hr2} (Hr1 n) (Hr2 n).
   move => n IH σ1 σ1' σ2 σ2' Hr1 Hr2.
   apply Wp_step => Pσi n' κ Hsub Hstep. inv_all @m_step.
   - inversion Hr1 as [??? Hr1']; simplify_eq.
@@ -273,9 +273,9 @@ Proof.
       tstep_Some; [by apply (ProductStepL (Some _))|].
       move => [??]/= [/HP'? ?]; subst.
       apply: thas_trace_mono; [by apply: mod_product_nil_l|done|] => -[??] /= [/HP[?[??]]?]; subst. eexists (_, _).
-      split; [done|]. apply: IH; [done..|]. apply: wp_mono; [done|]. by apply ti_lt_impl_le.
+      split; [done|]. apply: IH; [done..|]. apply: wp_mono; [done|]. by apply o_lt_impl_le.
     + apply: thas_trace_mono; [by apply: mod_product_nil_l|done|] => -[??] /= [/HP[?[??]]?]; subst. eexists (_, _).
-      split; [done|]. apply: IH; [done..|]. apply: wp_mono; [done|]. by apply ti_lt_impl_le.
+      split; [done|]. apply: IH; [done..|]. apply: wp_mono; [done|]. by apply o_lt_impl_le.
   - inversion Hr2 as [??? Hr2']; simplify_eq.
     have [?[Ht HP]]:= Hr2' _ _ _ ltac:(done) ltac:(done).
     case_match; simplify_eq/=.
@@ -285,9 +285,9 @@ Proof.
       tstep_Some; [by apply (ProductStepR (Some _))|].
       move => [??]/= [? /HP'?]; subst.
       apply: thas_trace_mono; [by apply: mod_product_nil_r|done|] => -[??] /= [/HP[?[??]] ?]; subst. eexists (_, _).
-      split; [done|]. apply: IH; [done| |done]. apply: wp_mono; [done|]. by apply ti_lt_impl_le.
+      split; [done|]. apply: IH; [done| |done]. apply: wp_mono; [done|]. by apply o_lt_impl_le.
     + apply: thas_trace_mono; [by apply: mod_product_nil_r|done|] => -[??] /= [/HP[?[??]]?]; subst. eexists (_, _).
-      split; [done|]. apply: IH; [done| |done]. apply: wp_mono; [done|]. by apply ti_lt_impl_le.
+      split; [done|]. apply: IH; [done| |done]. apply: wp_mono; [done|]. by apply o_lt_impl_le.
   - inversion Hr1 as [??? Hr1']; simplify_eq.
     inversion Hr2 as [??? Hr2']; simplify_eq.
     have [?[Ht1 HP1]]:= Hr1' _ _ _ ltac:(done) ltac:(done).

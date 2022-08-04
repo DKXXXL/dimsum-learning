@@ -6,12 +6,12 @@ From dimsum.core Require Import axioms.
 refinement. The development uses mostly [tsim]. *)
 
 (** * [mod_to_trace] *)
-Fixpoint mod_to_trace {EV} (m : mod_trans EV) (n : trace_index) (σ : m.(m_state)) : trace EV :=
+Fixpoint mod_to_trace {EV} (m : mod_trans EV) (n : ordinal) (σ : m.(m_state)) : trace EV :=
   match n with
-  | tiO => tnb
-  | tiS n' => tall { x : option EV * (m.(m_state) → Prop) | m.(m_step) σ x.1 x.2} (λ x,
+  | oO => tnb
+  | oS n' => tall { x : option EV * (m.(m_state) → Prop) | m.(m_step) σ x.1 x.2} (λ x,
          tapp (option_trace (`x).1) (tex {σ' : m.(m_state) | (`x).2 σ'} (λ σ', mod_to_trace m n' (`σ'))))
-  | tiChoice T fn => tall T (λ x, mod_to_trace m (fn x) σ)
+  | oChoice T fn => tall T (λ x, mod_to_trace m (fn x) σ)
   end.
 
 Lemma thas_trace_mod_to_trace {EV} (m : mod_trans EV) n σ :
@@ -86,16 +86,16 @@ Proof.
 Qed.
 
 (** * [wp] *)
-Inductive wp {EV} (m1 m2 : mod_trans EV) : trace_index → m1.(m_state) -> m2.(m_state) -> Prop :=
+Inductive wp {EV} (m1 m2 : mod_trans EV) : ordinal → m1.(m_state) -> m2.(m_state) -> Prop :=
 | Wp_step' σi1 σs1 n:
-    (∀ Pσi2 κ n', tiS n' ⊆ n → m_step m1 σi1 κ Pσi2 -> ∃ Pσ2,
+    (∀ Pσi2 κ n', oS n' ⊆ n → m_step m1 σi1 κ Pσi2 -> ∃ Pσ2,
       σs1 ~{ m2, option_trace κ }~>ₜ Pσ2 ∧
       ∀ σs2, Pσ2 σs2 → ∃ σi2, Pσi2 σi2 ∧ wp m1 m2 n' σi2 σs2) ->
     wp m1 m2 n σi1 σs1
 .
 
 Lemma Wp_step {EV} (m1 m2 : mod_trans EV) σi1 σs1 n:
-  (∀ Pσi2 n' κ, tiS n' ⊆ n → m_step m1 σi1 κ Pσi2 ->
+  (∀ Pσi2 n' κ, oS n' ⊆ n → m_step m1 σi1 κ Pσi2 ->
       σs1 ~{ m2, option_trace κ }~>ₜ (λ σs2, ∃ σi2, Pσi2 σi2 ∧ wp m1 m2 n' σi2 σs2)) ->
     wp m1 m2 n σi1 σs1
 .
@@ -143,7 +143,7 @@ Lemma wp_complete {EV} (m1 m2 : module EV):
 Proof.
   destruct m1 as [m1 σi1]. destruct m2 as [m2 σs1]. move => /= [Href] n.
   have {Href} := Href (mod_to_trace _ n σi1) ltac:(apply thas_trace_mod_to_trace) => /=.
-  elim/ti_lt_ind: n σi1 σs1 => /= n IH σi σs Ht.
+  elim/o_lt_ind: n σi1 σs1 => /= n IH σi σs Ht.
   apply Wp_step => Pσi n' κ Hsub Hstep.
   move: Ht => /thas_trace_mono Ht.
   have {Ht} := Ht _ (λ _, True) ltac:(by apply mod_to_trace_mono) ltac:(done) => /=.
@@ -172,7 +172,7 @@ Lemma sim_wp {EV} (m1 m2 : mod_trans EV) σi σs :
 Proof.
   intros Hsim n; induction n in σi, σs, Hsim |-*.
   - constructor. intros ????. exfalso.
-    eapply ti_not_le_S. etrans; first done. eapply ti_le_O.
+    eapply o_not_le_S. etrans; first done. eapply o_le_O.
   - constructor. intros Pσi' κ' n' Hle Hstep.
     destruct Hsim as [Hsim]. destruct (Hsim _ _ Hstep) as (Pσs' & Hsteps & Hcont).
     eexists _; split; first done.
@@ -183,12 +183,12 @@ Proof.
     destruct Hsim as [Hsim]. destruct (Hsim _ _ Hstep) as (Pσs' & Hsteps & Hcont).
     eexists _; split; first done.
     intros σs2 [σi2 [HP Hsim']]%Hcont.
-    eexists. split; first done. eapply ti_le_choice_inv in Hle as [x Hle].
+    eexists. split; first done. eapply o_le_choice_inv in Hle as [x Hle].
     eapply wp_mono; first by eauto.
-    etrans; last done. eapply ti_le_S.
+    etrans; last done. eapply o_le_S.
 Qed.
 
-Lemma existential_property {X} (P: trace_index → X → Prop):
+Lemma existential_property {X} (P: ordinal → X → Prop):
   (∀ n, ∃ x, P n x) →
   (∀ n n' x, P n x → n' ⊆ n → P n' x) →
   (∃ x, ∀ n, P n x).
@@ -203,11 +203,11 @@ Proof.
   have [F Hnx]:= AxChoice _ _ _ Hnp.
 
   (* we take the supremum *)
-  pose (n_sup := (tiChoice X (λ x, F x))).
+  pose (n_sup := (oChoice X (λ x, F x))).
 
   assert (∀ x, ¬ P n_sup x) as Hnsup.
   { intros x Hp. eapply Hnx. eapply Hdown; first done.
-    eapply ti_le_choice_r. done. }
+    eapply o_le_choice_r. done. }
 
   destruct (HP n_sup) as [x_sup HPnx].
   exfalso. by eapply Hnsup.
@@ -226,7 +226,7 @@ Lemma wp_sim_inner {EV} (m1 m2 : mod_trans EV) σi1 σs1:
 Proof.
   intros Hwp Pσi2 κ Hstep.
   (* destruct Hwp underneath the quantifier *)
-  assert (∀ n, ∀ n', tiS n' ⊆ n →
+  assert (∀ n, ∀ n', oS n' ⊆ n →
        ∃ Pσ2, σs1 ~{ m2, option_trace κ }~>ₜ Pσ2 ∧
       (∀ σs2, Pσ2 σs2 → ∃ σi2, Pσi2 σi2 ∧ wp m1 m2 n' σi2 σs2)) as Hnext.
   { intros n. destruct (Hwp n) as [σi1 σs1 n Hwp']. intros ??. by unshelve eapply (Hwp' _ _ _ _ Hstep). }
@@ -237,7 +237,7 @@ Proof.
   eapply existential_property in Hwp as [Pσ2 Hwp]; last first.
   { (* prove downwards closure *) naive_solver eauto using wp_mono. }
   eapply forall_and_distr in Hwp as [Hstep' Hwp].
-  specialize (Hstep' tiO).
+  specialize (Hstep' oO).
   eexists. split; first done.
   intros σs2 HPσs2.
   pose proof (forall_forall _ Hwp) as Hwp'. clear Hwp.
@@ -247,7 +247,7 @@ Proof.
   eapply existential_property in Hwp as [σi2 Hwp]; last first.
   { (* prove downwards closure *) naive_solver eauto using wp_mono. }
   eapply forall_and_distr in Hwp as [HP Hwp].
-  specialize (HP tiO).
+  specialize (HP oO).
   eexists. split; first done.
   done.
 Qed.
@@ -275,9 +275,9 @@ Qed.
 (* Print Assumptions sim_trefines. *)
 
 (** * [tsim] *)
-Definition tsim {EV} (n : trace_index) (b : bool) (mi ms : mod_trans EV) (σi : mi.(m_state)) (κss : trace EV) (σs : ms.(m_state))  :=
+Definition tsim {EV} (n : ordinal) (b : bool) (mi ms : mod_trans EV) (σi : mi.(m_state)) (κss : trace EV) (σs : ms.(m_state))  :=
   ∀ κs n',
-    tiS?b n' ⊆ n →
+    oS?b n' ⊆ n →
     σi ~{ mi, κs, n' }~>ₜ - →
     σs ~{ ms, tapp κss κs }~>ₜ -.
 
@@ -298,12 +298,12 @@ Proof. move => [Hr] ??? /=?. apply Hr. by apply: thas_trace_n_2. Qed.
 
 Lemma tsim_mono_to_true {EV} {mi ms : mod_trans EV} σi σs n n' κs b:
   σi ⪯{mi, ms, n', true, κs} σs →
-  tiS n ⊆ n' →
+  oS n ⊆ n' →
   σi ⪯{mi, ms, n, b, κs} σs.
-Proof. move => Hsim Hn ???. apply: Hsim. etrans; [|done]. econs. etrans; [|done]. apply ti_le_S_maybe. Qed.
+Proof. move => Hsim Hn ???. apply: Hsim. etrans; [|done]. econs. etrans; [|done]. apply o_le_S_maybe. Qed.
 
 Lemma tsim_mono_to_tiS {EV} {mi ms : mod_trans EV} σi σs n κs:
-  (∀ n', tiS n' ⊆ n → σi ⪯{mi, ms, n', false, κs} σs) →
+  (∀ n', oS n' ⊆ n → σi ⪯{mi, ms, n', false, κs} σs) →
   σi ⪯{mi, ms, n, true, κs} σs.
 Proof. move => Hsim ??/=?. by apply: Hsim. Qed.
 
@@ -316,37 +316,37 @@ Proof. move => Hsim Hn ???. apply: Hsim. by destruct b; (etrans; [done|]). Qed.
 Lemma tsim_mono_b {EV} {mi ms : mod_trans EV} σi σs n κs b:
   σi ⪯{mi, ms, n, b, κs} σs →
   σi ⪯{mi, ms, n, true, κs} σs.
-Proof. move => Hsim Hn ??. apply: Hsim. destruct b => //. by apply ti_lt_impl_le. Qed.
+Proof. move => Hsim Hn ??. apply: Hsim. destruct b => //. by apply o_lt_impl_le. Qed.
 
 Lemma tsim_mono_b_false {EV} {mi ms : mod_trans EV} σi σs n κs b:
   σi ⪯{mi, ms, n, false, κs} σs →
   σi ⪯{mi, ms, n, b, κs} σs.
-Proof. move => Hsim Hn ??. apply: Hsim. destruct b => //. by apply ti_lt_impl_le. Qed.
+Proof. move => Hsim Hn ??. apply: Hsim. destruct b => //. by apply o_lt_impl_le. Qed.
 
 Definition Plater (P : bool → Prop) : Prop :=
   P true → P false.
 Arguments Plater _ /.
 
 Lemma tsim_remember' {EV} {mi ms : mod_trans EV} (Pσ : _ → _ → _ → Prop) σi σs b n :
-  (∀ n', tiS?b n' ⊆ n → Pσ n' σi σs) →
-  (∀ n', tiS?b n' ⊆ n →
-         (∀ n'' σi σs, n'' ⊆ n' → (∀ n''', tiS n''' ⊆ n'' → Pσ n''' σi σs) → σi ⪯{mi, ms, n'', true} σs) →
+  (∀ n', oS?b n' ⊆ n → Pσ n' σi σs) →
+  (∀ n', oS?b n' ⊆ n →
+         (∀ n'' σi σs, n'' ⊆ n' → (∀ n''', oS n''' ⊆ n'' → Pσ n''' σi σs) → σi ⪯{mi, ms, n'', true} σs) →
          (∀ σi σs, Pσ n' σi σs → σi ⪯{mi, ms, n', false} σs)) →
   σi ⪯{mi, ms, n, b} σs.
 Proof.
   move => HP Hsim κs' n' Hn Ht /=. exploit HP; [done|] => {}HP.
-  elim/ti_lt_ind: n' κs' σi σs Hn HP Ht.
+  elim/o_lt_ind: n' κs' σi σs Hn HP Ht.
   move => n' IHn κs' σi σs Hn HP Ht.
   apply: Hsim; [done| |done| |done]. 2: done.
   move => ???? HP'???? /=. eapply IHn; [by etrans| | |done].
-  - etrans; [|done]. apply tiS_maybe_mono; [done|]. etrans; [|done]. etrans; [|done]. apply ti_le_S.
+  - etrans; [|done]. apply oS_maybe_mono; [done|]. etrans; [|done]. etrans; [|done]. apply o_le_S.
   - apply: HP'. by etrans.
 Qed.
 
 Lemma tsim_remember {EV} {mi ms : mod_trans EV} (Pσ : _ → _ → _ → Prop) σi σs b n :
   Pσ n σi σs →
-  (∀ n n' σi σs, tiS?b n' ⊆ n → Pσ n σi σs → Pσ n' σi σs) →
-  (∀ n', tiS?b n' ⊆ n →
+  (∀ n n' σi σs, oS?b n' ⊆ n → Pσ n σi σs → Pσ n' σi σs) →
+  (∀ n', oS?b n' ⊆ n →
          (∀ n'' σi σs, n'' ⊆ n' → Pσ n'' σi σs → σi ⪯{mi, ms, n'', true} σs) →
          (∀ σi σs, Pσ n' σi σs → σi ⪯{mi, ms, n', false} σs)) →
   σi ⪯{mi, ms, n, b} σs.
@@ -354,18 +354,18 @@ Proof.
   move => ? HPmono Hsim. apply: (tsim_remember' (Pσ)). { naive_solver. }
   move => ?? Hrec ???. apply Hsim; [done| |done].
   move => ?????. apply: Hrec; [done|]. move => n3 ?. apply: HPmono; [|done]. etrans; [|done].
-  change (tiS n3) with (tiS?true n3). by apply tiS_maybe_mono.
+  change (oS n3) with (oS?true n3). by apply oS_maybe_mono.
 Qed.
 
 Lemma tsim_remember_all {EV A} {mi ms : mod_trans EV} σi σs b n:
-  (∀ n', tiS?b n' ⊆ n → Plater (λ b', ∀ x, σi x ⪯{mi, ms, n', b'} σs x)) →
+  (∀ n', oS?b n' ⊆ n → Plater (λ b', ∀ x, σi x ⪯{mi, ms, n', b'} σs x)) →
   ∀ x : A, σi x ⪯{mi, ms, n, b} σs x.
 Proof.
   move => Hsim x. apply: (tsim_remember (λ _ σi' σs', ∃ x, σi' = σi x ∧ σs' = σs x)).
   all: naive_solver.
 Qed.
 
-Inductive tsim_remember_call_stack {EV} (n : trace_index) (mi ms : mod_trans EV)
+Inductive tsim_remember_call_stack {EV} (n : ordinal) (mi ms : mod_trans EV)
           (R : nat → bool → _ → _ → Prop) (RR : mi.(m_state) → ms.(m_state) → _ → _ → Prop) :
   nat → mi.(m_state) → ms.(m_state) → Prop :=
 | IPSNil σi σs :
@@ -406,7 +406,7 @@ Lemma tsim_remember_call {EV} (mi ms : mod_trans EV) R `{!∀ d b, Transitive (R
   (∀ d σi σs σi' σs', R d true (σi, σs) (σi', σs') → R d false (σi, σs) (σi', σs')) →
   R 0%nat false (σi0, σs0) (σi0, σs0) →
   (∀ n σi1 σs1 d,
-      tiS?b n ⊆ n0 →
+      oS?b n ⊆ n0 →
       R d false (σi0, σs0) (σi1, σs1) →
       (* Stay *)
       (∀ n' σi2 σs2,
@@ -444,7 +444,7 @@ Proof.
   { split!. done. econs. } {
     move => ? n' ?? /=??. destruct!. split!; [done|].
     apply: tsim_remember_call_stack_mono; [done|]. etrans; [|done].
-    apply ti_le_S_maybe.
+    apply o_le_S_maybe.
   }
   move => n ? /= Hloop σi1 σs1 ?. destruct!.
   apply: Hcall; [done..| | |].
@@ -462,7 +462,7 @@ Qed.
 
 Lemma tsim_mirror {EV1 EV2} (m : mod_trans EV1) (σ : m.(m_state)) (fm1 : mod_trans EV1 → mod_trans EV2) fm2 fσ1 fσ2 n b  :
   (∀ σ n',
-      tiS?b n' ⊆ n →
+      oS?b n' ⊆ n →
       (∀ (P : _ → _ → _ → Prop),
           (∀ κ Pσ, m_step m σ κ Pσ → (∀ σ', fσ1 σ' ⪯{fm1 m, fm2 m, n', true} fσ2 σ') → P true κ Pσ) →
             σ -{ m }-> P) →
@@ -515,7 +515,7 @@ Proof.
   have [?[? {}Hsim]]:= Hsim _ _ ltac:(done).
   apply: Hsim. 2: { naive_solver. }
   destruct b; (etrans; [|done]).
-  - econs. apply ti_lt_impl_le. etrans; [|done]. econs. by econs.
+  - econs. apply o_lt_impl_le. etrans; [|done]. econs. by econs.
   - etrans; [|done]. econs. by econs.
     Unshelve. done.
 Qed.
@@ -552,8 +552,8 @@ Proof.
   apply: thas_trace_under_tall; [done..|] => {Hi HP Hd} {}κs /= [?|]. { tend. }
   move => [?[?[?[?[?[[b'[? [HP [? HG']]]][<-[??]]]]]]]]. move: HP => /HG'[?[? Hs]].
   apply: Hs. 2: naive_solver.
-  etrans; [|done]. rewrite orb_comm. etrans; [ apply tiS_maybe_orb|]. apply tiS_maybe_mono; [done|].
-  etrans; [|done]. by apply tiS_maybe_mono.
+  etrans; [|done]. rewrite orb_comm. etrans; [ apply oS_maybe_orb|]. apply oS_maybe_mono; [done|].
+  etrans; [|done]. by apply oS_maybe_mono.
 Qed.
 
 Lemma tsim_tstep_both {EV} (mi : mod_trans EV) σi P `{!TStepI mi σi P} ms σs n b:
@@ -566,8 +566,8 @@ Proof.
   move => [?[?[?[?[?[[?[?[?[? HG']]]][<-[??]]]]]]]].
   apply: thas_trace_trans; [done|] => ? /HG' [σi' [? {}Ht]].
   apply: Ht; [|naive_solver].
-  etrans; [|done]. rewrite orb_comm. etrans; [ apply tiS_maybe_orb|]. apply tiS_maybe_mono; [done|].
-  etrans; [|done]. by apply tiS_maybe_mono.
+  etrans; [|done]. rewrite orb_comm. etrans; [ apply oS_maybe_orb|]. apply oS_maybe_mono; [done|].
+  etrans; [|done]. by apply oS_maybe_mono.
 Qed.
 
 Class TStepS {EV} (ms : mod_trans EV) (σs : ms.(m_state)) (P : (option EV → ((ms.(m_state) → Prop) → Prop) → Prop) → Prop) : Prop := {

@@ -1496,7 +1496,7 @@ Proof.
       apply Hstay; [done|]. by split!.
     }
     { move => ?? [????] [[?[???]][[?[??]]?]] ??. destruct!. split!; [done..|].
-      move => *. apply: tsim_mono; [naive_solver|]. etrans; [|done]. apply ti_le_S. }
+      move => *. apply: tsim_mono; [naive_solver|]. etrans; [|done]. apply o_le_S. }
     iSatClear.
     move => n' /= Hn' IH [i' rs' mem' ins'] [[?[???]][[?[??]]?]] ?. destruct!.
     apply: Hf; [try done..| |].
@@ -1521,7 +1521,7 @@ Proof.
         iDestruct (r2a_args_elim with "[$]") as (??) "?". iSatStop.
         r2a_split!. { by apply not_elem_of_dom. } { by apply elem_of_dom. }
         { iSatMono. iIntros!. iFrame. iAccu. }
-        apply Hcall. { etrans; [|done]. apply ti_le_S. } { by split!. }
+        apply Hcall. { etrans; [|done]. apply o_le_S. } { by split!. }
         iSatClear.
         move => [i2 rs2 mem2 ins'2] [[?[???]][[?[??]]?]].
         move => [i3 rs3 mem3 ins'3] [[?[???]][[?[??]]?]] ??. destruct!.

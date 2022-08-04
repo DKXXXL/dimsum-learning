@@ -287,7 +287,7 @@ Lemma memcpy_spec n0 d s d' s' n o K e h m σ1 σ2 b cs hvs `{!RecExprFill e K
     ⪯{rec_link_trans {["memmove"; "memcpy"]} {["locle"]} rec_trans (itree_trans rec_event ()), m, n0, b}
   σ2.
 Proof.
-  elim/ti_lt_ind: n0 b d d' s s' n h hvs e K RecExprFill0 => n1 IH b d d' s s' n h hvs e K [->] ? Ho ?? Hle Hhvs Halive Hcont. subst.
+  elim/o_lt_ind: n0 b d d' s s' n h hvs e K RecExprFill0 => n1 IH b d d' s s' n h hvs e K [->] ? Ho ?? Hle Hhvs Halive Hcont. subst.
   tstep_i. split! => *. simplify_map_eq. split!.
   tstep_i. move => ?? [??]. simplify_eq. split!.
   tstep_i. split!.
@@ -323,7 +323,7 @@ Proof.
     rewrite right_id_L.
     enough (kmap (λ i : Z, d +ₗ i) (map_seqZ (Z.succ 0) hvs) =@{gmap _ _}
             kmap (λ i : Z, d +ₗ 1 +ₗ i) (map_seqZ 0 hvs)) as ->. {
-      move => ?. apply: tsim_mono; [done|]. etrans; [|done]. apply ti_le_S.
+      move => ?. apply: tsim_mono; [done|]. etrans; [|done]. apply o_le_S.
     }
     apply map_eq => i. apply option_eq => v'. rewrite !lookup_kmap_Some.
     setoid_rewrite lookup_map_seqZ_Some. split; move => [j ?]; destruct!.
@@ -363,7 +363,7 @@ Proof.
     rewrite /= heap_update_big_update app_length /=.
     have -> : (- (length hvs' + 1)%nat + 1) = - length hvs' by lia.
     rewrite map_seqZ_app /= kmap_union kmap_insert kmap_empty offset_loc_add_sub //.
-    move => ?. apply: tsim_mono; [done|]. etrans; [|done]. apply ti_le_S.
+    move => ?. apply: tsim_mono; [done|]. etrans; [|done]. apply o_le_S.
 Qed.
 
 Definition memmove_itree : itree (moduleE rec_event unit) unit :=

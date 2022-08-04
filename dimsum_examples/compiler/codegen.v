@@ -428,7 +428,7 @@ Proof.
 Qed.
 
 (** ** sim *)
-Definition sim (n : trace_index) (b : bool) (dins : list deep_asm_instr) (e : expr)
+Definition sim (n : ordinal) (b : bool) (dins : list deep_asm_instr) (e : expr)
            (s : state) (rs : gmap string Z) (h h' : heap_state) : uPred rec_to_asmUR :=
   ∀ mem lr rf,
   ⌜deep_to_asm_instrs (rs !!! "PC") dins ⊆ pf_ins⌝ -∗
@@ -1102,7 +1102,7 @@ Proof.
     rewrite lookup_total_insert_ne; [by simplify_map_eq'|set_solver].
 Qed.
 
-Definition call_correct (n : trace_index) (s : state) (K : list expr_ectx) : Prop :=
+Definition call_correct (n : ordinal) (s : state) (K : list expr_ectx) : Prop :=
   (∀ rs vs vm p' a f K' h,
       s.(s_f2i) !! f = Some a →
   r2a_args 0 vs rs -∗
