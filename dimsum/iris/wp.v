@@ -7,167 +7,182 @@ From dimsum.core Require Import trefines.
 From dimsum.core.iris Require Export ord_later.
 Set Default Proof Using "Type".
 
-Structure language := Language {
-  expr : Type;
-  state : Type;
-  events : Type;
-  lang_trans : mod_trans events;
-  to_expr : lang_trans.(m_state) → expr;
-  to_state : lang_trans.(m_state) → state;
+Class Sim (PROP : bi) (E1 E2 : Type) :=
+  sim : coPset → E1 → E2 → (E1 → E2 → PROP) → PROP.
+(* We assume only one instance is ever in scope, hence no mode *)
+
+(* FIXME what are good levels for et, es? *)
+Notation "et '⪯{' E '}' es {{ Φ }}" := (sim E et es Φ) (at level 70, Φ at level 200,
+  format "'[hv' et  '/' '⪯{' E '}'  '/' es  '/' {{  '[ ' Φ  ']' }} ']'") : bi_scope.
+
+Record mod_lang EV := ModLang {
+  mexpr : Type;
+  mstate : Type;
+  mtrans : mod_trans EV;
+(* TODO: Should this be something like mexpr_state_rel? *)
+  mto_expr : mtrans.(m_state) → mexpr;
+  mto_state : mtrans.(m_state) → mstate;
 }.
-Definition exprO {Λ : language} := leibnizO (expr Λ).
+Global Arguments mexpr {_} _.
+Global Arguments mstate {_} _.
+Global Arguments mtrans {_} _.
+Global Arguments mto_expr {_} _ _.
+Global Arguments mto_state {_} _ _.
 
-Class refirisPreG (Σ : gFunctors) := RefirisPreG {
-  refiris_pre_invG :> invGpreS Σ;
-  refiris_pre_ord_laterG :> ord_laterPreG Σ;
+Definition mexprO {EV} {Λ : mod_lang EV} := leibnizO (mexpr Λ).
+
+Class dimsumPreG (Σ : gFunctors) := RefirisPreG {
+  dimsum_pre_invG :> invGpreS Σ;
+  dimsum_pre_ord_laterG :> ord_laterPreG Σ;
 }.
 
-Class refirisGS (Λ : language) (Σ : gFunctors) := RefirisGS {
-  refiris_invGS :> invGS_gen HasNoLc Σ;
-  refiris_ord_laterGS :> ord_laterGS Σ;
-  spec_trans : mod_trans (events Λ);
-  state_interp : state Λ → spec_trans.(m_state) → iProp Σ;
+Class dimsumGS (EV : Type) (Λ_t Λ_s : mod_lang EV) (Σ : gFunctors) := DimsumGS {
+  dimsum_invGS :> invGS_gen HasNoLc Σ;
+  dimsum_ord_laterGS :> ord_laterGS Σ;
+  state_interp : mstate Λ_t → mstate Λ_s → iProp Σ;
 }.
-Global Opaque refiris_invGS.
+Global Opaque dimsum_invGS.
 
-Definition wp_pre `{!refirisGS Λ Σ}
-    (wp : leibnizO coPset -d> exprO -d> (exprO -d> iPropO Σ) -d> iPropO Σ) :
-    leibnizO coPset -d> exprO -d> (exprO -d> iPropO Σ) -d> iPropO Σ := λ E e1 Φ,
-  (∀ σ σs, ⌜e1 = to_expr Λ σ⌝ -∗ ord_later_ctx -∗ state_interp (to_state Λ σ) σs ={E}=∗
-    (state_interp (to_state Λ σ) σs ∗ Φ e1) ∨
-    ∀ κ Pσ, ⌜(lang_trans Λ).(m_step) σ κ Pσ⌝ ={E,∅}=∗ ▷ₒ
-      ∃ Pσs, ⌜σs ~{spec_trans, option_trace κ}~>ₜ Pσs⌝ ∗
-        ∀ σs', ⌜Pσs σs'⌝ ={∅, E}=∗
-          ∃ σ', ⌜Pσ σ'⌝ ∗ (state_interp (to_state Λ σ') σs' ∗ wp E (to_expr Λ σ') Φ))%I.
+Definition sim_pre `{!dimsumGS EV Λ_t Λ_s Σ}
+    (sim : leibnizO coPset -d> mexprO -d> mexprO -d> (mexprO -d> mexprO -d> iPropO Σ) -d> iPropO Σ) :
+    leibnizO coPset -d> mexprO -d> mexprO -d> (mexprO -d> mexprO -d> iPropO Σ) -d> iPropO Σ := λ E e_t e_s Φ,
+  (∀ σ_t σ_s, ⌜e_t = mto_expr Λ_t σ_t⌝ -∗ ⌜e_s = mto_expr Λ_s σ_s⌝ -∗
+    ord_later_ctx -∗ state_interp (mto_state Λ_t σ_t) (mto_state Λ_s σ_s) ={E}=∗
+      (state_interp (mto_state Λ_t σ_t) (mto_state Λ_s σ_s) ∗ Φ e_t e_s) ∨
+      ∀ κ Pσ_t, ⌜(mtrans Λ_t).(m_step) σ_t κ Pσ_t⌝ ={E,∅}=∗ ▷ₒ
+        ∃ Pσ_s, ⌜σ_s ~{mtrans Λ_s, option_trace κ}~>ₜ Pσ_s⌝ ∗
+          ∀ σ_s', ⌜Pσ_s σ_s'⌝ ={∅, E}=∗
+            ∃ σ_t', ⌜Pσ_t σ_t'⌝ ∗ (state_interp (mto_state Λ_t σ_t') (mto_state Λ_s σ_s') ∗
+             sim E (mto_expr Λ_t σ_t') (mto_expr Λ_s σ_s') Φ))%I.
 
-Global Instance wp_pre_ne `{!refirisGS Λ Σ} n:
-  Proper ((dist n ==> dist n ==> dist n ==> dist n) ==> dist n ==> dist n ==> dist n ==> dist n) wp_pre.
+Global Instance sim_pre_ne `{!dimsumGS EV Λ_t Λ_s Σ} n:
+  Proper ((dist n ==> dist n ==> dist n ==> dist n ==> dist n) ==> dist n ==> dist n ==> dist n ==> dist n ==> dist n) sim_pre.
 Proof.
-  move => ?? Hwp ?? -> ?? -> ?? HΦ. rewrite /wp_pre.
-  repeat (f_equiv || eapply Hwp || eapply HΦ || reflexivity).
+  move => ?? Hsim ?? -> ?? -> ?? -> ?? HΦ. rewrite /sim_pre.
+  repeat (f_equiv || eapply Hsim || eapply HΦ || reflexivity).
 Qed.
 
-Lemma wp_pre_mono `{!refirisGS Λ Σ} wp1 wp2:
-  ⊢ □ (∀ E e Φ, wp1 E e Φ -∗ wp2 E e Φ )
-  → ∀ E e Φ , wp_pre wp1 E e Φ -∗ wp_pre wp2 E e Φ.
+Lemma sim_pre_mono `{!dimsumGS EV Λ_t Λ_s Σ} sim1 sim2:
+  ⊢ □ (∀ E e_t e_s Φ, sim1 E e_t e_s Φ -∗ sim2 E e_t e_s Φ )
+  → ∀ E e_t e_s Φ , sim_pre sim1 E e_t e_s Φ -∗ sim_pre sim2 E e_t e_s Φ.
 Proof.
-  iIntros "#Hinner" (E e Φ) "Hwp".
-  iIntros (σ σs ?) "#? Hσ". iMod ("Hwp" with "[//] [//] Hσ") as "[Hwp|Hwp]"; [by iLeft|iRight]. iModIntro.
-  iIntros (κ Pσ ?). iMod ("Hwp" with "[//]") as "Hwp". iModIntro. iMod "Hwp" as (??) "Hwp".
+  iIntros "#Hinner" (E e_t e_s Φ) "Hsim".
+  iIntros (σ_t σ_s ??) "#? Hσ".
+  iMod ("Hsim" with "[//] [//] [//] Hσ") as "[Hsim|Hsim]"; [by iLeft|iRight]. iModIntro.
+  iIntros (κ P_tσ ?). iMod ("Hsim" with "[//]") as "Hsim". iModIntro. iMod "Hsim" as (??) "Hsim".
   iExists _. iSplit; [done|].
-  iIntros (??). iMod ("Hwp" with "[//]") as (??) "[? ?]". iModIntro. iExists _. iSplit; [done|].
+  iIntros (??). iMod ("Hsim" with "[//]") as (??) "[? ?]". iModIntro. iExists _. iSplit; [done|].
   iFrame. by iApply "Hinner".
 Qed.
 
-Local Instance wp_pre_monotone `{!refirisGS Λ Σ} :
-  BiMonoPred (λ wp : prodO (prodO (leibnizO coPset) exprO) (exprO -d> iPropO Σ) -d> iPropO Σ, uncurry3 (wp_pre (curry3 wp))).
+Local Instance sim_pre_monotone `{!dimsumGS EV Λ_t Λ_s Σ} :
+  BiMonoPred (λ sim : prodO (prodO (prodO (leibnizO coPset) mexprO) mexprO) (mexprO -d> mexprO -d> iPropO Σ) -d> iPropO Σ, uncurry4 (sim_pre (curry4 sim))).
 Proof.
   constructor.
-  - iIntros (Φ Ψ ??) "#Hinner". iIntros ([[??]?]) "Hwp" => /=. iApply wp_pre_mono; [|done].
-    iIntros "!>" (???) "HΦ". by iApply ("Hinner" $! (_, _, _)).
-  - move => wp Hwp n [[E1 e1]Φ1] [[E2 e2]Φ2] /= [[/=??]?].
-    apply wp_pre_ne; eauto. move => ????????? /=. by apply: Hwp.
+  - iIntros (Φ Ψ ??) "#Hinner". iIntros ([[[??]?]?]) "Hsim" => /=. iApply sim_pre_mono; [|done].
+    iIntros "!>" (????) "HΦ". by iApply ("Hinner" $! (_, _, _, _)).
+  - move => sim Hsim n [[[E1 e_t1] e_s1] Φ1] [[[E2 e_t2] e_s2] Φ2] /= [[/=[/=??]?]?].
+    apply sim_pre_ne; eauto. move => ???????????? /=. by apply: Hsim.
 Qed.
 
-Definition wp_def `{!refirisGS Λ Σ} : Wp (iProp Σ) (expr Λ) (expr Λ) stuckness :=
-  λ s : stuckness, curry3 (bi_least_fixpoint (λ wp : prodO (prodO (leibnizO coPset) exprO) (exprO -d> iPropO Σ) -d> iPropO Σ, uncurry3 (wp_pre (curry3 wp)))).
-Definition wp_aux : seal (@wp_def). Proof. by eexists. Qed.
-Definition wp' := wp_aux.(unseal).
-Global Arguments wp' {Λ Σ _}.
-Global Existing Instance wp'.
-Lemma wp_eq `{!refirisGS Λ Σ} : wp = @wp_def Λ Σ _.
-Proof. rewrite -wp_aux.(seal_eq) //. Qed.
+Definition sim_def `{!dimsumGS EV Λ_t Λ_s Σ} : Sim (iPropI Σ) (mexpr Λ_t) (mexpr Λ_s) :=
+  curry4 (bi_least_fixpoint (λ sim : prodO (prodO (prodO (leibnizO coPset) mexprO) mexprO) (mexprO -d> mexprO -d> iPropO Σ) -d> iPropO Σ, uncurry4 (sim_pre (curry4 sim)))).
+Definition sim_aux : seal (@sim_def). Proof. by eexists. Qed.
+Definition sim' := sim_aux.(unseal).
+Global Arguments sim' {EV Λ_t Λ_s Σ _}.
+Global Existing Instance sim'.
+Lemma sim_eq `{!dimsumGS EV Λ_t Λ_s Σ} : sim = @sim_def EV Λ_t Λ_s Σ _.
+Proof. rewrite -sim_aux.(seal_eq) //. Qed.
 
-Section wp.
-Context `{!refirisGS Λ Σ}.
+Section sim.
+Context `{!dimsumGS EV Λ_t Λ_s Σ}.
 Implicit Types s : stuckness.
 Implicit Types P : iProp Σ.
-Implicit Types Φ : expr Λ → iProp Σ.
-Implicit Types e : expr Λ.
+Implicit Types Φ : mexpr Λ_t → mexpr Λ_s → iProp Σ.
 
 (* Weakest pre *)
-Lemma wp_unfold E e Φ s:
-  WP e @ s; E {{ Φ }} ⊣⊢ wp_pre (wp s (PROP:=iProp Σ)) E e Φ.
-Proof. rewrite wp_eq /wp_def /curry3. apply: least_fixpoint_unfold. Qed.
+Lemma sim_unfold E e_t e_s Φ:
+  e_t ⪯{E} e_s {{ Φ }} ⊣⊢ sim_pre (sim (PROP:=iPropI Σ)) E e_t e_s Φ.
+Proof. rewrite sim_eq /sim_def /curry3. apply: least_fixpoint_unfold. Qed.
 
-Lemma wp_strong_ind (R: leibnizO coPset -d> exprO -d> (exprO -d> iPropO Σ) -d> iPropO Σ):
-  NonExpansive3 R →
-  ⊢ (□ ∀ E e Φ, wp_pre (λ E e Ψ, R E e Ψ ∧ wp NotStuck E e Ψ) E e Φ -∗ R E e Φ)
-    -∗ ∀ E e Φ, wp NotStuck E e Φ -∗ R E e Φ .
+Lemma sim_strong_ind (R: leibnizO coPset -d> mexprO -d> mexprO -d> (mexprO -d> mexprO -d> iPropO Σ) -d> iPropO Σ):
+  NonExpansive4 R →
+  ⊢ (□ ∀ E e_t e_s Φ, sim_pre (λ E e_t e_s Ψ, R E e_t e_s Ψ ∧ e_t ⪯{E} e_s {{ Ψ }}) E e_t e_s Φ -∗ R E e_t e_s Φ)
+    -∗ ∀ E e_t e_s Φ, e_t ⪯{E} e_s {{ Φ }} -∗ R E e_t e_s Φ.
 Proof.
-  iIntros (Hne) "#HPre". iIntros (E e Φ) "Hwp".
-  rewrite wp_eq {2}/wp_def {1}/curry3.
-  iApply (least_fixpoint_ind _ (uncurry3 R) with "[] Hwp").
-  iIntros "!>" ([[??]?]) "Hwp" => /=. by iApply "HPre".
+  iIntros (Hne) "#HPre". iIntros (E e_t e_s Φ) "Hsim".
+  rewrite sim_eq {2}/sim_def {1}/curry4.
+  iApply (least_fixpoint_ind _ (uncurry4 R) with "[] Hsim").
+  iIntros "!>" ([[[??]?]?]) "Hsim" => /=. by iApply "HPre".
 Qed.
 
-Lemma wp_ind (R: leibnizO coPset -d> exprO -d> (exprO -d> iPropO Σ) -d> iPropO Σ):
-  NonExpansive3 R →
-  ⊢ (□ ∀ E e Φ, wp_pre R E e Φ -∗ R E e Φ)
-    -∗ ∀ E e Φ, wp NotStuck E e Φ -∗ R E e Φ .
+Lemma sim_ind (R: leibnizO coPset -d> mexprO -d> mexprO -d> (mexprO -d> mexprO -d> iPropO Σ) -d> iPropO Σ):
+  NonExpansive4 R →
+  ⊢ (□ ∀ E e_t e_s Φ, sim_pre R E e_t e_s Φ -∗ R E e_t e_s Φ)
+    -∗ ∀ E e_t e_s Φ, e_t ⪯{E} e_s {{ Φ }} -∗ R E e_t e_s Φ .
 Proof.
-  iIntros (Hne) "#HPre". iApply wp_strong_ind. iIntros "!>" (E e Φ) "Hwp".
-  iApply "HPre". iApply (wp_pre_mono with "[] Hwp").
-  iIntros "!>" (???) "[? _]". by iFrame.
+  iIntros (Hne) "#HPre". iApply sim_strong_ind. iIntros "!>" (E e_t e_s Φ) "Hsim".
+  iApply "HPre". iApply (sim_pre_mono with "[] Hsim").
+  iIntros "!>" (????) "[? _]". by iFrame.
 Qed.
 
-Lemma wp_stop' E e Φ:
-  (|={E}=> Φ e) -∗ WP e @ E {{ Φ }}.
-Proof. rewrite wp_unfold. iIntros "HΦ" (σ σs ?) "? Hσ". iLeft. iFrame. Qed.
-Lemma wp_stop E e Φ:
-  Φ e -∗ WP e @ E {{ Φ }}.
-Proof. iIntros "HΦ". iApply wp_stop'. by iFrame. Qed.
+Lemma sim_stop' E e_t e_s Φ:
+  (|={E}=> Φ e_t e_s) -∗ e_t ⪯{E} e_s {{ Φ }}.
+Proof. rewrite sim_unfold. iIntros "HΦ" (σ_t σ_s ??) "? Hσ". iLeft. iFrame. Qed.
+Lemma sim_stop E e_t e_s Φ:
+  Φ e_t e_s -∗ e_t ⪯{E} e_s {{ Φ }}.
+Proof. iIntros "HΦ". iApply sim_stop'. by iFrame. Qed.
 
-Lemma wp_bind E e Φ:
-  WP e @ E {{ e', WP e' @ E {{ Φ }} }} -∗ WP e @ E {{ Φ }}.
+Lemma sim_bind E e_t e_s Φ:
+  e_t ⪯{E} e_s {{ λ e_t' e_s', e_t' ⪯{E} e_s' {{ Φ }} }} -∗ e_t ⪯{E} e_s {{ Φ }}.
 Proof.
   iIntros "HΦ".
-  pose (F := (λ E e Ψ, ∀ Φ, (∀ e, Ψ e -∗ wp NotStuck E e Φ) -∗ wp NotStuck E e Φ)%I).
-  iAssert (∀ Φ, wp NotStuck E e Φ -∗ F E e Φ)%I as "Hgen"; last first.
-  { iApply ("Hgen" with "HΦ"). iIntros (?) "$". }
-  iIntros (?) "HWP".
-  iApply (wp_ind with "[] HWP"). { solve_proper. }
-  iIntros "!>" (???) "Hwp". iIntros (?) "Hc".
-  rewrite wp_unfold. iIntros (???) "#? Hσ".
-  iMod ("Hwp" with "[//] [//] Hσ") as "[[? ?]|Hwp]".
-  - iDestruct ("Hc" with "[$]") as "Hc". rewrite wp_unfold. by iApply "Hc".
-  - iModIntro. iRight. iIntros (???). iMod ("Hwp" with "[//]") as "Hwp". iModIntro.
-    iMod "Hwp" as (??) "Hwp".
-    iExists _. iSplit; [done|]. iIntros (??). iMod ("Hwp" with "[//]") as (??) "[? HF]". iModIntro.
+  pose (F := (λ E e_t e_s Ψ, ∀ Φ, (∀ e_t e_s, Ψ e_t e_s -∗ e_t ⪯{E} e_s {{ Φ }}) -∗ e_t ⪯{E} e_s {{ Φ }})%I).
+  iAssert (∀ Φ, e_t ⪯{E} e_s {{ Φ }} -∗ F E e_t e_s Φ)%I as "Hgen"; last first.
+  { iApply ("Hgen" with "HΦ"). iIntros (??) "$". }
+  iIntros (?) "Hsim".
+  iApply (sim_ind with "[] Hsim"). { solve_proper. }
+  iIntros "!>" (????) "Hsim". iIntros (?) "Hc".
+  rewrite sim_unfold. iIntros (????) "#? Hσ".
+  iMod ("Hsim" with "[//] [//] [//] Hσ") as "[[? ?]|Hsim]".
+  - iDestruct ("Hc" with "[$]") as "Hc". rewrite sim_unfold. by iApply "Hc".
+  - iModIntro. iRight. iIntros (???). iMod ("Hsim" with "[//]") as "Hsim". iModIntro.
+    iMod "Hsim" as (??) "Hsim".
+    iExists _. iSplit; [done|]. iIntros (??). iMod ("Hsim" with "[//]") as (??) "[? HF]". iModIntro.
     iExists _. iSplit; [done|]. iFrame. by iApply "HF".
 Qed.
 
-End wp.
+End sim.
 
-Theorem wp_adequacy Σ Λ `{!refirisPreG Σ} mspec σi σs :
+Theorem sim_adequacy Σ EV Λ_t Λ_s `{!dimsumPreG Σ} σ_t σ_s :
   (∀ `{Hinv : !invGS_gen HasNoLc Σ} `{Hord : !ord_laterGS Σ},
-    ⊢ |={⊤}=> ∃ (stateI : state Λ → mspec.(m_state) → iProp Σ),
-       let _ : refirisGS Λ Σ := RefirisGS _ _ _ _ mspec stateI
+    ⊢ |={⊤}=> ∃ (stateI : mstate Λ_t → mstate Λ_s → iProp Σ),
+       let _ : dimsumGS EV Λ_t Λ_s Σ := DimsumGS _ _ _ _ _ _ stateI
        in
-       stateI (to_state Λ σi) σs ∗
-       WP (to_expr Λ σi) @ ⊤ {{ _, |={⊤, ∅}=> False }}) →
-  trefines (Mod (lang_trans Λ) σi) (Mod mspec σs).
+       stateI (mto_state Λ_t σ_t) (mto_state Λ_s σ_s) ∗
+       mto_expr Λ_t σ_t ⪯{⊤} mto_expr Λ_s σ_s {{ λ _ _, |={⊤, ∅}=> False }}) →
+  trefines (Mod (mtrans Λ_t) σ_t) (Mod (mtrans Λ_s) σ_s).
 Proof.
-  intros Hwp. constructor => κs /thas_trace_n [n Htrace].
+  intros Hsim. constructor => κs /thas_trace_n [n Htrace].
   apply (step_fupdN_soundness_no_lc _ 0 0) => ? /=. simpl in *. iIntros "_".
   iMod (ord_later_alloc n) as (?) "Ha". iDestruct (ord_later_ctx_alloc with "Ha") as "#?".
-  iMod Hwp as (stateI) "(Hσ & Hwp)". clear Hwp.
-  iInduction Htrace as [????? Hκs|???????? Hstep ?? Hlt Hκs|????????? Hκs Hle] "IH" forall (σs).
+  iMod Hsim as (stateI) "(Hσ & Hsim)". clear Hsim.
+  iInduction Htrace as [????? Hκs|???????? Hstep ?? Hlt Hκs|????????? Hκs Hle] "IH" forall (σ_s).
   - rewrite -Hκs. iApply fupd_mask_intro; [done|]. iIntros "HE". iPureIntro. by econstructor.
-  - rewrite -Hκs. setoid_rewrite wp_unfold at 2.
-    iMod ("Hwp" with "[//] [//] Hσ") as "[[? Hwp]|Hwp]". { by iMod "Hwp". }
-    iMod ("Hwp" with "[//]") as "Hwp".
-    iMod (ord_later_elim with "Hwp Ha [-]"); [|done]. iIntros "Ha".
+  - rewrite -Hκs. setoid_rewrite sim_unfold at 2.
+    iMod ("Hsim" with "[//] [//] [//] Hσ") as "[[? Hsim]|Hsim]". { by iMod "Hsim". }
+    iMod ("Hsim" with "[//]") as "Hsim".
+    iMod (ord_later_elim with "Hsim Ha [-]"); [|done]. iIntros "Ha".
     iMod (ord_later_update with "Ha"); [shelve|].
     iModIntro. iExists _. iFrame. iSplit; [done|]. iIntros "Ha".
-    iDestruct 1 as (? Ht) "Hwp".
+    iDestruct 1 as (? Ht) "Hsim".
     iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. by apply thas_trace_trans. }
     iModIntro. iIntros (??).
-    iMod ("Hwp" with "[//]") as (σi' ?) "[Hstate Hwp]".
+    iMod ("Hsim" with "[//]") as (σi' ?) "[Hstate Hsim]".
     iMod (ord_later_update with "Ha") as "Ha"; [by apply: o_le_choice_r|].
-    iApply ("IH" with "Ha Hstate Hwp").
+    iApply ("IH" with "Ha Hstate Hsim").
     Unshelve. { by apply o_lt_impl_le. } { done. }
   - rewrite -Hκs. iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. apply thas_trace_all. }
     iIntros (?). iMod (ord_later_update with "Ha") as "Ha". { etrans; [|done]. by apply: o_le_choice_r. }
-    iApply ("IH" with "Ha Hσ Hwp").
+    iApply ("IH" with "Ha Hσ Hsim").
 Qed.
