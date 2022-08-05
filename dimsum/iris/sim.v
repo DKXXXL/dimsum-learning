@@ -12,22 +12,17 @@ Class Sim (PROP : bi) (E1 E2 : Type) :=
 (* We assume only one instance is ever in scope, hence no mode *)
 
 (* FIXME what are good levels for et, es? *)
-Notation "et '⪯{' E '}' es {{ Φ }}" := (sim E et es Φ) (at level 70, Φ at level 200,
-  format "'[hv' et  '/' '⪯{' E '}'  '/' es  '/' {{  '[ ' Φ  ']' }} ']'") : bi_scope.
+Notation "et '⪯{' E '}' es {{ Φ } }" := (sim E et es Φ) (at level 70, Φ at level 200,
+  format "'[hv' et  '/' '⪯{' E '}'  '/' es  '/' {{  '[ ' Φ  ']' } } ']'") : bi_scope.
 
-Record mod_lang EV := ModLang {
+Structure mod_lang EV := ModLang {
   mexpr : Type;
-  mstate : Type;
   mtrans : mod_trans EV;
-(* TODO: Should this be something like mexpr_state_rel? *)
-  mto_expr : mtrans.(m_state) → mexpr;
-  mto_state : mtrans.(m_state) → mstate;
+  mexpr_rel : mtrans.(m_state) → mexpr → Prop;
 }.
 Global Arguments mexpr {_} _.
-Global Arguments mstate {_} _.
 Global Arguments mtrans {_} _.
-Global Arguments mto_expr {_} _ _.
-Global Arguments mto_state {_} _ _.
+Global Arguments mexpr_rel {_} _ _ _.
 
 Definition mexprO {EV} {Λ : mod_lang EV} := leibnizO (mexpr Λ).
 
@@ -39,21 +34,21 @@ Class dimsumPreG (Σ : gFunctors) := RefirisPreG {
 Class dimsumGS (EV : Type) (Λ_t Λ_s : mod_lang EV) (Σ : gFunctors) := DimsumGS {
   dimsum_invGS :> invGS_gen HasNoLc Σ;
   dimsum_ord_laterGS :> ord_laterGS Σ;
-  state_interp : mstate Λ_t → mstate Λ_s → iProp Σ;
+  state_interp : (mtrans Λ_t).(m_state) → (mtrans Λ_s).(m_state) → iProp Σ;
 }.
 Global Opaque dimsum_invGS.
 
 Definition sim_pre `{!dimsumGS EV Λ_t Λ_s Σ}
     (sim : leibnizO coPset -d> mexprO -d> mexprO -d> (mexprO -d> mexprO -d> iPropO Σ) -d> iPropO Σ) :
     leibnizO coPset -d> mexprO -d> mexprO -d> (mexprO -d> mexprO -d> iPropO Σ) -d> iPropO Σ := λ E e_t e_s Φ,
-  (∀ σ_t σ_s, ⌜e_t = mto_expr Λ_t σ_t⌝ -∗ ⌜e_s = mto_expr Λ_s σ_s⌝ -∗
-    ord_later_ctx -∗ state_interp (mto_state Λ_t σ_t) (mto_state Λ_s σ_s) ={E}=∗
-      (state_interp (mto_state Λ_t σ_t) (mto_state Λ_s σ_s) ∗ Φ e_t e_s) ∨
+  (∀ σ_t σ_s, ⌜mexpr_rel Λ_t σ_t e_t⌝ -∗ ⌜mexpr_rel Λ_s σ_s e_s⌝ -∗
+    ord_later_ctx -∗ state_interp σ_t σ_s ={E}=∗
+      (state_interp σ_t σ_s ∗ Φ e_t e_s) ∨
       ∀ κ Pσ_t, ⌜(mtrans Λ_t).(m_step) σ_t κ Pσ_t⌝ ={E,∅}=∗ ▷ₒ
         ∃ Pσ_s, ⌜σ_s ~{mtrans Λ_s, option_trace κ}~>ₜ Pσ_s⌝ ∗
           ∀ σ_s', ⌜Pσ_s σ_s'⌝ ={∅, E}=∗
-            ∃ σ_t', ⌜Pσ_t σ_t'⌝ ∗ (state_interp (mto_state Λ_t σ_t') (mto_state Λ_s σ_s') ∗
-             sim E (mto_expr Λ_t σ_t') (mto_expr Λ_s σ_s') Φ))%I.
+            ∃ σ_t' e_t' e_s', ⌜Pσ_t σ_t'⌝ ∗ ⌜mexpr_rel Λ_t σ_t' e_t'⌝ ∗ ⌜mexpr_rel Λ_s σ_s' e_s'⌝ ∗
+              (state_interp σ_t' σ_s' ∗ sim E e_t' e_s' Φ))%I.
 
 Global Instance sim_pre_ne `{!dimsumGS EV Λ_t Λ_s Σ} n:
   Proper ((dist n ==> dist n ==> dist n ==> dist n ==> dist n) ==> dist n ==> dist n ==> dist n ==> dist n ==> dist n) sim_pre.
@@ -71,8 +66,8 @@ Proof.
   iMod ("Hsim" with "[//] [//] [//] Hσ") as "[Hsim|Hsim]"; [by iLeft|iRight]. iModIntro.
   iIntros (κ P_tσ ?). iMod ("Hsim" with "[//]") as "Hsim". iModIntro. iMod "Hsim" as (??) "Hsim".
   iExists _. iSplit; [done|].
-  iIntros (??). iMod ("Hsim" with "[//]") as (??) "[? ?]". iModIntro. iExists _. iSplit; [done|].
-  iFrame. by iApply "Hinner".
+  iIntros (??). iMod ("Hsim" with "[//]") as (??????) "[? ?]". iModIntro.
+  iSplit!; [done..|]. iFrame. by iApply "Hinner".
 Qed.
 
 Local Instance sim_pre_monotone `{!dimsumGS EV Λ_t Λ_s Σ} :
@@ -148,26 +143,28 @@ Proof.
   - iDestruct ("Hc" with "[$]") as "Hc". rewrite sim_unfold. by iApply "Hc".
   - iModIntro. iRight. iIntros (???). iMod ("Hsim" with "[//]") as "Hsim". iModIntro.
     iMod "Hsim" as (??) "Hsim".
-    iExists _. iSplit; [done|]. iIntros (??). iMod ("Hsim" with "[//]") as (??) "[? HF]". iModIntro.
-    iExists _. iSplit; [done|]. iFrame. by iApply "HF".
+    iExists _. iSplit; [done|]. iIntros (??). iMod ("Hsim" with "[//]") as (??????) "[? HF]". iModIntro.
+    iSplit!; [done..|]. iFrame. by iApply "HF".
 Qed.
 
 End sim.
 
 Theorem sim_adequacy Σ EV Λ_t Λ_s `{!dimsumPreG Σ} σ_t σ_s :
   (∀ `{Hinv : !invGS_gen HasNoLc Σ} `{Hord : !ord_laterGS Σ},
-    ⊢ |={⊤}=> ∃ (stateI : mstate Λ_t → mstate Λ_s → iProp Σ),
+    ⊢ |={⊤}=> ∃ (stateI : (mtrans Λ_t).(m_state) → (mtrans Λ_s).(m_state) → iProp Σ),
        let _ : dimsumGS EV Λ_t Λ_s Σ := DimsumGS _ _ _ _ _ _ stateI
        in
-       stateI (mto_state Λ_t σ_t) (mto_state Λ_s σ_s) ∗
-       mto_expr Λ_t σ_t ⪯{⊤} mto_expr Λ_s σ_s {{ λ _ _, |={⊤, ∅}=> False }}) →
+       ∃ e_t e_s,
+       ⌜mexpr_rel Λ_t σ_t e_t⌝ ∗ ⌜mexpr_rel Λ_s σ_s e_s⌝ ∗
+       stateI σ_t σ_s ∗
+       e_t ⪯{⊤} e_s {{ λ _ _, |={⊤, ∅}=> False }}) →
   trefines (Mod (mtrans Λ_t) σ_t) (Mod (mtrans Λ_s) σ_s).
 Proof.
   intros Hsim. constructor => κs /thas_trace_n [n Htrace].
   apply (step_fupdN_soundness_no_lc _ 0 0) => ? /=. simpl in *. iIntros "_".
   iMod (ord_later_alloc n) as (?) "Ha". iDestruct (ord_later_ctx_alloc with "Ha") as "#?".
-  iMod Hsim as (stateI) "(Hσ & Hsim)". clear Hsim.
-  iInduction Htrace as [????? Hκs|???????? Hstep ?? Hlt Hκs|????????? Hκs Hle] "IH" forall (σ_s).
+  iMod Hsim as (stateI ?? Het Hes) "(Hσ & Hsim)". clear Hsim.
+  iInduction Htrace as [????? Hκs|???????? Hstep ?? Hlt Hκs|????????? Hκs Hle] "IH" forall (σ_s e_t e_s Het Hes).
   - rewrite -Hκs. iApply fupd_mask_intro; [done|]. iIntros "HE". iPureIntro. by econstructor.
   - rewrite -Hκs. setoid_rewrite sim_unfold at 2.
     iMod ("Hsim" with "[//] [//] [//] Hσ") as "[[? Hsim]|Hsim]". { by iMod "Hsim". }
@@ -178,11 +175,11 @@ Proof.
     iDestruct 1 as (? Ht) "Hsim".
     iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. by apply thas_trace_trans. }
     iModIntro. iIntros (??).
-    iMod ("Hsim" with "[//]") as (σi' ?) "[Hstate Hsim]".
+    iMod ("Hsim" with "[//]") as (σ_t' ???? ?) "[Hstate Hsim]".
     iMod (ord_later_update with "Ha") as "Ha"; [by apply: o_le_choice_r|].
-    iApply ("IH" with "Ha Hstate Hsim").
+    iApply ("IH" with "[//] [//] Ha Hstate Hsim").
     Unshelve. { by apply o_lt_impl_le. } { done. }
   - rewrite -Hκs. iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. apply thas_trace_all. }
     iIntros (?). iMod (ord_later_update with "Ha") as "Ha". { etrans; [|done]. by apply: o_le_choice_r. }
-    iApply ("IH" with "Ha Hσ Hsim").
+    iApply ("IH" with "[//] [//] Ha Hσ Hsim").
 Qed.
