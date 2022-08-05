@@ -128,6 +128,24 @@ Lemma sim_stop E e_t e_s Φ:
   Φ e_t e_s -∗ e_t ⪯{E} e_s {{ Φ }}.
 Proof. iIntros "HΦ". iApply sim_stop'. by iFrame. Qed.
 
+
+Lemma sim_step E e_t e_s Φ:
+  (∀ σ_t σ_s κ Pσ_t, ⌜mexpr_rel Λ_t σ_t e_t⌝ -∗ ⌜mexpr_rel Λ_s σ_s e_s⌝ -∗
+    ⌜(mtrans Λ_t).(m_step) σ_t κ Pσ_t⌝ -∗ state_interp σ_t σ_s ={E,∅}=∗ ▷ₒ
+      ∃ Pσ_s, ⌜σ_s ~{mtrans Λ_s, option_trace κ}~>ₜ Pσ_s⌝ ∗
+         ∀ σ_s', ⌜Pσ_s σ_s'⌝ ={∅, E}=∗
+           ∃ σ_t' e_t' e_s', ⌜Pσ_t σ_t'⌝ ∗ ⌜mexpr_rel Λ_t σ_t' e_t'⌝ ∗ ⌜mexpr_rel Λ_s σ_s' e_s'⌝ ∗
+              (state_interp σ_t' σ_s' ∗ e_t' ⪯{E} e_s' {{ Φ }})) -∗
+  e_t ⪯{E} e_s {{ Φ }}.
+Proof.
+  iIntros "Hsim".
+  rewrite sim_unfold. iIntros (????) "#? Hσ !>". iRight. iIntros (???).
+  iMod ("Hsim" with "[//] [//] [//] [$]") as "Hsim". do 2 iModIntro.
+  iDestruct "Hsim" as (??) "Hsim". iExists _. iSplit; [done|].
+  iIntros (??). iMod ("Hsim" with "[//]") as (??????) "[? Hsim]".
+  iModIntro. iSplit!; [done..|]. iFrame.
+Qed.
+
 Lemma sim_bind E e_t e_s Φ:
   e_t ⪯{E} e_s {{ λ e_t' e_s', e_t' ⪯{E} e_s' {{ Φ }} }} -∗ e_t ⪯{E} e_s {{ Φ }}.
 Proof.
@@ -141,11 +159,19 @@ Proof.
   rewrite sim_unfold. iIntros (????) "#? Hσ".
   iMod ("Hsim" with "[//] [//] [//] Hσ") as "[[? ?]|Hsim]".
   - iDestruct ("Hc" with "[$]") as "Hc". rewrite sim_unfold. by iApply "Hc".
-  - iModIntro. iRight. iIntros (???). iMod ("Hsim" with "[//]") as "Hsim". iModIntro.
-    iMod "Hsim" as (??) "Hsim".
+  - iModIntro. iRight. iIntros (???). iMod ("Hsim" with "[//]") as "Hsim". do 2 iModIntro.
+    iDestruct "Hsim" as (??) "Hsim".
     iExists _. iSplit; [done|]. iIntros (??). iMod ("Hsim" with "[//]") as (??????) "[? HF]". iModIntro.
     iSplit!; [done..|]. iFrame. by iApply "HF".
 Qed.
+
+(* TODO *)
+Definition sim_src (E : coPset) (κ : option EV) (e_s : mexpr Λ_s) (Φ : mexpr Λ_s → iProp Σ) :=
+  ∀ σ_t σ_s, ⌜mexpr_rel Λ_s σ_s e_s⌝ -∗ state_interp σ_t σ_s ={E,∅}=∗
+    ∃ Pσ_s, ⌜σ_s ~{mtrans Λ_s, option_trace κ}~>ₜ Pσ_s⌝ ∗
+       ∀ σ_s', ⌜Pσ_s σ_s'⌝ ={∅, E}=∗
+            ∃ e_s', ⌜mexpr_rel Λ_s σ_s' e_s'⌝ ∗
+              (state_interp σ_t σ_s' ∗ Φ e_s').
 
 End sim.
 

@@ -79,6 +79,10 @@ Section lemmas.
     Proper ((≡) ==> (≡)) ord_later.
   Proof. unseal. solve_proper. Qed.
 
+  Lemma ord_later_intro P:
+    P -∗ ▷ₒ P.
+  Proof. unseal. iIntros "HP" (n) "Ha". iFrame. iIntros (??) "$". Qed.
+
   Lemma ord_later_mono P1 P2:
     ▷ₒ P1 -∗
     (P1 -∗ P2) -∗
@@ -86,13 +90,6 @@ Section lemmas.
   Proof.
     unseal. iIntros "Hl HP" (n) "Ha". iDestruct ("Hl" with "Ha") as "[$ Hl]".
     iIntros (n' ?) "Ha". iDestruct ("Hl" with "[//] Ha") as "[$ Hl]". by iApply "HP".
-  Qed.
-
-  Global Instance elim_modal_ord_later p P Q :
-    ElimModal True p false (▷ₒ P) P (▷ₒ Q) Q.
-  Proof.
-    rewrite /ElimModal bi.intuitionistically_if_elim.
-    iIntros (?) "[??]". by iApply (ord_later_mono with "[$]").
   Qed.
 
   Lemma ord_later_alloc `{!ord_laterPreG Σ} n :
@@ -125,6 +122,14 @@ Section lemmas.
     done.
   Qed.
 
+  (* TODO: does this hold? *)
+  Lemma ord_later_pers P :
+    □ ▷ₒ P -∗ ▷ₒ □ P.
+  Proof.
+    iIntros "#HP".
+    unseal. iIntros (n) "Htok".
+  Abort. (* Does not seem to hold. *)
+
   Lemma ord_loeb P:
     ord_later_ctx -∗
     □ (▷ₒ P -∗ P) -∗
@@ -153,3 +158,50 @@ Section lemmas.
     by iApply ("Hwand" with "Ha").
   Qed.
 End lemmas.
+
+(** Proof model instances *)
+Global Instance elim_modal_ord_later `{!ord_laterGS Σ} p P Q :
+  ElimModal True p false (▷ₒ P) P (▷ₒ Q) Q.
+Proof.
+  rewrite /ElimModal bi.intuitionistically_if_elim.
+  iIntros (?) "[??]". by iApply (ord_later_mono with "[$]").
+Qed.
+
+Class MaybeIntoOrdLater `{!ord_laterGS Σ} (P : iProp Σ) (Q : iProp Σ) :=
+  maybe_into_ord_later : P ⊢ ▷ₒ Q.
+Global Arguments MaybeIntoOrdLater {_ _} _%I _%I.
+Global Arguments maybe_into_ord_later {_ _} _%I _%I {_}.
+Global Hint Mode MaybeIntoOrdLater + + ! -  : typeclass_instances.
+
+Class IntoOrdLater `{!ord_laterGS Σ} (P : iProp Σ) (Q : iProp Σ) :=
+  into_ord_later :> MaybeIntoOrdLater P Q.
+Global Arguments IntoOrdLater {_ _} _%I _%I.
+Global Arguments into_ord_later {_ _} _%I _%I {_}.
+Global Hint Mode IntoOrdLater + + ! -  : typeclass_instances.
+
+Global Instance maybe_into_ord_later_default `{!ord_laterGS Σ} (P : iProp Σ) :
+  MaybeIntoOrdLater P P | 1000.
+Proof. apply ord_later_intro. Qed.
+
+Global Instance into_ord_later_ord_later `{!ord_laterGS Σ} (P : iProp Σ) :
+  IntoOrdLater (▷ₒ P) P | 1000.
+Proof. done. Qed.
+
+Lemma modality_ord_later_mixin `{!ord_laterGS Σ} :
+  (* TODO: Can we use [MIEnvTransform MaybeIntoOrdLater] instead of
+  MIEnvId? Seems tricky... *)
+  modality_mixin ord_later MIEnvId (MIEnvTransform MaybeIntoOrdLater).
+Proof.
+  split; simpl.
+  - iIntros (?). apply ord_later_intro.
+  - iIntros (???). done.
+  - apply ord_later_intro.
+  - iIntros (?? Himpl) "HP". iApply (ord_later_mono with "HP"). iApply Himpl.
+  - iIntros (??) "[??]". iApply ord_later_sep. iFrame.
+Qed.
+Definition modality_ord_later `{!ord_laterGS Σ} :=
+  Modality ord_later modality_ord_later_mixin.
+
+Global Instance from_modal_ord_later `{!ord_laterGS Σ} P :
+  FromModal True modality_ord_later (▷ₒ P) (▷ₒ P) P.
+Proof. rewrite /FromModal/=. iIntros (?) "$".  Qed.
