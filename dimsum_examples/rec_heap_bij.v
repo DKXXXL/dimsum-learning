@@ -676,7 +676,7 @@ Lemma heap_in_bij_alloc l1 l2 hi hs n bij H:
 Proof.
   iIntros ([Hi1 ?] [Hi2 ?]) "Hh". iIntros (p1 p2 o) => /=. iIntros ([[??]|[??]]%lookup_insert_Some); simplify_eq.
   - destruct l1 as [p1 ?], l2 as [p2 ?]; simplify_eq/=.
-    rewrite !lookup_union_l'.
+    rewrite !lookup_union_l.
     2: { apply eq_None_ne_Some => ??. apply Hi2. by apply: (heap_wf _ (_, _)). }
     2: { apply eq_None_ne_Some => ??. apply Hi1. by apply: (heap_wf _ (_, _)). }
     iSplit.

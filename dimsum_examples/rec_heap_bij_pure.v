@@ -930,7 +930,7 @@ Proof.
            revert select (default _ _ = _). rewrite default_eq_Some' => /(_ y). move: y => -[?|?].
            ++ rewrite heap_bij_splita_bij_bij //. naive_solver.
            ++ rewrite heap_bij_splita_bij_player elem_of_hb_player_s => ?. naive_solver.
-        -- simpl in *. unfold default in *. case_match as Hc => /=; simplify_eq/=.
+        -- simpl in *. unfold default in *. case_match eqn: Hc => /=; simplify_eq/=.
            ++ move: Hc. rewrite heap_bij_splita_bij_player elem_of_hb_player_s => ?.
               exfalso. fresh_map_learn. destruct!. revert select (_ ∉ _). apply.
               apply HX2. rewrite elem_of_dom. naive_solver.

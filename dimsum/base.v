@@ -32,14 +32,6 @@ Ltac inv_all_tac f :=
 Tactic Notation "inv_all/=" constr(f) := inv_all_tac f; simplify_eq/=.
 Tactic Notation "inv_all" constr(f) := inv_all_tac f.
 
-(** "as" variant of case_match  *)
-(* TODO: upstream *)
-Tactic Notation "case_match" "as" ident(Hd) :=
-  match goal with
-  | H : context [ match ?x with _ => _ end ] |- _ => destruct x eqn:Hd
-  | |- context [ match ?x with _ => _ end ] => destruct x eqn:Hd
-  end.
-
 (* TODO: make version for case_decide and case_match and upstream  *)
 (** [case_bool_decide] variant that takes a pattern  *)
 Tactic Notation "case_bool_decide" open_constr(pat) "as" ident(Hd) :=
@@ -366,32 +358,6 @@ Section map_seqZ.
   Qed.
 End map_seqZ.
 
-(** ** [map_Exists] *)
-(* TODO: https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/390 *)
-Definition map_Exists `{Lookup K A M} (P : K → A → Prop) : M → Prop :=
-  λ m, ∃ i x, m !! i = Some x ∧ P i x.
-
-Section theorems.
-Context `{FinMap K M}.
-Section map_Exists.
-  Context {A} (P : K → A → Prop).
-  Implicit Types m : M A.
-  Lemma map_Exists_to_list m : map_Exists P m ↔ Exists (uncurry P) (map_to_list m).
-  Proof.
-    rewrite Exists_exists. split.
-    - intros [? [? [? ?]]]. eexists (_, _). by rewrite elem_of_map_to_list.
-    - intros [[??] [??]]. eexists _, _. by rewrite <-elem_of_map_to_list.
-  Qed.
-
-  Context `{∀ i x, Decision (P i x)}.
-  Global Instance map_Exists_dec m : Decision (map_Exists P m).
-  Proof.
-    refine (cast_if (decide (Exists (uncurry P) (map_to_list m))));
-      by rewrite map_Exists_to_list.
-  Defined.
-End map_Exists.
-End theorems.
-
 (** ** [fresh_map] *)
 Definition fresh_map `{Countable A} `{Countable B} `{Infinite B}
     (S : gset A) (X : gset B) : gmap A B :=
@@ -440,10 +406,6 @@ Section map.
   Context `{FinMap K M}.
   Context {A : Type} .
   Implicit Types m : M A.
-(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/395 *)
-Lemma lookup_union_l' (m1 m2 : M A) i :
-  m2 !! i = None → (m1 ∪ m2) !! i = m1 !! i.
-Proof. intros Hi. rewrite lookup_union Hi. by destruct (m1 !! i). Qed.
 
 (* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/394 *)
 Lemma lookup_union_None_1 (m1 m2 : M A) i :
@@ -475,41 +437,6 @@ Section map_filter.
     filter P m = ∅.
   Proof. apply map_filter_empty_iff. Qed.
 End map_filter.
-
-Section theorems.
-Context `{FinMap K M}.
-
-(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/399 *)
-Lemma lookup_total_partial_alter {A} `{Inhabited A} (f : option A → option A) (m : M A) i:
-  partial_alter f i m !!! i = default inhabitant (f (m !! i)).
-Proof. by rewrite lookup_total_alt lookup_partial_alter. Qed.
-
-(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/399 *)
-Lemma lookup_partial_alter_Some {A} (f : option A → option A) (m : M A) i j x :
-  partial_alter f i m !! j = Some x ↔ (i = j ∧ f (m !! i) = Some x) ∨ (i ≠ j ∧ m !! j = Some x).
-Proof.
-  destruct (decide (i = j)); subst.
-  - rewrite lookup_partial_alter. naive_solver.
-  - rewrite lookup_partial_alter_ne; naive_solver.
-Qed.
-
-(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/399 *)
-Lemma delete_alter {A} (m : M A) i f :
-  delete i (alter f i m) = delete i m.
-Proof. by setoid_rewrite <-partial_alter_compose. Qed.
-
-(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/399 *)
-Lemma alter_insert {A} (m : M A) i f x :
-  alter f i (<[i := x]> m) = <[i := f x]> m.
-Proof. by setoid_rewrite <-partial_alter_compose. Qed.
-
-(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/399 *)
-Lemma alter_insert_ne {A} (m : M A) i j f x :
-  i ≠ j →
-  alter f i (<[j := x]> m) = <[j := x]> (alter f i m).
-Proof. move => ?. by setoid_rewrite <-partial_alter_commute at 1. Qed.
-
-End theorems.
 
 Section curry_uncurry.
   Context `{Countable K1, Countable K2} {A : Type}.
@@ -604,12 +531,11 @@ Proof.
   setoid_rewrite lookup_difference_Some. naive_solver.
 Qed.
 
-(* TODO: use map_agree after https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/392 is merged *)
 Lemma map_difference_difference_subseteq {A} (m1 m2 : M A) :
-  (∀ i x1 x2, m1 !! i = Some x1 → m2 !! i = Some x2 → x1 = x2) →
+  map_agree m1 m2 →
   m1 ∖ (m1 ∖ m2) ⊆ m2.
 Proof.
-  move => Hin.
+  rewrite map_agree_spec. move => Hin.
   apply map_subseteq_spec => ??.
   rewrite !lookup_difference_Some !lookup_difference_None /is_Some. naive_solver.
 Qed.
@@ -713,23 +639,6 @@ Lemma snoc_inv {A} (l : list A):
   l = [] ∨ ∃ x l', l = l' ++ [x].
 Proof. destruct l as [|x l'] using rev_ind; eauto. Qed.
 
-(* TODO: https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/397 *)
-Lemma omap_app {A B} l1 l2 (f : A → option B) :
-  omap f (l1 ++ l2) = omap f l1 ++ omap f l2.
-Proof. elim: l1 => //; csimpl => ?? ->. by case_match. Qed.
-(* TODO: https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/397 *)
-Lemma omap_option_list {A B} (f : A → option B) o :
-  omap f (option_list o) = option_list (o ≫= f).
-Proof. by destruct o. Qed.
-
-(* TODO: https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/397 *)
-Lemma list_fmap_delete {X Y: Type} i (f: X → Y) (L: list X):
-  f <$> (delete i L) = delete i (f <$> L).
-Proof.
-  induction L in i |-*; destruct i; simpl; eauto.
-  by erewrite IHL.
-Qed.
-
 Lemma list_elem_of_weaken {A} (xs ys : list A) x:
   x ∈ xs → xs ⊆ ys → x ∈ ys.
 Proof. set_solver. Qed.
@@ -738,21 +647,9 @@ Lemma list_subseteq_cons_l {A} x (xs ys : list A):
   x ∈ ys → xs ⊆ ys → x :: xs ⊆ ys.
 Proof. set_solver. Qed.
 
-(* TODO: https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/400 *)
-Global Program Instance list_subseteq_dec {A} `{!EqDecision A} : RelDecision (⊆@{list A}) :=
-  λ xs ys, cast_if (decide (Forall (λ x, x ∈ ys) xs)).
-Next Obligation. move => ???? /Forall_forall; set_solver. Qed.
-Next Obligation. move => ???? /Forall_forall; set_solver. Qed.
-
-
 Lemma elem_of_drop {A} x n (xs : list A):
   x ∈ drop n xs → x ∈ xs.
 Proof.  move => /elem_of_list_lookup. setoid_rewrite lookup_drop => -[??]. apply elem_of_list_lookup. naive_solver. Qed.
-
-(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/401 *)
-Lemma join_length {A} (xs : list (list A)):
-  length (mjoin xs) = sum_list (length <$> xs).
-Proof. elim: xs => // ???; csimpl. rewrite app_length. lia. Qed.
 
 Section mjoin.
   Context {A : Type}.
@@ -819,13 +716,6 @@ Proof.
   - rewrite lookup_delete_ge // in Hlook; last lia.
     eapply elem_of_list_lookup_2 in Hlook. done.
 Qed.
-
-Section imap.
-  Context {A B : Type} (f : nat → A → B).
-(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/396 *)
-  Lemma list_lookup_imap_Some l i x : imap f l !! i = Some x ↔ ∃ y, l !! i = Some y ∧ x = f i y.
-  Proof. rewrite list_lookup_imap fmap_Some. done. Qed.
-End imap.
 
 Lemma app_inj_middle {A} (l1 l2 l1' l2' : list A) x:
   x ∉ l2 →

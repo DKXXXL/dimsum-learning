@@ -399,7 +399,7 @@ Proof.
   move => /= {}n _ Hloop [i1 rs1 mem1 ins1'] [[[σf s] [il rsl meml insl]] [ir rsr memr insr]] [? [? [? Hinv]]].
   case_match; destruct!.
   - destruct i as [|[??|???|???|]?].
-    + tstep_i => pc ?. case_match as Hunion. 1: move: Hunion => /lookup_union_Some_raw[Hl|[? Hl]].
+    + tstep_i => pc ?. case_match eqn: Hunion. 1: move: Hunion => /lookup_union_Some_raw[Hl|[? Hl]].
       * tstep_s. split!. simplify_option_eq. apply: Hloop; [done|]. naive_solver.
       * tstep_s. split!. simplify_eq. simpl_map_decide. simplify_option_eq. split! => /=.
         tstep_s. split!. tstep_s. split!. simplify_map_eq. apply: Hloop; [done|]. naive_solver.
@@ -417,7 +417,7 @@ Proof.
       tstep_both => *. tstep_s => *. split!; [|done|]; [done|].
       tstep_s. split!. tend. apply: Hloop; [done|]. naive_solver.
   - destruct i as [|[??|???|???|]?].
-    + tstep_i => pc ?. case_match as Hunion. 1: move: Hunion => /lookup_union_Some_raw[Hl|[? Hl]].
+    + tstep_i => pc ?. case_match eqn: Hunion. 1: move: Hunion => /lookup_union_Some_raw[Hl|[? Hl]].
       * have ?: ins2 !! pc = None by apply: map_disjoint_Some_l.
         tstep_s. split!. simplify_eq. simpl_map_decide. simplify_option_eq. split! => /=.
         tstep_s. split!. tstep_s. split!. simplify_map_eq. apply: Hloop; [done|]. naive_solver.
@@ -475,7 +475,7 @@ Proof.
     + tstep_i => pc ?. case_match => *; destruct!/=.
       * tstep_s. split!. erewrite lookup_union_Some_r by done.
         apply: Hloop; [done|]. naive_solver.
-      * tstep_s. split!. rewrite lookup_union_l' //.
+      * tstep_s. split!. rewrite lookup_union_l //.
         destruct (ins1 !! (rs1 !!! "PC")) eqn:? => /=; simpl_map_decide.
         -- tstep_i => *; simplify_eq. tstep_i => *. simplify_map_eq. apply: Hloop; [done|]. naive_solver.
         -- split!. apply: Hloop; [done|]. naive_solver.

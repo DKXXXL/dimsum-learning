@@ -327,7 +327,7 @@ Proof.
       destruct (decide (i = "PC")). 1: by simplify_map_eq.
       repeat (rewrite lookup_insert_ne; [|done]).
       destruct (coro_regs_regs rsold !! i) eqn: Heq.
-      * rewrite lookup_union_l // Heq. symmetry. apply lookup_union_Some_l.
+      * rewrite lookup_union_l' // Heq. symmetry. apply lookup_union_Some_l.
         move: Heq => /coro_regs_regs_lookup_Some[??].
         apply coro_regs_regs_n_lookup_Some. split!.
         by rewrite coro_saved_regs_take_PC.
@@ -414,7 +414,7 @@ Proof.
       destruct (decide (j = "R16")); simplify_map_eq; [done|].
       destruct (decide (j = "R17")); simplify_map_eq; [done|].
       destruct (coro_regs_regs_n rsold i !! j) eqn: Heq.
-      * rewrite lookup_union_l // Heq. symmetry. apply lookup_union_Some_l.
+      * rewrite lookup_union_l' // Heq. symmetry. apply lookup_union_Some_l.
         move: Heq => /coro_regs_regs_n_lookup_Some[??].
         apply coro_regs_regs_n_lookup_Some. split!.
         rewrite coro_saved_regs_take_saved; [done|lia|done].

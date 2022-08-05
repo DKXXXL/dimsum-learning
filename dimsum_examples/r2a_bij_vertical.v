@@ -587,7 +587,7 @@ Proof.
   iInduction h as [|l v h Hl] "IH" using map_ind forall (m Hag). { by iApply big_sepM_empty. }
   move: Hag => [m2l /map_Forall_insert [//|? Hag]].
   iApply big_sepM_insert; [done|].
-  case_match as Heq; destruct!; rewrite ?r2a_ih_shared_Some ?r2a_rh_shared_None in Heq; simplify_option_eq.
+  case_match eqn: Heq; destruct!; rewrite ?r2a_ih_shared_Some ?r2a_rh_shared_None in Heq; simplify_option_eq.
   - erewrite <-(insert_delete m); [|done].
     iDestruct (big_sepM_insert with "Hm") as "[Ha Hm]". { by simplify_map_eq. }
     iSplitL "Ha".
@@ -841,7 +841,7 @@ Proof.
     rewrite r2a_combine_priv_diff // (map_difference_difference_add (hb_priv_s bijb)).
 
     iMod (heap_bij_update_all bijb' with "[$] [$] [$]") as "[?[#Hs ?]]". {
-      apply map_difference_difference_subseteq. move => j x1 x2 Hho.
+      apply map_difference_difference_subseteq, map_agree_spec. move => j x1 x2 Hho.
       have : r2a_combine_priv (r2a_rh_shared rha) bijb hb !! j = Some x1 by apply: lookup_weaken.
       move => /r2a_combine_priv_Some ? /hb_priv_s_lookup_Some. naive_solver.
     } { done. } { done. } { done. }
@@ -945,7 +945,7 @@ Proof.
         -- done.
         -- iIntros (p1 p2 o ?) => /=.
            destruct (decide (p1 ∈ dom (rh' ∪ r2a_rh_shared rha))) as [Hin|].
-           ++ rewrite lookup_union_l'.
+           ++ rewrite lookup_union_l.
               2: { apply map_filter_lookup_None. right => ?? /=. rewrite elem_of_hb_shared_i. naive_solver. }
               rewrite map_filter_lookup_true; [|done].
               iSplit; [iPureIntro; by apply heap_through_bij_is_Some1|].

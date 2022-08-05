@@ -470,12 +470,12 @@ Proof.
   - split!. destruct (m !! i) eqn:?.
     + by erewrite lookup_union_Some_l.
     + rewrite lookup_union_r //=. by simplify_map_eq.
-  - split!. rewrite lookup_union_l' //. by simplify_map_eq.
+  - split!. rewrite lookup_union_l //. by simplify_map_eq.
   - destruct (decide (l = i)); subst; split!.
     + destruct (m !! i) eqn:?.
       * by erewrite lookup_union_Some_l.
       * rewrite lookup_union_r //=. by simplify_map_eq.
-    + rewrite lookup_union_l' //. by simplify_map_eq.
+    + rewrite lookup_union_l //. by simplify_map_eq.
 Qed.
 
 
