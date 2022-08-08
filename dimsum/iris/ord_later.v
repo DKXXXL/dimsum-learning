@@ -159,7 +159,7 @@ Section lemmas.
   Qed.
 End lemmas.
 
-(** Proof model instances *)
+(** Proof mode instances *)
 Global Instance elim_modal_ord_later `{!ord_laterGS Σ} p P Q :
   ElimModal True p false (▷ₒ P) P (▷ₒ Q) Q.
 Proof.
