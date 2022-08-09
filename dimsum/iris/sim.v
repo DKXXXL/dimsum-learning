@@ -295,6 +295,10 @@ Qed.
 (* Qed. *)
 
 
+(* TODO: Is this provable? Seems tricky since we need to go inside and
+outside of pure quantifiers. So if this is not provable, it might be
+necessary to define sim_src as a fixpoint. This would be a bit more
+annoying for the adequacy proofs but should be fine. *)
 Lemma sim_src_bind E e_s Φ κ:
   SRC e_s @ E {{ λ e_s', SRC e_s' @ κ; E {{ Φ }} }} -∗
   SRC e_s @ κ; E {{ Φ }}.
