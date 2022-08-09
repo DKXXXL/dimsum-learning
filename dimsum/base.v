@@ -32,6 +32,10 @@ Ltac inv_all_tac f :=
 Tactic Notation "inv_all/=" constr(f) := inv_all_tac f; simplify_eq/=.
 Tactic Notation "inv_all" constr(f) := inv_all_tac f.
 
+(** admit with string *)
+Tactic Notation "admit:" constr(H) := admit.
+
+
 (* TODO: make version for case_decide and case_match and upstream  *)
 (** [case_bool_decide] variant that takes a pattern  *)
 Tactic Notation "case_bool_decide" open_constr(pat) "as" ident(Hd) :=

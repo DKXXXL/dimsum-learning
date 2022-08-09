@@ -62,6 +62,12 @@ Definition oS_maybe (b : bool) (n : ordinal) :=
 Notation "'oS?' b n" := (oS_maybe b n)
   (at level 20, b at level 9, n at level 20, right associativity, format "'oS?' b  n").
 
+Fixpoint nat_to_ord (n : nat) : ordinal :=
+  match n with
+  | O => oO
+  | S n' => oS (nat_to_ord n')
+  end.
+
 Fixpoint o_min (n1 : ordinal) : ordinal → ordinal :=
   fix go n2 :=
   match n1, n2 with
