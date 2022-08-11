@@ -36,6 +36,26 @@ Section wp.
   Context {Λ : language}.
   Context `{!irisGS_gen HasNoLc Λ Σ}.
 
+  Lemma sim_steps_nb_trans EV κ Φ:
+    () ≈{ nb_trans EV, κ }≈> Φ ={∅}=∗
+    ⌜κ = None⌝ ∗ Φ tt.
+  Proof.
+    iIntros "Hsim".
+    pose (F := (λ (σ : unit) (κ : option EV) (Ψ : unit → iProp Σ), |={∅}=> ⌜κ = None⌝ ∗ Ψ tt)%I).
+    iAssert (∀ Φ, tt ≈{ nb_trans EV, κ }≈> Φ -∗ F tt κ Φ)%I as "Hgen"; last first.
+    { iApply ("Hgen" with "Hsim"). }
+    iIntros (?) "Hsim".
+    iApply (sim_steps_ind with "[] Hsim"). { solve_proper. }
+    iIntros "!>" ([]? ?) "Hsim".
+    iMod "Hsim" as "[[% $]|[% [% [%Ht [% Hsim]]]]]"; [done|].
+    destruct κ'.
+    - apply thas_trace_cons_inv in Ht.
+      apply thas_trace_nil_inv in Ht. inv Ht => //. destruct!.
+      inv_all @m_step.
+    - apply thas_trace_nil_inv in Ht. inv Ht; [|done].
+      by iMod ("Hsim" with "[//]").
+  Qed.
+
   Lemma sim_wp_adequacy e E `{!ord_laterPreG Σ}
     `{!ghost_varG Σ unit}:
     (∀ (e : expr Λ) σ κ e2 σ2 efs, prim_step e σ κ e2 σ2 efs → efs = []) →
@@ -64,51 +84,42 @@ Section wp.
                  (∀ e_t' : mexpr Λ_t, Ψ e_t' -∗ ∃ v, ⌜to_val e_t' = Some v⌝) -∗
                  WP e_t @ E {{ _, True }})%I
                  : coPset → mexpr Λ_t → _ → iProp Σ ).
-  iAssert (∀ Φ, TGT e @ E {{ Φ }} -∗ F E e Φ)%I as "Hgen"; last first. {
-    iApply ("Hgen" with "[He1 Hsim] [$] [$] [$]").
-    - by iApply "Hsim".
-    - iIntros (?) "[% [?$]]".
-  }
-  iClear "Hend". clear n. iIntros (?) "Hsim".
-  iApply (sim_ind with "[] Hsim"). { solve_proper. }
-  iIntros "!>" (? e_t ?) "Hsim". iIntros (n) "Hend Hord He Hc".
-  destruct (to_val e_t) eqn:He.
-  { apply of_to_val in He. subst. by iApply wp_value'. }
-  rewrite wp_unfold /wp_pre. simplify_option_eq.
-  iIntros (σ ????) "Hσ".
-  iMod ("Hsim" $! (_, _) with "[//] [//] [//] [$] [Hσ] [//]") as "[[?[?[??]]]|[Hsim|Hsim]]".
-  { simpl. by rewrite -Hstate. }
-  { iDestruct ("Hc" with "[$]") as %[??]. simplify_eq. }
-  - destruct n; [done|] => /=.
-    have [Hred|Hnotred] := AxClassic (reducible e_t σ).
-    + iApply fupd_mask_intro; [set_solver|]. iIntros "He". iSplit; [done|].
-      iIntros (????) "_ !> !> !>". iApply step_fupdN_intro; [done|]. iModIntro. iMod "He".
-      iMod ("Hsim" with "[%]") as "Hsim". { by econstructor. }
-      iMod (ord_later_elim with "Hsim Hord [-]"); [|done]. iIntros "Hord /=".
-      iMod (ord_later_update with "Hord"); [by apply o_le_S|].
-      iModIntro. iExists _. iFrame. iSplit; [done|]. iIntros "Hod".
-      iDestruct 1 as (? Ht) "Hsim". iModIntro.
-      iMod ("Hsim" $! tt with "[%]") as (?????) "[?[? >[Hσ [? Hsim]]]]". {
-          destruct κ.
-          - apply thas_trace_nil_inv in Ht. by inv Ht.
-          - apply thas_trace_cons_inv in Ht.
-            apply thas_trace_nil_inv in Ht. inv Ht => //. destruct!.
-            inv_all @m_step.
-        }
+    iAssert (∀ Φ, TGT e @ E {{ Φ }} -∗ F E e Φ)%I as "Hgen"; last first. {
+      iApply ("Hgen" with "[He1 Hsim] [$] [$] [$]").
+      - by iApply "Hsim".
+      - iIntros (?) "[% [?$]]".
+    }
+    iClear "Hend". clear n. iIntros (?) "Hsim".
+    iApply (sim_ind with "[] Hsim"). { solve_proper. }
+    iIntros "!>" (? e_t ?) "Hsim". iIntros (n) "Hend Hord He Hc".
+    destruct (to_val e_t) eqn:He.
+    { apply of_to_val in He. subst. by iApply wp_value'. }
+    rewrite wp_unfold /wp_pre. simplify_option_eq.
+    iIntros (σ ????) "Hσ".
+    iMod ("Hsim" $! (_, _) with "[//] [//] [//] [$] [Hσ] [//]") as "[[?[?[??]]]|[Hsim|Hsim]]".
+    { simpl. by rewrite -Hstate. }
+    { iDestruct ("Hc" with "[$]") as %[??]. simplify_eq. }
+    - destruct n; [done|] => /=.
+      have [Hred|Hnotred] := AxClassic (reducible e_t σ).
+      + iApply fupd_mask_intro; [set_solver|]. iIntros "He". iSplit; [done|].
+        iIntros (????) "_ !> !> !>". iApply step_fupdN_intro; [done|]. iModIntro. iMod "He".
+        iMod ("Hsim" with "[%]") as "Hsim". { by econstructor. }
+        iMod (ord_later_elim with "Hsim Hord [-]"); [|done]. iIntros "Hord /=".
+        iMod (ord_later_update with "Hord"); [by apply o_le_S|].
+        iModIntro. iExists _. iFrame. iSplit; [done|]. iIntros "Hod Hsteps !>".
+        iMod (sim_steps_nb_trans with "Hsteps") as (?) "(%&%&%&%&%&?&?&>[Hσ [? Hsim]])".
         exploit Hnofork; [done|] => ?. simplify_eq/=. destruct_all unit. iModIntro.
         iSplitL "Hσ". { by iApply Hstate. }
         iSplit; [|done]. iApply ("Hsim" with "[$] [$] [$] [$]").
       + iMod ("Hsim" with "[%]") as "Hsim". { by constructor. }
         iMod (ord_later_elim with "Hsim Hord [-]"); [|done]. iIntros "Hord/=".
         iMod (ord_later_update with "Hord"); [by apply o_le_S|].
-        iModIntro. iExists _. iFrame. iSplit; [done|]. iIntros "Hod".
-        iDestruct 1 as (? Ht) "Hsim". iModIntro.
-        iMod ("Hsim" $! tt with "[%]") as (??????) "[? ?]".
-        { apply thas_trace_nil_inv in Ht. by inv Ht. }
+        iModIntro. iExists _. iFrame. iSplit; [done|]. iIntros "Hod Hsteps !>".
+        iMod (sim_steps_nb_trans with "Hsteps") as (?) "(%&%&%&%&%&?&?&>[Hσ [? Hsim]])".
         done.
-  - iMod "Hsim" as (? Ht) "Hsim".
-    iMod ("Hsim" $! tt with "[%]") as (??) "[? >[?[? Hsim]]]".
-    { apply thas_trace_nil_inv in Ht. by inv Ht. } simplify_eq/=. destruct_all unit.
+  - iMod "Hsim" as "Hsteps".
+    iMod (sim_steps_nb_trans with "Hsteps") as (?) "(%&%&?&>[Hσ [? Hsim]])".
+    simplify_eq/=. destruct_all unit.
     iDestruct ("Hsim" with "[$] [$] [$] [$]") as "Hsim".
     rewrite wp_unfold /wp_pre. simplify_option_eq.
     iMod ("Hsim" with "[-]") as "Hsim".

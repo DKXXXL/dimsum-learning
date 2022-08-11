@@ -7,6 +7,177 @@ From dimsum.core Require Export module trefines.
 From dimsum.core.iris Require Export ord_later.
 Set Default Proof Using "Type".
 
+Definition option_prefix {A} (o1 o2 : option A) : Prop :=
+  match o1 with
+  | Some x1 => o2 = Some x1
+  | None => True
+  end.
+
+Definition option_drop {A} (o1 o2 : option A) : option A :=
+  match o1 with
+  | Some _ => None
+  | None => o2
+  end.
+
+Lemma option_prefix_option_trace {A} (κ1 κ2 : option A) :
+  option_prefix κ1 κ2 →
+  option_trace κ2 = tapp (option_trace κ1) (option_trace (option_drop κ1 κ2)).
+Proof. destruct κ1, κ2 => //=; naive_solver. Qed.
+
+(** * [sim_steps] *)
+Section sim_steps.
+  Context {Σ : gFunctors} {EV : Type} `{!invGS_gen HasNoLc Σ}.
+  Context (m : mod_trans EV).
+
+  Definition sim_steps_pre
+    (sim_steps : leibnizO (m.(m_state)) -d> leibnizO (option EV) -d>
+                   (leibnizO (m.(m_state)) -d> iPropO Σ) -d> iPropO Σ) :
+    leibnizO (m.(m_state)) -d> leibnizO (option EV) -d>
+      (leibnizO (m.(m_state)) -d> iPropO Σ) -d> iPropO Σ := λ σ κ Φ,
+  (|={∅}=> (⌜κ = None⌝ ∗ Φ σ) ∨
+        ∃ κ' Pσ, ⌜σ ~{m, option_trace κ'}~>ₜ Pσ⌝ ∗ ⌜option_prefix κ' κ⌝ ∗
+         ∀ σ', ⌜Pσ σ'⌝ ={∅}=∗ sim_steps σ' (option_drop κ' κ) Φ)%I.
+
+  Global Instance sim_steps_pre_ne n:
+    Proper ((dist n ==> dist n ==> dist n ==> dist n) ==> dist n ==> dist n ==> dist n ==> dist n) sim_steps_pre.
+  Proof.
+    move => ?? Hsim ?? -> ?? -> ?? HΦ. rewrite /sim_steps_pre.
+    repeat (f_equiv || eapply Hsim || eapply HΦ || reflexivity).
+  Qed.
+
+  Lemma sim_steps_pre_mono sim1 sim2:
+    ⊢ □ (∀ σ κ Φ, sim1 σ κ Φ -∗ sim2 σ κ Φ)
+    → ∀ σ κ Φ , sim_steps_pre sim1 σ κ Φ -∗ sim_steps_pre sim2 σ κ Φ.
+  Proof.
+    iIntros "#Hinner" (σ κ Φ) "Hsim".
+    iMod "Hsim" as "[[% ?]|[% [% [% [% Hsim]]]]]"; [by iLeft; iFrame| iRight].
+    iModIntro. iExists _, _. iSplit; [done|]. iSplit; [done|].
+    iIntros (??). iMod ("Hsim" with "[//]"). iModIntro. by iApply "Hinner".
+  Qed.
+
+  Local Instance sim_steps_pre_monotone :
+    BiMonoPred (λ sim_steps : prodO (prodO (leibnizO (m.(m_state))) (leibnizO (option EV))) ((leibnizO (m.(m_state))) -d> iPropO Σ) -d> iPropO Σ, uncurry3 (sim_steps_pre (curry3 sim_steps))).
+  Proof.
+    constructor.
+    - iIntros (Φ Ψ ??) "#Hinner". iIntros ([[??]?]) "Hsim" => /=. iApply sim_steps_pre_mono; [|done].
+      iIntros "!>" (???) "HΦ". by iApply ("Hinner" $! (_, _, _)).
+    - move => sim_steps Hsim n [[σ1 κ1] Φ1] [[σ2 κ2] Φ2] /= [[/=??]?].
+      apply sim_steps_pre_ne; eauto. move => ????????? /=. by apply: Hsim.
+  Qed.
+
+  Definition sim_steps : m.(m_state) → option EV → (m.(m_state) → iProp Σ) → iProp Σ :=
+    curry3 (bi_least_fixpoint (λ sim_steps : prodO (prodO (leibnizO (m.(m_state))) (leibnizO (option EV))) ((leibnizO (m.(m_state))) -d> iPropO Σ) -d> iPropO Σ, uncurry3 (sim_steps_pre (curry3 sim_steps)))).
+
+  Global Instance sim_steps_ne n:
+    Proper ((=) ==> (=) ==> ((=) ==> dist n) ==> dist n) sim_steps.
+  Proof. move => ?? -> ?? -> ?? HΦ. unfold sim_steps. f_equiv. intros ?. by apply HΦ. Qed.
+End sim_steps.
+
+Notation " σ '≈{' m , κ '}≈>' P " := (sim_steps m σ κ P)
+  (at level 70, format "σ  '≈{'  m ,  κ  '}≈>'  P ") : bi_scope.
+
+Section sim_steps.
+  Context {Σ : gFunctors} {EV : Type} `{!invGS_gen HasNoLc Σ}.
+  Context (m : mod_trans EV).
+  Implicit Types Φ : m.(m_state) → iProp Σ.
+
+  Local Existing Instance sim_steps_pre_monotone.
+  Lemma sim_steps_unfold σ κ Φ:
+    σ ≈{ m, κ }≈> Φ ⊣⊢ sim_steps_pre m (sim_steps m) σ κ Φ.
+  Proof. rewrite /sim_steps /curry3. apply: least_fixpoint_unfold. Qed.
+
+  Lemma sim_steps_strong_ind (R: leibnizO (m.(m_state)) -d> leibnizO (option EV) -d> (leibnizO (m.(m_state)) -d> iPropO Σ) -d> iPropO Σ):
+    NonExpansive3 R →
+    ⊢ (□ ∀ σ κ Φ, sim_steps_pre m (λ σ κ Ψ, R σ κ Ψ ∧ σ ≈{ m, κ }≈> Ψ) σ κ Φ -∗ R σ κ Φ)
+      -∗ ∀ σ κ Φ, σ ≈{ m, κ }≈> Φ -∗ R σ κ Φ.
+  Proof.
+    iIntros (Hne) "#HPre". iIntros (σ κ Φ) "Hsim".
+    rewrite {2}/sim_steps {1}/curry3.
+    iApply (least_fixpoint_ind _ (uncurry3 R) with "[] Hsim").
+    iIntros "!>" ([[??]?]) "Hsim" => /=. by iApply "HPre".
+  Qed.
+
+  Lemma sim_steps_ind (R: leibnizO (m.(m_state)) -d> leibnizO (option EV) -d> (leibnizO (m.(m_state)) -d> iPropO Σ) -d> iPropO Σ) :
+    NonExpansive3 R →
+    ⊢ (□ ∀ σ κ Φ, sim_steps_pre m R σ κ Φ -∗ R σ κ Φ)
+      -∗ ∀ σ κ Φ, σ ≈{ m, κ }≈> Φ -∗ R σ κ Φ.
+  Proof.
+    iIntros (Hne) "#HPre". iApply sim_steps_strong_ind. iIntros "!>" (σ κ Φ) "Hsim".
+    iApply "HPre". iApply (sim_steps_pre_mono with "[] Hsim").
+    iIntros "!>" (???) "[? _]". by iFrame.
+  Qed.
+
+  Lemma sim_steps_wand_strong σ κ Φ Ψ:
+    σ ≈{ m, κ }≈> Φ -∗
+    (∀ σ, Φ σ ={∅}=∗ Ψ σ) -∗
+    σ ≈{ m, κ }≈> Ψ.
+  Proof.
+    iIntros "Hsim Hwand".
+    pose (F := (λ σ κ Ψ, ∀ Φ, (∀ σ', Ψ σ' ={∅}=∗ Φ σ') -∗ σ ≈{ m, κ }≈> Φ)%I).
+    iAssert (∀ Φ, σ ≈{ m, κ }≈> Φ -∗ F σ κ Φ)%I as "Hgen"; last first.
+    { iApply ("Hgen" with "Hsim"). done. }
+    iIntros (?) "Hsim".
+    iApply (sim_steps_ind with "[] Hsim"). { solve_proper. }
+    iIntros "!>" (?? ?) "Hsim". iIntros (?) "Hc".
+    rewrite sim_steps_unfold. iMod "Hsim" as "[[% ?]|[% [% [% [% Hsim]]]]]"; [iLeft| iRight].
+    - iMod ("Hc" with "[$]") as "$". done.
+    - iModIntro. iExists _, _. iSplit; [done|]. iSplit; [done|].
+      iIntros (??). iMod ("Hsim" with "[//]") as "Hsim". iModIntro. by iApply "Hsim".
+  Qed.
+
+  Lemma sim_steps_wand σ κ Φ Ψ:
+    σ ≈{ m, κ }≈> Φ -∗
+    (∀ σ, Φ σ -∗ Ψ σ) -∗
+    σ ≈{ m, κ }≈> Ψ.
+  Proof.
+    iIntros "Hsim Hwand".
+    iApply (sim_steps_wand_strong with "Hsim"). iIntros (?) "?". iModIntro. by iApply "Hwand".
+  Qed.
+
+  Lemma sim_steps_stop σ Φ :
+    Φ σ -∗
+    σ ≈{ m, None }≈> Φ.
+  Proof. iIntros "?". rewrite sim_steps_unfold. iLeft. by iFrame. Qed.
+
+  Lemma sim_steps_step κ' Pσ κ σ Φ :
+    σ ~{m, option_trace κ'}~>ₜ Pσ →
+    option_prefix κ' κ →
+    (∀ σ', ⌜Pσ σ'⌝ ={∅}=∗ σ' ≈{ m, option_drop κ' κ }≈> Φ) -∗
+    σ ≈{ m, κ }≈> Φ.
+  Proof.
+    iIntros (??) "HΦ". rewrite sim_steps_unfold.
+    iRight. iModIntro. iExists _, _. iSplit; [done|]. iSplit; [done|].
+    iIntros (??). by iMod ("HΦ" with "[//]").
+  Qed.
+
+  (* One should be able to get rid of the [HasNoLc] if one uses classical logic. *)
+  (* TODO: Is it possible to get a stronger adequacy lemma? *)
+  Lemma sim_steps_elim E Pσ κ σ Φ κs :
+    σ ≈{ m, κ }≈> Φ -∗
+    (∀ σ', Φ σ' -∗ |={E}=> ⌜σ' ~{m, κs}~>ₜ Pσ⌝ ) -∗
+    |={E}=> ⌜σ ~{m, tapp (option_trace κ) κs}~>ₜ Pσ⌝.
+  Proof.
+    iIntros "Hsim HΦ".
+    pose (F := (λ σ κ Φ,
+      (∀ σ', Φ σ' -∗ |={E}=> ⌜σ' ~{m, κs}~>ₜ Pσ⌝ ) -∗
+        |={E}=> ⌜σ ~{m, tapp (option_trace κ) κs}~>ₜ Pσ⌝)%I).
+    iAssert (∀ Φ, σ ≈{ m, κ }≈> Φ -∗ F σ κ Φ)%I as "Hgen"; last first.
+    { iApply ("Hgen" with "Hsim"). done. }
+    iIntros (?) "Hsim".
+    iApply (sim_steps_ind with "[] Hsim"). { solve_proper. }
+    iIntros "!>" (?? ?) "Hsim". iIntros "Hc".
+    iMod (fupd_mask_subseteq ∅) as "He"; [set_solver|].
+    iMod "Hsim" as "[[% ?]|[% [% [% [% Hsim]]]]]"; iMod "He" as "_".
+    { subst. by iApply "Hc". }
+    erewrite option_prefix_option_trace; [|done]. rewrite -assoc_L.
+    iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. by apply thas_trace_trans. }
+    iIntros (??).
+    iMod (fupd_mask_subseteq ∅) as "He"; [set_solver|].
+    iMod ("Hsim" with "[//]") as "Hsim". iMod "He" as "_".
+    by iApply "Hsim".
+  Qed.
+End sim_steps.
+
 (** * mod_lang *)
 Structure mod_lang EV Σ := ModLang {
   mexpr : Type;
@@ -68,19 +239,17 @@ Definition sim_pre `{!dimsumGS EV Σ Λ_t Λ_s}
       (⤇ e_s ∗ mstate_interp Λ_t σ_t ∗
          mstate_interp Λ_s σ_s ∗ Φ e_t) ∨
       (∀ κ Pσ_t, ⌜(mtrans Λ_t).(m_step) σ_t κ Pσ_t⌝ ={E,∅}=∗ ▷ₒ
-        ∃ Pσ_s, ⌜σ_s ~{mtrans Λ_s, option_trace κ}~>ₜ Pσ_s⌝ ∗
-         ∀ σ_s', ⌜Pσ_s σ_s'⌝ ={∅}=∗ ∃ σ_t' e_t' e_s', ⌜Pσ_t σ_t'⌝ ∗
+         (σ_s ≈{ mtrans Λ_s, κ }≈> (λ σ_s', ∃ σ_t' e_t' e_s', ⌜Pσ_t σ_t'⌝ ∗
             ⌜mexpr_rel Λ_t σ_t' e_t'⌝ ∗ ⌜mexpr_rel Λ_s σ_s' e_s'⌝ ∗ ⤇ e_s' ∗
-            |={∅, E}=> mstate_interp Λ_t σ_t' ∗ mstate_interp Λ_s σ_s' ∗ sim E e_t' Φ)
-      ∨ |={E,∅}=> ∃ Pσ_s, ⌜σ_s ~{mtrans Λ_s, tnil}~>ₜ Pσ_s⌝ ∗
-             ∀ σ_s', ⌜Pσ_s σ_s'⌝ ={∅}=∗ ∃ e_s', ⌜mexpr_rel Λ_s σ_s' e_s'⌝ ∗ ⤇ e_s' ∗
-            |={∅, E}=> mstate_interp Λ_t σ_t ∗ mstate_interp Λ_s σ_s' ∗ sim E e_t Φ)%I.
+            |={∅, E}=> mstate_interp Λ_t σ_t' ∗ mstate_interp Λ_s σ_s' ∗ sim E e_t' Φ)))
+      ∨ |={E,∅}=> σ_s ≈{ mtrans Λ_s, None }≈> (λ σ_s', ∃ e_s', ⌜mexpr_rel Λ_s σ_s' e_s'⌝ ∗ ⤇ e_s' ∗
+            |={∅, E}=> mstate_interp Λ_t σ_t ∗ mstate_interp Λ_s σ_s' ∗ sim E e_t Φ))%I.
 
 Global Instance sim_pre_ne `{!dimsumGS EV Λ_t Λ_s Σ} n:
   Proper ((dist n ==> dist n ==> dist n ==> dist n) ==> dist n ==> dist n ==> dist n ==> dist n) sim_pre.
 Proof.
   move => ?? Hsim ?? -> ?? -> ?? HΦ. rewrite /sim_pre.
-  repeat (f_equiv || eapply Hsim || eapply HΦ || reflexivity).
+  repeat (f_equiv || eapply Hsim || eapply HΦ || reflexivity || intros ?? ->).
 Qed.
 
 Lemma sim_pre_mono `{!dimsumGS EV Λ_t Λ_s Σ} sim1 sim2:
@@ -91,12 +260,11 @@ Proof.
   iIntros (σ_t σ_s e_s ??) "#? ? Hσ_t Hσ_s".
   iMod ("Hsim" with "[//] [//] [//] [$] Hσ_t Hσ_s") as "[Hsim|[Hsim|Hsim]]";
     [by iLeft|iRight; iLeft| iRight; iRight].
-  - iModIntro. iIntros (κ Pσ_t ?). iMod ("Hsim" with "[//]") as "Hsim". iModIntro. iMod "Hsim" as (??) "Hsim".
-    iExists _. iSplit; [done|].
-    iIntros (??). iMod ("Hsim" with "[//]") as (??????) "[? Hsim]". iModIntro.
+  - iModIntro. iIntros (κ Pσ_t ?). iMod ("Hsim" with "[//]") as "Hsim". do 2 iModIntro.
+    iApply (sim_steps_wand with "Hsim"). iIntros (?) "(%&%&%&%&%&%&?&Hsim)".
     iSplit!; [done..|]. iFrame. iMod "Hsim" as "[? [??]]". iModIntro. iFrame. by iApply "Hinner".
-  - iModIntro. iMod "Hsim" as (??) "Hsim". iModIntro. iExists _. iSplit; [done|].
-    iIntros (??). iMod ("Hsim" with "[//]") as (??) "[? Hsim]". iModIntro.
+  - iModIntro. iMod "Hsim" as "Hsim". iModIntro.
+    iApply (sim_steps_wand with "Hsim"). iIntros (?) "(%&%&?&Hsim)".
     iExists _. iSplit; [done|]. iFrame. iMod "Hsim" as "[? [??]]". iModIntro. iFrame. by iApply "Hinner".
 Qed.
 
@@ -131,8 +299,8 @@ Notation "et '⪯{' E '}' es {{ Φ } }" := (sim_both E et es Φ%I) (at level 70,
 Definition sim_src `{!dimsumGS EV Σ Λ_t Λ_s}
   (E : coPset) (κ : option EV) (e_s : mexpr Λ_s) (Φ : mexpr Λ_s → iProp Σ) : iProp Σ :=
   ∀ σ_s, ⌜mexpr_rel Λ_s σ_s e_s⌝ -∗ ord_later_ctx -∗ mstate_interp Λ_s σ_s ={E,∅}=∗
-    ∃ Pσ_s, ⌜σ_s ~{mtrans Λ_s, option_trace κ}~>ₜ Pσ_s⌝ ∗
-       ∀ σ_s', ⌜Pσ_s σ_s'⌝ ={∅}=∗ ∃ e_s', ⌜mexpr_rel Λ_s σ_s' e_s'⌝ ∗ |={∅, E}=> mstate_interp Λ_s σ_s' ∗ Φ e_s'.
+    σ_s ≈{ mtrans Λ_s, κ }≈> (λ σ_s', ∃ e_s', ⌜mexpr_rel Λ_s σ_s' e_s'⌝ ∗
+       |={∅, E}=> mstate_interp Λ_s σ_s' ∗ Φ e_s').
 
 Notation "'SRC' e @ κ ; E {{ Φ } }" := (sim_src E κ e Φ%I) (at level 70, Φ at level 200,
   format "'[hv' 'SRC'  e  '/' @  κ ;  E  {{  '[ ' Φ  ']' } } ']'") : bi_scope.
@@ -187,14 +355,11 @@ Proof.
   iMod ("Hsim" with "[//] [//] [$] [$] Hσ_t Hσ_s") as "[[?[?[??]]]|[Hsim|Hsim]]".
   - iModIntro. iLeft. iFrame. by iApply "Hc".
   - iModIntro. iRight. iLeft. iIntros (???). iMod ("Hsim" with "[//]") as "Hsim". do 2 iModIntro.
-    iDestruct "Hsim" as (??) "Hsim".
-    iExists _. iSplit; [done|]. iIntros (??). iMod ("Hsim" with "[//]") as (??????) "[? Hsim]".
-    iModIntro. iSplit!; [done..|]. iFrame. iMod "Hsim" as "[$ [$ Hsim]]". iModIntro.
-    by iApply "Hsim".
-  - iModIntro. iRight. iRight. iMod ("Hsim") as (??) "Hsim". iModIntro.
-    iExists _. iSplit; [done|]. iIntros (??). iMod ("Hsim" with "[//]") as (??) "[? Hsim]".
-    iModIntro. iSplit!; [done..|]. iFrame. iMod "Hsim" as "[$ [$ Hsim]]". iModIntro.
-    by iApply "Hsim".
+    iApply (sim_steps_wand with "Hsim"). iIntros (?) "(%&%&%&%&%&%&?&Hsim)".
+    iSplit!; [done..|]. iFrame. iMod "Hsim" as "[? [?Hsim]]". iModIntro. iFrame. by iApply "Hsim".
+  - iModIntro. iRight. iRight. iMod "Hsim" as "Hsim". iModIntro.
+    iApply (sim_steps_wand with "Hsim"). iIntros (?) "(%&%&?&Hsim)".
+    iExists _. iSplit; [done|]. iFrame. iMod "Hsim" as "[? [?Hsim]]". iModIntro. iFrame. by iApply "Hsim".
 Qed.
 
 Lemma sim_bind e_t E Φ:
@@ -213,14 +378,11 @@ Proof.
   - iDestruct ("Hc" with "[$]") as "Hc". rewrite {1}sim_unfold.
     iApply ("Hc" with "[//] [//] [$] [$] [$] [$]").
   - iModIntro. iRight. iLeft. iIntros (???). iMod ("Hsim" with "[//]") as "Hsim". do 2 iModIntro.
-    iDestruct "Hsim" as (??) "Hsim".
-    iExists _. iSplit; [done|]. iIntros (??). iMod ("Hsim" with "[//]") as (??????) "[? Hsim]".
-    iModIntro. iSplit!; [done..|]. iFrame. iMod "Hsim" as "[$ [$ Hsim]]". iModIntro.
-    by iApply "Hsim".
-  - iModIntro. iRight. iRight. iMod ("Hsim") as (??) "Hsim". iModIntro.
-    iExists _. iSplit; [done|]. iIntros (??). iMod ("Hsim" with "[//]") as (??) "[? Hsim]".
-    iModIntro. iSplit!; [done..|]. iFrame. iMod "Hsim" as "[$ [$ Hsim]]". iModIntro.
-    by iApply "Hsim".
+    iApply (sim_steps_wand with "Hsim"). iIntros (?) "(%&%&%&%&%&%&?&Hsim)".
+    iSplit!; [done..|]. iFrame. iMod "Hsim" as "[? [?Hsim]]". iModIntro. iFrame. by iApply "Hsim".
+  - iModIntro. iRight. iRight. iMod "Hsim" as "Hsim". iModIntro.
+    iApply (sim_steps_wand with "Hsim"). iIntros (?) "(%&%&?&Hsim)".
+    iExists _. iSplit; [done|]. iFrame. iMod "Hsim" as "[? [?Hsim]]". iModIntro. iFrame. by iApply "Hsim".
 Qed.
 
 Lemma sim_stop E e_t Φ:
@@ -256,9 +418,8 @@ Proof.
   iIntros "He Hsim".
   rewrite {2}sim_unfold. iIntros (?????) "#? ???". iModIntro.
   iDestruct (sim_expr_s_agree with "[$] [$]") as %->.
-  iRight. iRight. iMod ("Hsim" with "[//] [$] [$]") as (??) "Hsim".
-  iModIntro. iExists _. iSplit; [done|]. iIntros (??).
-  iMod ("Hsim" with "[//]") as (??) "Hsim".
+  iRight. iRight. iMod ("Hsim" with "[//] [$] [$]") as "Hsim".
+  iModIntro. iApply (sim_steps_wand_strong with "Hsim"). iIntros (?) "(%&%&Hsim)".
   iMod (sim_expr_s_update with "[$] [$]") as "[? ?]". iModIntro.
   iExists _. iSplit; [done|]. iFrame.
   iMod "Hsim" as "[$ Hsim]". iModIntro. by iApply "Hsim".
@@ -269,9 +430,30 @@ Lemma sim_src_stop E e_s Φ:
 Proof.
   iIntros "HΦ" (σ_s ?) "??".
   iApply fupd_mask_intro; [set_solver|]. iIntros "He".
-  iExists (σ_s =.). iSplit; [iPureIntro; tend|]. iIntros (? <-) "!>".
-  iExists _. iSplit; [done|]. iMod "He". by iFrame.
+  iApply sim_steps_stop. iExists _. iSplit; [done|].
+  iMod "He". by iFrame.
 Qed.
+
+Lemma sim_src_step E e_s Φ κ:
+  (∀ σ_s, ⌜mexpr_rel Λ_s σ_s e_s⌝ -∗ mstate_interp Λ_s σ_s ==∗
+    ∃ κ' Pσ_s, ⌜σ_s ~{mtrans Λ_s, option_trace κ'}~>ₜ Pσ_s⌝ ∗ ⌜option_prefix κ' κ⌝ ∗
+     ∀ σ_s', ⌜Pσ_s σ_s'⌝ ={E}=∗ ∃ e_s', ⌜mexpr_rel Λ_s σ_s' e_s'⌝ ∗
+       mstate_interp Λ_s σ_s' ∗ SRC e_s' @ option_drop κ' κ; E {{ Φ }}) -∗
+  SRC e_s @ κ; E {{ Φ }}.
+Proof.
+  iIntros "HΦ" (σ_s ?) "??".
+  iMod ("HΦ" with "[//] [$]") as (????) "HΦ".
+  iApply fupd_mask_intro; [set_solver|]. iIntros "He".
+  iApply sim_steps_step; [done..|]. iIntros (??).
+  iMod "He" as "_". iMod ("HΦ" with "[//]") as (??) "[? HΦ]".
+  iMod ("HΦ" with "[//] [$] [$]") as "HΦ". by iModIntro.
+Qed.
+
+Lemma sim_src_bind E e_s Φ κ:
+  SRC e_s @ E {{ λ e_s', SRC e_s' @ κ; E {{ Φ }} }} -∗
+  SRC e_s @ κ; E {{ Φ }}.
+Proof.
+Admitted.
 
 (* From dimsum Require Import axioms. *)
 (* Lemma thas_trace_post κs (m : mod_trans EV) σ1 Pσ2: *)
@@ -299,6 +481,7 @@ Qed.
 outside of pure quantifiers. So if this is not provable, it might be
 necessary to define sim_src as a fixpoint. This would be a bit more
 annoying for the adequacy proofs but should be fine. *)
+(*
 Lemma sim_src_bind E e_s Φ κ:
   SRC e_s @ E {{ λ e_s', SRC e_s' @ κ; E {{ Φ }} }} -∗
   SRC e_s @ κ; E {{ Φ }}.
@@ -320,6 +503,7 @@ Proof.
   }
   admit: "How to swap these quantifiers?".
 Abort.
+*)
 (*
   move: (Ht) => /thas_trace_post[?|[??]].
   { iModIntro. iExists (λ _, False). iSplit. { iPureIntro. by apply: (thas_trace_trans tnil). }
@@ -335,20 +519,6 @@ Abort.
   iExists _. iSplit; [done|]. iMod "He". by iFrame.
 Qed.
 *)
-
-Lemma sim_src_steps E e_s Φ κ:
-  (∀ σ_s, ⌜mexpr_rel Λ_s σ_s e_s⌝ -∗ mstate_interp Λ_s σ_s ==∗
-    ∃ Pσ_s, ⌜σ_s ~{mtrans Λ_s, option_trace κ}~>ₜ Pσ_s⌝ ∗
-     ∀ σ_s', ⌜Pσ_s σ_s'⌝ ==∗ ∃ e_s',
-       ⌜mexpr_rel Λ_s σ_s' e_s'⌝ ∗ mstate_interp Λ_s σ_s' ∗ Φ e_s') -∗
-  SRC e_s @ κ; E {{ Φ }}.
-Proof.
-Abort.
-(*   iIntros "HΦ" (σ_s ?) "??". *)
-(*   iApply fupd_mask_intro; [set_solver|]. iIntros "He". *)
-(*   iExists (σ_s =.). iSplit; [iPureIntro; tend|]. iIntros (? <-) "!>". *)
-(*   iExists _. iSplit; [done|]. iMod "He". by iFrame. *)
-(* Qed. *)
 
 (*
 Lemma sim_step E e_t e_s Φ:
@@ -468,16 +638,12 @@ Proof.
     iMod ("Hsim" with "[//]") as "Hsim" => /=.
     iMod (ord_later_elim with "Hsim Ha [-]"); [|done]. iIntros "Ha".
     iMod (ord_later_update with "Ha"); [shelve|].
-    iModIntro. iExists _. iFrame. iSplit; [done|]. iIntros "Ha".
-    iDestruct 1 as (? Ht) "Hsim". iModIntro.
-    iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. by apply thas_trace_trans. }
-    iIntros (??).
-    iMod ("Hsim" with "[//]") as (σ_t' ???? ?) "[? >[Hσ_t [Hσ_s Hsim]]]".
+    iModIntro. iExists _. iFrame. iSplit; [done|]. iIntros "Ha Hsteps". iModIntro.
+    iApply (sim_steps_elim with "Hsteps"). iIntros (?) "(%&%&%&%&%&%&?&>[? [? Hsim]])".
     iMod (ord_later_update with "Ha") as "Ha"; [by apply: o_le_choice_r|].
     iApply ("Hsim" with "[//] [//] [//] [//] Ha [$] [$] [$] [$]").
-  - iMod "Hsim" as (??) "Hcont".
-    iApply (fupd_mono _ _ ⌜_⌝). { iPureIntro. by apply (thas_trace_trans tnil). }
-    iIntros (??). iMod ("Hcont" with "[//]") as (??) "[?>[?[? Hsim]]]".
+  - iMod "Hsim" as "Hsteps".
+    iApply (sim_steps_elim with "Hsteps"). iIntros (?) "(%&%&?&>[? [? Hsim]])".
     iApply ("Hsim" with "[//] [//] [//] [//] [$] [$] [$] [$] [$]").
   Unshelve.
   + apply _.
