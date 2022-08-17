@@ -48,3 +48,5 @@ dimsum/iris/mono_ord.v
 dimsum/iris/ord_later.v
 dimsum/iris/sim.v
 dimsum/iris/language.v
+
+dimsum_examples/lam.v
