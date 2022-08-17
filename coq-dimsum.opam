@@ -11,7 +11,7 @@ synopsis: "DimSum"
 
 depends: [
   "coq" { (>= "8.15.0" & < "8.16~") | (= "dev") }
-  "coq-iris" { (= "dev.2022-08-05.0.f89a452d") | (= "dev") }
+  "coq-iris" { (= "dev.2022-08-16.2.a58395f1") | (= "dev") }
   "coq-itree" { (= "4.0.0") }
   "coq-record-update" { (= "0.3.0") | (= "dev") }
 ]

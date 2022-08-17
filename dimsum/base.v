@@ -35,7 +35,6 @@ Tactic Notation "inv_all" constr(f) := inv_all_tac f.
 (** admit with string *)
 Tactic Notation "admit:" constr(H) := admit.
 
-
 (* TODO: make version for case_decide and case_match and upstream  *)
 (** [case_bool_decide] variant that takes a pattern  *)
 Tactic Notation "case_bool_decide" open_constr(pat) "as" ident(Hd) :=
@@ -60,14 +59,8 @@ not call set_unfold and setoid_subst so often. *)
 Ltac fast_set_solver := set_unfold; naive_solver.
 
 (** exploit from CompCert/Coqlib.v *)
-(* TODO: https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/389 *)
-Tactic Notation "feed" "revert" constr(H) :=
-  feed (fun p => let H':=fresh in pose proof p as H'; revert H') H.
-Tactic Notation "efeed" "revert" constr(H) :=
-  efeed H using (fun p => let H':=fresh in pose proof p as H'; revert H').
-
 (* TODO: Is this a good idea? *)
-Ltac exploit x := efeed revert x.
+Ltac exploit x := efeed generalize x.
 
 (** [specialize_hyps] looks for hypothesis of the form [∀ x, P x → ...] and
  tries to find a unique solution for x. *)
@@ -280,88 +273,6 @@ Section theorems.
 End theorems.
 
 (** * Lemmas about maps *)
-(** ** [map_seqZ] *)
-(* TODO: https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/391 *)
-Fixpoint map_seqZ `{Insert Z A M, Empty M} (start : Z) (xs : list A) : M :=
-  match xs with
-  | [] => ∅
-  | x :: xs => <[start:=x]> (map_seqZ (Z.succ start) xs)
-  end.
-
-Section map_seqZ.
-  Context `{FinMap Z M} {A : Type}.
-  Implicit Types x : A.
-  Implicit Types xs : list A.
-
-  Global Instance map_seqZ_proper `{Equiv A} start :
-    Proper ((≡@{list A}) ==> (≡)) (map_seqZ (M:=M A) start).
-  Proof.
-    intros l1 l2 Hl. revert start.
-    induction Hl as [|x1 x2 l1 l2 ?? IH]; intros start; simpl.
-    - intros ?. rewrite lookup_empty; constructor.
-    - repeat (done || f_equiv).
-  Qed.
-
-  Lemma lookup_map_seqZ start xs i :
-    map_seqZ (M:=M A) start xs !! i = guard (start ≤ i)%Z; xs !! Z.to_nat (i - start)%Z.
-  Proof.
-    revert start. induction xs as [|x' xs IH]; intros start; simpl.
-    { rewrite lookup_empty; simplify_option_eq; by rewrite ?lookup_nil. }
-    destruct (decide (start = i)) as [->|?].
-    - by rewrite lookup_insert option_guard_True ?Z.sub_diag; try lia.
-    - rewrite lookup_insert_ne // IH.
-      simplify_option_eq; try done || lia.
-      replace (i - start)%Z with (Z.succ (i - Z.succ start))%Z by lia.
-      by rewrite Z2Nat.inj_succ; [|lia].
-  Qed.
-  Lemma lookup_map_seqZ_0 xs i :
-    (0 ≤ i)%Z →
-    map_seqZ (M:=M A) 0 xs !! i = xs !! Z.to_nat i.
-  Proof. move => ?. by rewrite lookup_map_seqZ option_guard_True // ?Z.sub_0_r. Qed.
-
-  Lemma lookup_map_seqZ_Some_inv start xs i x :
-    xs !! i = Some x ↔ map_seqZ (M:=M A) start xs !! (start + Z.of_nat i)%Z = Some x.
-  Proof.
-    rewrite ->lookup_map_seqZ, option_guard_True by lia.
-    have ->: Z.to_nat (start + i - start) = i by lia.
-    done.
-  Qed.
-
-  Lemma lookup_map_seqZ_Some start xs i x :
-    map_seqZ (M:=M A) start xs !! i = Some x ↔ (start ≤ i)%Z ∧ xs !! (Z.to_nat (i - start)) = Some x.
-  Proof. rewrite lookup_map_seqZ. case_option_guard; naive_solver. Qed.
-
-  Lemma lookup_map_seqZ_None start xs i :
-    map_seqZ (M:=M A) start xs !! i = None ↔ (i < start ∨ start + length xs ≤ i)%Z.
-  Proof.
-    rewrite lookup_map_seqZ.
-    case_option_guard; rewrite ?lookup_ge_None; naive_solver lia.
-  Qed.
-
-  Lemma lookup_map_seqZ_is_Some start xs i :
-    is_Some (map_seqZ (M:=M A) start xs !! i) ↔ (start ≤ i < start + length xs)%Z.
-  Proof. rewrite -not_eq_None_Some lookup_map_seqZ_None. lia. Qed.
-
-  Lemma lookup_map_seqZ_disjoint start1 start2 xs1 xs2 :
-    map_seqZ (M:=M A) start1 xs1 ##ₘ map_seqZ (M:=M A) start2 xs2 ↔
-     (start1 + length xs1 ≤ start2 ∨ start2 + length xs2 ≤ start1 ∨ length xs1 = 0%nat ∨ length xs2 = 0%nat)%Z.
-  Proof.
-    rewrite map_disjoint_alt.
-    setoid_rewrite lookup_map_seqZ_None.
-    split => Hi; [|lia].
-    have ?:= (Hi (start1)%Z). have ?:= (Hi (start2)%Z). lia.
-  Qed.
-
-  Lemma map_seqZ_app start xs1 xs2 :
-    map_seqZ start (xs1 ++ xs2)
-    =@{M A} map_seqZ start xs1 ∪ map_seqZ (start + length xs1) xs2.
-  Proof.
-    revert start. induction xs1 as [|x1 xs1 IH]; intros start; simpl.
-    - by rewrite ->(left_id_L _ _), Z.add_0_r.
-    - by rewrite IH /= Nat2Z.inj_succ Z.add_succ_r Z.add_succ_l !insert_union_singleton_l (assoc_L _).
-  Qed.
-End map_seqZ.
-
 (** ** [fresh_map] *)
 Definition fresh_map `{Countable A} `{Countable B} `{Infinite B}
     (S : gset A) (X : gset B) : gmap A B :=
@@ -406,26 +317,6 @@ Definition codom {K A} `{Countable K} `{Countable A} (m : gmap K A) : gset A :=
   list_to_set (snd <$> (map_to_list m)).
 
 (** ** Misc lemmas about map *)
-Section map.
-  Context `{FinMap K M}.
-  Context {A : Type} .
-  Implicit Types m : M A.
-
-(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/394 *)
-Lemma lookup_union_None_1 (m1 m2 : M A) i :
-  (m1 ∪ m2) !! i = None → m1 !! i = None ∧ m2 !! i = None.
-Proof. apply lookup_union_None. Qed.
-Lemma lookup_union_None_2 (m1 m2 : M A) i :
-  m1 !! i = None → m2 !! i = None → (m1 ∪ m2) !! i = None.
-Proof. move => ??. by apply lookup_union_None. Qed.
-End map.
-
-Section fin_map_dom.
-Context `{FinMapDom K M D}.
-(* https://gitlab.mpi-sws.org/iris/stdpp/-/merge_requests/394 *)
-Lemma not_elem_of_dom_1 {A} (m : M A) i : i ∉ dom m → m !! i = None.
-Proof. apply not_elem_of_dom. Qed.
-End fin_map_dom.
 
 Section map_filter.
   Context `{FinMap K M}.

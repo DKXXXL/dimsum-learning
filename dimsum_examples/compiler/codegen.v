@@ -1267,7 +1267,7 @@ Proof.
       iApply (to_sim with "[Hcont Hp Hv] [%] Hrf"). 2: {
         simplify_map_eq'. etrans; [|done].
         rewrite deep_to_asm_instrs_app Z.add_assoc.
-        apply: map_union_subseteq_r. apply lookup_map_seqZ_disjoint. rewrite fmap_length. lia. }
+        apply: map_union_subseteq_r. apply map_seqZ_disjoint. rewrite fmap_length. lia. }
       2: { iDestruct "Hinv" as "(%&?&?&?)". iExists _. iFrame. iApply cr2a_regs_inv_mono_insert; [compute_done|done]. }
 
       iApply ("Hcont" with "[%] [//] [$]"); [by simplify_map_eq'|].
@@ -1276,7 +1276,7 @@ Proof.
     + iApply (to_sim with "[Hcont Hp] [%] Hrf"). 2: {
         simplify_map_eq'. etrans; [|done].
         rewrite deep_to_asm_instrs_app.
-        apply: map_union_subseteq_r'. { apply lookup_map_seqZ_disjoint. rewrite fmap_length. lia. }
+        apply: map_union_subseteq_r'. { apply map_seqZ_disjoint. rewrite fmap_length. lia. }
         rewrite deep_to_asm_instrs_cons.
         etrans; [|apply insert_subseteq; apply lookup_map_seqZ_None; lia].
         f_equiv; [lia|done].
