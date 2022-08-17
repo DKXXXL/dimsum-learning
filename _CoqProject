@@ -16,6 +16,7 @@ dimsum/dem_module.v
 dimsum/refinement_examples.v
 dimsum/refines_meta.v
 dimsum/proof_techniques.v
+dimsum/nb_mod.v
 dimsum/filter.v
 dimsum/filter_srefines.v
 dimsum/product.v
@@ -46,5 +47,7 @@ dimsum_examples/memmove.v
 dimsum_examples/coroutine_example.v
 dimsum/iris/mono_ord.v
 dimsum/iris/ord_later.v
+dimsum/iris/sim_steps.v
 dimsum/iris/sim.v
 dimsum/iris/language.v
+dimsum/iris/iris.v

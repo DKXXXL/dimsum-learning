@@ -190,6 +190,11 @@ Lemma tex_unit EV (f : _ → trace EV):
   tex () f ≡ f tt.
 Proof. split; econstructor; [case|]; done. Qed.
 
+Lemma option_prefix_option_trace {A} (κ1 κ2 : option A) :
+  option_prefix κ1 κ2 →
+  option_trace κ2 = tapp (option_trace κ1) (option_trace (option_drop κ1 κ2)).
+Proof. destruct κ1, κ2 => //=; naive_solver. Qed.
+
 (** * [under_tall] *)
 (** [under_tall κs P] behaves like P except that one can eliminate [tall] at the beginning of [κs]. *)
 Inductive under_tall {EV} : trace EV → (trace EV → Prop) → Prop :=

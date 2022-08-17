@@ -631,6 +631,18 @@ Proof.
 Qed.
 
 (** * Lemmas about [option] *)
+Definition option_prefix {A} (o1 o2 : option A) : Prop :=
+  match o1 with
+  | Some x1 => o2 = Some x1
+  | None => True
+  end.
+
+Definition option_drop {A} (o1 o2 : option A) : option A :=
+  match o1 with
+  | Some _ => None
+  | None => o2
+  end.
+
 Lemma default_eq_Some {A} (x : A) o:
   x = default x o ↔ (∀ y, o = Some y → x = y).
 Proof. destruct o; naive_solver. Qed.

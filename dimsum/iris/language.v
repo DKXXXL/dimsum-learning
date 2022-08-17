@@ -1,17 +1,8 @@
 From iris.program_logic Require Export language.
 From iris.program_logic Require Import weakestpre lifting.
 From dimsum.core.iris Require Export sim.
-From dimsum.core Require Import axioms.
+From dimsum.core Require Import nb_mod axioms.
 Set Default Proof Using "Type".
-
-Definition nb_step EV (_ : unit) (_ : option EV) (_ : unit → Prop) : Prop := False.
-Definition nb_trans EV : mod_trans EV := ModTrans (nb_step EV).
-Canonical Structure nb_mod_lang EV Σ : mod_lang EV Σ := {|
-  mexpr := unit;
-  mtrans := nb_trans EV;
-  mexpr_rel _ _ := True;
-  mstate_interp _ := True%I;
-|}.
 
 Inductive lang_step (Λ : language) :
   (expr Λ * state Λ) → option (observation Λ) → ((expr Λ * state Λ) → Prop) → Prop :=
@@ -48,12 +39,8 @@ Section wp.
     iApply (sim_steps_ind with "[] Hsim"). { solve_proper. }
     iIntros "!>" ([]? ?) "Hsim".
     iMod "Hsim" as "[[% $]|[% [% [%Ht [% Hsim]]]]]"; [done|].
-    destruct κ'.
-    - apply thas_trace_cons_inv in Ht.
-      apply thas_trace_nil_inv in Ht. inv Ht => //. destruct!.
-      inv_all @m_step.
-    - apply thas_trace_nil_inv in Ht. inv Ht; [|done].
-      by iMod ("Hsim" with "[//]").
+    move: Ht => /nb_trans_has_trace[-> ?]/=.
+    by iMod ("Hsim" with "[//]").
   Qed.
 
   Lemma sim_wp_adequacy e E `{!ord_laterPreG Σ}
