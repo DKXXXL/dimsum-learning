@@ -5,6 +5,77 @@ From iris.proofmode Require Export tactics.
 From dimsum.core.iris Require Export mono_ord.
 Set Default Proof Using "Type".
 
+(* Ideas for fixing mono_ord:
+
+1. Only use natural numbers counting the number of steps already done
+in the resource (potentially adding the original ordinal as a
+parameter to ord_laterGS).
+
+- Not sure how to make it work, in particular what to do the induction
+  on. It seems like a problem if the authoratative side can switch
+  which path it takes through the ordinal as it might not be
+  well-founded for large ordinals (e.g. [oChoice nat (λ n, oS^n oO)])
+
+2. Put the path through the ordinal into the resource.
+
+-> Does not help since the universe of this path would be as large as
+   the one of the ordinal.
+
+3. Use explicit step indexing
+
+-> Make the step index an explicit parameter of many definitions.
+- Con: Would be annoying and require proving monotonicity often (?)
+- Pro: Would probably work
+
+4. Use monotone predicates over the step index
+
+- Pro: Would be nicer than explicit step indexing
+- Con: Would require reengineering Lithium to work on arbitrary BIs
+- Con: Would maybe run into similar universe problems as it might push the
+  universe of bi too high
+
+5. Use coinduction instead of step indexing.
+
+- Pro: Would avoid the use of ordinals entirely
+- Con: It is unclear how to obtain such nice reasoning principles similar to Löb induction
+  - Challenge: Can one support the use of Löb induction in RefinedC, i.e. for
+    recursion between functions and for recursion between blocks?
+  - Could maybe work if one extends each WP-like judgement with a iProp parameter
+    that says that one can finish this kind of WP by showing that the iProp holds
+    and then universally quantify over the iProp parameter and have wands in the
+    context that show how to prove this iProp.
+    - Does this work for mutual recursion?
+
+6. Use transfinite Iris
+
+- Would this work or would this run into the same universe problems?
+- Would probably run into the same universe problems, as the type of ordinals in
+  transfinite lives below the type of propositions.
+
+7. Put the type of states into Set
+-> Would solve the problem since now ordinals don't need to live in a very high universe
+
+- Would require a first-order encoding of Iris propositions to handle prepost
+- Would require changing itrees to a new definition that can only make choices
+  over countable types and decidable propositions
+- Pro: Would retain compatability with Transfinite Iris
+- Pro: Might be good to avoid universe problems in the long term
+
+CoInductive spec (EV : Set) : Set :=
+| SNB | SUB
+| SVis (e : EV) (s : spec EV) | STau (s : spec EV)
+| SAll (f : positive → spec EV)
+| SExist (f : positive → spec EV).
+
+Or if one allows the states to be in Type@{Set+1} :
+CoInductive spec (EV : Set) : Type@{Set+1} :=
+| SVis (e : EV) (s : spec EV)
+| SAll (T : Set) (f : T → spec EV)
+| SExist (T : Set) (f : T → spec EV)
+| STau (s : spec EV).
+
+*)
+
 Class ord_laterPreG Σ := OrdLaterPreG {
   ord_later_pre_inG :> inG Σ mono_ordR;
 }.
@@ -132,17 +203,24 @@ Section lemmas.
 
   Lemma ord_loeb P:
     ord_later_ctx -∗
-    □ (▷ₒ P -∗ P) -∗
+    □ (□ ▷ₒ P -∗ P) -∗
     P.
   Proof.
-    unseal. iDestruct 1 as (n) "Hub". iIntros "#Hl".
+    unseal. iDestruct 1 as (n) "#Hub". iIntros "#Hl".
     iInduction n as [] "IH" using o_lt_ind.
-    iApply "Hl".
+    iApply "Hl". iModIntro.
     iIntros (n') "Hn'".
     iDestruct (own_valid_2 with "Hn' Hub") as %[_ ?]%mono_ord_both_frac_valid.
     iFrame. iIntros (n'' ?) "Ha".
-    rewrite {1}mono_ord_auth_ub_op. iDestruct "Ha" as "[Ha Hn'']". iFrame.
+    rewrite {1}mono_ord_auth_ub_op. iDestruct "Ha" as "[Ha #Hn'']". iFrame.
     iApply ("IH" with "[] Hn''"). iPureIntro. by etrans.
+  Qed.
+
+  Lemma ord_later_sep_pers P1 P2:
+    □ ▷ₒ (P1 ∗ P2) -∗
+    (□ ▷ₒ P1 ∗ □ ▷ₒ P2).
+  Proof.
+    iIntros "#HP". iSplit; iModIntro; iApply (ord_later_mono with "[$]"); by iIntros "[??]".
   Qed.
 
   Lemma ord_later_elim P Q n:

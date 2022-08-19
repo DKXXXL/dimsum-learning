@@ -1,4 +1,4 @@
-From dimsum.core Require Export proof_techniques link prepost.
+From dimsum.core Require Export proof_techniques seq_product link.
 From dimsum.core Require Import axioms.
 
 Local Open Scope Z_scope.

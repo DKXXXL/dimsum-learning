@@ -77,6 +77,14 @@ Done:
     - refines Return 1
 - [X] Compiler
 
+# Universes
+
+mod_trans.(m_state) < ordinal         (the execution can branch over the whole state)
+ofe <= mod_trans.(m_state)            (since prepost has propositions in the state)
+itree <= mod_trans.(m_state)          (since itree module has itrees in the state)
+resources < ofe                       (since resources are an ofe)
+transfinite iris step index < ofe (?) (since propositions are predicates over step indices)
+
 # Notes
 
 module : state transition system
