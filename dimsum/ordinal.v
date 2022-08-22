@@ -1,17 +1,18 @@
-From dimsum.core Require Import base axioms.
+From dimsum.core Require Export base universes.
+From dimsum.core Require Import axioms.
 
 (** * [ordinal] *)
 (** This file defines the [ordinal] type, which is a form of
 ordinal and used as a step index. *)
 
-Inductive ordinal : Type :=
-| oO | oS (n : ordinal) | oChoice (T : Type) (f : T → ordinal).
+Inductive ordinal : TypeOrdinal :=
+| oO | oS (n : ordinal) | oChoice (T : TypeState) (f : T → ordinal).
 
 Inductive o_le : ordinal → ordinal → Prop :=
 | o_le_O n : o_le oO n
 | o_le_S_S n1 n2 : o_le n1 n2 → o_le (oS n1) (oS n2)
-| o_le_choice_l T f n : (∀ x, o_le (f x) n) → o_le (oChoice T f) n
-| o_le_choice_r T f n x : o_le n (f x) → o_le n (oChoice T f)
+| o_le_choice_l (T : TypeState) f n : (∀ x, o_le (f x) n) → o_le (oChoice T f) n
+| o_le_choice_r (T : TypeState) f n x : o_le n (f x) → o_le n (oChoice T f)
 .
 Global Instance o_le_subseteq : SubsetEq ordinal := o_le.
 Global Instance o_le_rewrite : RewriteRelation (o_le) := {}.

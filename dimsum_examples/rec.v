@@ -1,4 +1,4 @@
-From dimsum.core Require Export proof_techniques seq_product link.
+From dimsum.core Require Export proof_techniques seq_product link prepost.
 From dimsum.core Require Import axioms.
 
 Local Open Scope Z_scope.
@@ -1534,7 +1534,7 @@ Proof.
   - move => *. subst. apply: tsim_mono; [|done]. apply tsim_mono_b_false. naive_solver.
 Qed.
 
-Lemma rec_prepost_proof {S} {M : ucmra} R `{!∀ b, PreOrder (R b)} i o fns1 fns2 (s0 : S) (r0 : uPred M):
+Lemma rec_prepost_proof {S} {M : ucmra} `{!Shrink M} R `{!∀ b, PreOrder (R b)} i o fns1 fns2 (s0 : S) (r0 : uPred M):
   (* R true: public transition relation, R false: private transition relation *)
   (∀ s r s' r', R true (s, r) (s', r') → R false (s, r) (s', r')) →
   (∀ n K1 K2 f fn1 vs1 h1 s1 r1,
@@ -1561,11 +1561,11 @@ Lemma rec_prepost_proof {S} {M : ucmra} R `{!∀ b, PreOrder (R b)} i o fns1 fns
             ∃ v2'' h2'', e''''' = (Incoming, ERReturn v2'' h2'') ∧
           Rec (expr_fill K1' (Val v1'')) h1'' fns1
               ⪯{rec_trans, prepost_trans i o rec_trans, n', true}
-          (SMProg, Rec (expr_fill K2' (Val v2'')) h2'' fns2, (PPInside, s6, r6')))) →
+          (SMProg, Rec (expr_fill K2' (Val v2'')) h2'' fns2, (PPInside, s6, uPred_shrink r6')))) →
 
           Rec (expr_fill K1' (Call f es1)) h1' fns1
               ⪯{rec_trans, prepost_trans i o rec_trans, n', b}
-          (SMProg, Rec (expr_fill K2' (Call f es2)) h2' fns2, (PPInside, s3, r3))) →
+          (SMProg, Rec (expr_fill K2' (Call f es2)) h2' fns2, (PPInside, s3, uPred_shrink r3))) →
       (* Return *)
       (∀ n' v1 v2 h1' h2' b s3 r3,
          n' ⊆ n →
@@ -1573,10 +1573,10 @@ Lemma rec_prepost_proof {S} {M : ucmra} R `{!∀ b, PreOrder (R b)} i o fns1 fns
                e''' = (Outgoing, ERReturn v1 h1') ∧ R true (s1, r1) (s4, r4') ∧ satisfiable (r4' ∗ r4 ∗ r3)) →
           Rec (expr_fill K1 (Val v1)) h1' fns1
               ⪯{rec_trans, prepost_trans i o rec_trans, n', b}
-          (SMProg, Rec (expr_fill K2 (Val v2)) h2' fns2, (PPInside, s3, r3))) →
+          (SMProg, Rec (expr_fill K2 (Val v2)) h2' fns2, (PPInside, s3, uPred_shrink r3))) →
       Rec (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs1 fn1.(fd_body))) h1 fns1
           ⪯{rec_trans, prepost_trans i o rec_trans, n, false}
-          (SMProg, Rec (expr_fill K2 (AllocA fn2.(fd_vars) $  subst_l fn2.(fd_args) vs2 fn2.(fd_body))) h2 fns2, (PPInside, s2, r2')))))) →
+          (SMProg, Rec (expr_fill K2 (AllocA fn2.(fd_vars) $  subst_l fn2.(fd_args) vs2 fn2.(fd_body))) h2 fns2, (PPInside, s2, uPred_shrink r2')))))) →
   trefines (rec_mod fns1) (prepost_mod i o (rec_mod fns2) s0 r0).
 Proof.
   move => HR Hc.
@@ -1584,14 +1584,15 @@ Proof.
   unshelve eapply tsim_remember_call.
   { simpl. exact (λ d b '((Rec ei1 hi1 fnsi1), (ips1, Rec es1 hs1 fnss1, (pp1, s1, r1)))
                     '((Rec ei2 hi2 fnsi2), (ips2, Rec es2 hs2 fnss2, (pp2, s2, r2))),
-    ∃ Ki Ks,
+    ∃ Ki Ks rr1 rr2,
+      r1 = uPred_shrink rr1 ∧ r2 = uPred_shrink rr2 ∧
       fnsi2 = fns1 ∧
       fnss2 = fns2 ∧
       ei2 = expr_fill Ki (Waiting (bool_decide (d ≠ 0%nat))) ∧
       es2 = expr_fill Ks (Waiting (bool_decide (d ≠ 0%nat))) ∧
       pp2 = PPOutside ∧
       ips2 = SMFilter ∧
-      R b (s1, r1) (s2, r2) ∧
+      R b (s1, rr1) (s2, rr2) ∧
       if b then
         ei2 = ei1 ∧
         es2 = es1
@@ -1600,7 +1601,8 @@ Proof.
                  ). }
   { simpl. exact (λ  '(Rec ei1 hi1 fnsi1) '(ips1, Rec es1 hs1 fnss1, (pp1, s1, r1))
                      '(Rec ei2 hi2 fnsi2) '(ips2, Rec es2 hs2 fnss2, (pp2, s2, r2)),
-    ∃ Ki b v,
+    ∃ Ki b v rr,
+      r1 = uPred_shrink rr ∧ r2 = uPred_shrink rr ∧
       fnsi2 = fnsi1 ∧
       fnss2 = fnss1 ∧
       ei1 = expr_fill Ki (Waiting b) ∧
@@ -1609,8 +1611,7 @@ Proof.
       ips2 = SMFilter ∧
       hs2 = hs1 ∧
       pp2 = PPRecv1 (Incoming, ERReturn v hi2) ∧
-      s2 = s1 ∧
-      r2 = r1). }
+      s2 = s1). }
   { move => ??? *. destruct!. repeat case_match; naive_solver. }
   { move => /= *. destruct!. repeat case_match. naive_solver. }
   { move => /=. eexists [], []. split!. }

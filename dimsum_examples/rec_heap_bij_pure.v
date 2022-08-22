@@ -618,7 +618,7 @@ Definition rec_heap_bij_trans (m : mod_trans rec_event) : mod_trans rec_event :=
   prepost_trans rec_heap_bij_pre rec_heap_bij_post m.
 
 Definition rec_heap_bij (m : module rec_event) : module rec_event :=
-  Mod (rec_heap_bij_trans m.(m_trans)) (SMFilter, m.(m_init), (PPOutside, RecHeapBij ∅ ∅ ∅, (True%I : uPred unitUR))).
+  Mod (rec_heap_bij_trans m.(m_trans)) (SMFilter, m.(m_init), (PPOutside, RecHeapBij ∅ ∅ ∅, uPred_shrink (True%I : uPred unitUR))).
 
 (** * vertical compositionality *)
 (** ** map values and heaps through bij *)

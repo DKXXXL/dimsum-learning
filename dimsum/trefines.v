@@ -8,11 +8,11 @@ giving behaviors to modules and then comparing them via set inclusion.
 Its many feature is that it does not allow commuting choices and visible events. *)
 
 (** * tree traces *)
-Inductive trace (EV : Type) : Type :=
+Inductive trace (EV : TypeEvent) : TypeOrdinal :=
 | tnil
 | tcons (κ : EV) (κs : trace EV)
-| tex (T : Type) (f : T → trace EV)
-| tall (T : Type) (f : T → trace EV).
+| tex (T : TypeState) (f : T → trace EV)
+| tall (T : TypeState) (f : T → trace EV).
 Arguments tnil {_}.
 Arguments tcons {_}.
 Arguments tex {_}.

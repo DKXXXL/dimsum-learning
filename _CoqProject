@@ -6,6 +6,7 @@
 
 dimsum/base.v
 dimsum/axioms.v
+dimsum/universes.v
 dimsum/ordinal.v
 dimsum/satisfiable.v
 dimsum/module.v

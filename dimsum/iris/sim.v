@@ -8,6 +8,110 @@ From dimsum.core Require Import nb_mod.
 From dimsum.core.iris Require Export ord_later sim_steps.
 Set Default Proof Using "Type".
 
+(*
+Features:
+1. Bind rule which can bind expressions e that produce events, i.e.
+TGT e @ E {{ λ e, TGT e @ E {{ Φ }} }}
+------------------
+TGT e @ E {{ Φ }}
+
+2. Customizing what happens on events, i.e. whether the event needs to
+be proven in the spec or whether now another program executes (e.g. for linking).
+
+
+Idea for simulation relations:
+1.
+TGT e @ E [[ Π ]] π {{ Φ }} where
+e : expr | Π : Τ → option EV → (T → iProp) → iProp (where [T : Type] is an implicit parameter of the relation)
+π : T | E : coPset | Φ : expr → T → iProp
+
+SRC e @ E [[ Π ]] π {{ Φ }} where
+e : expr | Π : T → option EV → (T → iProp) → iProp
+π : T | E : coPset | Φ : expr → T → iProp
+Problem:
+TGT e_t @ E [[ λ κ e_s Φ, SRC e_s @ ∅ [[ λ _ κ', κ = κ' ∗ ?Φ? ]] () {{ λ _ _, False}} ]] e_s {{ λ _ _, False }}
+
+Can probably be fixed by removing Π in the spec, but this disallows the bind rule in the spec
+(only allows it for expressions that don't produce events)
+
+2.
+TGT e @ E [[ Π ]] {{ Φ }}
+where
+e : expr
+Π : option EV → ((option EV → (... → iProp)) → iProp) → iProp
+E : coPset
+Φ : expr → option EV → ((option EV → (... → iProp)) → iProp) → iProp → iProp
+
+SRC e @ E [[ Π ]] {{ Φ }}
+where
+e : expr
+Π : option EV → ((option EV → (... → iProp)) → iProp) → iProp
+E : coPset
+Φ : expr → option EV → ((option EV → (... → iProp)) → iProp) → iProp → iProp
+
+Problem: infinite type
+
+TGT e_t @ E [[ λ κ Φ, SRC e_s @ ∅ [[ λ κ' Ψ, κ = κ' ∗ Φ Ψ ]] {{ λ _ _, False}} ]] {{ λ _ _, False }}
+
+This solution seems quite nice, if one can make it work
+
+Unfolded:
+TGT e_t @ E [[ λ κ e_t, SRC e_s @ ∅ [[
+  λ κ' e_s', κ = κ' ∗ TGT e_t @ E [[ λ κ'' e_t'', SRC e_s' @ ∅ [[ ... ]] {{ _ }} ]] {{λ _ _, False}} ]] {{ λ _ _, False}}
+ ]] {{ λ _ _, False }}
+
+Other unfolded:
+TGT e_t @ E [[ X e_s Ψ ]] {{ Φ }} =
+TGT e_t @ E [[ λ κ e_t' Φ',
+  SRC e_s @ ∅ [[ λ κ' e_s' Ψ',
+    κ = κ' ∗ TGT e_t' @ E [[ X e_s' Ψ' ]] {{ Φ' }}
+  ]] {{ Ψ }}
+]] {{ Φ }}
+
+Even other unfolded:
+X e_t Φ e_s Ψ =
+TGT e_t @ E [[ λ κ e_t' Φ',
+  SRC e_s @ ∅ [[ λ κ' e_s' Ψ',
+    κ = κ' ∗ X e_t' Φ' e_s' Ψ'
+  ]] {{ Ψ }}
+]] {{ Φ }}
+-> What would the type of Φ / Ψ be? It should take Π as an argument but Π also
+takes Φ \ Ψ as arguments ...
+
+Φ : expr → (option EV → expr → (expr → (option EV → expr → (...) → iProp) → iProp) → iProp) → iProp
+
+3. Solution that likely works: Only allow bind rule for target, not for spec. Also require
+pre-/postconditions in rule for linking such that there is no mutual recursion
+when considering linking in the target
+
+TGT e @ E [[ Π ]] π {{ Φ }} where
+e : expr | Π : Τ → option EV → (T → iProp) → iProp (where [T : Type] is an implicit parameter of the relation)
+π : T | E : coPset | Φ : expr → T → iProp
+
+SRC e @ E {{ Φ }} where
+e : expr | E : coPset | Φ : expr → option EV → iProp
+
+TGT e_t @ E [[ λ e_s κ Φ, SRC e_s @ ∅ {{ λ e_s' κ', κ' = κ ∗ φ e_s' }} ]] e_s {{ λ _ _, False }}
+
+Problem: Only allows the following bind rule for SRC (note the [κ = None]):
+SRC e @ E {{ λ κ e', κ = None ∗ SRC e' @ E {{ Φ }} }}
+------------------
+SRC e @ E {{ Φ }}
+
+Also rule for linking would be weird because one does not get the e in Π so one cannot put it in π
+TGT e1 [[ ??? ]] ??? {{ Φ }}
+------------------
+TGT e1 + e2 [[ Π ]] π {{ Φ }}
+
+4. Same as 3. but use ghost state to manage π instead of having it in the relation.
+
+TGT e_t @ E [[ λ κ Φ, ∀ e_s, ⤇ e_s -∗ SRC e_s @ ∅ {{ λ e_s' κ', κ' = κ ∗ ⤇ e_s ∗ φ }} ]] {{ λ _ _, False }}
+
+
+5. Manage the Π in ghost state
+-> Requires actual laters
+ *)
+
 
 (** * mod_lang *)
 Structure mod_lang EV Σ := ModLang {
@@ -69,6 +173,7 @@ Section sim_expr.
 End sim_expr.
 
 (** * [sim_pre] *)
+(* TODO: Also allow stuttering in base case*)
 Definition sim_pre `{!dimsumGS EV Σ Λ_t Λ_s}
     (sim : leibnizO coPset -d> mexprO -d> (mexprO -d> iPropO Σ) -d> iPropO Σ) :
     leibnizO coPset -d> mexprO -d> (mexprO -d> iPropO Σ) -d> iPropO Σ := λ E e_t Φ,
@@ -150,6 +255,45 @@ Notation "'SRC' e @ E {{ Φ } }" := (sim_src E None e Φ%I) (at level 70, Φ at 
 Section sim.
 Context `{!dimsumGS EV Σ Λ_t Λ_s}.
 Implicit Types P : iProp Σ.
+
+(*
+Definition tgt (e_t : mexpr Λ_t) (Π : option EV → mexpr Λ_t → iProp Σ) : iProp Σ.
+Admitted.
+Definition tgt_step (tgt : mexpr Λ_t → (option EV → mexpr Λ_t → iProp Σ) → iProp Σ) (e_t : mexpr Λ_t) (Π : option EV → mexpr Λ_t → iProp Σ) : iProp Σ.
+Admitted.
+
+Lemma tgt_unfold e_t Π :
+  tgt e_t Π ⊣⊢ tgt_step tgt e_t Π.
+Admitted.
+
+Lemma tgt_step_mono e_t Π Φ Φ' :
+  tgt_step Φ e_t Π -∗
+  (∀ e' Π', Φ e' Π' -∗ Φ' e' Π') -∗
+  tgt_step Φ' e_t Π.
+Admitted.
+
+Definition tgt_post (e_t : mexpr Λ_t) (Π : option EV → mexpr Λ_t → iProp Σ) (Φ : mexpr Λ_t → (option EV → mexpr Λ_t → iProp Σ) → iProp Σ) : iProp Σ :=
+  (∀ e_t' Π', Φ e_t' Π' -∗ tgt e_t' Π') -∗ tgt e_t Π.
+
+Lemma tgt_post_bind e_t Π Φ :
+  tgt_post e_t Π (λ e_t' Π', tgt_post e_t' Π' Φ) -∗
+  tgt_post e_t Π Φ.
+Proof. iIntros "HT HΦ". iApply "HT". iIntros (??) "HT". by iApply "HT". Qed.
+
+Lemma tgt_post_wand e_t Π Φ Φ' :
+  tgt_post e_t Π Φ -∗
+  (∀ e' Π', Φ e' Π' -∗ Φ' e' Π') -∗
+  tgt_post e_t Π Φ'.
+Proof. iIntros "HT Hwand HΦ". iApply "HT". iIntros (??) "HT". iApply "HΦ". by iApply "Hwand". Qed.
+
+Lemma tgt_post_step e_t Π Φ :
+  tgt_step (λ e_t' Π', tgt_post e_t' Π' Φ) e_t Π -∗
+  tgt_post e_t Π Φ.
+Proof.
+  iIntros "HT HΦ". rewrite tgt_unfold.
+  iApply (tgt_step_mono with "HT"). iIntros (??) "HT". by iApply "HT".
+Qed.
+*)
 
 (** * Lemmas about [sim] *)
 Lemma sim_unfold E e_t Φ:

@@ -190,6 +190,9 @@ Canonical Structure rec_to_asm_elemO := leibnizO rec_to_asm_elem.
 Definition rec_to_asmUR : ucmra :=
   prodUR (gmap_viewUR prov rec_to_asm_elemO) (gmap_viewUR Z (optionO ZO)).
 
+Global Instance rec_to_asmUR_shrink : Shrink rec_to_asmUR.
+Proof. solve_shrink. Qed.
+
 Definition r2a_heap_inj (r : (gmap_viewUR prov rec_to_asm_elemO)) : rec_to_asmUR := (r, ε).
 Definition r2a_mem_inj (r : (gmap_viewUR Z (optionO ZO))) : rec_to_asmUR := (ε, r).
 
@@ -1183,7 +1186,7 @@ Definition rec_to_asm_trans (ins : gset Z) (fns : gset string) (f2i : gmap strin
 Definition rec_to_asm (ins : gset Z) (fns : gset string) (f2i : gmap string Z) (mo : gmap Z (option Z))
            (m : module rec_event) : module asm_event :=
   Mod (rec_to_asm_trans ins fns f2i m.(m_trans))
-      (SMFilter, m.(m_init), (PPOutside, R2A [] ∅, (r2a_mem_map mo)%I)).
+      (SMFilter, m.(m_init), (PPOutside, R2A [] ∅, uPred_shrink (r2a_mem_map mo)%I)).
 
 Lemma rec_to_asm_trefines mo m m' ins fns f2i `{!VisNoAng m.(m_trans)}:
   trefines m m' →
@@ -1403,9 +1406,9 @@ Lemma rec_to_asm_proof ins fns ins_dom fns_dom f2i :
               r2a_regs_ret rs'' rs' av →
               map_scramble touched_registers lr'' rs'' →
               AsmState (ARunning []) rs'' mem'' ins ⪯{asm_trans, rec_to_asm_trans ins_dom fns_dom f2i rec_trans, n, true}
-               (SMProg, Rec (expr_fill K (expr_fill K' (Val v))) h'' fns, (PPInside, R2A cs lr'', rf''))) →
+               (SMProg, Rec (expr_fill K (expr_fill K' (Val v))) h'' fns, (PPInside, R2A cs lr'', uPred_shrink rf''))) →
           AsmState (ARunning []) rs' mem' ins ⪯{asm_trans, rec_to_asm_trans ins_dom fns_dom f2i rec_trans, n, true}
-               (SMProg, Rec (expr_fill K (expr_fill K' (rec.Call f' es))) h' fns, (PPInside, R2A cs lr', rf'))) →
+               (SMProg, Rec (expr_fill K (expr_fill K' (rec.Call f' es))) h' fns, (PPInside, R2A cs lr', uPred_shrink rf'))) →
       (* Return *)
       (∀ rs' mem' ssz' av v h' lr' rf',
           rs' !!! "PC" = rs !!! "R30" →
@@ -1414,9 +1417,9 @@ Lemma rec_to_asm_proof ins fns ins_dom fns_dom f2i :
           r2a_regs_ret rs' rs av →
           map_scramble touched_registers lr' rs' →
           AsmState (ARunning []) rs' mem' ins ⪯{asm_trans, rec_to_asm_trans ins_dom fns_dom f2i rec_trans, n, true}
-               (SMProg, Rec (expr_fill K (Val v)) h' fns, (PPInside, R2A cs lr', rf'))) →
+               (SMProg, Rec (expr_fill K (Val v)) h' fns, (PPInside, R2A cs lr', uPred_shrink rf'))) →
       AsmState (ARunning []) rs mem ins ⪯{asm_trans, rec_to_asm_trans ins_dom fns_dom f2i rec_trans, n, false}
-               (SMProg, Rec (expr_fill K (AllocA fn.(fd_vars) $ subst_l fn.(fd_args) vs fn.(fd_body))) h fns, (PPInside, R2A cs lr, rf))
+               (SMProg, Rec (expr_fill K (AllocA fn.(fd_vars) $ subst_l fn.(fd_args) vs fn.(fd_body))) h fns, (PPInside, R2A cs lr, uPred_shrink rf))
 ) →
   trefines (asm_mod ins) (rec_to_asm ins_dom fns_dom f2i ∅ (rec_mod fns)).
 Proof.
@@ -1425,21 +1428,24 @@ Proof.
   unshelve eapply tsim_remember_call.
   { simpl. exact (λ d b '((AsmState i1 rs1 mem1 ins'1), (σfs1, Rec e1 h1 fns'1, (t1, R2A cs1 lr1, r1)))
                         '((AsmState i2 rs2 mem2 ins'2), (σfs2, Rec e2 h2 fns'2, (t2, R2A cs2 lr2, r2))),
-      ∃ K, i2 = AWaiting ∧ ins'2 = ins ∧ e2 = expr_fill K (Waiting (bool_decide (d ≠ 0%nat))) ∧ fns'2 = fns ∧
-              t2 = PPOutside ∧ σfs2 = SMFilter ∧ (d = 0%nat ↔ cs2 = []) ∧
+      ∃ K rr1 rr2,
+        i2 = AWaiting ∧ ins'2 = ins ∧ e2 = expr_fill K (Waiting (bool_decide (d ≠ 0%nat))) ∧ fns'2 = fns ∧
+        t2 = PPOutside ∧ σfs2 = SMFilter ∧ (d = 0%nat ↔ cs2 = []) ∧
+        r1 = uPred_shrink rr1 ∧ r2 = uPred_shrink rr2 ∧
       if b then
         e2 = e1 ∧
         cs2 = cs1 ∧
-        r1 = r2
+        rr1 = rr2
       else
         True
                  ). }
   { simpl. exact (λ  '(AsmState i1 rs1 mem1 ins'1) '(σfs1, Rec e1 h1 fns'1, (t1, R2A cs1 lr1, r1))
                      '(AsmState i2 rs2 mem2 ins'2) '(σfs2, Rec e2 h2 fns'2, (t2, R2A cs2 lr2, r2)),
-    ∃ i K av v pc lr' ssz,
+    ∃ i K av v pc lr' ssz rr1 rr2,
+      r1 = uPred_shrink rr1 ∧ r2 = uPred_shrink rr2 ∧
       rs2 !!! "PC" = pc ∧
       ins !! pc = Some i ∧
-      satisfiable (r2a_mem_inv (rs2 !!! "SP") ssz mem2 ∗ r2a_heap_inv h2 ∗ r2a_val_rel v av ∗ r1 ∗ r2) ∧
+      satisfiable (r2a_mem_inv (rs2 !!! "SP") ssz mem2 ∗ r2a_heap_inv h2 ∗ r2a_val_rel v av ∗ rr1 ∗ rr2) ∧
       r2a_regs_ret rs2 lr' av ∧
       i2 = ARunning [] ∧
       ins'1 = ins'2 ∧
@@ -1463,7 +1469,8 @@ Proof.
     (* This inner loop deals with calls inside of the module. We use
     Hf both for calls triggered from inside and outside the module. *)
     unshelve eapply tsim_remember. { exact (λ n '(AsmState i1 rs1 mem1 ins'1) '(σfs1, Rec e1 h1 fns'1, (t1, R2A cs1 lr1, r1)),
-       ∃ K' pc i f fn vs r' ssz,
+       ∃ K' pc i f fn vs r' ssz rr1,
+         r1 = uPred_shrink rr1 ∧
          rs1 !!! "PC" = pc ∧
          ins !! pc = Some i ∧
          fns !! f = Some fn ∧
@@ -1471,7 +1478,7 @@ Proof.
          ins'1 = ins ∧
          fns'1 = fns ∧
          satisfiable (r2a_mem_inv (rs1 !!! "SP") ssz mem1 ∗ r2a_heap_inv h1 ∗
-                                   r2a_args 0 vs rs1 ∗ r' ∗ r1) ∧
+                                   r2a_args 0 vs rs1 ∗ r' ∗ rr1) ∧
          i1 = ARunning [] ∧
          e1 = expr_fill K' (AllocA fn.(fd_vars) $ subst_l fn.(fd_args) vs fn.(fd_body)) ∧
          map_scramble touched_registers lr1 rs1 ∧
@@ -1485,7 +1492,7 @@ Proof.
           r2a_regs_ret rs' rs1 av  →
           map_scramble touched_registers lr' rs' →
           AsmState (ARunning []) rs' mem' ins ⪯{asm_trans, rec_to_asm_trans (dom ins) (dom fns) f2i rec_trans, n, true}
-               (SMProg, Rec (expr_fill K' (Val v)) h' fns, (PPInside, R2A cs1 lr', rf'))) ). }
+               (SMProg, Rec (expr_fill K' (Val v)) h' fns, (PPInside, R2A cs1 lr', uPred_shrink rf'))) ). }
     { eexists (ReturnExtCtx _:: _). split! => //. {
         iSatMono. iIntros!. iFrame.
         iDestruct (r2a_args_intro with "[$]") as "$"; [done|]. iAccu. }
@@ -1531,7 +1538,7 @@ Proof.
         eapply Hret' => //.
         iSatMono. iIntros!. iFrame.
     + iSatClear. move => *.
-      apply: H14 => //.
+      apply: H15 => //.
       iSatMono. iIntros!. iFrame.
   - move => *.
     tstep_s. simplify_eq. destruct d; [exfalso; naive_solver|]. split!.

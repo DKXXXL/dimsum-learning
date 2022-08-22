@@ -436,7 +436,7 @@ Definition sim (n : ordinal) (b : bool) (dins : list deep_asm_instr) (e : expr)
   cr2a_inv s lr rs mem h' -∗
   iSat_end (AsmState (ARunning []) rs mem pf_ins
              ⪯{asm_trans, rec_to_asm_trans (dom pf_ins) (dom pf_fns) s.(s_f2i) rec_trans, n, b}
-           (SMProg, Rec e h pf_fns, (PPInside, R2A pf_cs lr, rf))).
+           (SMProg, Rec e h pf_fns, (PPInside, R2A pf_cs lr, uPred_shrink rf))).
 
 Lemma to_sim n b dins e s rs h h' :
   sim n b dins e s rs h h' -∗ sim n b dins e s rs h h'.
@@ -1343,7 +1343,7 @@ Lemma sim_intro s dins rs mem ins ins_dom fns_dom f2i n b e h fns cs lr rf P:
   (P -∗ sim n b dins e s rs h h) →
   AsmState (ARunning []) rs mem ins
      ⪯{asm_trans, rec_to_asm_trans ins_dom fns_dom f2i rec_trans, n, b}
-  (SMProg, Rec e h fns, (PPInside, R2A cs lr, rf))
+  (SMProg, Rec e h fns, (PPInside, R2A cs lr, uPred_shrink rf))
 .
 Proof.
   move => ?????? Hcont. subst.

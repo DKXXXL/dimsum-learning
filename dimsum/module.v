@@ -1,4 +1,4 @@
-From dimsum.core Require Export base.
+From dimsum.core Require Export base universes.
 
 (** * Definition of [module] *)
 
@@ -15,8 +15,8 @@ Naming scheme:
 | init + state + step | module    | ..._mod   | product_mod   |
  *)
 
-Record mod_trans (EV : Type) : Type := ModTrans {
-  m_state : Type;
+Record mod_trans (EV : TypeEvent) : Type := ModTrans {
+  m_state : TypeState;
   m_step : m_state → option EV → (m_state → Prop) → Prop;
 }.
 Arguments m_state {_}.
@@ -24,7 +24,7 @@ Arguments m_step {_}.
 Arguments ModTrans {_ _}.
 Add Printing Constructor mod_trans.
 
-Record module EV := Mod {
+Record module (EV : TypeEvent) : Type := Mod {
   m_trans : mod_trans EV;
   m_init : m_trans.(m_state);
 }.
@@ -45,7 +45,7 @@ Class VisNoAng {EV} (m : mod_trans EV) : Prop :=
 Inductive io_type : Set :=
 | Incoming | Outgoing.
 
-Definition io_event (EV : Type) : Type := io_type * EV.
+Definition io_event (EV : TypeEvent) : TypeEvent := io_type * EV.
 
 Inductive player :=
 | Prog | Env.

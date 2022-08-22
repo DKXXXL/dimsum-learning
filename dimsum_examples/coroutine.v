@@ -598,7 +598,8 @@ Proof.
   unshelve apply: tsim_remember. { simpl. exact (λ _
       '(σpy1, σpy2, (yt, yregs), (σpc1, σpc2, (σsm1, σ1, (pp1, (R2A cs1 lr1), x1)), (σsm2, σ2, (pp2, (R2A cs2 lr2), x2))))
       '(σsm', (σlc, σc, σ1', σ2'), (ppc, (R2A csc lrc), xc)),
-       ∃ cret cregs,
+       ∃ cret cregs rx1 rx2 rxc,
+       x1 = uPred_shrink rx1 ∧ x2 = uPred_shrink rx2 ∧ xc = uPred_shrink rxc ∧
        eqit eq true false yt yield_itree ∧
        σ1' = σ1 ∧
        σ2' = σ2 ∧
@@ -618,7 +619,7 @@ Proof.
            pp1 = PPInside ∧
            cs1 = csc ∧
            map_scramble touched_registers lrc lr1 ∧
-           (x1 ⊣⊢ r2a_mem_stack (yregs !!! "SP") ssz ∗ r2a_mem_map (coro_regs_mem yregs) ∗ x2 ∗ xc)%I ∧
+           (rx1 ⊣⊢ r2a_mem_stack (yregs !!! "SP") ssz ∗ r2a_mem_map (coro_regs_mem yregs) ∗ rx2 ∗ rxc)%I ∧
            σsm2 = SMFilter ∧
            pp2 = PPOutside ∧
            (if σc.2 is Some f then
@@ -638,7 +639,7 @@ Proof.
            cs1 = [R2AI true (yregs !!! "PC") regs1; R2AI false cret cregs] ∧
            map_preserved saved_registers regs1 yregs ∧
            map_scramble touched_registers lrc lr2 ∧
-           (x2 ⊣⊢ r2a_mem_stack (yregs !!! "SP") ssz ∗ r2a_mem_map (coro_regs_mem yregs) ∗ x1 ∗ xc)%I ∧
+           (rx2 ⊣⊢ r2a_mem_stack (yregs !!! "SP") ssz ∗ r2a_mem_map (coro_regs_mem yregs) ∗ rx1 ∗ rxc)%I ∧
            σsm2 = SMProg ∧
            pp2 = PPInside ∧
            cs2 = [R2AI false ret2 regs2] ∧
@@ -674,7 +675,7 @@ Proof.
       go_i. split; [done|]. go.
       go_i. split; [fast_set_solver|]. go.
       go_i.
-      iSatStart. iIntros!. revert select (x1 ⊣⊢ _) => ->. iDestruct!.
+      iSatStart. iIntros!. revert select (rx1 ⊣⊢ _) => ->. iDestruct!.
       iDestruct select (r2a_mem_inv _ _ _) as "Hm".
       iDestruct (r2a_mem_lookup_big with "Hm [$]") as %?.
       iSatStop.
@@ -843,7 +844,7 @@ Proof.
       go_i. split; [done|]. go.
       go_i. split; [fast_set_solver|]. go.
       go_i.
-      iSatStart. iIntros!. revert select (x2 ⊣⊢ _) => ->. iDestruct!.
+      iSatStart. iIntros!. revert select (rx2 ⊣⊢ _) => ->. iDestruct!.
       iDestruct select (r2a_mem_inv _ _ _) as "Hm".
       iDestruct (r2a_mem_lookup_big with "Hm [$]") as %?.
       iSatStop.

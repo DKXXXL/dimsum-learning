@@ -313,7 +313,7 @@ Lemma pass_lexpr_op_correct ei' Ki ei Ks es es' x k (l: loc) n hi hs fns1 fns2 v
     crun () (lexpr_op_pass x es') = CResult () f (CSuccess ei') →
     Rec ei hi fns1
       ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, true}
-    (SMProg, Rec es hs fns2, (PPInside, (), rf)).
+    (SMProg, Rec es hs fns2, (PPInside, (), uPred_shrink rf)).
 Proof.
   intros Hcalls Hcont Hsat Hxs Hxi Hsub Hl Hrun.
   destruct Hfill1 as [->], Hfill2 as [->].
@@ -428,7 +428,7 @@ Lemma pass_correct  r rf ei' Ki ei Ks es es' x (l: loc) n k h h' fns1 fns2 vsi v
     crun () (pass x es') = CResult () r_p (CSuccess ei') →
     Rec ei h fns1
       ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, true}
-    (SMProg, Rec es h' fns2, (PPInside, (), rf)).
+    (SMProg, Rec es h' fns2, (PPInside, (), uPred_shrink rf)).
 Proof.
   intros Hl; destruct Hfill1 as [->]. destruct Hfill2 as [->].
   revert r rf ei' Ki Ks x n k h h' fns1 fns2 vsi vss vi vs r_p.

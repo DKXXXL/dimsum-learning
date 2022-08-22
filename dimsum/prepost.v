@@ -1,5 +1,6 @@
 From dimsum.core Require Export proof_techniques satisfiable seq_product.
 From dimsum.core Require Import link.
+From dimsum.core Require Import axioms.
 
 Set Default Proof Using "Type".
 
@@ -81,10 +82,82 @@ End prepost.
 
 Arguments prepost : clear implicits.
 
+(** * Shrinking of types *)
+Class Shrink (X : TypeOfe) := MkShrink {
+  small_car : TypeState;
+  type_to_small : X → small_car;
+  small_to_type : small_car → X;
+  type_to_small_bij x : type_to_small (small_to_type x) = x;
+  small_to_type_bij x : small_to_type (type_to_small x) = x;
+}.
+Arguments small_car _ {_}.
+Arguments type_to_small _ {_} _.
+Arguments small_to_type _ {_} _.
+Arguments type_to_small_bij _ {_} _.
+Arguments small_to_type_bij _ {_} _.
+
+Global Hint Mode Shrink + : typeclass_instances.
+
+Ltac solve_shrink :=
+  lazy; refine (MkShrink _ _ (λ x, x) (λ x, x) (λ x, eq_refl) (λ x, eq_refl)).
+
+Global Instance unitUR_shrink : Shrink unitUR.
+Proof. solve_shrink. Qed.
+
+(** * [uPred_small] *)
+Record uPred_small (M : ucmra) `{!Shrink M} : TypeState := UPred_small {
+  uPred_small_holds : nat → (small_car M) → Prop;
+
+  uPred_small_mono n1 n2 x1 x2 :
+    uPred_small_holds n1 x1 → small_to_type M x1 ≼{n2} small_to_type M x2 → n2 ≤ n1 → uPred_small_holds n2 x2
+}.
+Arguments uPred_small_holds {_ _} _ _ _.
+Add Printing Constructor uPred_small.
+
+Program Definition uPred_shrink {M : ucmra} `{!Shrink M} (P : uPred M) : uPred_small M :=
+ let '(UPred _ P HP) := P in
+ {|
+   uPred_small_holds n x := P n (small_to_type M x);
+|}.
+Next Obligation. move => M s ? P HP n1 n2 x1 x2 /=. apply HP. Qed.
+
+Program Definition uPred_expand {M : ucmra} `{!Shrink M} (P : uPred_small M) : uPred M := {|
+   uPred_holds n x := uPred_small_holds P n (type_to_small M x);
+|}.
+Next Obligation.
+  move => M s P n1 n2 x1 x2 /=.
+  have <- := small_to_type_bij M x1. have <- := small_to_type_bij M x2.
+  rewrite !type_to_small_bij. apply uPred_small_mono.
+Qed.
+
+Lemma uPred_eq {M : ucmra} (x1 x2 : uPred M) :
+  x1 = x2 ↔ ∀ n r, uPred_holds x1 n r = uPred_holds x2 n r.
+Proof.
+  split; [naive_solver|]. move => Heq.
+  destruct x1 as [P1 HP1], x2 as [P2 HP2]; simpl in *.
+  have ? : P1 = P2. { by do 2 apply AxFunctionalExtensionality => ?. }
+  subst. f_equal. apply AxProofIrrelevance.
+Qed.
+
+Lemma uPred_expand_shrink {M : ucmra} `{!Shrink M} (x : uPred M) :
+  uPred_expand (uPred_shrink x) = x.
+Proof.
+  apply uPred_eq => ??.
+  destruct x as [P HP] => //=.
+  rewrite /uPred_expand/uPred_shrink/=/uPred_holds/=.
+  by rewrite small_to_type_bij.
+Qed.
+
+Global Instance uPred_shrink_inj (M : ucmra) `{!Shrink M} : Inj (=) (=) (uPred_shrink (M:=M)).
+Proof.
+  move => x y Hxy.
+  by rewrite -(uPred_expand_shrink x) -(uPred_expand_shrink y) Hxy.
+Qed.
+
 (** * [mod_prepost] *)
 Section prepost.
   Context {EV1 EV2 S : Type}.
-  Context {M : ucmra}.
+  Context {M : ucmra} `{!Shrink M}.
   Implicit Types (i : EV2 → S → prepost (EV1 * S) M) (o : EV1 → S → prepost (EV2 * S) M).
 
   Inductive pp_case : Type :=
@@ -97,7 +170,7 @@ Section prepost.
   .
 
   Inductive pp_filter_step i o :
-    (pp_case * S * uPred M) → option (sm_event EV1 EV2) → ((pp_case * S * uPred M) → Prop) → Prop :=
+    (pp_case * S * uPred_small M) → option (sm_event EV1 EV2) → ((pp_case * S * uPred_small M) → Prop) → Prop :=
   | PPOutsideS s x e:
     (* TODO: Add a user-defined predicate here to rule out choosing
     non-sensical events? E.g. allow only Incoming events or prevent
@@ -105,15 +178,15 @@ Section prepost.
     pp_filter_step i o (PPOutside, s, x) (Some (SMEEmit e)) (λ σ, σ = (PPRecv1 e, s, x))
   | PPRecv1S s x e:
     pp_filter_step i o (PPRecv1 e, s, x) None (λ σ,
-        pp_to_ex (i e s) (λ r y, ∃ x', satisfiable (x ∗ y ∗ x') ∧ σ = (PPRecv2 r.1, r.2, x')))
+        pp_to_ex (i e s) (λ r y, ∃ x', satisfiable (uPred_expand x ∗ y ∗ x') ∧ σ = (PPRecv2 r.1, r.2, uPred_shrink x')))
   | PPRecv2S s x e:
     pp_filter_step i o (PPRecv2 e, s, x) (Some (SMEReturn (Some e))) (λ σ, σ = (PPInside, s, x))
   | PPInsideS s x e:
     pp_filter_step i o (PPInside, s, x) (Some (SMERecv e)) (λ σ, σ = (PPSend1 e, s, x))
   | PPSend1S s x e r y x':
-    satisfiable (x' ∗ y ∗ x) →
+    satisfiable (x' ∗ y ∗ uPred_expand x) →
     pp_to_ex (o e s) (λ r' y', r' = r ∧ y' = y) →
-    pp_filter_step i o (PPSend1 e, s, x) None (λ σ, σ = (PPSend2 r.1, r.2, x'))
+    pp_filter_step i o (PPSend1 e, s, x) None (λ σ, σ = (PPSend2 r.1, r.2, uPred_shrink x'))
   | PPSend2S s x e:
     pp_filter_step i o (PPSend2 e, s, x) (Some (SMEEmit e)) (λ σ, σ = (PPOutside, s, x))
   .
@@ -132,7 +205,7 @@ Section prepost.
   (* If one needs a version of prepost_mod that starts on the inside,
   one can define prepost_mod_inside or similar. *)
   Definition prepost_mod i o (m : module EV1) (s : S) (x : uPred M) : module EV2 :=
-    Mod (prepost_trans i o m.(m_trans)) (SMFilter, m.(m_init), (PPOutside, s, x)).
+    Mod (prepost_trans i o m.(m_trans)) (SMFilter, m.(m_init), (PPOutside, s, uPred_shrink x)).
 
   Lemma prepost_mod_trefines i o (m m' : module EV1) σm s `{!VisNoAng m.(m_trans)}:
     trefines m m' →
@@ -151,20 +224,21 @@ Section prepost.
   Qed.
 
   Lemma prepost_trans_step_Recv1_i i o m σ s e x:
-    TStepI (prepost_trans i o m) (SMFilter, σ, (PPRecv1 e, s, x)) (λ G,
+    TStepI (prepost_trans i o m) (SMFilter, σ, (PPRecv1 e, s, uPred_shrink x)) (λ G,
         pp_to_ex (i e s) (λ r y, ∃ x', satisfiable (x ∗ y ∗ x') ∧
-                      G true None (λ G', G' (SMProgRecv r.1, σ, (PPInside, r.2, x'))))).
+                      G true None (λ G', G' (SMProgRecv r.1, σ, (PPInside, r.2, uPred_shrink x'))))).
   Proof.
     constructor => G /= /pp_to_ex_exists[r [? [[?[? HG]]?]]]. tstep_i.
     apply steps_impl_step_next => ???. inv_all @m_step.
-    eexists (_, _). split!. { apply pp_to_ex_exists. naive_solver. }
+    eexists (_, _). split!. {
+      apply pp_to_ex_exists. setoid_rewrite uPred_expand_shrink. naive_solver. }
     apply steps_impl_step_end => ???. inv_all @m_step => ???. naive_solver.
   Qed.
 
   Lemma prepost_trans_step_Inside_i i o m σ s e x:
-    TStepI (prepost_trans i o m) (SMFilterRecv e, σ, (PPInside, s, x)) (λ G,
+    TStepI (prepost_trans i o m) (SMFilterRecv e, σ, (PPInside, s, uPred_shrink x)) (λ G,
         pp_to_all (o e s) (λ r y, ∀ x', satisfiable (x' ∗ y ∗ x) →
-            G true (Some (r.1)) (λ G', G' (SMFilter, σ, (PPOutside, r.2, x'))))).
+            G true (Some (r.1)) (λ G', G' (SMFilter, σ, (PPOutside, r.2, uPred_shrink x'))))).
   Proof.
     constructor => G /= ?. apply steps_impl_step_trans. tstep_i.
     apply steps_impl_step_end => ???. inv_all @m_step => ? b *; simplify_eq. split! => ?. split!; [done|].
@@ -172,6 +246,7 @@ Section prepost.
     apply steps_impl_step_next => ???. inv_all @m_step => *; simplify_eq. split!.
     apply steps_impl_step_end => ???. inv_all @m_step => *; simplify_eq. split! => ?.
     have [?[?[?[??]]]]:= pp_to_all_ex _ _ _ ltac:(done) ltac:(done); subst.
+    revert select (satisfiable _). rewrite uPred_expand_shrink => ?.
     split!; [naive_solver|by destruct b|]. naive_solver.
   Qed.
 
@@ -185,27 +260,28 @@ Section prepost.
 
 
   Lemma prepost_trans_step_Recv1_s i o m σ s e x:
-    TStepS (prepost_trans i o m) (SMFilter, σ, (PPRecv1 e, s, x)) (λ G,
+    TStepS (prepost_trans i o m) (SMFilter, σ, (PPRecv1 e, s, uPred_shrink x)) (λ G,
         G None (λ G', pp_to_all (i e s) (λ r y, ∀ x', satisfiable (x ∗ y ∗ x') →
-             G' (SMProgRecv r.1, σ, (PPInside, r.2, x'))))).
+             G' (SMProgRecv r.1, σ, (PPInside, r.2, uPred_shrink x'))))).
   Proof.
     constructor => G /= ?. split!; [done|] => /= ??. apply steps_spec_step_trans.
     tstep_s. eexists None. split!.
     apply: steps_spec_step_end; [by econs|] => ? /=?.
     have [?[?[?[?[??]]]]]:= pp_to_all_ex _ _ _ ltac:(done) ltac:(done); subst.
     tstep_s. eexists (Some (SMEReturn _)). split!.
+    rename select (satisfiable _) into Hsat. rewrite uPred_expand_shrink in Hsat.
     apply: steps_spec_step_end; [econs|]. naive_solver.
   Qed.
 
   Lemma prepost_trans_step_Inside_s i o m σ s e x:
-    TStepS (prepost_trans i o m) (SMFilterRecv e, σ, (PPInside, s, x)) (λ G,
+    TStepS (prepost_trans i o m) (SMFilterRecv e, σ, (PPInside, s, uPred_shrink x)) (λ G,
         pp_to_ex (o e s) (λ r y, ∃ x', satisfiable (x' ∗ y ∗ x) ∧
-           G (Some (r.1)) (λ G', G' (SMFilter, σ, (PPOutside, r.2, x'))))).
+           G (Some (r.1)) (λ G', G' (SMFilter, σ, (PPOutside, r.2, uPred_shrink x'))))).
   Proof.
     constructor => G /= /pp_to_ex_exists[?[?[[?[??]]?]]]. split!; [done|] => /= ??.
     apply steps_spec_step_trans. tstep_s. eexists (Some _). split!.
     apply: steps_spec_step_end; [by econs|] => /= ? ->. tstep_s. eexists (Some (SMEEmit _)). split!.
-    apply: steps_spec_step; [by econs|] => /= ? ->.
+    apply: steps_spec_step. { by econs; [by rewrite uPred_expand_shrink|]. } move => /= ? ->.
     apply: steps_spec_step_end; [by econs|] => /= ? ->.
     naive_solver.
   Qed.
@@ -225,7 +301,7 @@ Global Hint Resolve
 Definition prepost_id {EV} : EV → unit → prepost (EV * unit) unitUR :=
   λ x _, pp_end (x, tt).
 
-Lemma prepost_id_l M S EV1 EV2 (m : module EV1) i o s x:
+Lemma prepost_id_l (M : ucmra) `{!Shrink M} S EV1 EV2 (m : module EV1) i o s x:
   trefines (prepost_mod i o
               (prepost_mod prepost_id prepost_id m tt True) s x)
            (prepost_mod (M:=M) (S:=S) (EV2:=EV2) i o m s x).
@@ -240,7 +316,8 @@ Proof.
   tstep_i. eexists True%I. split. { apply satisfiable_emp_valid. by iSplit. }
   unshelve apply: tsim_remember. { simpl. exact (λ _
       '(σf1, (σf1', σ1, (σpp1', _, x')), (σpp1, s1, x1)) '(σf2, σ2, (σpp2, s2, x2)),
-         x' = True%I ∧ σf1 = SMProg ∧ σf1' = σf2 ∧ σ1 = σ2 ∧ σpp1 = PPInside ∧ x1 = x2
+         ∃ rx,
+         x' = uPred_shrink True%I ∧ σf1 = SMProg ∧ σf1' = σf2 ∧ σ1 = σ2 ∧ σpp1 = PPInside ∧ x1 = x2 ∧ x1 = uPred_shrink rx
          ∧ σpp1' = PPInside ∧ σpp2 = PPInside ∧ s1 = s2 ∧
          ((∃ e, σf1' = SMProgRecv e) ∨ σf1' = SMProg)). }
   { split!. } { done. }
@@ -271,7 +348,7 @@ Section prepost.
 
   Lemma prepost_link
         {EV1 EV2 S1 S2 S' Sr1 Sr2 : Type}
-        {M : ucmra}
+        {M : ucmra} `{!Shrink M}
         (INV : seq_product_case → S1 → S2 → S' → uPred M → uPred M → uPred M → Sr1 → Sr2 → Prop)
         (i1 : io_event EV2 → S1 → prepost (io_event EV1 * S1) M)
         (o1 : io_event EV1 → S1 → prepost (io_event EV2 * S1) M)
@@ -382,8 +459,9 @@ Section prepost.
       unshelve apply: tsim_remember. { simpl. exact (λ _
           '(σl1, sr1, (σf1, σ1, (σpp1, s1, x1)), (σf2, σ2, (σpp2, s2, x2)))
           '(σf, (σl2, sr2, σ1', σ2'), (σpp, s, x)),
-           ∃ sp,
-           σ1 = σ1' ∧ σ2 = σ2' ∧ INV sp s1 s2 s x1 x2 x sr1 sr2 ∧
+           ∃ sp rx1 rx2 rx,
+           x1 = uPred_shrink rx1 ∧ x2 = uPred_shrink rx2 ∧ x = uPred_shrink rx ∧
+           σ1 = σ1' ∧ σ2 = σ2' ∧ INV sp s1 s2 s rx1 rx2 rx sr1 sr2 ∧
           (( sp = SPNone ∧
               σl1 = MLFNone ∧ σf = SMFilter
             ∧ σpp1 = PPOutside ∧ σpp2 = PPOutside ∧ σpp = PPOutside
@@ -522,7 +600,7 @@ Section prepost.
 
   Lemma mod_prepost_combine
         {EV1 EV2 EV S1 S2 S : Type}
-        {M1 M2 M : ucmra}
+        {M1 M2 M : ucmra} `{!Shrink M1} `{!Shrink M2} `{!Shrink M}
         (m : module EV)
         (INV : player → S1 → S2 → S → uPred M1 → uPred M2 → uPred M → Prop)
         (i1 : EV1 → S1 → prepost (EV2 * S1) M1)
@@ -563,7 +641,9 @@ Section prepost.
       unshelve apply: tsim_remember. { simpl. exact (λ _
           '(σf1, (σf2, σ1, (σpp2, s2, x2)), (σpp1, s1, x1))
           '(σf, σ, (σpp, s, x)),
-           ∃ p, σ = σ1 ∧ INV p s1 s2 s x1 x2 x ∧
+           ∃ p rx1 rx2 rx,
+           x1 = uPred_shrink rx1 ∧ x2 = uPred_shrink rx2 ∧ x = uPred_shrink rx ∧
+           σ = σ1 ∧ INV p s1 s2 s rx1 rx2 rx ∧
            ((p = Env ∧ σf1 = SMFilter ∧ σf2 = SMFilter ∧ σf = SMFilter ∧
               σpp1 = PPOutside ∧ σpp2 = PPOutside ∧ σpp = PPOutside) ∨
             (p = Prog ∧ σf1 = SMProg ∧ σpp1 = PPInside ∧ σpp2 = PPInside ∧ σpp = PPInside ∧
@@ -605,7 +685,7 @@ Section prepost.
 
   Lemma mod_prepost_impl
         {EV1 EV2 Si Ss : Type}
-        {Mi Ms : ucmra}
+        {Mi Ms : ucmra} `{!Shrink Mi} `{!Shrink Ms}
         (m : module EV2)
         (INV : player → Si → Ss → uPred Mi → uPred Ms → Prop)
         (i_i : EV1 → Si → prepost (EV2 * Si) Mi)
@@ -640,7 +720,9 @@ Section prepost.
       unshelve apply: tsim_remember. { simpl. exact (λ _
           '(σfi, σi, (σppi, si, xi))
           '(σfs, σs, (σpps, ss, xs)),
-           ∃ p, σi = σs ∧ INV p si ss xi xs ∧ σfi = σfs ∧ σppi = σpps ∧
+           ∃ p rxi rxs,
+           xi = uPred_shrink rxi ∧ xs = uPred_shrink rxs ∧
+           σi = σs ∧ INV p si ss rxi rxs ∧ σfi = σfs ∧ σppi = σpps ∧
            ((p = Env ∧ σfi = SMFilter ∧ σppi = PPOutside) ∨
             (p = Prog ∧ σppi = PPInside ∧
                (σfi = SMProg ∨ ∃ e, σfi = SMProgRecv e)))). }

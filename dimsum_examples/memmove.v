@@ -54,13 +54,14 @@ Lemma locle_asm_refines_itree_strong :
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember. { simpl. exact (λ _ σa '(σf, (t, ps), (pp, σr2a, P)),
+    ∃ rP, P = uPred_shrink rP ∧
     t ≈ locle_itree_strong ∧
     σa.(asm_cur_instr) = AWaiting ∧
     σa.(asm_instrs) = locle_asm ∧
     σr2a.(r2a_calls) = [] ∧
     σf = SMFilter ∧
     pp = PPOutside ∧
-    (P ⊢ [∗ map] p↦z∈ps, r2a_heap_shared p z)). }
+    (rP ⊢ [∗ map] p↦z∈ps, r2a_heap_shared p z)). }
   { split!. iIntros!. by rewrite big_sepM_empty. } { done. }
   move => n _ Hloop [????] [[?[? ps]][[??]?]] ?. destruct!/=.
   tstep_i => ????? Hi. tstep_s. split!.

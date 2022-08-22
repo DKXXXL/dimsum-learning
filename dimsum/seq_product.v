@@ -10,7 +10,7 @@ Global Instance seq_product_case_inhabited : Inhabited seq_product_case := popul
 Global Instance seq_product_eq_dec : EqDecision seq_product_case.
 Proof. solve_decision. Qed.
 
-Inductive seq_product_event (EV1 EV2 : Type) :=
+Inductive seq_product_event EV1 EV2 :=
 | SPELeft (e : EV1) (s : seq_product_case)
 | SPERight (e : EV2) (s : seq_product_case)
 | SPENone (s : seq_product_case).
@@ -310,7 +310,7 @@ Qed.
 Global Hint Resolve seq_product_trans_step_r_s : typeclass_instances.
 
 (** * [seq_map] *)
-Inductive seq_map_case {EV1 : Type} :=
+Inductive seq_map_case {EV1} :=
 | SMProg
 | SMProgRecv (e : EV1)
 | SMFilter
@@ -318,7 +318,7 @@ Inductive seq_map_case {EV1 : Type} :=
 .
 Arguments seq_map_case _ : clear implicits.
 
-Inductive sm_event {EV1 EV2 : Type} :=
+Inductive sm_event {EV1 EV2} :=
 | SMERecv (e : EV1)
 | SMEEmit (e : EV2)
 | SMEReturn (e : option EV1).

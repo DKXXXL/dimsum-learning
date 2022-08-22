@@ -20,6 +20,9 @@ Canonical Structure heap_bij_priv_elemO := leibnizO heap_bij_priv_elem.
 Definition heap_bijUR : ucmra :=
   prodUR (gmap_viewUR prov heap_bij_elemO) (gmap_viewUR prov heap_bij_priv_elemO).
 
+Global Instance heap_bijUR_shrink : Shrink heap_bijUR.
+Proof. solve_shrink. Qed.
+
 Definition heap_bijUR_s_inj (r : (gmap_viewUR prov heap_bij_elemO)) : heap_bijUR := (r, ε).
 Definition heap_bijUR_i_inj (r : (gmap_viewUR prov heap_bij_priv_elemO)) : heap_bijUR := (ε, r).
 
@@ -962,7 +965,7 @@ Definition rec_heap_bij_trans (m : mod_trans rec_event) : mod_trans rec_event :=
   prepost_trans rec_heap_bij_pre rec_heap_bij_post m.
 
 Definition rec_heap_bij (m : module rec_event) : module rec_event :=
-  Mod (rec_heap_bij_trans m.(m_trans)) (SMFilter, m.(m_init), (PPOutside, tt, True%I)).
+  Mod (rec_heap_bij_trans m.(m_trans)) (SMFilter, m.(m_init), (PPOutside, tt, uPred_shrink True%I)).
 
 Lemma rec_heap_bij_trefines m m' `{!VisNoAng m.(m_trans)}:
   trefines m m' →
@@ -990,10 +993,10 @@ Definition rec_heap_bij_call (n : ordinal) (fns1 fns2 : gmap string fndef) :=
         satisfiable (heap_bij_inv h1'' h2'' ∗ val_in_bij v1'' v2'' ∗ r ∗ rf'') →
         Rec (expr_fill K1' (Val v1'')) h1'' fns1
             ⪯{rec_trans, rec_heap_bij_trans rec_trans, n', true}
-        (SMProg, Rec (expr_fill K2' (Val v2'')) h2'' fns2, (PPInside, tt, rf''))) →
+        (SMProg, Rec (expr_fill K2' (Val v2'')) h2'' fns2, (PPInside, tt, uPred_shrink rf''))) →
       Rec es1' h1' fns1
           ⪯{rec_trans, rec_heap_bij_trans rec_trans, n', b}
-      (SMProg, Rec es2' h2' fns2, (PPInside, tt, rf'))).
+      (SMProg, Rec es2' h2' fns2, (PPInside, tt, uPred_shrink rf'))).
 
 Definition rec_heap_bij_return n fns1 fns2 Ki Ks r :=
   (∀ n' v1 v2 h1' h2' rf' b,
@@ -1001,7 +1004,7 @@ Definition rec_heap_bij_return n fns1 fns2 Ki Ks r :=
       satisfiable (heap_bij_inv h1' h2' ∗ val_in_bij v1 v2 ∗ r ∗ rf') →
       Rec (expr_fill Ki (Val v1)) h1' fns1
         ⪯{rec_trans, rec_heap_bij_trans rec_trans, n', b}
-      (SMProg, Rec (expr_fill Ks (Val v2)) h2' fns2, (PPInside, (), rf'))).
+      (SMProg, Rec (expr_fill Ks (Val v2)) h2' fns2, (PPInside, (), uPred_shrink rf'))).
 
 Lemma rec_heap_bij_call_mono n n' fns1 fns2:
   rec_heap_bij_call n fns1 fns2 →
@@ -1037,7 +1040,7 @@ Lemma rec_heap_bij_proof fns1 fns2 :
 
       Rec (expr_fill K1 (AllocA fn1.(fd_vars) $ subst_l fn1.(fd_args) vs1 (fd_body fn1))) h1 fns1
           ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, false}
-      (SMProg, Rec (expr_fill K2 (AllocA fn2.(fd_vars) $ subst_l fn2.(fd_args) vs2 (fd_body fn2))) h2 fns2, (PPInside, tt, rf))) →
+      (SMProg, Rec (expr_fill K2 (AllocA fn2.(fd_vars) $ subst_l fn2.(fd_args) vs2 (fd_body fn2))) h2 fns2, (PPInside, tt, uPred_shrink rf))) →
   trefines (rec_mod fns1) (rec_heap_bij (rec_mod fns2)).
 Proof.
   move => Hdom Hlen Hf.
@@ -1054,7 +1057,8 @@ Proof.
   split!. move => ?. split; [lia|].
   move => Hcall Hret.
   unshelve eapply tsim_remember'. { simpl. exact (λ n' '(Rec e1 h1 fns1') '(σfs, Rec e2 h2 fns2', (t1, _, rf')),
-     ∃ K1 K2 f vs1 vs2 fn1 fn2 r,
+     ∃ K1 K2 f vs1 vs2 fn1 fn2 r rrf',
+       rf' = uPred_shrink rrf' ∧
        fns1' = fns1 ∧
        fns2' = fns2 ∧
        fns1 !! f = Some fn1 ∧
@@ -1064,7 +1068,7 @@ Proof.
        length vs1 = length (fd_args fn1) ∧
        σfs = SMProg ∧
        t1 = PPInside ∧
-       satisfiable (heap_bij_inv h1 h2 ∗ ([∗ list] v1;v2∈vs1;vs2, val_in_bij v1 v2) ∗ r ∗ rf') ∧
+       satisfiable (heap_bij_inv h1 h2 ∗ ([∗ list] v1;v2∈vs1;vs2, val_in_bij v1 v2) ∗ r ∗ rrf') ∧
        rec_heap_bij_return n' fns1 fns2 K1 K2 r). }
   { move => /= ??. split! => //; [lia|..]. { iSatMono. iFrame. iAccu. } iSatClear.
     move => ?????????. apply: tsim_mono; [|done]. apply: Hret; [done|]. eexists [_]. split!.
@@ -1157,7 +1161,7 @@ Lemma rec_heap_bij_sim_call_bind args vs' ws' es ei Ks Ki vss vsi n b hi hs fns1
       satisfiable (heap_bij_inv hi' hs' ∗ ([∗ map] vi;vs ∈ vsi; vss, val_in_bij vi vs) ∗ ([∗ list] v; w ∈ vs' ++ vs; ws' ++ ws, val_in_bij v w) ∗ r ∗ rf') →
       Rec (expr_fill Ki (Call f (Val <$> (vs' ++ vs)))) hi' fns1
         ⪯{rec_trans, rec_heap_bij_trans rec_trans, n', b'}
-      (SMProg, Rec (expr_fill Ks (Call f (Val <$> (ws' ++ ws)))) hs' fns2, (PPInside, (), rf'))
+      (SMProg, Rec (expr_fill Ks (Call f (Val <$> (ws' ++ ws)))) hs' fns2, (PPInside, (), uPred_shrink rf'))
     ) →
     Forall
     (λ e : expr,
@@ -1172,10 +1176,10 @@ Lemma rec_heap_bij_sim_call_bind args vs' ws' es ei Ks Ki vss vsi n b hi hs fns1
                       → rec_heap_bij_return n fns1 fns2 Ki Ks r
                      → Rec ei hi fns1 ⪯{rec_trans,
                      rec_heap_bij_trans rec_trans, n, b}
-                     (SMProg, Rec es hs fns2, (PPInside, (), rf))) args →
+                     (SMProg, Rec es hs fns2, (PPInside, (), uPred_shrink rf))) args →
     Rec ei hi fns1
       ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, b}
-    (SMProg, Rec es hs fns2, (PPInside, (), rf)).
+    (SMProg, Rec es hs fns2, (PPInside, (), uPred_shrink rf)).
 Proof.
   intros Hsat Hdom Hfuns Hcont Hargs; destruct Hfill1 as [->], Hfill2 as [->].
   induction args as [|e args IH] in n, b, vs', ws', hs, hi, Hsat, Hcont, Hargs, Hfuns, rf |-*; simpl.
@@ -1208,7 +1212,7 @@ Lemma rec_heap_bij_sim_refl_static vss vsi e es ei hi hs n b Ki Ks fns1 fns2 r r
   rec_heap_bij_return n fns1 fns2 Ki Ks r →
   is_static_expr false e →
   satisfiable (heap_bij_inv hi hs ∗ ([∗ map] v1;v2 ∈ vsi; vss, val_in_bij v1 v2) ∗ r ∗ rf) →
-  Rec ei hi fns1 ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, b} (SMProg, Rec es hs fns2, (PPInside, (), rf)).
+  Rec ei hi fns1 ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, b} (SMProg, Rec es hs fns2, (PPInside, (), uPred_shrink rf)).
 Proof.
   induction e as [x|v|e1 op e2 IH1 IH2|e IH|e1 e2 IH1 IH2|e e1 e2 IH IH1 IH2| x e1 e2 IH1 IH2| f args IH| | | |] in vss, vsi, hi, hs, n, b, Ks, Ki, es, ei, Hfill1, Hfill2, r, rf |-*;
     intros Hsub Hcall Hcont Hstatic Hsat;
@@ -1349,8 +1353,8 @@ Proof.
   unshelve apply: tsim_remember. { simpl. exact (λ _
           '(σm1, (σf, σ1, (pp, _, r)), σc1)
           '(σm2, σ2, σc2),
-           σ1 = σ2 ∧ σc1 = σc2 ∧
-             ((σc1 = RCStart ∧ σf = SMFilter ∧ pp = PPOutside ∧ σm1 = σm2 ∧ σm2 = SMFilter ∧ r = True%I) ∨
+           ∃ rr, r = uPred_shrink rr ∧ σ1 = σ2 ∧ σc1 = σc2 ∧
+             ((σc1 = RCStart ∧ σf = SMFilter ∧ pp = PPOutside ∧ σm1 = σm2 ∧ σm2 = SMFilter ∧ rr = True%I) ∨
               ( ((∃ e, σf = SMProgRecv e ∧ σm2 = SMProgRecv e) ∨ (σf = SMProg ∧ σm2 = SMProg)
                  ) ∧ σm1 = SMProg ∧ σc1 = RCRunning ∧ pp = PPInside))
                              ). }
