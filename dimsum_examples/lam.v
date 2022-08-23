@@ -600,7 +600,7 @@ Next Obligation.
 Qed.
 
 Definition heap_alloc_prop (h h':heap_state) (l:loc) (v:val) (n:Z):Prop:=
-  heap_is_fresh h l /\ h' = heap_alloc h l v n.
+  n=0 \/ (heap_is_fresh h l /\ h' = heap_alloc h l v n).
 
 
 (* ** removed*)
@@ -925,9 +925,9 @@ Inductive head_step : lam_state → option lam_event → (lam_state → Prop) �
     ∃ v, eval_binop op v1 v2 = Some v ∧ σ' = Lam (Val v) lis h fns)
 (* ** not sure *)
 | NewRefS v v' l lis h h' fns: (* ref v n *)
+  (∀n, v' = ValNum n →heap_alloc_prop h h' l v n) →
   head_step (Lam (NewRef (Val v) (Val v')) lis h fns) None 
-  (λ σ', ∃ n, ValNum n = v' /\ n>0 /\ 
-  heap_alloc_prop h h' l v n/\  σ' = Lam (Val (ValLoc l)) lis h' fns) 
+  (λ σ', ∃n, ValNum n = v' /\n>0 /\ σ' = Lam (Val (ValLoc l)) lis h' fns) 
 | LoadS v lis h fns: (* !v *)
   head_step (Lam (Load (Val v)) lis h fns) None 
   (λ σ', ∃l v', v = ValLoc l ∧ h.(h_heap)!!l = Some v' ∧ σ' = Lam (Val v') lis h fns)
@@ -957,7 +957,7 @@ Inductive head_step : lam_state → option lam_event → (lam_state → Prop) �
   fns !! f = Some fn →
   head_step (Lam (App (Val(ValFid f)) (Val <$> args)) lis h fns) None
   (λ σ', length args = length fn.(fd_args) ∧ 
-    σ' = Lam (subst_l fn.(fd_args) args fn.(fd_body)) (fst f::lis) h fns)
+    σ' = Lam (subst_l fn.(fd_args) args fn.(fd_body)) lis h fns)
 | CallExternalS f args lis h fns: (* Call! f args h*)
   fns !! f = None →
   head_step (Lam (App (Val (ValFid f)) (Val <$> args)) lis h fns) (Some (Outgoing, ELCall f args h)) 
@@ -965,9 +965,9 @@ Inductive head_step : lam_state → option lam_event → (lam_state → Prop) �
 | ReturnS v hd tl h fns: (* Ret!(v, h)*)
   head_step (Lam (ReturnExt (Val v)) (hd::tl) h fns) (Some (Outgoing, ELReturn v h))
   (λ σ',  σ' = Lam (Waiting) tl h fns)
-| RecvReturnS v h' s h fns: (* Ret?(v, h')*) (* should s be hd::tl?*)
-  head_step (Lam (Waiting) s h fns) (Some (Incoming, ELReturn v h'))
-  (λ σ', σ' = Lam (Val v) s h' fns)
+| RecvReturnS v h' hd tl h fns: (* Ret?(v, h')*) (* should s be hd::tl?*)
+  head_step (Lam (Waiting) (hd::tl) h fns) (Some (Incoming, ELReturn v h'))
+  (λ σ', σ' = Lam (Val v) (hd::tl) h' fns)
 .
 
 
@@ -1401,29 +1401,29 @@ Proof.
 Qed. 
 Global Hint Resolve lam_step_BinopOffset_i | 5 : typeclass_instances.
 
+(* ** TO VERIFY*)
 Lemma lam_step_Newref_i fns s h e K v n `{!LamExprFill e K (NewRef (Val v)  (Val (ValNum n)))}:
-  TStepI lam_trans (Lam e  s h fns) (λ G, ∀l h', 
-    heap_alloc_prop h h' l v n /\ (G true None (λ G', n>0/\ G' (Lam (expr_fill K (Val (ValLoc l))) s h' fns)))).
+  TStepI lam_trans (Lam e  s h fns) (λ G, ∀l h', heap_alloc_prop h h' l v n→
+  (G true None (λ G',n>0/\ ( G' (Lam (expr_fill K (Val (ValLoc l))) s h' fns))))).
 Proof.
   destruct LamExprFill0; subst.
   econs. intros. apply steps_impl_step_end. intros. apply prim_step_inv_head in H0. destruct H0 as [?[??]]. subst.
   inversion H0; simplify_eq. 
-  exists true,  (λ G' : m_state lam_trans → Prop, n > 0 ∧ G' (Lam (expr_fill K (Val (ValLoc l))) s h' fns)). 
-  split!. naive_solver. intros. exists (Lam (expr_fill K (Val (ValLoc l))) s h' fns).
-  split!; auto. naive_solver. edestruct H. exact H2. 
-  naive_solver. solve_sub_redexes_are_values. reflexivity. 
+  eexists true,  _. 
+  split!. apply H. apply H8. reflexivity.  intros. simpl in H1. destruct!. naive_solver.   
+  solve_sub_redexes_are_values. reflexivity. 
 Qed.
 Global Hint Resolve lam_step_Newref_i | 10 : typeclass_instances.
 
-(* ** Not sure about v'*)
+
 Lemma lam_step_Newref_s fns s h e K v v' `{!LamExprFill e K (NewRef (Val v)  (Val v'))}:
-  TStepS lam_trans (Lam e s h fns) (λ G,  (G None (λ G', ∃ l h' (n:Z), v' = (ValNum n)/\ 
-  heap_alloc_prop h h' l v n /\n>0/\ G' (Lam (expr_fill K (Val (ValLoc l))) s h' fns)))).
+  TStepS lam_trans (Lam e s h fns) (λ G, (G None (λ G', ∃ l h', 
+  (∀n, ValNum n = v'→heap_alloc_prop h h' l v n/\(n>0→ G' (Lam (expr_fill K (Val (ValLoc l))) s h' fns)))))).
 Proof.
   destruct LamExprFill0; subst.
-  econs. intros.  split!; [done|]. move => ? /= [?[?[? [? ?]]]]. eapply steps_spec_step_end. econs. 
-  done. econs. naive_solver.   
-Qed.
+  econs. intros. destruct!.   split!; [done|]. move => ? /=. intros. destruct!. eapply steps_spec_step_end. econs. 
+  done. econs. intros. symmetry in H1. apply H0 in H1. destruct!. exact H2. naive_solver. 
+Qed. 
 Global Hint Resolve lam_step_Newref_s | 10 : typeclass_instances.
 
 
@@ -1524,7 +1524,7 @@ Global Hint Resolve lam_step_LetE_s : typeclass_instances.
 
 Lemma lam_step_Fix_i fns hd tl h e K f args body`{!LamExprFill e K (FixE f args body)}:
   TStepI lam_trans (Lam e  (hd::tl) h fns) (λ G, ∀ n, 
-  fns!!(hd,Some n)= None/\ (G true None (λ G',  ∃ H,
+  fns!!(hd,Some n)= None→ (G true None (λ G',  ∃ H,
   let updated_body := subst f (ValFid (hd,Some n)) body in
   let fn_entry := {|fd_args:= args; fd_body:= updated_body;fd_static:= H|} in 
   G' (Lam (expr_fill K (Val (ValFid (hd,Some n)))) (hd::tl) h 
@@ -1554,7 +1554,7 @@ Qed.
 Lemma lam_step_App_i fns s h e K f vs es `{!LamExprFill e K (App (Val (ValFid f)) es)} `{!AsVals es vs None}:
   TStepI lam_trans (Lam e s h fns) (λ G,
           (∀ fn, fns !! f = Some fn → G true None (λ G', length vs = length fn.(fd_args) ∧
-            G' (Lam (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) ((fst f)::s) h fns))) ∧
+            G' (Lam (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) s h fns))) ∧
           (fns !! f = None → G true (Some (Outgoing, ELCall  f vs h)) (λ G',
             G' (Lam (expr_fill K Waiting) s  h fns)))
     ).
@@ -1573,24 +1573,20 @@ Global Hint Resolve lam_step_App_i : typeclass_instances.
 (* Not sure*)
 (* TODO*)
 Lemma lam_step_App_s fns s h e K v  vs `{!LamExprFill e K (App (Val v) es)} `{!AsVals es vs None}:
-  TStepS lam_trans (Lam e s h fns) (λ G,
-  G  None (λ G', ∃f fn, ValFid f = v /\ fns !! f = Some fn /\ length vs = length fn.(fd_args) ∧
-  G' (Lam (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) ((fst f)::s) h fns)) \/
-  ∀ f, G  (Some (Outgoing, ELCall  f vs h)) (λ G', fns !! f = None/\ 
-            G' (Lam (expr_fill K Waiting) s  h fns))).
+  TStepS lam_trans (Lam e s h fns) (λ G, ∃f fn, ValFid f = v /\ fns !! f = Some fn /\ 
+  G  None (λ G',  (length vs = length fn.(fd_args) →
+  G' (Lam (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) s h fns))) \/
+  ∃ f, G  (Some (Outgoing, ELCall  f vs h)) (λ G', 
+  ValFid f = v /\ fns !! f = None/\ G' (Lam (expr_fill K Waiting) s  h fns))).
 Proof.
   destruct AsVals0, LamExprFill0; subst. rewrite right_id_L.
-  econs. intros. destruct H. eexists _,_ . split. exact H.
-  intros. simpl in H0. destruct H0 as [?[?[?[?[??]]]]]. subst. eapply steps_spec_step_end. 
-  econs. naive_solver.  apply CallInternalS. exact H1. intros. simpl in H0.
-  destruct H0 as [?[?[?[?[??]]]]]. destruct H0. inversion H5.  subst. auto.
-  admit.
-  Admitted.
-  
-  constructor => ? HG. edestruct HG. destruct!; (split!; [done|]); move => /= ??.
-  eapply steps_spec_step_end. apply prim_step_inv_head. apply head_fill_step_val.
-  all: apply: steps_spec_step_end. econs. eauto. econs. eauto. [econs; [done|by econs]|] => ? /=?.
-  all: destruct!; naive_solver.
+  econs. intros. destruct!. eexists _,_ . split. exact H2.
+  intros. simpl in H0. eapply steps_spec_step_end. 
+  econs. naive_solver.  apply CallInternalS. exact H. intros. simpl in H1.
+  destruct!. auto.
+  eexists _,_. split. exact H. intros. destruct H0 as [?[??]].
+  subst. eapply steps_spec_step_end. econs. auto. econs. auto. 
+  intros. naive_solver. 
 Qed.
 Global Hint Resolve lam_step_App_s : typeclass_instances.
 
@@ -1600,7 +1596,7 @@ Lemma lam_step_Waiting_i fns s h K e `{!LamExprFill e K Waiting}:
     (∀ f vs h', f∈dom fns →
       G true (Some (Incoming, ELCall f vs h')) (λ G',  G'
           (Lam (expr_fill K (ReturnExt (App (Val (ValFid f)) (Val <$> vs)))) ((fst f)::s) h' fns))) ∧
-    ∀ v h', G true (Some (Incoming, ELReturn v h')) (λ G', G' (Lam (expr_fill K (Val v)) s h' fns))
+       ∀ v h',  (∃ hd tl, hd::tl= s)→G true (Some (Incoming, ELReturn v h')) (λ G', G' (Lam (expr_fill K (Val v)) s h' fns))
    ).
 Proof.
   destruct LamExprFill0; subst.
@@ -1608,7 +1604,7 @@ Proof.
   { solve_sub_redexes_are_values. } { done. } subst.
   inv_all head_step.
   - naive_solver.
-  - naive_solver.
+  - naive_solver. 
 Qed.
 Global Hint Resolve lam_step_Waiting_i : typeclass_instances.
 
@@ -1617,14 +1613,15 @@ Lemma lam_step_Waiting_s fns s h e K `{!LamExprFill e K Waiting}:
     (∃ f vs h', f∈dom fns ∧
       G (Some (Incoming, ELCall f vs h')) (λ G', G'
           (Lam (expr_fill K (ReturnExt (App (Val(ValFid f)) (Val <$> vs)))) (fst f::s) h' fns))) ∨
-    ∃ v h', G (Some (Incoming, ELReturn v h')) (λ G', G' (Lam (expr_fill K (Val v)) s h' fns))
+          ∃ v h',  (∃ hd tl, hd::tl= s)/\ G (Some (Incoming, ELReturn v h')) (λ G', G' (Lam (expr_fill K (Val v)) s h' fns))
    ).
 Proof.
   destruct LamExprFill0; subst.
-  constructor => ? HG. destruct!; (split!; [done|]) => /= ??.
-  eapply steps_spec_step_end. econs. eauto. econs. auto. naive_solver. 
-  eapply steps_spec_step_end. econs. eauto. econs. auto. naive_solver. 
-  all: apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?; destruct!; done.
+  constructor => ? HG. destruct!. split!. exact H0. intros.
+  eapply steps_spec_step_end. econs. auto. econs. auto. 
+  simpl. intros. naive_solver.
+  eexists _,_. split. naive_solver. eauto.
+  intros. eapply steps_spec_step_end. econs. auto. econs. naive_solver. 
 Qed.
 Global Hint Resolve lam_step_Waiting_s : typeclass_instances.
 
@@ -1958,13 +1955,13 @@ Definition lam_ctx_refines (fnsi fnss : gmap string fndef) :=
 *)
 
 (** ** Semantic linking *)
-Definition lam_link_filter (fns1 fns2 : gset fid) : seq_product_case → list seq_product_case → lam_ev → seq_product_case → list seq_product_case → lam_ev → bool → Prop :=
+Definition lam_link_filter (fns1 fns2 : gset string) : seq_product_case → list seq_product_case → lam_ev → seq_product_case → list seq_product_case → lam_ev → bool → Prop :=
   λ p cs e p' cs' e' ok,
     e' = e ∧
     ok = true ∧
     match e with
     | ELCall f vs h =>
-          p' = (if bool_decide (f ∈ fns1) then SPLeft else if bool_decide (f ∈ fns2) then SPRight else SPNone) ∧
+          p' = (if bool_decide (f.1 ∈ fns1) then SPLeft else if bool_decide (f.1 ∈ fns2) then SPRight else SPNone) ∧
           (cs' = p::cs) ∧
           p ≠ p'
       
@@ -1974,10 +1971,10 @@ Definition lam_link_filter (fns1 fns2 : gset fid) : seq_product_case → list se
     end.
 Arguments lam_link_filter _ _ _ _ _ _ _ _ /.
 
-Definition lam_link_trans (fns1 fns2 : gset fid) (m1 m2 : mod_trans lam_event) : mod_trans lam_event :=
+Definition lam_link_trans (fns1 fns2 : gset string) (m1 m2 : mod_trans lam_event) : mod_trans lam_event :=
   link_trans (lam_link_filter fns1 fns2) m1 m2.
 
-Definition lam_link (fns1 fns2 : gset fid) (m1 m2 : module lam_event) : module lam_event :=
+Definition lam_link (fns1 fns2 : gset string) (m1 m2 : module lam_event) : module lam_event :=
   Mod (lam_link_trans fns1 fns2 m1.(m_trans) m2.(m_trans)) (MLFNone, [], m1.(m_init), m2.(m_init)).
 
 Lemma lam_link_trefines m1 m1' m2 m2' fns1 fns2 `{!VisNoAng m1.(m_trans)} `{!VisNoAng m2.(m_trans)}:
@@ -2003,42 +2000,40 @@ Inductive lam_link_combine_stack_and_ectx:
     lam_link_combine_stack_and_ectx n MLFNone cs K Kl Kr s sl sr →
     lam_link_combine_stack_and_ectx (S n) MLFRight (SPNone :: cs) (ReturnExtCtx::K)
     Kl (ReturnExtCtx::Kr) (f::s) sl (f::sr)
-  | LLCELeftToRight n cs K Kl Kl' Kr f fs s sl sr: 
+  | LLCELeftToRight n cs K Kl Kl' Kr f s sl sr: 
     lam_link_combine_stack_and_ectx n MLFLeft cs K Kl Kr s sl sr →
     is_static_expr true (expr_fill Kl' (Var "")) →
     lam_link_combine_stack_and_ectx (S n) MLFRight (SPLeft::cs) (Kl'++K) (Kl'++Kl) (ReturnExtCtx::Kr) 
-    (f::fs++s) (fs++sl) (f::sr)
-  | LLCELeftToNone n cs K Kl Kl' Kr fs s sl sr: 
+    (f::s) (sl) (f::sr)
+  | LLCELeftToNone n cs K Kl Kl' Kr s sl sr: 
     lam_link_combine_stack_and_ectx n MLFLeft cs K Kl Kr s sl sr →
     is_static_expr true (expr_fill Kl' (Var ""))→
     lam_link_combine_stack_and_ectx (S n) MLFNone (SPLeft::cs) (Kl'++K) (Kl'++Kl) Kr 
-    (fs++s) (fs++sl) sr
-  | LLCERighttoLeft n cs K Kl Kr Kr' f fs s sl sr: 
+    (s) (sl) sr
+  | LLCERighttoLeft n cs K Kl Kr Kr' f s sl sr: 
     lam_link_combine_stack_and_ectx n MLFRight cs K Kl Kr s sl sr →
     is_static_expr true (expr_fill Kr' (Var "")) →
     lam_link_combine_stack_and_ectx (S n) MLFLeft (SPRight::cs) (Kr'++K) (ReturnExtCtx::Kl) (Kr'++Kr) 
-    (f::fs++s) (f::sl) (fs++sr)
-  | LLCERightToNone n cs K Kl Kr Kr' fs s sl sr: 
+    (f::s) (f::sl) (sr)
+  | LLCERightToNone n cs K Kl Kr Kr' s sl sr: 
     lam_link_combine_stack_and_ectx n MLFRight cs K Kl Kr s sl sr →
     is_static_expr true (expr_fill Kr' (Var ""))→
     lam_link_combine_stack_and_ectx (S n) MLFNone (SPRight::cs) (Kr'++K) Kl (Kr'++Kr)  
-    (fs++s) sl (fs++sr) .
+    (s) sl (sr) .
 
 
 (* ** probably need to add some definition for s and cm*)
-(*
+(* TODO *)
+
 Definition lam_link_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : lam_trans.(m_state)) (σ2 : link_case lam_ev * list seq_product_case * lam_state * lam_state) : Prop :=
-  let 'Lam e1 s1 h1 cm1 fns1' := σ1 in
-  let '(σf, cs, Lam el sl hl cml fnsl, Lam er sr hr cmr fnsr) := σ2 in
+  let 'Lam e1 s1 h1 fns1' := σ1 in
+  let '(σf, cs, Lam el sl hl fnsl, Lam er sr hr fnsr) := σ2 in
   ∃ n K Kl Kr e1' el' er' ,
-  fns1' = fns1 ∪ fns2 ∧
-  fnsl = fns1 ∧
-  fnsr = fns2 ∧
+  fns1' = fnsl ∪ fnsr ∧
   lam_link_combine_stack_and_ectx n  σf cs K Kl Kr s1 sl sr ∧
   e1 = expr_fill K e1' ∧
   el = expr_fill Kl el' ∧
   er = expr_fill Kr er' ∧
-  cm1 = cml ∪ cmr∧
   match σf with
   | MLFLeft => e1' = el' ∧ is_static_expr true el' ∧ er' = Waiting ∧ h1 = hl
               ∧ (if bv then to_val el' = None else True)
@@ -2049,10 +2044,16 @@ Definition lam_link_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : lam_t
   end.
 
 
+(*Definition get_string_set_from_fid_set (s:gmap fid fndef):=
+  @set_map fid _ _ _ _ _ _ _ (λ f:fid, f.1) (dom s).
+*)
+  
+  
+
 Lemma lam_syn_link_refines_link fns1 fns2:
   fns1 ##ₘ fns2 →
   trefines (lam_mod (lam_syn_link fns1 fns2))
-           (lam_link (dom fns1) (dom fns2) (lam_mod fns1) (lam_mod fns2)).
+           (lam_link (set_map (λ f, f.1) (dom fns1)) (set_map (λ f, f.1) (dom fns2)) (lam_mod fns1) (lam_mod fns2)).
 Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
@@ -2173,11 +2174,15 @@ Proof.
         apply Hloop. rewrite !expr_fill_app. split!; [done..|].
         by apply is_static_expr_expr_fill.
 Qed.
+*)
 
 
+
+
+(*
 Lemma rec_link_refines_syn_link fns1 fns2:
   fns1 ##ₘ fns2 →
-  trefines (lam_link (dom fns1) (dom fns2) (lam_mod fns1) (lam_mod fns2))
+  trefines (lam_link (set_map (λ f, f.1) (dom fns1)) (set_map (λ f, f.1) (dom fns2)) (lam_mod fns1) (lam_mod fns2))
            (lam_mod (lam_syn_link fns1 fns2)).
 Proof.
   move => Hdisj.
