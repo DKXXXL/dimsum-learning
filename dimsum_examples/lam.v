@@ -2049,7 +2049,7 @@ Definition lam_link_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : lam_t
 *)
   
   
-
+(*
 Lemma lam_syn_link_refines_link fns1 fns2:
   fns1 ##ₘ fns2 →
   trefines (lam_mod (lam_syn_link fns1 fns2))
