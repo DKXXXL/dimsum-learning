@@ -2004,7 +2004,7 @@ Inductive lam_link_combine_stack_and_ectx:
     lam_link_combine_stack_and_ectx n MLFLeft cs K Kl Kr s sl sr →
     is_static_expr true (expr_fill Kl' (Var "")) →
     lam_link_combine_stack_and_ectx (S n) MLFRight (SPLeft::cs) (Kl'++K) (Kl'++Kl) (ReturnExtCtx::Kr) 
-    (f::s) (sl) (f::sr)
+    (s) (sl) (f::sr)
   | LLCELeftToNone n cs K Kl Kl' Kr s sl sr: 
     lam_link_combine_stack_and_ectx n MLFLeft cs K Kl Kr s sl sr →
     is_static_expr true (expr_fill Kl' (Var ""))→
@@ -2014,7 +2014,7 @@ Inductive lam_link_combine_stack_and_ectx:
     lam_link_combine_stack_and_ectx n MLFRight cs K Kl Kr s sl sr →
     is_static_expr true (expr_fill Kr' (Var "")) →
     lam_link_combine_stack_and_ectx (S n) MLFLeft (SPRight::cs) (Kr'++K) (ReturnExtCtx::Kl) (Kr'++Kr) 
-    (f::s) (f::sl) (sr)
+    s (f::sl) (sr)
   | LLCERightToNone n cs K Kl Kr Kr' s sl sr: 
     lam_link_combine_stack_and_ectx n MLFRight cs K Kl Kr s sl sr →
     is_static_expr true (expr_fill Kr' (Var ""))→
@@ -2025,7 +2025,7 @@ Inductive lam_link_combine_stack_and_ectx:
 (* ** probably need to add some definition for s and cm*)
 (* TODO *)
 
-Definition lam_link_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : lam_trans.(m_state)) (σ2 : link_case lam_ev * list seq_product_case * lam_state * lam_state) : Prop :=
+Definition lam_link_inv (bv : bool) (fns1 fns2 : gmap fid fndef) (σ1 : lam_trans.(m_state)) (σ2 : link_case lam_ev * list seq_product_case * lam_state * lam_state) : Prop :=
   let 'Lam e1 s1 h1 fns1' := σ1 in
   let '(σf, cs, Lam el sl hl fnsl, Lam er sr hr fnsr) := σ2 in
   ∃ n K Kl Kr e1' el' er' ,
@@ -2044,9 +2044,9 @@ Definition lam_link_inv (bv : bool) (fns1 fns2 : gmap string fndef) (σ1 : lam_t
   end.
 
 
-(*Definition get_string_set_from_fid_set (s:gmap fid fndef):=
-  @set_map fid _ _ _ _ _ _ _ (λ f:fid, f.1) (dom s).
-*)
+Definition get_string_set_from_fid_set (s:gmap fid fndef):gset string:=
+  set_map(λ f:fid, f.1) (dom s).
+
   
   
 (*
@@ -2182,29 +2182,31 @@ Qed.
 (*
 Lemma rec_link_refines_syn_link fns1 fns2:
   fns1 ##ₘ fns2 →
-  trefines (lam_link (set_map (λ f, f.1) (dom fns1)) (set_map (λ f, f.1) (dom fns2)) (lam_mod fns1) (lam_mod fns2))
+  trefines (lam_link  (get_string_set_from_fid_set fns1)  (get_string_set_from_fid_set fns2) (lam_mod fns1) (lam_mod fns2))
            (lam_mod (lam_syn_link fns1 fns2)).
 Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
-  unshelve apply: tsim_remember. { exact: (λ _, flip (rec_link_inv false fns1 fns2)). }
+  unshelve apply: tsim_remember. {exact: (λ _, flip (lam_link_inv false fns1 fns2)). }
   { split!. 1: by econs. all: done. } { done. }
-  move => /= {}n _ Hloop [[[ipfs cs] [el hl fnsl]] [er hr fnsr]] [e1 h1 fns1'] [m [K [Kl [Kr ?]]]].
+  move => /= {}n _ Hloop [[[ipfs cs] [el sl hl fnsl]] [er sr hr fnsr]] [e1 s1 h1 fns1'] [m [K [Kl [Kr ?]]]].
   destruct!/=. case_match; destruct!.
-  - destruct (to_val el') eqn:?.
-    + destruct el'; simplify_eq/=.
-      revert select (lam_link_combine_ectx _ _ _ _ _ _ _ _) => HK.
+  - (* ** MLFLeft case*)
+    destruct (to_val el') eqn:?.
+    + (* ** is a value*) 
+      destruct el'; simplify_eq/=.
+      revert select (lam_link_combine_stack_and_ectx _ _ _ _ _ _ _ _ _) => HK.
       inversion HK; clear HK; simplify_eq/=.
       * tstep_i => *; destruct!. tstep_s. split!.
         apply: Hloop; [done|]. by split!.
       * tstep_i => *; destruct!/=.
-        tstep_i; split => *; simplify_eq.
-        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..|].
+        tstep_i; split => *; simplify_eq. destruct!.
+        apply: Hloop; [done|]. rewrite !expr_fill_app.  split!;  [done..|].
         by apply is_static_expr_expr_fill.
     + tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]] *.
-      simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
+      simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/= [??] //.
       rewrite -expr_fill_app.
-      inv_all/= head_step => //; destruct!.
+      inv_all/= head_step => //; destruct!. clear H H0. (* ** TODO*)
       * tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.
@@ -2297,7 +2299,10 @@ Proof.
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done|done..|].
         by apply is_static_expr_expr_fill.
 Qed.
+*)
 
+
+(*
 Lemma rec_trefines_implies_ctx_refines fnsi fnss :
   dom fnsi = dom fnss →
   trefines (rec_mod fnsi) (rec_mod fnss) →
@@ -2314,7 +2319,7 @@ Proof.
 Qed.
 
 (** ** Commuting and associativity of semantic linking (WIP) *)
-(*
+
 (* TODO: track a stack of this and compute every thing from it (also keep an optional event) *)
 Inductive rec_prod_assoc_state :=
 | IPA1 | IPA2 | IPA3 | IPANone.
@@ -2383,4 +2388,4 @@ try by exfalso; set_unfold; naive_solver.
   tstep_i.
 *)
 
-*)
+
