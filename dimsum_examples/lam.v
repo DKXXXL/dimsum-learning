@@ -967,7 +967,7 @@ Inductive head_step : lam_state → option lam_event → (lam_state → Prop) �
 | RecvCallS f args h' lis h fns: (* Call?(f, args, h') *)
   f∈dom fns →
   head_step (Lam Waiting lis h fns) (Some (Incoming, ELCall f args h'))
-  (λ σ', σ' = Lam (ReturnExt (App (Val (ValFid f)) (Val <$> args))) lis h' fns)
+  (λ σ', σ' = Lam (ReturnExt (App (Val (ValFid f)) (Val <$> args))) lis h' fns
 | CallInternalS f fn args lis h fns: (* App (Val(ValFid f)) (Val <$> args) *)
   fns !! f = Some fn →
   head_step (Lam (App (Val(ValFid f)) (Val <$> args)) lis h fns) None
@@ -1343,6 +1343,7 @@ Lemma lam_expr_fill_ReturnInt e K e' `{!LamExprFill e K e'} :
   LamExprFill (ReturnInt e) (K ++ [ReturnIntCtx]) e'.
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply lam_expr_fill_proof. Qed.
 Global Hint Resolve lam_expr_fill_ReturnInt : typeclass_instances.
+
 (** ** instances *)
 
 (* This pattern of using LamExprFill at each rule is quite expensive
@@ -1647,6 +1648,7 @@ Proof.
 Qed.
 Global Hint Resolve lam_step_Waiting_s : typeclass_instances.
 
+
 Lemma rec_step_ReturnExt_i fns s h e K  (v : val) `{!LamExprFill e K (ReturnExt (Val v))}:
   TStepI lam_trans (Lam e s h fns) (λ G,
     (G true (Some (Outgoing, ELReturn v h)) (λ G', G' (Lam (expr_fill K Waiting) s h fns)))).
@@ -1659,6 +1661,7 @@ Proof.
 Qed.
 Global Hint Resolve rec_step_ReturnExt_i : typeclass_instances.
 
+
 Lemma lam_step_ReturnExt_s fns s h e K  (v : val) `{!LamExprFill e K (ReturnExt (Val v))}:
   TStepS lam_trans (Lam e s h fns) (λ G,
     (G (Some (Outgoing, ELReturn v h)) (λ G', G' (Lam (expr_fill K Waiting) s h fns)))).
@@ -1669,6 +1672,7 @@ Proof.
   destruct!. done.
 Qed.
 Global Hint Resolve lam_step_ReturnExt_s : typeclass_instances.
+
 
 Lemma rec_step_ReturnInt_i fns hd tl h e K  (v : val) `{!LamExprFill e K (ReturnInt (Val v))}:
   TStepI lam_trans (Lam e (hd::tl) h fns) (λ G,
@@ -1693,6 +1697,7 @@ Proof.
   destruct!. done.
 Qed.
 Global Hint Resolve lam_step_ReturnInt_s : typeclass_instances.
+
 
 
 (*
@@ -2029,6 +2034,7 @@ Lemma lam_link_trefines m1 m1' m2 m2' fns1 fns2 `{!VisNoAng m1.(m_trans)} `{!Vis
 Proof. move => ??.  by apply link_mod_trefines. Qed.
 
 
+
 (* ** Need to change this!*)
 (** ** Relating semantic and syntactic linking *)
 Inductive lam_link_combine_ectx:
@@ -2130,6 +2136,8 @@ Definition lam_link_inv (bv : bool) (fns1 fns2 : gmap fid fndef) (σ1 : lam_tran
   | MLFNone => e1' = Waiting  ∧ el' = Waiting ∧ er' = Waiting
   | _ => False
   end.
+
+
 
 
   
@@ -2264,6 +2272,7 @@ Qed.
 
 
 
+(*
 
 Lemma rec_link_refines_syn_link fns1 fns2:
   (get_string_set_from_fid_set fns1) ## (get_string_set_from_fid_set fns2) →
@@ -2273,6 +2282,7 @@ Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. {exact: (λ _, flip (lam_link_inv false fns1 fns2)). }
+
   { split!. 1,2: by econs.  all:done. } { done. }
   move => /= {}n _ Hloop [[[ipfs cs] [el sl hl fnsl]] [er sr hr fnsr]] [e1 s1 h1 fns1'] [m [K [Kl [Kr ?]]]].
   destruct!/=. case_match; destruct!.
@@ -2280,6 +2290,7 @@ Proof.
     destruct (to_val el') eqn:?.
     + (* ** is a value*) 
       destruct el'; simplify_eq/=.
+
       revert select (lam_link_combine_ectx _ _ _ _ _ _ ) => HK.
       inversion HK; clear HK; simplify_eq/=.
       * tstep_i => *; destruct!. tstep_s. split!.
@@ -2291,6 +2302,7 @@ Proof.
     + tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]] *.
       simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/= [??] //.
       rewrite -expr_fill_app.
+
       inv_all/= head_step => //; destruct!. clear H2 H3. (* ** TODO*)
       * (*binop*) tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!;   [done..| ].
@@ -2334,7 +2346,7 @@ Proof.
             destruct H. destruct!. admit. (* ** simple lemma from H4 and H5*)
             tend. split!. apply Hloop; try done. split!; try done. econs. exact H1. done.
       
-      
+
   - destruct (to_val er') eqn:?.
     + destruct er'; simplify_eq/=.
       revert select (lam_link_combine_ectx _ _ _ _ _ _ _ _) => HK. inv/= HK.
