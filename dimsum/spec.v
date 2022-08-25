@@ -453,8 +453,8 @@ Proof.
   rewrite unfold_bind_.
   destruct (sobserve s) => /=.
   1: rewrite bind_ret_l; by apply reflexivity.
-  all: rewrite unfold_spec_to_itree_eq /= Eq.unfold_bind/=.
-  all: gstep; repeat red; simpl; eauto with paco.
+  all: rewrite unfold_spec_to_itree_eq /= Eqit.unfold_bind/=.
+  all: gstep; constructor; simpl; eauto with paco.
 Qed.
 
 Global Instance bind_Proper {EV S T U} :
