@@ -40,8 +40,12 @@ Definition sim_tgt_expr {EV Σ Λ} `{!dimsumGS Σ}
   (Φ : mexpr Λ → (option EV → ((m_state Λ → iProp Σ) → iProp Σ) → iProp Σ) → iProp Σ): iProp Σ :=
   (∀ e' Π', Φ e' Π' -∗ TGT e' [{ Π' }]) -∗ TGT e [{ Π }].
 
-Notation "'TGT' e [{ Π }] {{ Φ } }" := (sim_tgt_expr e Π%I Φ%I) (at level 70, Π, Φ at level 200,
-  format "'[hv' 'TGT'  e  '/' [{  '[ ' Π  ']' }]  {{  '[ ' Φ  ']' } } ']'") : bi_scope.
+Notation "'TGT' e [{ Π }] {{ Φ } }" := (sim_tgt_expr e Π%I Φ%I)
+  (at level 70, Π, Φ at level 200, only parsing) : bi_scope.
+
+Notation "'TGT' e [{ Π }] {{ e' , Π' , Φ } }" := (sim_tgt_expr e Π%I (λ e' Π', Φ))
+  (at level 70, Π, Φ at level 200,
+    format "'[hv' 'TGT'  e  '/' [{  '[ ' Π  ']' }]  {{  '[ ' e' ,  Π' ,  '/' Φ  ']' } } ']'") : bi_scope.
 
 Section sim_tgt.
 Context {EV} {Σ} {Λ : mod_lang EV Σ} `{!dimsumGS Σ}.
@@ -67,13 +71,13 @@ Lemma sim_tgt_expr_raw_elim e Π σ :
 Proof. iIntros (?) "Hσ He". iApply sim_tgt_ctx. iIntros "#?". by iApply "He". Qed.
 
 Lemma sim_tgt_expr_bind e Π Φ :
-  TGT e [{ Π }] {{ λ e' Π', TGT e' [{ Π' }] {{ Φ }} }} -∗
+  TGT e [{ Π }] {{ e', Π', TGT e' [{ Π' }] {{ Φ }} }} -∗
   TGT e [{ Π }] {{ Φ }}.
 Proof. iIntros "Hsim HΦ". iApply "Hsim". iIntros (??) "Hsim". by iApply "Hsim". Qed.
 
 Lemma sim_tgt_expr_bind_ctx e Π Φ f :
   (∀ σ, mexpr_rel Λ σ (f e) → mexpr_rel Λ σ e) →
-  TGT e [{ Π }] {{ λ e' Π', TGT f e' [{ Π' }] {{ Φ }} }} -∗
+  TGT e [{ Π }] {{ e', Π', TGT f e' [{ Π' }] {{ Φ }} }} -∗
   TGT f e [{ Π }] {{ Φ }}.
 Proof.
   iIntros (?) "Hsim HΦ".
@@ -139,8 +143,11 @@ Definition sim_src_expr {EV Σ Λ} `{!dimsumGS Σ}
   (Φ : mexpr Λ → (option EV → m_state Λ → iProp Σ) → iProp Σ): iProp Σ :=
   (∀ e' Π', Φ e' Π' -∗ SRC e' [{ Π' }]) -∗ SRC e [{ Π }].
 
-Notation "'SRC' e [{ Π }] {{ Φ } }" := (sim_src_expr e Π%I Φ%I) (at level 70, Π, Φ at level 200,
-  format "'[hv' 'SRC'  e  '/' [{  '[ ' Π  ']' }]  {{  '[ ' Φ  ']' } } ']'") : bi_scope.
+Notation "'SRC' e [{ Π }] {{ Φ } }" := (sim_src_expr e Π%I Φ%I)
+  (at level 70, Π, Φ at level 200, only parsing) : bi_scope.
+
+Notation "'SRC' e [{ Π }] {{ e' , Π' , Φ } }" := (sim_src_expr e Π%I (λ e' Π', Φ)) (at level 70, Π, Φ at level 200,
+  format "'[hv' 'SRC'  e  '/' [{  '[ ' Π  ']' }]  {{  '[ ' e' ,  Π' ,  '/' Φ  ']' } } ']'") : bi_scope.
 
 Section sim_src.
 Context {EV} {Σ} {Λ : mod_lang EV Σ} `{!dimsumGS Σ}.
@@ -169,7 +176,7 @@ Lemma sim_src_expr_raw_elim e Π σ :
 Proof. iIntros (?) "Hσ He". iApply sim_src_ctx. iIntros "#?". by iApply "He". Qed.
 
 Lemma sim_src_expr_bind e Π Φ :
-  SRC e [{ Π }] {{ λ e' Π', SRC e' [{ Π' }] {{ Φ }} }} -∗
+  SRC e [{ Π }] {{ e', Π', SRC e' [{ Π' }] {{ Φ }} }} -∗
   SRC e [{ Π }] {{ Φ }}.
 Proof. iIntros "Hsim HΦ". iApply "Hsim". iIntros (??) "Hsim". by iApply "Hsim". Qed.
 
