@@ -1,5 +1,5 @@
 From dimsum.core Require Export proof_techniques.
-From dimsum.core Require Import itree.
+From dimsum.core Require Import spec_mod.
 From dimsum.examples Require Import rec asm rec_to_asm.
 From dimsum.examples.compiler Require Import compiler.
 
@@ -25,23 +25,23 @@ Definition int_to_ptr_fns : gset string :=
 Definition int_to_ptr_f2i : gmap string Z :=
   <["cast_int_to_ptr" := 400]> $ <["cast_ptr_to_int" := 401]> $ ∅.
 
-Definition int_to_ptr_itree : itree (moduleE rec_event (gmap prov Z)) unit :=
-  ITree.forever (
-      '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));;;
+Definition int_to_ptr_spec : spec rec_event (gmap prov Z) void :=
+  Spec.forever (
+      '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
       if bool_decide (f = "cast_int_to_ptr") then
-        z ← TAll Z;;;
-        TAssume (vs = [ValNum z]);;;;
-        l ← TAll loc;;;
-        ps ← TGet;;;
-        TAssume (ps !! l.1 = Some (z - l.2));;;;
+        z ← TAll Z;
+        TAssume (vs = [ValNum z]);;
+        l ← TAll loc;
+        ps ← TGet;
+        TAssume (ps !! l.1 = Some (z - l.2));;
         TVis (Outgoing, ERReturn (ValLoc l) h)
       else if bool_decide (f = "cast_ptr_to_int") then
-        l ← TAll loc;;;
-        TAssume (vs = [ValLoc l]);;;;
-        z ← TExist Z;;;
-        ps ← TGet;;;
+        l ← TAll loc;
+        TAssume (vs = [ValLoc l]);;
+        z ← TExist Z;
+        ps ← TGet;
         let ps' := <[l.1 := (default z (ps !! l.1))]> ps in
-        TPut ps';;;;
+        TPut ps';;
         TVis (Outgoing, ERReturn (ValNum (ps' !!! l.1 + l.2)) h)
       else
         TNb).
@@ -69,7 +69,7 @@ Definition int_to_ptr_itree : itree (moduleE rec_event (gmap prov Z)) unit :=
  *)
 
 Local Ltac go :=
-  clear_itree.
+  clear_spec.
 Local Ltac go_s :=
   tstep_s; go.
 Local Ltac go_i :=
@@ -78,18 +78,18 @@ Local Ltac go_i :=
 (*
   asm_module(int_to_ptr_asm) {asm_event}
     <= {asm_event}
-  rec_to_asm(itree_module(int_to_ptr_itree {rec_event}) {rec_event}) {asm_event}
+  rec_to_asm(spec_module(int_to_ptr_spec {rec_event}) {rec_event}) {asm_event}
 *)
 
-Lemma int_to_ptr_asm_refines_itree :
+Lemma int_to_ptr_asm_refines_spec :
   trefines (asm_mod int_to_ptr_asm)
            (rec_to_asm (dom int_to_ptr_asm) int_to_ptr_fns int_to_ptr_f2i ∅
-              (itree_mod int_to_ptr_itree ∅)).
+              (spec_mod int_to_ptr_spec ∅)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember. { simpl. exact (λ _ σa '(σf, (t, ps), (pp, σr2a, P)),
     ∃ rP, P = uPred_shrink rP ∧
-    t ≈ int_to_ptr_itree ∧
+    t ≡ int_to_ptr_spec ∧
     σa.(asm_cur_instr) = AWaiting ∧
     σa.(asm_instrs) = int_to_ptr_asm ∧
     σr2a.(r2a_calls) = [] ∧
@@ -101,7 +101,7 @@ Proof.
   tstep_i => ????? Hi. tstep_s. split!.
   tstep_i => ??. simplify_map_eq.
   tstep_s => *. case_match => /= *. 2: congruence.
-  tstep_s. rewrite -/int_to_ptr_itree. go. go_s. eexists (_, _, _). go.
+  tstep_s. rewrite -/int_to_ptr_spec. go. go_s. eexists (_, _, _). go.
   go_s. split!. go. go_s.
   revert select (_ ⊢ _) => HP.
   revert select (_ ∉ dom _) => /not_elem_of_dom?.
@@ -185,23 +185,23 @@ Definition main_rec : fndef := {|
 Definition main_rec_prog : gmap string fndef :=
   <[ "main" := main_rec ]> ∅.
 
-Definition main_itree : itree (moduleE rec_event unit) unit :=
-  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));;;
-  TAssume (f = "main");;;;
-  TAssume (vs = []);;;;
-  h' ← TExist (heap_state);;;
-  TVis (Outgoing, ERCall "exit" [ValNum 1] h');;;;
+Definition main_spec : spec rec_event unit void :=
+  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+  TAssume (f = "main");;
+  TAssume (vs = []);;
+  h' ← TExist (heap_state);
+  TVis (Outgoing, ERCall "exit" [ValNum 1] h');;
   TUb.
 
 (*
-  rec_module(main_rec) {rec_event} +rec itree_module(int_to_ptr_itree {rec_event}) {rec_event}
+  rec_module(main_rec) {rec_event} +rec spec_module(int_to_ptr_spec {rec_event}) {rec_event}
       <= {rec_event}
-  itree_module(main_itree {rec_event}) {rec_event}
+  spec_module(main_spec {rec_event}) {rec_event}
 *)
 
-Lemma main_int_to_ptr_refines_itree :
-  trefines (rec_link (dom main_rec_prog) int_to_ptr_fns (rec_mod main_rec_prog) (itree_mod int_to_ptr_itree ∅))
-           (itree_mod main_itree tt).
+Lemma main_int_to_ptr_refines_spec :
+  trefines (rec_link (dom main_rec_prog) int_to_ptr_fns (rec_mod main_rec_prog) (spec_mod int_to_ptr_spec ∅))
+           (spec_mod main_spec tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   tstep_i => *. case_match; destruct!.
@@ -216,7 +216,7 @@ Proof.
   tstep_i. split. { move => *; simplify_map_eq. }
   move => ????. rewrite bool_decide_false; [|compute_done]. rewrite bool_decide_true; [|compute_done].
   move => *. destruct!/=.
-  tstep_i. rewrite -/int_to_ptr_itree. go.
+  tstep_i. rewrite -/int_to_ptr_spec. go.
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq/=.
   go_i. eexists _. go.
@@ -232,7 +232,7 @@ Proof.
   tstep_i. split. { move => *; simplify_map_eq. }
   move => ????. rewrite bool_decide_false; [|compute_done]. rewrite bool_decide_true; [|compute_done].
   move => *. destruct!/=.
-  tstep_i. rewrite -/int_to_ptr_itree. go.
+  tstep_i. rewrite -/int_to_ptr_spec. go.
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq/=.
   go_i. eexists _. go.
@@ -289,26 +289,26 @@ Definition exit_asm : gmap Z asm_instr :=
         WriteReg "PC" (λ rs, rs !!! "PC")
     ] ]> $ ∅.
 
-Definition exit_itree : itree (moduleE asm_event unit) unit :=
-  '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
-  TAssume (rs !!! "PC" = 100);;;;
-  args ← TExist _;;;
-  TAssert (length args = length syscall_arg_regs);;;;
-  TAssert (args !! 0%nat = Some (rs !!! "R0"));;;;
-  TAssert (args !! 8%nat = Some __NR_EXIT);;;;
-  TVis (Outgoing, EASyscallCall args mem);;;;
+Definition exit_spec : spec asm_event unit void :=
+  '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));
+  TAssume (rs !!! "PC" = 100);;
+  args ← TExist _;
+  TAssert (length args = length syscall_arg_regs);;
+  TAssert (args !! 0%nat = Some (rs !!! "R0"));;
+  TAssert (args !! 8%nat = Some __NR_EXIT);;
+  TVis (Outgoing, EASyscallCall args mem);;
   (* TUb. *)
-  TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));;;;
+  TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));;
   TNb.
 
 (*
   asm_module(exit_asm) {asm_event}
     <= {asm_event}
-  itree_module(exit_itree {asm_event}) {asm_event}
+  spec_module(exit_spec {asm_event}) {asm_event}
 *)
 
-Lemma exit_asm_refines_itree :
-  trefines (asm_mod exit_asm) (itree_mod exit_itree tt).
+Lemma exit_asm_refines_spec :
+  trefines (asm_mod exit_asm) (spec_mod exit_spec tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   go_i => ????? Hi.
@@ -346,35 +346,35 @@ Qed.
 
 (* TODO: something even more high-level? Maybe stated as safety property on traces? *)
 
-Definition top_level_itree : itree (moduleE asm_event unit) unit :=
-  '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
-  TAssume (rs !!! "PC" = 200);;;;
-  TAssume (rs !!! "R30" ∉ main_asm_dom ∪ dom int_to_ptr_asm);;;;
-  TAssume (∃ ssz, r2a_mem_stack_mem (rs !!! "SP") ssz ⊆ mem);;;;
-  args ← TExist _;;;
-  mem ← TExist _;;;
-  TAssert (length args = length syscall_arg_regs);;;;
-  TAssert (args !! 0%nat = Some 1);;;;
-  TAssert (args !! 8%nat = Some __NR_EXIT);;;;
-  TVis (Outgoing, EASyscallCall args mem);;;;
-  TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));;;;
+Definition top_level_spec : spec asm_event unit void :=
+  '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));
+  TAssume (rs !!! "PC" = 200);;
+  TAssume (rs !!! "R30" ∉ main_asm_dom ∪ dom int_to_ptr_asm);;
+  TAssume (∃ ssz, r2a_mem_stack_mem (rs !!! "SP") ssz ⊆ mem);;
+  args ← TExist _;
+  mem ← TExist _;
+  TAssert (length args = length syscall_arg_regs);;
+  TAssert (args !! 0%nat = Some 1);;
+  TAssert (args !! 8%nat = Some __NR_EXIT);;
+  TVis (Outgoing, EASyscallCall args mem);;
+  TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));;
   TNb.
 
 (*
-   rec_to_asm(itree_module(main_itree {rec_event}) {rec_event}) {asm_event}
+   rec_to_asm(spec_module(main_spec {rec_event}) {rec_event}) {asm_event}
     +asm
-   itree_module(exit_itree {asm_event}) {asm_event}
+   spec_module(exit_spec {asm_event}) {asm_event}
       <= {asm_event}
-   itree_module(toplevel_itree {asm_event}) {asm_event}
+   spec_module(toplevel_spec {asm_event}) {asm_event}
 *)
 
-Lemma top_level_refines_itree :
+Lemma top_level_refines_spec :
   trefines (asm_link (main_asm_dom ∪ dom int_to_ptr_asm) (dom exit_asm)
               (rec_to_asm (main_asm_dom ∪ dom int_to_ptr_asm)
                  (dom main_rec_prog ∪ int_to_ptr_fns)
                  main_f2i ∅
-                 (itree_mod main_itree tt)) (itree_mod exit_itree tt))
-    (itree_mod top_level_itree tt).
+                 (spec_mod main_spec tt)) (spec_mod exit_spec tt))
+    (spec_mod top_level_spec tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   go_i => ??????. case_match; destruct!.
@@ -430,12 +430,12 @@ Qed.
 (*
   asm_module(main_asm ∪ int_to_ptr_asm ∪ exit_asm) {asm_event}
     <= {asm_event}
-  itree_module(toplevel_itree {asm_event}) {asm_event}
+  spec_module(toplevel_spec {asm_event}) {asm_event}
 *)
 
 Lemma complete_refinement :
   trefines (asm_mod (main_asm ∪ int_to_ptr_asm ∪ exit_asm))
-           (itree_mod top_level_itree tt).
+           (spec_mod top_level_spec tt).
 Proof.
   etrans. {
     apply asm_syn_link_refines_link. compute_done.
@@ -448,21 +448,21 @@ Proof.
       etrans. {
         apply: asm_link_trefines.
         - apply main_asm_refines_rec.
-        - apply int_to_ptr_asm_refines_itree.
+        - apply int_to_ptr_asm_refines_spec.
       }
       etrans. {
         apply rec_to_asm_combine; [apply _|apply _|..]; compute_done.
       }
       etrans. {
         apply rec_to_asm_trefines; [apply _|].
-        apply main_int_to_ptr_refines_itree.
+        apply main_int_to_ptr_refines_spec.
       }
       have -> : (main_f2i ∪ int_to_ptr_f2i) = main_f2i by compute_done.
       done.
-    - apply exit_asm_refines_itree.
+    - apply exit_asm_refines_spec.
   }
   etrans. {
-    etrans; [|apply: (top_level_refines_itree)].
+    etrans; [|apply: (top_level_refines_spec)].
     rewrite dom_union_L /main_asm_dom left_id_L. unlock. done.
   }
   done.

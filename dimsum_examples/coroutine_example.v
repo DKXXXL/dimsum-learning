@@ -1,5 +1,5 @@
 From dimsum.core Require Export proof_techniques.
-From dimsum.core Require Import itree.
+From dimsum.core Require Import spec_mod.
 From dimsum.examples Require Import rec asm rec_to_asm print coroutine.
 From dimsum.examples.compiler Require Import compiler.
 
@@ -59,30 +59,30 @@ Lemma main_asm_refines_rec :
            (rec_to_asm (dom main_asm) {["main"]} all_f2i ∅ (rec_mod (<["main" := main_rec]> ∅))).
 Proof. apply: compile_correct; [|done|..]; compute_done. Qed.
 
-Definition main_itree : itree (moduleE rec_event unit) unit :=
-  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));;;
-  TAssume (f = "main");;;;
-  TAssume (vs = []);;;;
-  TVis (Outgoing, ERCall "print" [ValNum 0] h);;;;
-  e ← TExist _;;;
-  TVis (Incoming, e);;;;
-  TAssume (if e is ERReturn _ _ then true else false);;;;
-  TVis (Outgoing, ERCall "print" [ValNum 1] (heap_of_event e));;;;
-  e ← TExist _;;;
-  TVis (Incoming, e);;;;
-  TAssume (if e is ERReturn _ _ then true else false);;;;
-  TVis (Outgoing, ERReturn (ValNum 2) (heap_of_event e));;;;
+Definition main_spec : spec rec_event unit void :=
+  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+  TAssume (f = "main");;
+  TAssume (vs = []);;
+  TVis (Outgoing, ERCall "print" [ValNum 0] h);;
+  e ← TExist _;
+  TVis (Incoming, e);;
+  TAssume (if e is ERReturn _ _ then true else false);;
+  TVis (Outgoing, ERCall "print" [ValNum 1] (heap_of_event e));;
+  e ← TExist _;
+  TVis (Incoming, e);;
+  TAssume (if e is ERReturn _ _ then true else false);;
+  TVis (Outgoing, ERReturn (ValNum 2) (heap_of_event e));;
   TUb.
 Local Ltac go :=
-  clear_itree.
+  clear_spec.
 Local Ltac go_s :=
   tstep_s; go.
 Local Ltac go_i :=
   tstep_i; go.
 
-Lemma main_refines_itree :
+Lemma main_refines_spec :
   trefines (coro_link {["main"]} {["stream"]} "stream" (rec_mod main_prog) (rec_mod stream_prog))
-    (itree_mod main_itree tt).
+    (spec_mod main_spec tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=. unfold main_prog, stream_prog.
   tstep_i => *. destruct!/=.
@@ -150,41 +150,41 @@ Definition stream_regs_init : gmap string Z :=
   <["PC" := stream_addr]> $
   ∅.
 
-Definition top_level_itree : itree (moduleE asm_event unit) unit :=
-  '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
-  TAssume (rs !!! "PC" = main_addr);;;;
-  TAssume (rs !!! "R30" ∉ yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom ∪ dom print_asm);;;;
+Definition top_level_spec : spec asm_event unit void :=
+  '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));
+  TAssume (rs !!! "PC" = main_addr);;
+  TAssume (rs !!! "R30" ∉ yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom ∪ dom print_asm);;
   TAssume (∃ ssz,
      (r2a_mem_stack_mem (rs !!! "SP") ssz ##ₘ
        (r2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init)) ∧
     r2a_mem_stack_mem (rs !!! "SP") ssz ∪
-    (r2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init) ⊆ mem);;;;
-  args ← TExist _;;;
-  mem ← TExist _;;;
-  TAssert (print_args 0 args);;;;
-  TVis (Outgoing, EASyscallCall args mem);;;;
-  '(ret, mem') ← TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));;;
-  TAssume (mem' = mem);;;;
-  args ← TExist _;;;
-  mem ← TExist _;;;
-  TAssert (print_args 1 args);;;;
-  TVis (Outgoing, EASyscallCall args mem);;;;
-  '(ret, mem') ← TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));;;
-  TAssume (mem' = mem);;;;
-  rs' ← TExist _;;;
-  mem' ← TExist _;;;
-  TAssert (rs' !!! "PC" = rs !!! "R30");;;;
-  TAssert (rs' !!! "R0" = 2);;;;
-  TVis (Outgoing, EAJump rs' mem');;;;
+    (r2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init) ⊆ mem);;
+  args ← TExist _;
+  mem ← TExist _;
+  TAssert (print_args 0 args);;
+  TVis (Outgoing, EASyscallCall args mem);;
+  '(ret, mem') ← TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));
+  TAssume (mem' = mem);;
+  args ← TExist _;
+  mem ← TExist _;
+  TAssert (print_args 1 args);;
+  TVis (Outgoing, EASyscallCall args mem);;
+  '(ret, mem') ← TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));
+  TAssume (mem' = mem);;
+  rs' ← TExist _;
+  mem' ← TExist _;
+  TAssert (rs' !!! "PC" = rs !!! "R30");;
+  TAssert (rs' !!! "R0" = 2);;
+  TVis (Outgoing, EAJump rs' mem');;
   TUb.
 
-Lemma top_level_refines_itree :
+Lemma top_level_refines_spec :
   trefines (asm_link (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom) (dom print_asm)
               (rec_to_asm (yield_asm_dom ∪ main_asm_dom ∪ stream_asm_dom)
                 {["yield"; "main"; "stream"]} all_f2i
                 (r2a_mem_stack_mem (stream_regs_init !!! "SP") stream_ssz ∪ coro_regs_mem stream_regs_init)
-                (itree_mod main_itree tt)) (itree_mod print_itree tt))
-           (itree_mod top_level_itree tt).
+                (spec_mod main_spec tt)) (spec_mod print_spec tt))
+           (spec_mod top_level_spec tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   tstep_i => *. case_match; destruct!/=.
@@ -266,7 +266,7 @@ Proof.
   rename select (all_f2i !! _ = Some _) into Hf2i2. unfold all_f2i in Hf2i2. simplify_map_eq'.
   rewrite bool_decide_false. 2: unfold yield_asm_dom, yield_asm, main_asm_dom, stream_asm_dom; unlock; by vm_compute.
   rewrite bool_decide_true. 2: compute_done.
-  tstep_i. rewrite -/print_itree. go.
+  tstep_i. rewrite -/print_spec. go.
   go_i => -[??]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
@@ -324,7 +324,7 @@ Qed.
 
 Lemma complete_refinement :
   trefines (asm_mod (yield_asm ∪ (main_asm ∪ stream_asm) ∪ print_asm))
-           (itree_mod top_level_itree tt).
+           (spec_mod top_level_spec tt).
 Proof.
   etrans. {
     apply asm_syn_link_refines_link. rewrite /yield_asm. unlock. compute_done.
@@ -356,13 +356,13 @@ Proof.
       }
       etrans. {
         apply rec_to_asm_trefines; [apply _|].
-        apply: main_refines_itree.
+        apply: main_refines_spec.
       }
       done.
-    - apply print_asm_refines_itree.
+    - apply print_asm_refines_spec.
   }
   etrans. {
-    etrans; [|apply top_level_refines_itree].
+    etrans; [|apply top_level_refines_spec].
     rewrite idemp_L assoc_L 2!dom_union_L.
     rewrite /yield_asm_dom/main_asm_dom/stream_asm_dom. unlock.
     done.

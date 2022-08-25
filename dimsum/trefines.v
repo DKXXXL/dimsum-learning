@@ -651,6 +651,10 @@ Definition steps_spec {EV} (m : mod_trans EV) (σ : m.(m_state)) (κ : option EV
 
 Notation " σ '-{' m , κ '}->ₛ' P " := (steps_spec m σ κ P) (at level 40).
 
+Lemma steps_spec_unfold {EV} (m : mod_trans EV) σ (Pσ : _ → Prop) κ :
+  σ -{ m, κ }->ₛ Pσ ↔ steps_spec_rec m κ Pσ (λ σ, steps_spec m σ κ Pσ) σ.
+Proof. apply prop_least_fixpoint_unfold; apply _. Qed.
+
 Lemma steps_spec_mono {EV} (m : mod_trans EV) σ (Pσ Pσ' : _ → Prop) κ:
   σ -{ m, κ }->ₛ Pσ' →
   (∀ σ', Pσ' σ' → Pσ σ') →
@@ -664,14 +668,14 @@ Qed.
 Lemma steps_spec_end {EV} (m : mod_trans EV) σ (Pσ : _ → Prop):
   Pσ σ →
   σ -{ m, None }->ₛ Pσ.
-Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. left. naive_solver. Qed.
+Proof. move => ?. apply steps_spec_unfold. left. naive_solver. Qed.
 
 Lemma steps_spec_step_end {EV} (m : mod_trans EV) σ (Pσ Pσ' : _ → Prop) κ:
   m.(m_step) σ κ Pσ' →
   (∀ σ', Pσ' σ' → Pσ σ') →
   σ -{ m, κ }->ₛ Pσ.
 Proof.
-  move => ??. apply prop_least_fixpoint_unfold; [ apply _|]. right.
+  move => ??. apply steps_spec_unfold. right.
   eexists _, _. split; [done|]. split; [by case_match|]. naive_solver.
 Qed.
 
@@ -680,7 +684,7 @@ Lemma steps_spec_step {EV} (m : mod_trans EV) σ (Pσ Pσ' : _ → Prop) κ:
   (∀ σ', Pσ' σ' → σ' -{ m, κ }->ₛ Pσ) →
   σ -{ m, κ }->ₛ Pσ.
 Proof.
-  move => ??. apply prop_least_fixpoint_unfold; [ apply _|]. right.
+  move => ??. apply steps_spec_unfold. right.
   eexists _, _. split; [done|]. split; [done|]. naive_solver.
 Qed.
 
@@ -772,25 +776,32 @@ Arguments steps_impl_rec : simpl never.
 
 Notation " σ '-{' m '}->' P " := (steps_impl m σ P) (at level 40).
 
+Lemma steps_impl_unfold {EV} (m : mod_trans EV) σ (Pσ : _ → _ → _ → Prop):
+  σ -{ m }-> Pσ ↔ steps_impl_rec m (uncurry (steps_impl m)) (σ, Pσ).
+Proof.
+  etrans; [apply prop_least_fixpoint_unfold; apply _|].
+  by split; apply mono_pred => -[??] /=.
+Qed.
+
 Lemma steps_impl_end {EV} (m : mod_trans EV) σ (Pσ : _ → _ → _ → Prop):
   Pσ false None (σ =.) →
   σ -{ m }-> Pσ.
-Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. left. naive_solver. Qed.
+Proof. move => ?. apply steps_impl_unfold. left. naive_solver. Qed.
 
 Lemma steps_impl_step_end {EV} (m : mod_trans EV) σ (Pσ : _ → _ → _ → Prop):
   (∀ κ Pσ2, m.(m_step) σ κ Pσ2 → Pσ true κ Pσ2) →
   σ -{ m }-> Pσ.
-Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. right => ???. left. naive_solver. Qed.
+Proof. move => ?. apply steps_impl_unfold. right => ???. left. naive_solver. Qed.
 
 Lemma steps_impl_step {EV} (m : mod_trans EV) σ (Pσ : _ → _ → _ → Prop):
   (∀ κ Pσ2, m.(m_step) σ κ Pσ2 → Pσ true κ Pσ2 ∨ ∃ σ2, Pσ2 σ2 ∧ κ = None ∧ σ2 -{ m }-> (λ _, Pσ true)) →
   σ -{ m }-> Pσ.
-Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. right => ???. naive_solver. Qed.
+Proof. move => ?. apply steps_impl_unfold. right => ???. naive_solver. Qed.
 
 Lemma steps_impl_step_next {EV} (m : mod_trans EV) σ (Pσ : _ → _ → _ → Prop):
   (∀ κ Pσ2, m.(m_step) σ κ Pσ2 → ∃ σ2, Pσ2 σ2 ∧ κ = None ∧ σ2 -{ m }-> (λ _, Pσ true)) →
   σ -{ m }-> Pσ.
-Proof. move => ?. apply prop_least_fixpoint_unfold; [ apply _|]. right => ???. naive_solver. Qed.
+Proof. move => ?. apply steps_impl_unfold. right => ???. naive_solver. Qed.
 
 Lemma steps_impl_step_trans' {EV} (m : mod_trans EV) σ (Pσ Pσ' : _ → _ → _ → Prop):
   σ -{ m }-> Pσ' →

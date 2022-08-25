@@ -1,5 +1,5 @@
 From dimsum.core Require Export proof_techniques.
-From dimsum.core Require Import itree.
+From dimsum.core Require Import spec_mod.
 From dimsum.examples Require Import rec asm rec_to_asm print.
 From dimsum.examples.compiler Require Import compiler.
 
@@ -23,39 +23,39 @@ Definition locle_fns : gset string :=
 Definition locle_f2i : gmap string Z :=
   <["locle" := locle_addr]> $ ∅.
 
-Definition locle_itree_strong : itree (moduleE rec_event (gmap prov Z)) unit :=
-  ITree.forever (
-      '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));;;
-      TAssume (f = "locle");;;;
-      l1 ← TAll loc;;; l2 ← TAll loc;;;
-      TAssume (vs = [ValLoc l1; ValLoc l2]);;;;
-      ps ← TGet;;;
-      z1 ← TExist Z;;;
-      TAssert (z1 = default z1 (ps !! l1.1));;;;
-      TPut (<[l1.1 := z1]> ps);;;;
-      ps ← TGet;;;
-      z2 ← TExist Z;;;
-      TAssert (z2 = default z2 (ps !! l2.1));;;;
-      TPut (<[l2.1 := z2]> ps);;;;
+Definition locle_spec_strong : spec rec_event (gmap prov Z) void :=
+  Spec.forever (
+      '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+      TAssume (f = "locle");;
+      l1 ← TAll loc; l2 ← TAll loc;
+      TAssume (vs = [ValLoc l1; ValLoc l2]);;
+      ps ← TGet;
+      z1 ← TExist Z;
+      TAssert (z1 = default z1 (ps !! l1.1));;
+      TPut (<[l1.1 := z1]> ps);;
+      ps ← TGet;
+      z2 ← TExist Z;
+      TAssert (z2 = default z2 (ps !! l2.1));;
+      TPut (<[l2.1 := z2]> ps);;
       TVis (Outgoing, ERReturn (ValBool (bool_decide (z1 + l1.2 ≤ z2 + l2.2))) h)
     ).
 
 Local Ltac go :=
-  clear_itree.
+  clear_spec.
 Local Ltac go_s :=
   tstep_s; go.
 Local Ltac go_i :=
   tstep_i; go.
 
-Lemma locle_asm_refines_itree_strong :
+Lemma locle_asm_refines_spec_strong :
   trefines (asm_mod locle_asm)
            (rec_to_asm (dom locle_asm) locle_fns locle_f2i ∅
-              (itree_mod locle_itree_strong ∅)).
+              (spec_mod locle_spec_strong ∅)).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember. { simpl. exact (λ _ σa '(σf, (t, ps), (pp, σr2a, P)),
     ∃ rP, P = uPred_shrink rP ∧
-    t ≈ locle_itree_strong ∧
+    t ≡ locle_spec_strong ∧
     σa.(asm_cur_instr) = AWaiting ∧
     σa.(asm_instrs) = locle_asm ∧
     σr2a.(r2a_calls) = [] ∧
@@ -67,7 +67,7 @@ Proof.
   tstep_i => ????? Hi. tstep_s. split!.
   tstep_i => ??. simplify_map_eq'.
   tstep_s => *. case_match => /= *. 2: congruence.
-  tstep_s. rewrite -/locle_itree_strong. go. go_s. eexists (_, _, _). go.
+  tstep_s. rewrite -/locle_spec_strong. go. go_s. eexists (_, _, _). go.
   go_s. split!. go.
   go_s => ?. go.
   revert select (_ ⊢ _) => HP.
@@ -118,27 +118,27 @@ Proof.
     iIntros!. by iApply (big_sepM_insert_2 with "[] [$]").
 Qed.
 
-Definition locle_itree : itree (moduleE rec_event unit) unit :=
-  ITree.forever (
-      '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));;;
-      TAssume (f = "locle");;;;
-      l1 ← TAll loc;;; l2 ← TAll loc;;;
-      TAssume (vs = [ValLoc l1; ValLoc l2]);;;;
-      b ← TExist _;;;
-      TAssert (l1.1 = l2.1 → b = bool_decide (l1.2 ≤ l2.2));;;;
+Definition locle_spec : spec rec_event unit void :=
+  Spec.forever (
+      '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+      TAssume (f = "locle");;
+      l1 ← TAll loc; l2 ← TAll loc;
+      TAssume (vs = [ValLoc l1; ValLoc l2]);;
+      b ← TExist _;
+      TAssert (l1.1 = l2.1 → b = bool_decide (l1.2 ≤ l2.2));;
       TVis (Outgoing, ERReturn (ValBool b) h)).
 
-Lemma locle_itree_strong_refines_itree :
-  trefines (itree_mod locle_itree_strong ∅)
-           (itree_mod locle_itree tt).
+Lemma locle_spec_strong_refines_spec :
+  trefines (spec_mod locle_spec_strong ∅)
+           (spec_mod locle_spec tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember. { simpl. exact (λ _ '(t1, ps) '(t2, _),
-    eqit eq true false t1 locle_itree_strong ∧
-    t2 ≈ locle_itree). }
+    t1 ≡ locle_spec_strong ∧
+    t2 ≡ locle_spec). }
   { split!. } { done. }
   move => n _ Hloop [??] [??] ?. destruct!/=.
-  go_i. go_s. fold locle_itree_strong in *. fold locle_itree in *.
+  go_i. go_s. fold locle_spec_strong in *. fold locle_spec in *.
   go_i => -[[??]?]. go.
   go_i.
   go_s. eexists (_, _, _). go.
@@ -168,13 +168,13 @@ Proof.
   - move => Heq. rewrite Heq in Hz2. simplify_map_eq. repeat case_bool_decide; lia.
 Qed.
 
-Lemma locle_asm_refines_itree :
+Lemma locle_asm_refines_spec :
   trefines (asm_mod locle_asm)
-           (rec_to_asm (dom locle_asm) locle_fns locle_f2i ∅ (itree_mod locle_itree tt)).
+           (rec_to_asm (dom locle_asm) locle_fns locle_f2i ∅ (spec_mod locle_spec tt)).
 Proof.
-  etrans; [apply locle_asm_refines_itree_strong|].
+  etrans; [apply locle_asm_refines_spec_strong|].
   apply rec_to_asm_trefines; [apply _|].
-  apply: locle_itree_strong_refines_itree.
+  apply: locle_spec_strong_refines_spec.
 Qed.
 
 (** * Rec code *)
@@ -282,10 +282,10 @@ Lemma memcpy_spec n0 d s d' s' n o K e h m σ1 σ2 b cs hvs `{!RecExprFill e K
   ((MLFLeft, cs, Rec (expr_fill K (Val (ValNum 0)))
                    (heap_update_big h (kmap (λ i, d' +ₗ i) (map_seqZ 0 hvs)))
                    (memmove_prog ∪ memcpy_prog), σ1)
-    ⪯{rec_link_trans {["memmove"; "memcpy"]} {["locle"]} rec_trans (itree_trans rec_event ()), m, n0, true}
+    ⪯{rec_link_trans {["memmove"; "memcpy"]} {["locle"]} rec_trans (spec_trans rec_event ()), m, n0, true}
   σ2) →
   (MLFLeft, cs, Rec e h (memmove_prog ∪ memcpy_prog), σ1)
-    ⪯{rec_link_trans {["memmove"; "memcpy"]} {["locle"]} rec_trans (itree_trans rec_event ()), m, n0, b}
+    ⪯{rec_link_trans {["memmove"; "memcpy"]} {["locle"]} rec_trans (spec_trans rec_event ()), m, n0, b}
   σ2.
 Proof.
   elim/o_lt_ind: n0 b d d' s s' n h hvs e K RecExprFill0 => n1 IH b d d' s s' n h hvs e K [->] ? Ho ?? Hle Hhvs Halive Hcont. subst.
@@ -367,28 +367,28 @@ Proof.
     move => ?. apply: tsim_mono; [done|]. etrans; [|done]. apply o_le_S.
 Qed.
 
-Definition memmove_itree : itree (moduleE rec_event unit) unit :=
-  ITree.forever (
-    '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));;;
-    TAssume (f = "memmove");;;;
-    '(d, s, n) ← TAll _;;;
-    TAssume (vs = [ValLoc d; ValLoc s; ValNum n]);;;;
-    hvs ← TAll (list val);;;
-    TAssume (n = Z.of_nat (length hvs));;;;
-    TAssume (∀ i v, hvs !! i = Some v → h_heap h !! (s +ₗ Z.of_nat i) = Some v);;;;
-    TAssume (∀ i v, hvs !! i = Some v → heap_alive h (d +ₗ Z.of_nat i));;;;
-    TVis (Outgoing, ERReturn 0 (heap_update_big h (kmap (λ i, d +ₗ i) (map_seqZ 0 hvs))) );;;;
-    Ret ()).
+Definition memmove_spec : spec rec_event unit void :=
+  Spec.forever (
+    '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+    TAssume (f = "memmove");;
+    '(d, s, n) ← TAll _;
+    TAssume (vs = [ValLoc d; ValLoc s; ValNum n]);;
+    hvs ← TAll (list val);
+    TAssume (n = Z.of_nat (length hvs));;
+    TAssume (∀ i v, hvs !! i = Some v → h_heap h !! (s +ₗ Z.of_nat i) = Some v);;
+    TAssume (∀ i v, hvs !! i = Some v → heap_alive h (d +ₗ Z.of_nat i));;
+    TVis (Outgoing, ERReturn 0 (heap_update_big h (kmap (λ i, d +ₗ i) (map_seqZ 0 hvs))) );;
+    TRet ()).
 
-Lemma memmove_refines_itree :
+Lemma memmove_refines_spec :
   trefines (rec_link {["memmove"; "memcpy"]} {["locle"]} (rec_mod (memmove_prog ∪ memcpy_prog))
-              (itree_mod locle_itree tt))
-           (itree_mod memmove_itree tt).
+              (spec_mod locle_spec tt))
+           (spec_mod memmove_spec tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember. { simpl. exact (λ _ '(σi, cs, Rec e h fns, (ti, _)) '(t, _),
-    eqit eq true false ti locle_itree ∧
-    t ≈ memmove_itree ∧
+    ti ≡ locle_spec ∧
+    t ≡ memmove_spec ∧
     cs = [] ∧
     σi = MLFNone ∧
     e = Waiting false ∧
@@ -397,7 +397,7 @@ Proof.
   move => n ? IH [[[??] [???]] [??]] [??] ?. destruct!.
   tstep_i => *. case_match; destruct!/=.
   go_s.
-  go_s. eexists (_, _, _). rewrite -/memmove_itree. go.
+  go_s. eexists (_, _, _). rewrite -/memmove_spec. go.
   go_s. split!. go.
   go_s => ?. go.
   go_s => -[[??]?]. go.
@@ -411,7 +411,7 @@ Proof.
   tstep_i. split!. move => ??. simplify_map_eq. split!.
   tstep_i => *. destruct!/=. split!.
   tstep_i. split!. move => *. destruct!. repeat case_bool_decide => //.
-  tstep_i. rewrite -/locle_itree. go.
+  tstep_i. rewrite -/locle_spec. go.
   go_i => -[[??]?]. go.
   go_i => *. simplify_eq. go.
   go_i. split!. go.
@@ -446,30 +446,30 @@ Proof.
     eapply IH; [done|]. split!.
 Qed.
 
-Definition main_itree : itree (moduleE rec_event unit) unit :=
-  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));;;
-  TAssume (f = "main");;;;
-  TAssume (vs = []);;;;
-  h' ← TExist _;;;
-  TVis (Outgoing, ERCall "print" [ValNum 1] h');;;;
-  e ← TExist _;;;
-  TVis (Incoming, e);;;;
-  TAssume (if e is ERReturn _ h'' then h' = h'' else false);;;;
-  h' ← TExist _;;;
-  TVis (Outgoing, ERCall "print" [ValNum 2] h');;;;
-  e ← TExist _;;;
-  TVis (Incoming, e);;;;
-  TAssume (if e is ERReturn _ h'' then h' = h'' else false);;;;
+Definition main_spec : spec rec_event unit void :=
+  '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ERCall f vs h));
+  TAssume (f = "main");;
+  TAssume (vs = []);;
+  h' ← TExist _;
+  TVis (Outgoing, ERCall "print" [ValNum 1] h');;
+  e ← TExist _;
+  TVis (Incoming, e);;
+  TAssume (if e is ERReturn _ h'' then h' = h'' else false);;
+  h' ← TExist _;
+  TVis (Outgoing, ERCall "print" [ValNum 2] h');;
+  e ← TExist _;
+  TVis (Incoming, e);;
+  TAssume (if e is ERReturn _ h'' then h' = h'' else false);;
   TUb.
 
-Lemma main_refines_itree :
+Lemma main_refines_spec :
   trefines (rec_link {["main"]} {["memmove"; "memcpy"; "locle"]}
-              (rec_mod main_prog) (itree_mod memmove_itree tt))
-           (itree_mod main_itree tt).
+              (rec_mod main_prog) (spec_mod memmove_spec tt))
+           (spec_mod main_spec tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   tstep_i => *. case_match; destruct!/=.
-  go_s. eexists (_, _, _). rewrite -/main_itree. go.
+  go_s. eexists (_, _, _). rewrite -/main_spec. go.
   go_s. split!. go.
   go_s => ?. go. simplify_eq. rewrite bool_decide_true; [|done].
   go_s => ?. go.
@@ -494,7 +494,7 @@ Proof.
   rewrite bool_decide_true; [|compute_done].
   rewrite offset_loc_0 /=.
 
-  tstep_i. rewrite -/memmove_itree. go.
+  tstep_i. rewrite -/memmove_spec. go.
   go_i => -[[??]?]. go.
   go_i => ?. go. simplify_eq/=.
   go_i. split!. go.
@@ -582,32 +582,32 @@ Qed.
 
 (** * Top-level specification *)
 
-Definition top_level_itree : itree (moduleE asm_event unit) unit :=
-  '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
-  TAssume (rs !!! "PC" = main_addr);;;;
-  TAssume (rs !!! "R30" ∉ main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm);;;;
-  TAssume (∃ ssz, r2a_mem_stack_mem (rs !!! "SP") ssz ⊆ mem);;;;
-  args ← TExist _;;;
-  mem ← TExist _;;;
-  TAssert (print_args 1 args);;;;
-  TVis (Outgoing, EASyscallCall args mem);;;;
-  '(ret, mem') ← TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));;;
-  TAssume (mem' = mem);;;;
-  args ← TExist _;;;
-  mem ← TExist _;;;
-  TAssert (print_args 2 args);;;;
-  TVis (Outgoing, EASyscallCall args mem);;;;
-  '(ret, mem') ← TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));;;
-  TAssume (mem' = mem);;;;
+Definition top_level_spec : spec asm_event unit void :=
+  '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));
+  TAssume (rs !!! "PC" = main_addr);;
+  TAssume (rs !!! "R30" ∉ main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm);;
+  TAssume (∃ ssz, r2a_mem_stack_mem (rs !!! "SP") ssz ⊆ mem);;
+  args ← TExist _;
+  mem ← TExist _;
+  TAssert (print_args 1 args);;
+  TVis (Outgoing, EASyscallCall args mem);;
+  '(ret, mem') ← TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));
+  TAssume (mem' = mem);;
+  args ← TExist _;
+  mem ← TExist _;
+  TAssert (print_args 2 args);;
+  TVis (Outgoing, EASyscallCall args mem);;
+  '(ret, mem') ← TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));
+  TAssume (mem' = mem);;
   TUb.
 
-Lemma top_level_refines_itree :
+Lemma top_level_refines_spec :
   trefines (asm_link (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm)
               (dom print_asm)
               (rec_to_asm (main_asm_dom ∪ memmove_asm_dom ∪ memcpy_asm_dom ∪ dom locle_asm)
                  {["main"; "memmove"; "memcpy"; "locle"]}
-                 main_f2i ∅ (itree_mod main_itree tt)) (itree_mod print_itree tt))
-           (itree_mod top_level_itree tt).
+                 main_f2i ∅ (spec_mod main_spec tt)) (spec_mod print_spec tt))
+           (spec_mod top_level_spec tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   tstep_i => *. case_match; destruct!/=.
@@ -637,7 +637,7 @@ Proof.
   rename select (main_f2i !! _ = Some _) into Hf2i. unfold main_f2i in Hf2i. simplify_map_eq'.
   rewrite bool_decide_false. 2: unfold main_asm_dom, memmove_asm_dom, memcpy_asm_dom; unlock; by vm_compute.
   rewrite bool_decide_true. 2: compute_done.
-  tstep_i. rewrite -/print_itree. go.
+  tstep_i. rewrite -/print_spec. go.
   go_i => -[??]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
@@ -686,7 +686,7 @@ Proof.
   rename select (main_f2i !! _ = Some _) into Hf2i2. unfold main_f2i in Hf2i2. simplify_map_eq'.
   rewrite bool_decide_false. 2: unfold main_asm_dom, memmove_asm_dom, memcpy_asm_dom; unlock; by vm_compute.
   rewrite bool_decide_true. 2: compute_done.
-  tstep_i. rewrite -/print_itree. go.
+  tstep_i. rewrite -/print_spec. go.
   go_i => -[??]. go.
   go_i => ?. go. simplify_eq.
   go_i. split!. go.
@@ -732,7 +732,7 @@ Qed.
 
 Lemma complete_refinement :
   trefines (asm_mod (main_asm ∪ memmove_asm ∪ memcpy_asm ∪ locle_asm ∪ print_asm))
-           (itree_mod top_level_itree tt).
+           (spec_mod top_level_spec tt).
 Proof.
   etrans. {
     have -> : (main_asm ∪ memmove_asm ∪ memcpy_asm ∪ locle_asm ∪ print_asm) =
@@ -757,9 +757,9 @@ Proof.
     apply: asm_link_trefines; [apply memmove_asm_refines_rec|apply memcpy_asm_refines_rec].
   }
   etrans. {
-    apply: asm_link_trefines; [|apply print_asm_refines_itree].
+    apply: asm_link_trefines; [|apply print_asm_refines_spec].
     apply: asm_link_trefines; [done|].
-    apply: asm_link_trefines; [done|apply locle_asm_refines_itree].
+    apply: asm_link_trefines; [done|apply locle_asm_refines_spec].
   }
   etrans. {
     etrans. {
@@ -799,17 +799,17 @@ Proof.
       apply: asm_link_trefines; [|done].
       apply rec_to_asm_trefines; [apply _|].
       apply rec_link_trefines; [apply _|apply _|done|].
-      apply memmove_refines_itree.
+      apply memmove_refines_spec.
     }
     done.
   }
   etrans. {
     apply: asm_link_trefines; [|done].
     apply rec_to_asm_trefines; [apply _|].
-    apply main_refines_itree.
+    apply main_refines_spec.
   }
   etrans. {
-    etrans; [|apply top_level_refines_itree].
+    etrans; [|apply top_level_refines_spec].
     rewrite /main_asm_dom/memmove_asm_dom/memcpy_asm_dom/locle_fns. unlock.
     rewrite -4!dom_union_L 5!assoc_L idemp_L.
     have -> : (main_f2i ∪ locle_f2i) = main_f2i by compute_done.

@@ -26,7 +26,8 @@ dimsum/state_transform.v
 dimsum/seq_product.v
 dimsum/link.v
 dimsum/prepost.v
-dimsum/itree.v
+dimsum/spec.v
+dimsum/spec_mod.v
 dimsum_examples/asm.v
 dimsum_examples/rec.v
 dimsum_examples/rec_heap_bij_pure.v

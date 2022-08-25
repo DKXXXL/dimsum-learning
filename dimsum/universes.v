@@ -16,5 +16,4 @@ Notation TypeOrdinal := Type@{Ordinal} (only parsing).
 Notation TypeOfe := Type@{ofe.u0} (only parsing).
 
 Constraint State < Ordinal.
-(* TODO: add this constraint here once itrees are compatible with it *)
-(* Constraint Ordinal <= ofe.u0. *)
+Constraint Ordinal <= ofe.u0.

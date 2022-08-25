@@ -71,6 +71,18 @@ Lemma sim_tgt_expr_bind e Π Φ :
   TGT e [{ Π }] {{ Φ }}.
 Proof. iIntros "Hsim HΦ". iApply "Hsim". iIntros (??) "Hsim". by iApply "Hsim". Qed.
 
+Lemma sim_tgt_expr_bind_ctx e Π Φ f :
+  (∀ σ, mexpr_rel Λ σ (f e) → mexpr_rel Λ σ e) →
+  TGT e [{ Π }] {{ λ e' Π', TGT f e' [{ Π' }] {{ Φ }} }} -∗
+  TGT f e [{ Π }] {{ Φ }}.
+Proof.
+  iIntros (?) "Hsim HΦ".
+  iIntros (??). iApply ("Hsim" with "[-] [%]"); [|naive_solver].
+  iIntros (??) "HTGT".
+(* TODO: Maybe this works if one put some ghost state into the state
+interpretation that tracks the evaluation contexts? *)
+Abort.
+
 Lemma sim_tgt_expr_wand e Π Φ Φ' :
   TGT e [{ Π }] {{ Φ' }} -∗
   (∀ e' Π', Φ' e' Π' -∗ Φ e' Π') -∗
@@ -228,3 +240,25 @@ End sim_src.
 (*     ⤇ e1 -∗ ⤇ e2 ==∗ ⤇ e' ∗ ⤇ e'. *)
 (*   Proof. iApply ghost_var_update_halves. Qed. *)
 (* End sim_expr. *)
+
+
+(*
+
+TGT e init [{ λ κ, if κ in locle then locle ≈>ₜ ... else src ≈>ₛ λ κ', κ = κ' ... }]
+----------------------------------------
+memmove ≈>ₜ λ κ, if κ in locle then locle ≈>ₜ ... else src ≈>ₛ λ κ', κ = κ' ...
+-----------------------
+memmove + locle ≈>ₜ λ κ, src ≈>ₛ λ κ', κ = κ' ...
+-----------------------
+memmove + locle <= src
+
+
+TGT Call locle [{ Π }] {{ λ e' Π', ∃ b, e' = ValBool b ∗ Π' = Π }}
+
+
+TGT if b then ... else [{ Π }] {{ Φ }}
+---------------------------------------------------
+TGT Call locle [{ Π }] {{ λ e Π', TGT if e then ... else [{ Π' }] {{ Φ }} }}
+---------------------------------------------------
+TGT if Call locle then... else ... [{ Π }] {{ Φ }}
+*)

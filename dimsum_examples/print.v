@@ -1,5 +1,5 @@
 From dimsum.core Require Export proof_techniques.
-From dimsum.core Require Import itree.
+From dimsum.core Require Import spec_mod.
 From dimsum.examples Require Import asm.
 
 Local Open Scope Z_scope.
@@ -21,38 +21,38 @@ Definition print_asm : gmap Z asm_instr :=
       Aret
     ].
 
-Definition print_itree : itree (moduleE asm_event unit) unit :=
-  ITree.forever (
-    '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
-    TAssume (rs !!! "PC" = print_addr);;;;
-    TAssume (print_asm !! (rs !!! "R30") = None);;;;
-    args ← TExist _;;;
-    TAssert (print_args (rs !!! "R0") args);;;;
-    TVis (Outgoing, EASyscallCall args mem);;;;
-    '(ret, mem) ← TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));;;
+Definition print_spec : spec asm_event unit void :=
+  Spec.forever (
+    '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));
+    TAssume (rs !!! "PC" = print_addr);;
+    TAssume (print_asm !! (rs !!! "R30") = None);;
+    args ← TExist _;
+    TAssert (print_args (rs !!! "R0") args);;
+    TVis (Outgoing, EASyscallCall args mem);;
+    '(ret, mem) ← TReceive (λ '(ret, mem), (Incoming, EASyscallRet ret mem));
     TVis (Outgoing, EAJump (<["PC" := rs !!! "R30"]> $
                             <["R0" := ret]> $
                             <["R8" := __NR_PRINT]> $
                             rs) mem)).
 
 Local Ltac go :=
-  clear_itree.
+  clear_spec.
 Local Ltac go_s :=
   tstep_s; go.
 Local Ltac go_i :=
   tstep_i; go.
 
-Lemma print_asm_refines_itree :
-  trefines (asm_mod print_asm) (itree_mod print_itree tt).
+Lemma print_asm_refines_spec :
+  trefines (asm_mod print_asm) (spec_mod print_spec tt).
 Proof.
   apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember. { simpl. exact (λ _ σa '(t, _),
-    t ≈ print_itree ∧
+    t ≡ print_spec ∧
     σa.(asm_cur_instr) = AWaiting ∧
     σa.(asm_instrs) = print_asm). }
   { split!. } { done. }
   move => n _ Hloop [????] [??] ?. destruct!/=.
-  tstep_i => ????? Hi. tstep_s. rewrite -/print_itree. go.
+  tstep_i => ????? Hi. tstep_s. rewrite -/print_spec. go.
   go_s. eexists (_, _). go.
   go_s. split!. go.
   go_s => ?. go.

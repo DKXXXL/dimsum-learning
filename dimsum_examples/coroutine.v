@@ -1,5 +1,5 @@
 From dimsum.core Require Export proof_techniques.
-From dimsum.core Require Import seq_product link itree.
+From dimsum.core Require Import seq_product link spec_mod.
 From dimsum.examples Require Import rec asm rec_to_asm.
 
 Local Open Scope Z_scope.
@@ -223,43 +223,43 @@ Definition yield_asm: gmap Z asm_instr := deep_to_asm_instrs yield_addr ([
 Definition yield_asm_dom : gset Z := locked dom yield_asm.
 
 (** ** Specification of [yield]  *)
-Definition yield_itree : itree (moduleE asm_event (gmap string Z)) unit :=
-  ITree.forever (
-  '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));;;
-  TAssume (rs !!! "PC" = yield_addr);;;;
-  TAssume (rs !!! "R30" ∉ yield_asm_dom);;;;
-  rsold ← TGet;;;
-  TAssume (coro_regs_mem rsold ⊆ mem);;;;
+Definition yield_spec : spec asm_event (gmap string Z) void :=
+  Spec.forever (
+  '(rs, mem) ← TReceive (λ '(rs, mem), (Incoming, EAJump rs mem));
+  TAssume (rs !!! "PC" = yield_addr);;
+  TAssume (rs !!! "R30" ∉ yield_asm_dom);;
+  rsold ← TGet;
+  TAssume (coro_regs_mem rsold ⊆ mem);;
   let rs' := (<["PC" := rs !!! "R30"]> rs) in
-  TPut rs';;;;
-  r16 ← TExist Z;;;
-  r17 ← TExist Z;;;
+  TPut rs';;
+  r16 ← TExist Z;
+  r17 ← TExist Z;
   TVis (Outgoing, EAJump
                     (<["R16" := r16]> $ <["R17" := r17]> $ (coro_regs_regs rsold ∪ rs))
                     (coro_regs_mem rs' ∪ mem))).
 
 (** ** Verification of [yield]  *)
 Local Ltac go :=
-  clear_itree.
+  clear_spec.
 Local Ltac go_s :=
   tstep_s; go.
 Local Ltac go_i :=
   tstep_i; go.
 
-Lemma yield_asm_refines_itree regs :
+Lemma yield_asm_refines_spec regs :
   regs !!! "PC" ∉ yield_asm_dom →
-  trefines (asm_mod yield_asm) (itree_mod yield_itree regs).
+  trefines (asm_mod yield_asm) (spec_mod yield_spec regs).
 Proof.
   move => ?. apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember. { simpl. exact (λ _ σa '(t, rs),
-    t ≈ yield_itree ∧
+    t ≡ yield_spec ∧
     σa.(asm_cur_instr) = AWaiting ∧
     σa.(asm_instrs) = yield_asm ∧
     rs !!! "PC" ∉ yield_asm_dom). }
   { split!. } { done. }
   move => n _ Hloop [????] [? rsold] ?. destruct!/=.
   tstep_i => ?? rs mem ? Hi. simpl.
-  tstep_s. rewrite -/yield_itree. go.
+  tstep_s. rewrite -/yield_spec. go.
   go_s. eexists (_, _). go.
   go_s. split!. go.
   go_s => ?. go.
@@ -275,7 +275,7 @@ Proof.
   rewrite (deep_to_asm_instrs_lookup_nat 1) /=; [|lia].
   tstep_i.
   tstep_i. simplify_map_eq'.
-  rename select (itree _ _) into t'.
+  rename select (spec _ _ _) into t'.
   unshelve eapply tsim_remember. { simpl. exact (λ _ σa '(t, rs'),
     ∃ (n : nat) r16,
     n ≤ length saved_registers ∧
@@ -571,7 +571,7 @@ Proof.
   have Hf1in : ∀ f i1 i2, f2i1 !! f  = Some i1 → f2i !! f = Some i2 → i1 = i2.
   { move => ???. rewrite /f2i lookup_union_Some_raw. naive_solver. }
   etrans. {
-    apply: asm_link_trefines; [|done]. apply (yield_asm_refines_itree regs_init).
+    apply: asm_link_trefines; [|done]. apply (yield_asm_refines_spec regs_init).
     fast_set_solver.
   }
   apply: tsim_implies_trefines => n0 /=.
@@ -600,7 +600,7 @@ Proof.
       '(σsm', (σlc, σc, σ1', σ2'), (ppc, (R2A csc lrc), xc)),
        ∃ cret cregs rx1 rx2 rxc,
        x1 = uPred_shrink rx1 ∧ x2 = uPred_shrink rx2 ∧ xc = uPred_shrink rxc ∧
-       eqit eq true false yt yield_itree ∧
+       yt ≡ yield_spec ∧
        σ1' = σ1 ∧
        σ2' = σ2 ∧
        σpy1 = MLFRight ∧
@@ -669,7 +669,7 @@ Proof.
       rewrite bool_decide_false. 2: fast_set_solver.
       move => /= *. destruct!; simplify_map_eq'.
       rewrite bool_decide_true; [|done].
-      tstep_i. rewrite -/yield_itree. go.
+      tstep_i. rewrite -/yield_spec. go.
       go_i => -[??]. go.
       go_i => ?. simplify_eq. go.
       go_i. split; [done|]. go.
@@ -838,7 +838,7 @@ Proof.
       rewrite bool_decide_false. 2: fast_set_solver.
       move => /= *. destruct!; simplify_map_eq'.
       rewrite bool_decide_true. 2: done.
-      tstep_i. rewrite -/yield_itree. go.
+      tstep_i. rewrite -/yield_spec. go.
       go_i => -[??]. go.
       go_i => ?. simplify_eq. go.
       go_i. split; [done|]. go.
