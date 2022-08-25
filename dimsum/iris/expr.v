@@ -8,23 +8,21 @@ Set Default Proof Using "Type".
 (** * mod_lang *)
 Structure mod_lang EV Σ := ModLang {
   mexpr : Type;
+  mectx : Type;
+  mfill : mectx → mexpr → mexpr;
+  mcomp_ectx : mectx → mectx → mectx;
   mtrans :> mod_trans EV;
   mexpr_rel : mtrans.(m_state) → mexpr → Prop;
   mstate_interp : mtrans.(m_state) → iProp Σ;
+  mfill_comp K1 K2 e : mfill K1 (mfill K2 e) = mfill (mcomp_ectx K1 K2) e
 }.
 Global Arguments mexpr {_ _} _.
+Global Arguments mectx {_ _} _.
+Global Arguments mfill {_ _} _.
+Global Arguments mcomp_ectx {_ _} _.
 Global Arguments mtrans {_ _} _.
 Global Arguments mexpr_rel {_ _} _ _ _.
 Global Arguments mstate_interp {_ _} _ _.
-
-Definition mexprO {Σ EV} {Λ : mod_lang Σ EV} := leibnizO (mexpr Λ).
-
-Canonical Structure nb_mod_lang EV Σ : mod_lang EV Σ := {|
-  mexpr := unit;
-  mtrans := nb_trans EV;
-  mexpr_rel _ _ := True;
-  mstate_interp _ := True%I;
-|}.
 
 (** * [sim_tgt_expr] *)
 Definition sim_tgt_expr_raw {EV Σ Λ} `{!dimsumGS Σ}
@@ -38,7 +36,7 @@ Notation "'TGT' e [{ Π }]" := (sim_tgt_expr_raw e Π%I) (at level 70, Π at lev
 Definition sim_tgt_expr {EV Σ Λ} `{!dimsumGS Σ}
   (e : mexpr Λ) (Π : option EV → ((m_state Λ → iProp Σ) → iProp Σ) → iProp Σ)
   (Φ : mexpr Λ → (option EV → ((m_state Λ → iProp Σ) → iProp Σ) → iProp Σ) → iProp Σ): iProp Σ :=
-  (∀ e' Π', Φ e' Π' -∗ TGT e' [{ Π' }]) -∗ TGT e [{ Π }].
+  ∀ K, (∀ e' Π', Φ e' Π' -∗ TGT mfill Λ K e' [{ Π' }]) -∗ TGT mfill Λ K e [{ Π }].
 
 Notation "'TGT' e [{ Π }] {{ Φ } }" := (sim_tgt_expr e Π%I Φ%I)
   (at level 70, Π, Φ at level 200, only parsing) : bi_scope.
@@ -70,56 +68,47 @@ Lemma sim_tgt_expr_raw_elim e Π σ :
   σ ≈{Λ}≈>ₜ Π.
 Proof. iIntros (?) "Hσ He". iApply sim_tgt_ctx. iIntros "#?". by iApply "He". Qed.
 
-Lemma sim_tgt_expr_bind e Π Φ :
-  TGT e [{ Π }] {{ e', Π', TGT e' [{ Π' }] {{ Φ }} }} -∗
-  TGT e [{ Π }] {{ Φ }}.
-Proof. iIntros "Hsim HΦ". iApply "Hsim". iIntros (??) "Hsim". by iApply "Hsim". Qed.
-
-Lemma sim_tgt_expr_bind_ctx e Π Φ f :
-  (∀ σ, mexpr_rel Λ σ (f e) → mexpr_rel Λ σ e) →
-  TGT e [{ Π }] {{ e', Π', TGT f e' [{ Π' }] {{ Φ }} }} -∗
-  TGT f e [{ Π }] {{ Φ }}.
+Lemma sim_tgt_expr_bind e Π Φ K :
+  TGT e [{ Π }] {{ e', Π', TGT mfill Λ K e' [{ Π' }] {{ Φ }} }} -∗
+  TGT mfill Λ K e [{ Π }] {{ Φ }}.
 Proof.
-  iIntros (?) "Hsim HΦ".
-  iIntros (??). iApply ("Hsim" with "[-] [%]"); [|naive_solver].
-  iIntros (??) "HTGT".
-(* TODO: Maybe this works if one put some ghost state into the state
-interpretation that tracks the evaluation contexts? *)
-Abort.
+  iIntros "Hsim" (?) "HΦ". rewrite mfill_comp. iApply "Hsim".
+  iIntros (??) "Htgt". rewrite -mfill_comp. by iApply "Htgt".
+Qed.
 
 Lemma sim_tgt_expr_wand e Π Φ Φ' :
   TGT e [{ Π }] {{ Φ' }} -∗
   (∀ e' Π', Φ' e' Π' -∗ Φ e' Π') -∗
   TGT e [{ Π }] {{ Φ }}.
-Proof. iIntros "Hsim Hwand HΦ". iApply "Hsim". iIntros (??) "Hsim". iApply "HΦ". by iApply "Hwand". Qed.
+Proof. iIntros "Hsim Hwand" (?) "HΦ". iApply "Hsim". iIntros (??) "Hsim". iApply "HΦ". by iApply "Hwand". Qed.
 
 Lemma sim_tgt_expr_stop e Π Φ :
   Φ e Π -∗ TGT e [{ Π }] {{ Φ }}.
-Proof. iIntros "HΦ HF". by iApply "HF". Qed.
+Proof. iIntros "HΦ" (?) "HF". by iApply "HF". Qed.
 
 Lemma sim_tgt_expr_step_None e Π Φ :
-  (∀ σ κ Pσ, ⌜mexpr_rel Λ σ e⌝ -∗ ⌜Λ.(m_step) σ κ Pσ⌝ -∗ mstate_interp Λ σ ={∅}=∗ ▷ₒ
-      (∃ σ' e', ⌜κ = None⌝ ∗ ⌜Pσ σ'⌝ ∗ ⌜mexpr_rel Λ σ' e'⌝ ∗ mstate_interp Λ σ' ∗ TGT e' [{ Π }] {{Φ}})) -∗
+  (∀ K σ κ Pσ, ⌜mexpr_rel Λ σ (mfill Λ K e)⌝ -∗ ⌜Λ.(m_step) σ κ Pσ⌝ -∗ mstate_interp Λ σ ={∅}=∗ ▷ₒ
+      (∃ σ' e', ⌜κ = None⌝ ∗ ⌜Pσ σ'⌝ ∗ ⌜mexpr_rel Λ σ' (mfill Λ K e')⌝ ∗ mstate_interp Λ σ' ∗ TGT e' [{ Π }] {{Φ}})) -∗
   TGT e [{ Π }] {{ Φ }}.
 Proof.
-  iIntros "Hs HΦ". iApply sim_tgt_expr_raw_step. iIntros (?????) "?".
+  iIntros "Hs" (?) "HΦ". iApply sim_tgt_expr_raw_step. iIntros (?????) "?".
   iMod ("Hs" with "[//] [//] [$]") as "Hs". do 2 iModIntro. iRight.
   iDestruct "Hs" as (?????) "[? Hsim]". iExists _, _. iSplit; [done|]. iSplit; [done|]. iSplit; [done|].
   iFrame. by iApply "Hsim".
 Qed.
 
 Lemma sim_tgt_expr_step e Φ Π :
-  (∀ σ κ Pσ, ⌜mexpr_rel Λ σ e⌝ -∗ ⌜Λ.(m_step) σ κ Pσ⌝ -∗ mstate_interp Λ σ ={∅}=∗ ▷ₒ
+  (∀ K σ κ Pσ, ⌜mexpr_rel Λ σ (mfill Λ K e)⌝ -∗ ⌜m_step Λ σ κ Pσ⌝ -∗ mstate_interp Λ σ ={∅}=∗ ▷ₒ
      Π κ (λ P, ∃ σ', ⌜Pσ σ'⌝ ∗
        ((∀ Π' e',
-           ⌜mexpr_rel Λ σ' e'⌝ -∗
+           ⌜mexpr_rel Λ σ' (mfill Λ K e')⌝ -∗
            mstate_interp Λ σ' -∗
            TGT e' [{ Π' }] {{ Φ }} -∗
            σ' ≈{Λ}≈>ₜ Π') -∗
           P σ'))) -∗
   TGT e [{ Π }] {{ Φ }}.
 Proof.
-  iIntros "Hsim HΦ" (??) "#? Hσ".
+  iIntros "Hsim" (?). iIntros "HΦ" (??) "#? Hσ".
   iApply sim_tgt_step_end. iIntros (???). iMod ("Hsim" with "[//] [//] [$]") as "Hsim".
   do 2 iModIntro. iExists _. iFrame. iIntros (?) "[% [% Hsim]]".
   iExists _. iSplit; [done|]. iApply "Hsim".
@@ -141,7 +130,7 @@ Notation "'SRC' e [{ Π }]" := (sim_src_expr_raw e Π%I) (at level 70, Π at lev
 Definition sim_src_expr {EV Σ Λ} `{!dimsumGS Σ}
   (e : mexpr Λ) (Π : option EV → m_state Λ → iProp Σ)
   (Φ : mexpr Λ → (option EV → m_state Λ → iProp Σ) → iProp Σ): iProp Σ :=
-  (∀ e' Π', Φ e' Π' -∗ SRC e' [{ Π' }]) -∗ SRC e [{ Π }].
+  ∀ K, (∀ e' Π', Φ e' Π' -∗ SRC mfill Λ K e' [{ Π' }]) -∗ SRC mfill Λ K e [{ Π }].
 
 Notation "'SRC' e [{ Π }] {{ Φ } }" := (sim_src_expr e Π%I Φ%I)
   (at level 70, Π, Φ at level 200, only parsing) : bi_scope.
@@ -175,47 +164,50 @@ Lemma sim_src_expr_raw_elim e Π σ :
   σ ≈{Λ}≈>ₛ Π.
 Proof. iIntros (?) "Hσ He". iApply sim_src_ctx. iIntros "#?". by iApply "He". Qed.
 
-Lemma sim_src_expr_bind e Π Φ :
-  SRC e [{ Π }] {{ e', Π', SRC e' [{ Π' }] {{ Φ }} }} -∗
-  SRC e [{ Π }] {{ Φ }}.
-Proof. iIntros "Hsim HΦ". iApply "Hsim". iIntros (??) "Hsim". by iApply "Hsim". Qed.
+Lemma sim_src_expr_bind e Π Φ K :
+  SRC e [{ Π }] {{ e', Π', SRC mfill Λ K e' [{ Π' }] {{ Φ }} }} -∗
+  SRC mfill Λ K e [{ Π }] {{ Φ }}.
+Proof.
+  iIntros "Hsim" (?) "HΦ". rewrite mfill_comp. iApply "Hsim".
+  iIntros (??) "Htgt". rewrite -mfill_comp. by iApply "Htgt".
+Qed.
 
 Lemma sim_src_expr_wand e Π Φ Φ' :
   SRC e [{ Π }] {{ Φ' }} -∗
   (∀ e' Π', Φ' e' Π' -∗ Φ e' Π') -∗
   SRC e [{ Π }] {{ Φ }}.
-Proof. iIntros "Hsim Hwand HΦ". iApply "Hsim". iIntros (??) "Hsim". iApply "HΦ". by iApply "Hwand". Qed.
+Proof. iIntros "Hsim Hwand" (?) "HΦ". iApply "Hsim". iIntros (??) "Hsim". iApply "HΦ". by iApply "Hwand". Qed.
 
 Lemma sim_src_expr_stop e Π Φ :
   Φ e Π -∗ SRC e [{ Π }] {{ Φ }}.
-Proof. iIntros "HΦ HF". by iApply "HF". Qed.
+Proof. iIntros "HΦ" (?) "HF". by iApply "HF". Qed.
 
 Lemma sim_src_expr_step_None e Π Φ :
-  (∀ σ, ⌜mexpr_rel Λ σ e⌝ -∗ mstate_interp Λ σ ==∗
+  (∀ K σ, ⌜mexpr_rel Λ σ (mfill Λ K e)⌝ -∗ mstate_interp Λ σ ==∗
     ∃ Pσ, ⌜m_step Λ σ None Pσ⌝ ∗
-     ∀ σ', ⌜Pσ σ'⌝ ={∅}=∗ ∃ e', ⌜mexpr_rel Λ σ' e'⌝ ∗
+     ∀ σ', ⌜Pσ σ'⌝ ={∅}=∗ ∃ e', ⌜mexpr_rel Λ σ' (mfill Λ K e')⌝ ∗
        mstate_interp Λ σ' ∗ SRC e' [{ Π }] {{ Φ }}) -∗
   SRC e [{ Π }] {{ Φ }}.
 Proof.
-  iIntros "Hs HΦ". iApply sim_src_expr_raw_step. iIntros (??) "?".
+  iIntros "Hs" (?) "HΦ". iApply sim_src_expr_raw_step. iIntros (??) "?".
   iMod ("Hs" with "[//] [$]") as (??) "Hs". iModIntro. iExists _, _. iSplit; [done|].
   iIntros (??). iMod ("Hs" with "[//]") as (??) "[$ Hs]". iModIntro. iExists _. iSplit; [done|].
   by iApply "Hs".
 Qed.
 
 Lemma sim_src_expr_step e Φ Π :
-  (∀ σ, ⌜mexpr_rel Λ σ e⌝ -∗ mstate_interp Λ σ ==∗
+  (∀ K σ, ⌜mexpr_rel Λ σ (mfill Λ K e)⌝ -∗ mstate_interp Λ σ ==∗
      ∃ κ' Pσ_s, ⌜m_step Λ σ κ' Pσ_s⌝ ∗
        ∀ σ', ⌜Pσ_s σ'⌝ ={∅}=∗
           ((∀ Π' e',
-              ⌜mexpr_rel Λ σ' e'⌝ -∗
+              ⌜mexpr_rel Λ σ' (mfill Λ K e')⌝ -∗
               mstate_interp Λ σ' -∗
               SRC e' [{ Π' }] {{ Φ }} -∗
               σ' ≈{Λ}≈>ₛ Π') -∗
           Π κ' σ')) -∗
   SRC e [{ Π }] {{ Φ }}.
 Proof.
-  iIntros "He HΦ" (??) "#? Hσ". iApply fupd_sim_src.
+  iIntros "He" (?). iIntros "HΦ" (??) "#? Hσ". iApply fupd_sim_src.
   iMod ("He" with "[//] [$]") as (???) "Hsim". iModIntro.
   iApply sim_src_step_end; [done|]. iIntros (??). iMod ("Hsim" with "[//]") as "Hsim".
   iModIntro. iApply "Hsim". iIntros (???) "? Hsim".
