@@ -58,7 +58,8 @@ Section 3.1:
 - Theorem 3.2: `trefines_lrefines` in `dimsum/refines_meta.v`
 
 Section 3.2:
-- Definition of Spec: `itree_mod` in `dimsum/itree.v`
+- Definition of the syntax of Spec: `spec` in `dimsum/spec.v`
+- Definition of the semantics of Spec: `spec_mod` in `dimsum/spec_mod.v`
 
 Section 3.3:
 - Product: `seq_product_mod` in `dimsum/seq_product.v`
