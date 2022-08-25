@@ -94,7 +94,9 @@ Inductive expr : Set :=
 | App (e :expr) (args : list expr)
 (* Returning to the context, insert automatically during execution. *)
 | ReturnExt (e : expr)
+| ReturnInt (e:expr) (* Needed because we want to generate closures of same name as linking*)
 | Waiting 
+
 .
 End expr.
 
@@ -110,11 +112,12 @@ Lemma expr_ind (P : expr → Prop) :
   (∀ (f:string) (args:list string) (e:expr), P e →P( FixE f args e))→
   (∀ (e :expr ) (args : list expr), P e → Forall P args → P (App e args)) →
   (∀ (e : expr), P e → P (ReturnExt  e)) →
+  (∀ (e : expr), P e → P (ReturnInt  e)) →
   (P Waiting ) →
   ∀ (e : expr), P e.
 Proof.
   move => *. generalize dependent P => P. match goal with | e : expr |- _ => revert e end.
-  fix FIX 1. move => [ ^e] => ????????? Happ ??. 
+  fix FIX 1. move => [ ^e] => ????????? Happ ???. 
   10: { apply Happ. auto. apply Forall_true => ?. by apply: FIX. }
   all: auto.
 Qed.
@@ -142,6 +145,7 @@ Fixpoint assigned_vars (e : expr) : list string :=
   | FixE f args e => [f] ++ args ++ assigned_vars e
   | App e args => assigned_vars e ++ mjoin (assigned_vars <$> args)
   | ReturnExt e => assigned_vars e
+  | ReturnInt e => assigned_vars e
   | Waiting  => []
   end.
 
@@ -159,6 +163,7 @@ Fixpoint subst (x : string) (v : val) (e : expr) : expr :=
   | FixE f args e => FixE f args (if bool_decide (x ∈ f::args) then e else subst x v e)
   | App e args => App (subst x v e) (subst x v <$> args)
   | ReturnExt e => ReturnExt (subst x v e)
+  | ReturnInt e => ReturnInt (subst x v e)
   | Waiting  => Waiting 
   end.
 
@@ -183,6 +188,7 @@ Fixpoint subst_map (x : gmap string val) (e : expr) : expr :=
       FixE f args (subst_map newx e)
   | App e args => App (subst_map x e) (subst_map x <$> args)
   | ReturnExt e => ReturnExt (subst_map x e)
+  | ReturnInt e => ReturnInt (subst_map x e)
   | Waiting  => Waiting 
   end.
 
@@ -315,6 +321,7 @@ Inductive expr_ectx :=
 | AppLCtx (el: list expr)
 | AppRCtx (v1: val) (arg1: list val) (arg2: list expr)
 | ReturnExtCtx 
+| ReturnIntCtx 
 .
 
 
@@ -332,6 +339,7 @@ Definition expr_fill_item (Ki : expr_ectx) (e : expr) : expr :=
   | AppLCtx el => App e el
   | AppRCtx v vl el => App (Val v) ((Val<$> vl) ++ e::el)
   | ReturnExtCtx => ReturnExt e
+  | ReturnIntCtx => ReturnInt e
   end.
 
 Global Instance expr_fill_item_inj Ki : Inj (=) (=) (expr_fill_item Ki).
@@ -415,6 +423,7 @@ Fixpoint is_static_expr (allow_loc_closid: bool)  (e : expr) : bool :=
   | FixE f args e => is_static_expr allow_loc_closid e
   | App e args => is_static_expr allow_loc_closid e && forallb (is_static_expr allow_loc_closid) args
   | ReturnExt e => false
+  | ReturnInt e => false
   | Waiting => false
   end.
 
@@ -466,6 +475,12 @@ Proof.
   elim/rev_ind: K e => /=. { naive_solver. }
   move => Ki K IH e. rewrite !expr_fill_app/=.
   destruct Ki => //=; rewrite ?forallb_app/=; naive_solver.
+Qed.
+
+Lemma is_static_expr_val v: is_static_expr true (Val v).
+Proof.
+  destruct v; auto.
+  destruct id; destruct o; auto.
 Qed.
 
 
@@ -952,19 +967,22 @@ Inductive head_step : lam_state → option lam_event → (lam_state → Prop) �
 | RecvCallS f args h' lis h fns: (* Call?(f, args, h') *)
   f∈dom fns →
   head_step (Lam Waiting lis h fns) (Some (Incoming, ELCall f args h'))
-  (λ σ', σ' = Lam (ReturnExt (App (Val (ValFid f)) (Val <$> args))) ((fst f)::lis) h' fns)
+  (λ σ', σ' = Lam (ReturnExt (App (Val (ValFid f)) (Val <$> args))) lis h' fns)
 | CallInternalS f fn args lis h fns: (* App (Val(ValFid f)) (Val <$> args) *)
   fns !! f = Some fn →
   head_step (Lam (App (Val(ValFid f)) (Val <$> args)) lis h fns) None
   (λ σ', length args = length fn.(fd_args) ∧ 
-    σ' = Lam (subst_l fn.(fd_args) args fn.(fd_body)) lis h fns)
+    σ' = Lam (ReturnInt (subst_l fn.(fd_args) args fn.(fd_body))) ((fst f)::lis) h fns)
 | CallExternalS f args lis h fns: (* Call! f args h*)
   fns !! f = None →
   head_step (Lam (App (Val (ValFid f)) (Val <$> args)) lis h fns) (Some (Outgoing, ELCall f args h)) 
   (λ σ', σ' = Lam (Waiting) lis h fns)
-| ReturnS v hd tl h fns: (* Ret!(v, h)*)
-  head_step (Lam (ReturnExt (Val v)) (hd::tl) h fns) (Some (Outgoing, ELReturn v h))
-  (λ σ',  σ' = Lam (Waiting) tl h fns)
+| ReturnInternalS v hd tl h fns: (* returning internal, i.e. popping the stack*)
+  head_step (Lam (ReturnInt (Val v)) (hd::tl) h fns) None
+  (λ σ',  σ' = Lam (Val v) tl h fns)
+| ReturnExternalS v s h fns: (* Ret!(v, h)*)
+  head_step (Lam (ReturnExt (Val v)) s h fns) (Some (Outgoing, ELReturn v h))
+  (λ σ',  σ' = Lam (Waiting) s h fns)
 | RecvReturnS v h' hd tl h fns: (* Ret?(v, h')*) (* should s be hd::tl?*)
   head_step (Lam (Waiting) (hd::tl) h fns) (Some (Incoming, ELReturn v h'))
   (λ σ', σ' = Lam (Val v) (hd::tl) h' fns)
@@ -1321,7 +1339,10 @@ Lemma lam_expr_fill_ReturnExt e K e' `{!LamExprFill e K e'} :
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply lam_expr_fill_proof. Qed.
 Global Hint Resolve lam_expr_fill_ReturnExt : typeclass_instances.
 
-
+Lemma lam_expr_fill_ReturnInt e K e' `{!LamExprFill e K e'} :
+  LamExprFill (ReturnInt e) (K ++ [ReturnIntCtx]) e'.
+Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply lam_expr_fill_proof. Qed.
+Global Hint Resolve lam_expr_fill_ReturnInt : typeclass_instances.
 (** ** instances *)
 
 (* This pattern of using LamExprFill at each rule is quite expensive
@@ -1549,12 +1570,13 @@ Proof.
   eapply steps_spec_step_end. econs. 
   done. econs. destruct H0.  done. intros. naive_solver.
 Qed. 
+Global Hint Resolve lam_step_Fix_s | 10 : typeclass_instances.
 
 
 Lemma lam_step_App_i fns s h e K f vs es `{!LamExprFill e K (App (Val (ValFid f)) es)} `{!AsVals es vs None}:
   TStepI lam_trans (Lam e s h fns) (λ G,
           (∀ fn, fns !! f = Some fn → G true None (λ G', length vs = length fn.(fd_args) ∧
-            G' (Lam (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) s h fns))) ∧
+            G' (Lam (expr_fill K (ReturnInt (subst_l fn.(fd_args) vs fn.(fd_body)))) (f.1::s) h fns))) ∧
           (fns !! f = None → G true (Some (Outgoing, ELCall  f vs h)) (λ G',
             G' (Lam (expr_fill K Waiting) s  h fns)))
     ).
@@ -1573,9 +1595,9 @@ Global Hint Resolve lam_step_App_i : typeclass_instances.
 (* Not sure*)
 (* TODO*)
 Lemma lam_step_App_s fns s h e K v  vs `{!LamExprFill e K (App (Val v) es)} `{!AsVals es vs None}:
-  TStepS lam_trans (Lam e s h fns) (λ G, ∃f fn, ValFid f = v /\ fns !! f = Some fn /\ 
+  TStepS lam_trans (Lam e s h fns) (λ G,( ∃f fn, ValFid f = v /\ fns !! f = Some fn /\ 
   G  None (λ G',  (length vs = length fn.(fd_args) →
-  G' (Lam (expr_fill K (subst_l fn.(fd_args) vs fn.(fd_body))) s h fns))) \/
+  G' (Lam (expr_fill (ReturnIntCtx:: K) ((subst_l fn.(fd_args) vs fn.(fd_body)))) (f.1::s) h fns)))) \/
   ∃ f, G  (Some (Outgoing, ELCall  f vs h)) (λ G', 
   ValFid f = v /\ fns !! f = None/\ G' (Lam (expr_fill K Waiting) s  h fns))).
 Proof.
@@ -1583,7 +1605,7 @@ Proof.
   econs. intros. destruct!. eexists _,_ . split. exact H2.
   intros. simpl in H0. eapply steps_spec_step_end. 
   econs. naive_solver.  apply CallInternalS. exact H. intros. simpl in H1.
-  destruct!. auto.
+  destruct!.  auto.
   eexists _,_. split. exact H. intros. destruct H0 as [?[??]].
   subst. eapply steps_spec_step_end. econs. auto. econs. auto. 
   intros. naive_solver. 
@@ -1595,7 +1617,7 @@ Lemma lam_step_Waiting_i fns s h K e `{!LamExprFill e K Waiting}:
   TStepI lam_trans (Lam e s h fns) (λ G,
     (∀ f vs h', f∈dom fns →
       G true (Some (Incoming, ELCall f vs h')) (λ G',  G'
-          (Lam (expr_fill K (ReturnExt (App (Val (ValFid f)) (Val <$> vs)))) ((fst f)::s) h' fns))) ∧
+          (Lam (expr_fill K (ReturnExt (App (Val (ValFid f)) (Val <$> vs)))) s h' fns))) ∧
        ∀ v h',  (∃ hd tl, hd::tl= s)→G true (Some (Incoming, ELReturn v h')) (λ G', G' (Lam (expr_fill K (Val v)) s h' fns))
    ).
 Proof.
@@ -1612,7 +1634,7 @@ Lemma lam_step_Waiting_s fns s h e K `{!LamExprFill e K Waiting}:
   TStepS lam_trans (Lam e s h fns) (λ G,
     (∃ f vs h', f∈dom fns ∧
       G (Some (Incoming, ELCall f vs h')) (λ G', G'
-          (Lam (expr_fill K (ReturnExt (App (Val(ValFid f)) (Val <$> vs)))) (fst f::s) h' fns))) ∨
+          (Lam (expr_fill K (ReturnExt (App (Val(ValFid f)) (Val <$> vs)))) s h' fns))) ∨
           ∃ v h',  (∃ hd tl, hd::tl= s)/\ G (Some (Incoming, ELReturn v h')) (λ G', G' (Lam (expr_fill K (Val v)) s h' fns))
    ).
 Proof.
@@ -1625,9 +1647,9 @@ Proof.
 Qed.
 Global Hint Resolve lam_step_Waiting_s : typeclass_instances.
 
-Lemma rec_step_ReturnExt_i fns hd tl h e K  (v : val) `{!LamExprFill e K (ReturnExt (Val v))}:
-  TStepI lam_trans (Lam e (hd::tl) h fns) (λ G,
-    (G true (Some (Outgoing, ELReturn v h)) (λ G', G' (Lam (expr_fill K Waiting) tl h fns)))).
+Lemma rec_step_ReturnExt_i fns s h e K  (v : val) `{!LamExprFill e K (ReturnExt (Val v))}:
+  TStepI lam_trans (Lam e s h fns) (λ G,
+    (G true (Some (Outgoing, ELReturn v h)) (λ G', G' (Lam (expr_fill K Waiting) s h fns)))).
 Proof.
   destruct LamExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
@@ -1637,9 +1659,9 @@ Proof.
 Qed.
 Global Hint Resolve rec_step_ReturnExt_i : typeclass_instances.
 
-Lemma lam_step_ReturnExt_s fns  hd tl h e K  (v : val) `{!LamExprFill e K (ReturnExt (Val v))}:
-  TStepS lam_trans (Lam e (hd::tl) h fns) (λ G,
-    (G (Some (Outgoing, ELReturn v h)) (λ G', G' (Lam (expr_fill K Waiting) tl h fns)))).
+Lemma lam_step_ReturnExt_s fns s h e K  (v : val) `{!LamExprFill e K (ReturnExt (Val v))}:
+  TStepS lam_trans (Lam e s h fns) (λ G,
+    (G (Some (Outgoing, ELReturn v h)) (λ G', G' (Lam (expr_fill K Waiting) s h fns)))).
 Proof.
   destruct LamExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => /= ??.
@@ -1648,6 +1670,29 @@ Proof.
 Qed.
 Global Hint Resolve lam_step_ReturnExt_s : typeclass_instances.
 
+Lemma rec_step_ReturnInt_i fns hd tl h e K  (v : val) `{!LamExprFill e K (ReturnInt (Val v))}:
+  TStepI lam_trans (Lam e (hd::tl) h fns) (λ G,
+  G true None  (λ G', G' (Lam (expr_fill K (Val v)) tl h fns))).
+Proof.
+  destruct LamExprFill0; subst.
+  constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
+  { solve_sub_redexes_are_values. } { done. } subst.
+  inv_all head_step.
+  naive_solver.
+Qed.
+Global Hint Resolve rec_step_ReturnInt_i : typeclass_instances.
+
+(* ** Need an additional rule for returnInt but with empty stack?*)
+Lemma lam_step_ReturnInt_s fns hd tl h e K  (v : val) `{!LamExprFill e K (ReturnInt (Val v))}:
+  TStepS lam_trans (Lam e (hd::tl) h fns) (λ G,
+    (G None (λ G', G' (Lam (expr_fill K (Val v)) tl h fns)))).
+Proof.
+  destruct LamExprFill0; subst.
+  constructor => ? HG. split!; [done|]. move => /= ??.
+  apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?.
+  destruct!. done.
+Qed.
+Global Hint Resolve lam_step_ReturnInt_s : typeclass_instances.
 
 
 (*
@@ -1984,53 +2029,96 @@ Lemma lam_link_trefines m1 m1' m2 m2' fns1 fns2 `{!VisNoAng m1.(m_trans)} `{!Vis
 Proof. move => ??.  by apply link_mod_trefines. Qed.
 
 
+(* ** Need to change this!*)
 (** ** Relating semantic and syntactic linking *)
-(* ** may need to increase invariant for stack*)
-Inductive lam_link_combine_stack_and_ectx:
+Inductive lam_link_combine_ectx:
   nat → link_case lam_ev → list seq_product_case → 
-  list expr_ectx → list expr_ectx → list expr_ectx →
-  list string → list string →list string→ Prop := 
+  list expr_ectx → list expr_ectx → list expr_ectx → Prop := 
   | LLCENil : 
-    lam_link_combine_stack_and_ectx 0 MLFNone [] [] [] [] [] [] []
-  | LLCENoneToLeft n cs K Kl Kr f s sl sr: 
-    lam_link_combine_stack_and_ectx n MLFNone cs K Kl Kr s sl sr →
-    lam_link_combine_stack_and_ectx (S n) MLFLeft (SPNone :: cs) (ReturnExtCtx::K)
-    (ReturnExtCtx::Kl) Kr (f::s) (f::sl) sr
-  | LLCENoneToRight n cs K Kl Kr f s sl sr: 
-    lam_link_combine_stack_and_ectx n MLFNone cs K Kl Kr s sl sr →
-    lam_link_combine_stack_and_ectx (S n) MLFRight (SPNone :: cs) (ReturnExtCtx::K)
-    Kl (ReturnExtCtx::Kr) (f::s) sl (f::sr)
-  | LLCELeftToRight n cs K Kl Kl' Kr f s sl sr: 
-    lam_link_combine_stack_and_ectx n MLFLeft cs K Kl Kr s sl sr →
+    lam_link_combine_ectx 0 MLFNone [] [] [] [] 
+  | LLCENoneToLeft n cs K Kl Kr: 
+    lam_link_combine_ectx n MLFNone cs K Kl Kr →
+    lam_link_combine_ectx (S n) MLFLeft (SPNone :: cs) (ReturnExtCtx::K)
+    (ReturnExtCtx::Kl) Kr 
+  | LLCENoneToRight n cs K Kl Kr: 
+    lam_link_combine_ectx n MLFNone cs K Kl Kr  →
+    lam_link_combine_ectx (S n) MLFRight (SPNone :: cs) (ReturnExtCtx::K)
+    Kl (ReturnExtCtx::Kr) 
+  | LLCELeftToRight n cs K Kl Kl' Kr : 
+    lam_link_combine_ectx n MLFLeft cs K Kl Kr  →
     is_static_expr true (expr_fill Kl' (Var "")) →
-    lam_link_combine_stack_and_ectx (S n) MLFRight (SPLeft::cs) (Kl'++K) (Kl'++Kl) (ReturnExtCtx::Kr) 
-    (s) (sl) (f::sr)
-  | LLCELeftToNone n cs K Kl Kl' Kr s sl sr: 
-    lam_link_combine_stack_and_ectx n MLFLeft cs K Kl Kr s sl sr →
+    lam_link_combine_ectx (S n) MLFRight (SPLeft::cs) (Kl'++K) (Kl'++Kl) (ReturnExtCtx::Kr)
+  | LLCELeftToNone n cs K Kl Kl' Kr: 
+    lam_link_combine_ectx n MLFLeft cs K Kl Kr →
     is_static_expr true (expr_fill Kl' (Var ""))→
-    lam_link_combine_stack_and_ectx (S n) MLFNone (SPLeft::cs) (Kl'++K) (Kl'++Kl) Kr 
-    (s) (sl) sr
-  | LLCERighttoLeft n cs K Kl Kr Kr' f s sl sr: 
-    lam_link_combine_stack_and_ectx n MLFRight cs K Kl Kr s sl sr →
+    lam_link_combine_ectx (S n) MLFNone (SPLeft::cs) (Kl'++K) (Kl'++Kl) Kr 
+  | LLCERighttoLeft n cs K Kl Kr Kr': 
+    lam_link_combine_ectx n MLFRight cs K Kl Kr→
     is_static_expr true (expr_fill Kr' (Var "")) →
-    lam_link_combine_stack_and_ectx (S n) MLFLeft (SPRight::cs) (Kr'++K) (ReturnExtCtx::Kl) (Kr'++Kr) 
-    s (f::sl) (sr)
-  | LLCERightToNone n cs K Kl Kr Kr' s sl sr: 
-    lam_link_combine_stack_and_ectx n MLFRight cs K Kl Kr s sl sr →
+    lam_link_combine_ectx (S n) MLFLeft (SPRight::cs) (Kr'++K) (ReturnExtCtx::Kl) (Kr'++Kr) 
+  | LLCERightToNone n cs K Kl Kr Kr': 
+    lam_link_combine_ectx n MLFRight cs K Kl Kr  →
     is_static_expr true (expr_fill Kr' (Var ""))→
-    lam_link_combine_stack_and_ectx (S n) MLFNone (SPRight::cs) (Kr'++K) Kl (Kr'++Kr)  
-    (s) sl (sr) .
+    lam_link_combine_ectx (S n) MLFNone (SPRight::cs) (Kr'++K) Kl (Kr'++Kr)  
+.
+
+Inductive stack_inv (f1 f2:gset string):
+  list string → list string → list string → Prop := 
+  | SVNil: 
+      stack_inv f1 f2  [] [] []
+  | SVLeft f s sl sr:
+      f∈f1 → 
+      stack_inv f1 f2 s sl sr →
+      stack_inv f1 f2 (f::s) (f::sl) sr
+  | SVRight f s sl sr: 
+      f∈f1 → 
+      stack_inv f1 f2 s sl sr →
+      stack_inv f1 f2 (f::s) sl (f::sr).
 
 
-(* ** probably need to add some definition for s and cm*)
-(* TODO *)
+(* TODO, add invariant for stack!*)
+
+Definition get_string_set_from_fid_set (s:gmap fid fndef):gset string:=
+  set_map(λ f:fid, f.1) (dom s).
+
+Lemma lookup_disjoint_none_left m1 m2 key payload: get_string_set_from_fid_set m1## get_string_set_from_fid_set m2→key∈get_string_set_from_fid_set m2→
+m1!!(key,payload)=None.
+Proof.
+  intros. unfold get_string_set_from_fid_set in *.
+  symmetry in H.
+  remember (not_elem_of_disjoint _ _ _ H0 H). clear Heqn.
+  destruct (m1!!(key,payload)) eqn:K; auto.
+  unfold not in n.
+  assert (key ∈ ((set_map (λ f : fid, f.1) (dom m1)):gset string)).
+  rewrite elem_of_map. exists (key,payload). split!. rewrite elem_of_dom. auto. apply n in H1.
+  inversion H1.
+Qed.
+
+Lemma lookup_disjoint_none_right m1 m2 key payload: get_string_set_from_fid_set m1## get_string_set_from_fid_set m2→key∈get_string_set_from_fid_set m1→m2!!(key,payload)=None.
+Proof.
+  intros. unfold get_string_set_from_fid_set in *.
+  remember (not_elem_of_disjoint _ _ _ H0 H). clear Heqn.
+  destruct (m2!!(key,payload)) eqn:K; auto.
+  unfold not in n.
+  assert (key ∈ ((set_map (λ f : fid, f.1) (dom m2)):gset string)).
+  rewrite elem_of_map. exists (key,payload). split!. rewrite elem_of_dom. auto. apply n in H1.
+  inversion H1.
+Qed.
+
+Definition fns_inv fns1 fns2 fns fnsl fnsr:= 
+  fns = fnsl ∪ fnsr ∧
+  get_string_set_from_fid_set fnsl ## get_string_set_from_fid_set fnsr ∧
+  get_string_set_from_fid_set fnsl = get_string_set_from_fid_set fns1 ∧
+  get_string_set_from_fid_set fnsr = get_string_set_from_fid_set fns2 .
+
 
 Definition lam_link_inv (bv : bool) (fns1 fns2 : gmap fid fndef) (σ1 : lam_trans.(m_state)) (σ2 : link_case lam_ev * list seq_product_case * lam_state * lam_state) : Prop :=
   let 'Lam e1 s1 h1 fns1' := σ1 in
   let '(σf, cs, Lam el sl hl fnsl, Lam er sr hr fnsr) := σ2 in
   ∃ n K Kl Kr e1' el' er' ,
-  fns1' = fnsl ∪ fnsr ∧
-  lam_link_combine_stack_and_ectx n  σf cs K Kl Kr s1 sl sr ∧
+  fns_inv fns1 fns2 fns1' fnsl fnsr ∧
+  lam_link_combine_ectx n  σf cs K Kl Kr ∧
+  stack_inv (get_string_set_from_fid_set fns1) (get_string_set_from_fid_set fns2) s1 sl sr ∧
   e1 = expr_fill K e1' ∧
   el = expr_fill Kl el' ∧
   er = expr_fill Kr er' ∧
@@ -2043,9 +2131,6 @@ Definition lam_link_inv (bv : bool) (fns1 fns2 : gmap fid fndef) (σ1 : lam_tran
   | _ => False
   end.
 
-
-Definition get_string_set_from_fid_set (s:gmap fid fndef):gset string:=
-  set_map(λ f:fid, f.1) (dom s).
 
   
   
@@ -2179,26 +2264,26 @@ Qed.
 
 
 
-(*
+
 Lemma rec_link_refines_syn_link fns1 fns2:
-  fns1 ##ₘ fns2 →
+  (get_string_set_from_fid_set fns1) ## (get_string_set_from_fid_set fns2) →
   trefines (lam_link  (get_string_set_from_fid_set fns1)  (get_string_set_from_fid_set fns2) (lam_mod fns1) (lam_mod fns2))
            (lam_mod (lam_syn_link fns1 fns2)).
 Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. {exact: (λ _, flip (lam_link_inv false fns1 fns2)). }
-  { split!. 1: by econs. all: done. } { done. }
+  { split!. 1,2: by econs.  all:done. } { done. }
   move => /= {}n _ Hloop [[[ipfs cs] [el sl hl fnsl]] [er sr hr fnsr]] [e1 s1 h1 fns1'] [m [K [Kl [Kr ?]]]].
   destruct!/=. case_match; destruct!.
   - (* ** MLFLeft case*)
     destruct (to_val el') eqn:?.
     + (* ** is a value*) 
       destruct el'; simplify_eq/=.
-      revert select (lam_link_combine_stack_and_ectx _ _ _ _ _ _ _ _ _) => HK.
+      revert select (lam_link_combine_ectx _ _ _ _ _ _ ) => HK.
       inversion HK; clear HK; simplify_eq/=.
       * tstep_i => *; destruct!. tstep_s. split!.
-        apply: Hloop; [done|]. by split!.
+        apply: Hloop; [done|]. split!; auto. done. 
       * tstep_i => *; destruct!/=.
         tstep_i; split => *; simplify_eq. destruct!.
         apply: Hloop; [done|]. rewrite !expr_fill_app.  split!;  [done..|].
@@ -2206,37 +2291,50 @@ Proof.
     + tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]] *.
       simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/= [??] //.
       rewrite -expr_fill_app.
-      inv_all/= head_step => //; destruct!. clear H H0. (* ** TODO*)
-      * tstep_s => *. tend. split!; [done..|].
+      inv_all/= head_step => //; destruct!. clear H2 H3. (* ** TODO*)
+      * (*binop*) tstep_s => *. tend. split!; [done..|].
+        apply: Hloop; [done|]. rewrite !expr_fill_app. split!;   [done..| ].
+        apply is_static_expr_expr_fill; split!; apply is_static_expr_val.
+      * (*newref*) tstep_s => *. exists l, h'. intros.  split!. symmetry in H4. auto.
+        intros. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.
-      * tstep_s => *. tend. split!; [done..|].
+      * (*load*) tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
-        by apply is_static_expr_expr_fill.
-      * tstep_s => *. tend. split!; [done..|].
+        apply is_static_expr_expr_fill; split!; apply is_static_expr_val.
+      * (* store*) tstep_s => *. subst. tend. split!. apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
+        apply is_static_expr_expr_fill. split!. 
+      * (* if*) tstep_s =>b *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
-        by apply is_static_expr_expr_fill.
-      * tstep_s => b ?. subst. tend. split!. apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
-        apply is_static_expr_expr_fill. split!. destruct b; naive_solver.
-      * tstep_s => *. tend. split!; [done..|].
-        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
-        apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst.
-      * by tstep_s.
-      * tstep_s => *. split!; [done..|] => *. tend. split!; [done..|].
-        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
-        apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst_l.
-      * tstep_s => *. tend. split!; [done..|].
-        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
-        by apply is_static_expr_expr_fill.
-      * tstep_s. left. split!; [apply lookup_union_Some; naive_solver|] => ?. tend. split!; [done..|].
-        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..|].
-        apply is_static_expr_expr_fill. split!. apply is_static_expr_subst_l.
-        apply is_static_expr_mono. apply fd_static.
-      * move => *. destruct!/=. repeat case_bool_decide => //.
-        -- tend. split!. tstep_i. split => *; simplify_eq.
-           apply: Hloop; [done|]. split!; [by econs|done..|]. apply is_static_expr_forallb.
-        -- tstep_s. right. split!; [apply lookup_union_None;split!;by apply not_elem_of_dom| done|].
-           tend. split!. apply: Hloop; [done|]. split!; [by econs|done..].
+        apply is_static_expr_expr_fill. split!. destruct b; auto. 
+      * (* let*) tstep_s => *. tend. split!. apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
+        apply is_static_expr_expr_fill. split!. by apply is_static_expr_subst.   
+      * (* fix e*) (*need to assert that s1 i nonempty*)
+        inversion H0; subst.
+        -- (*case 1 where the head is from the left*) 
+          tstep_s. exists n0. split!.
+          unfold fns_inv in H. destruct!. rewrite lookup_union_l; auto. eapply lookup_disjoint_none_right. exact H.
+          rewrite H3. exact H5. 
+          intros.
+          tend. split!. apply: Hloop; [done|]. rewrite !expr_fill_app. split!; try done.
+          unfold fns_inv in *. destruct!. admit. (* ** various fns lemmas*) 
+          apply is_static_expr_expr_fill. split!.
+        -- (* case 2 where the head is from the right*)
+          (* this should not happen. need better invariant. *)
+        admit.
+      * (* var*) by tstep_s.
+      * (* app internal in fnsl*) tstep_s => *.  left. exists (s,o),fn. split!. unfold fns_inv in *.
+        destruct!. by apply lookup_union_Some_l. intros. tend. split!; [done..|].
+        apply: Hloop; [done|].   unfold fns_inv in *. destruct!. 
+        admit. (* fustrating bug*)
+      *  move => *. destruct!/=. repeat case_bool_decide => //.
+        -- (* app internal in fnsr*) tend. split!. tstep_i. split => *; simplify_eq.
+           apply: Hloop; [done|]. split!; [by econs|done..|]. simpl. destruct o; auto.
+        -- (* app external*) tstep_s. right. eexists (s,o), _. split!. done.
+            destruct H. destruct!. admit. (* ** simple lemma from H4 and H5*)
+            tend. split!. apply Hloop; try done. split!; try done. econs. exact H1. done.
+      
+      
   - destruct (to_val er') eqn:?.
     + destruct er'; simplify_eq/=.
       revert select (lam_link_combine_ectx _ _ _ _ _ _ _ _) => HK. inv/= HK.
