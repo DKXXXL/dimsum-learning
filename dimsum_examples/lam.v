@@ -2038,45 +2038,52 @@ Proof. move => ??.  by apply link_mod_trefines. Qed.
 
 (* ** Need to change this!*)
 (** ** Relating semantic and syntactic linking *)
-Inductive lam_link_combine_ectx:
+Inductive lam_link_combine_ectx_stack (f1 f2:gset string):
   nat → link_case lam_ev → list seq_product_case → 
-  list expr_ectx → list expr_ectx → list expr_ectx → Prop := 
+  list expr_ectx → list expr_ectx → list expr_ectx →
+  list string→list string→list string →Prop := 
   | LLCENil : 
-    lam_link_combine_ectx 0 MLFNone [] [] [] [] 
-  | LLCENoneToLeft n cs K Kl Kr: 
-    lam_link_combine_ectx n MLFNone cs K Kl Kr →
-    lam_link_combine_ectx (S n) MLFLeft (SPNone :: cs) (ReturnExtCtx::K)
-    (ReturnExtCtx::Kl) Kr 
-  | LLCENoneToRight n cs K Kl Kr: 
-    lam_link_combine_ectx n MLFNone cs K Kl Kr  →
-    lam_link_combine_ectx (S n) MLFRight (SPNone :: cs) (ReturnExtCtx::K)
-    Kl (ReturnExtCtx::Kr) 
-  | LLCELeftToRight n cs K Kl Kl' Kr : 
-    lam_link_combine_ectx n MLFLeft cs K Kl Kr  →
+    lam_link_combine_ectx_stack f1 f2 0 MLFNone [] [] [] [] [] [] []
+  | LLCENoneToLeft n cs K Kl Kr s sl sr: 
+    lam_link_combine_ectx_stack f1 f2 n MLFNone cs K Kl Kr s sl sr→
+    lam_link_combine_ectx_stack f1 f2 (S n) MLFLeft (SPNone :: cs) (ReturnExtCtx::K) 
+    (ReturnExtCtx::Kl) Kr s sl sr
+  | LLCENoneToRight n cs K Kl Kr s sl sr: 
+    lam_link_combine_ectx_stack f1 f2 n MLFNone cs K Kl Kr s sl sr →
+    lam_link_combine_ectx_stack f1 f2 (S n) MLFRight (SPNone :: cs) (ReturnExtCtx::K) 
+    Kl (ReturnExtCtx::Kr) s sl sr 
+  | LLCELeftToRight n cs K Kl Kl' Kr s sl sr: 
+    lam_link_combine_ectx_stack f1 f2 n MLFLeft cs K Kl Kr s sl sr →
     is_static_expr true (expr_fill Kl' (Var "")) →
-    lam_link_combine_ectx (S n) MLFRight (SPLeft::cs) (Kl'++K) (Kl'++Kl) (ReturnExtCtx::Kr)
-  | LLCELeftToNone n cs K Kl Kl' Kr: 
-    lam_link_combine_ectx n MLFLeft cs K Kl Kr →
+    lam_link_combine_ectx_stack f1 f2 (S n) MLFRight (SPLeft::cs) (Kl'++K) (Kl'++Kl) (ReturnExtCtx::Kr) s sl sr 
+  | LLCELeftToNone n cs K Kl Kl' Kr s sl sr : 
+    lam_link_combine_ectx_stack f1 f2 n MLFLeft cs K Kl Kr s sl sr→
     is_static_expr true (expr_fill Kl' (Var ""))→
-    lam_link_combine_ectx (S n) MLFNone (SPLeft::cs) (Kl'++K) (Kl'++Kl) Kr 
-  | LLCERighttoLeft n cs K Kl Kr Kr': 
-    lam_link_combine_ectx n MLFRight cs K Kl Kr→
+    lam_link_combine_ectx_stack f1 f2 (S n) MLFNone (SPLeft::cs) (Kl'++K) (Kl'++Kl) Kr s sl sr  
+  | LLCERighttoLeft n cs K Kl Kr Kr' s sl sr : 
+    lam_link_combine_ectx_stack f1 f2 n MLFRight cs K Kl Kr s sl sr→
     is_static_expr true (expr_fill Kr' (Var "")) →
-    lam_link_combine_ectx (S n) MLFLeft (SPRight::cs) (Kr'++K) (ReturnExtCtx::Kl) (Kr'++Kr) 
-  | LLCERightToNone n cs K Kl Kr Kr': 
-    lam_link_combine_ectx n MLFRight cs K Kl Kr  →
+    lam_link_combine_ectx_stack f1 f2 (S n) MLFLeft (SPRight::cs) (Kr'++K) (ReturnExtCtx::Kl) (Kr'++Kr) s sl sr  
+  | LLCERightToNone n cs K Kl Kr Kr' s sl sr : 
+    lam_link_combine_ectx_stack f1 f2 n MLFRight cs K Kl Kr s sl sr →
     is_static_expr true (expr_fill Kr' (Var ""))→
-    lam_link_combine_ectx (S n) MLFNone (SPRight::cs) (Kr'++K) Kl (Kr'++Kr)  
-  | LLCELeftToLeft n cs K Kl Kl' Kr: 
-    lam_link_combine_ectx n MLFLeft cs K Kl Kr →
+    lam_link_combine_ectx_stack f1 f2 (S n) MLFNone (SPRight::cs) (Kr'++K) Kl (Kr'++Kr) s sl sr   
+  | LLCELeftToLeft n cs K Kl Kl' Kr f s sl sr: 
+    lam_link_combine_ectx_stack f1 f2 n MLFLeft cs K Kl Kr s sl sr →
+    f∈ f1 →
     is_static_expr true (expr_fill Kl' (Var ""))→
-    lam_link_combine_ectx (S n) MLFLeft cs (ReturnIntCtx::Kl'++K) (ReturnIntCtx::Kl'++Kl) Kr 
-  | LLCERightToRight n cs K Kl Kr Kr': 
-    lam_link_combine_ectx n MLFRight cs K Kl Kr →
+    lam_link_combine_ectx_stack f1 f2 (S n) MLFLeft cs (ReturnIntCtx::Kl'++K) (ReturnIntCtx::Kl'++Kl) Kr 
+    (f::s) (f::sl) sr 
+  | LLCERightToRight n cs K Kl Kr Kr' f s sl sr : 
+    lam_link_combine_ectx_stack f1 f2 n MLFRight cs K Kl Kr s sl sr →
+    f ∈ f2 →
     is_static_expr true (expr_fill Kr' (Var ""))→
-    lam_link_combine_ectx (S n) MLFRight cs (ReturnIntCtx::Kr'++K) Kl (ReturnIntCtx::Kr'++Kr) 
+    lam_link_combine_ectx_stack f1 f2 (S n) MLFRight cs (ReturnIntCtx::Kr'++K) Kl (ReturnIntCtx::Kr'++Kr)
+    (f::s) sl (f::sr) 
 .
 
+(* To remove?*)
+(*
 Inductive stack_inv (f1 f2:gset string):
   link_case lam_ev →list string → list string → list string → Prop := 
   | SVNil: 
@@ -2088,10 +2095,13 @@ Inductive stack_inv (f1 f2:gset string):
   | SVRight prev f s sl sr: 
       f∈f2 → 
       stack_inv f1 f2 prev s sl sr →
-      stack_inv f1 f2 MLFRight (f::s) sl (f::sr).
+      stack_inv f1 f2 MLFRight (f::s) sl (f::sr)
+  | SVNone prev s sl sr: 
+    stack_inv f1 f2 prev s sl sr →
+    stack_inv f1 f2 MLFNone s sl sr.
+*)
 
 
-(* TODO, add invariant for stack!*)
 
 Definition get_string_set_from_fid_set (s:gmap fid fndef):gset string:=
   set_map(λ f:fid, f.1) (dom s).
@@ -2132,8 +2142,9 @@ Definition lam_link_inv (bv : bool) (fns1 fns2 : gmap fid fndef) (σ1 : lam_tran
   let '(σf, cs, Lam el sl hl fnsl, Lam er sr hr fnsr) := σ2 in
   ∃ n K Kl Kr e1' el' er' ,
   fns_inv fns1 fns2  fns1' fnsl fnsr ∧
-  lam_link_combine_ectx n  σf cs K Kl Kr ∧
-  stack_inv (get_string_set_from_fid_set fns1) (get_string_set_from_fid_set fns2) σf s1 sl sr ∧
+  lam_link_combine_ectx_stack (get_string_set_from_fid_set fns1) (get_string_set_from_fid_set fns2) 
+  n  σf cs K Kl Kr s1 sl sr∧
+  (*stack_inv (get_string_set_from_fid_set fns1) (get_string_set_from_fid_set fns2) σf s1 sl sr ∧*)
   e1 = expr_fill K e1' ∧
   el = expr_fill Kl el' ∧
   er = expr_fill Kr er' ∧
@@ -2281,8 +2292,8 @@ Qed.
 
 
 
+(* ** TODO test out the current invariant *)
 (*
-
 Lemma rec_link_refines_syn_link fns1 fns2:
   (get_string_set_from_fid_set fns1) ## (get_string_set_from_fid_set fns2) →
   trefines (lam_link  (get_string_set_from_fid_set fns1)  (get_string_set_from_fid_set fns2) (lam_mod fns1) (lam_mod fns2))
@@ -2303,11 +2314,13 @@ Proof.
       revert select (lam_link_combine_ectx _ _ _ _ _ _ ) => HK.
       inversion HK; clear HK; simplify_eq/=.
       * tstep_i => *; destruct!. tstep_s. split!.
-        apply: Hloop; [done|]. split!; auto. done. 
-      * tstep_i => *; destruct!/=.
+        apply: Hloop; [done|]. split!; auto. done. econs. naive_solver. 
+      * admit.  (*tstep_i => *; destruct!/=.
         tstep_i; split => *; simplify_eq. destruct!.
-        apply: Hloop; [done|]. rewrite !expr_fill_app.  split!;  [done..|].
-        by apply is_static_expr_expr_fill.
+        apply: Hloop; [done|]. rewrite !expr_fill_app.  split!; try done.
+        
+        inversion H0; subst. admit. admit. *)
+      * admit. 
     + tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]] *.
       simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/= [??] //.
       rewrite -expr_fill_app.
