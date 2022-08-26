@@ -1,21 +1,22 @@
 From dimsum.core Require Export proof_techniques.
-From dimsum.core Require Import itree axioms.
+From dimsum.core Require Import spec_mod.
+From dimsum.core Require Import axioms.
 From dimsum.examples Require Import lam.
 
 Local Open Scope Z_scope.
 
 Local Ltac go :=
-  clear_itree.
+  clear_spec.
 Local Ltac go_s :=
   tstep_s; go.
 Local Ltac go_i :=
   tstep_i; go.
 
-Definition nb_itree: itree (moduleE lam_event unit) unit:= TNb.
-Lemma ub_itree_refines_everything s:
-  trefines (itree_mod nb_itree ()) s.
+Definition nb_spec: spec  lam_event unit void:= TNb.
+Lemma ub_spec_refines_everything s:
+  trefines (spec_mod nb_spec ()) s.
 Proof.
-  apply tsim_implies_trefines=>n. unfold nb_itree.
+  apply tsim_implies_trefines=>n. unfold nb_spec.
   go_i. auto.
 Qed.
 
@@ -31,17 +32,17 @@ Definition free_var_prog : gmap fid fndef :=
   <[("free_var",None) := free_var_lam]> $ ∅.
 Definition free_var_mod := lam_mod free_var_prog.
 
-Definition free_var_itree : itree (moduleE lam_event unit) unit:=
-  h← TExist _;;;
-  TVis (Incoming, ELCall ("free_var",None) [] h);;;;
+Definition free_var_spec : spec  lam_event unit void:=
+  h← TExist _;
+  TVis (Incoming, ELCall ("free_var",None) [] h);;
   TUb.
 
-Lemma free_var_itree_refines_free_var_lam:
-  trefines (itree_mod free_var_itree ()) free_var_mod.
+Lemma free_var_spec_refines_free_var_lam:
+  trefines (spec_mod free_var_spec ()) free_var_mod.
 Proof.
-  apply tsim_implies_trefines => n /=. unfold free_var_itree, free_var_prog. 
+  apply tsim_implies_trefines => n /=. unfold free_var_spec, free_var_prog. 
   go_i. intros. go. go_i. go_s. left. eexists _,_,_. split!.
-  go_s. eexists _,_. split!. eauto. intros. auto.
+  go_s. left. eexists _,_. split!. eauto. intros. auto.
   unfold free_var_lam. simpl. go_s. auto. 
 Qed.
 
@@ -56,54 +57,54 @@ Definition add_prog : gmap fid fndef :=
   <[("add",None) := add_lam]> $ ∅.
 Definition add_mod := lam_mod add_prog.
 
-Definition add_itree : itree (moduleE lam_event unit) unit :=
-        '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));;;
-        TAssume (f= ("add",None));;;;
-        x ← TAll _;;;
-        y ← TAll _;;; 
-        TAssume (vs = [ValNum x;ValNum y]);;;;
-        TVis (Outgoing, ELReturn (ValNum (x+y)) h);;;;
+Definition add_spec : spec lam_event unit void :=
+        '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));
+        TAssume (f= ("add",None));;
+        x ← TAll _;
+        y ← TAll _; 
+        TAssume (vs = [ValNum x;ValNum y]);;
+        TVis (Outgoing, ELReturn (ValNum (x+y)) h);;
         TUb.
-Lemma add_prog_refines_add_itree :
-  trefines add_mod (itree_mod add_itree ()).
+Lemma add_prog_refines_add_spec :
+  trefines add_mod (spec_mod add_spec ()).
 Proof.
   apply tsim_implies_trefines => n. 
   go_i. split!. intros. go_s. eexists (f, vs, h'). go.
   go_s. split!. go. go_s. intros. go. go_s. intros. go.
   go_s. intros. go. go_s. intros. go.
   go_i. split!. unfold add_prog in *.  intros. 
-  rewrite lookup_insert_Some in H2.   destruct!. split!. go_i. go_i.
+  rewrite lookup_insert_Some in H2.   destruct!. split!. go_i. go_i. go_i.
   go_s. split!. go. go_s.  auto.
   intros.
   subst. rewrite lookup_insert_None in H2. destruct!.
   intros. destruct!.
 Qed.
 
-Definition add_repeat_itree : itree (moduleE lam_event unit) unit :=
-        ITree.forever(
-          '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));;;
-          TAssume (f= ("add",None));;;;
-          x ← TAll _;;;
-          y ← TAll _;;; 
-          TAssume (vs = [ValNum x;ValNum y]);;;;
+Definition add_repeat_spec : spec  lam_event unit void :=
+        Spec.forever(
+          '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));
+          TAssume (f= ("add",None));;
+          x ← TAll _;
+          y ← TAll _; 
+          TAssume (vs = [ValNum x;ValNum y]);;
           TVis (Outgoing, ELReturn (ValNum (x+y)) h)
         ) .
-Lemma add_prog_refines_add_repeat_itree :
-  trefines add_mod (itree_mod add_repeat_itree ()).
+Lemma add_prog_refines_add_repeat_spec :
+  trefines add_mod (spec_mod add_repeat_spec ()).
 Proof.
   apply tsim_implies_trefines => n.
   unshelve eapply tsim_remember.
   { simpl. exact (λ _ σa '(t, _),
-  t ≈ add_repeat_itree ∧
+  t ≡ add_repeat_spec ∧
   ∃h, σa= Lam Waiting [] h add_prog). } 
   {simpl. naive_solver. }
   { simpl. eauto. }
   { simpl. intros ???[????][??][??]. destruct!. 
-  go_i. split!. intros. go_s. go_s. rewrite -/add_repeat_itree. eexists (f, vs, h'). go.
+  go_i. split!. intros. go_s. go_s. rewrite -/add_repeat_spec. eexists (f, vs, h'). go.
   go_s. intros. split. naive_solver. go. go_s. intros. go. go_s. intros.
   go. go_s. intros. go. go_s. intros. go. go_i. split.
-  intros. unfold add_prog. rewrite lookup_insert_Some in H5. destruct!/=; subst.
-  split!. go_i. go_i. go_s. split!. go. 
+  intros. unfold add_prog. rewrite lookup_insert_Some in H4. destruct!/=; subst.
+  split!. go_i. go_i. go_i. go_s. split!. go. 
   eapply H0; auto. split!. naive_solver.
   intros. destruct!. }
 Qed. 
@@ -116,20 +117,20 @@ fd_static := I
 Definition add_wrong_prog : gmap fid fndef :=
   <[("add_wrong",None) := add_wrong_lam]> $ ∅.
 Definition add_wrong_mod := lam_mod add_wrong_prog.
-Definition add_wrong_itree : itree (moduleE lam_event unit) unit:=
-  h← TExist _;;;
-  TVis (Incoming, ELCall ("add_wrong",None) [] h);;;;
+Definition add_wrong_spec : spec lam_event unit void:=
+  h← TExist _;
+  TVis (Incoming, ELCall ("add_wrong",None) [] h);;
   TUb.
 
-Lemma add_wrong_itree_refines_add_wrong_lam:
-  trefines (itree_mod  add_wrong_itree ()) add_wrong_mod.
+Lemma add_wrong_spec_refines_add_wrong_lam:
+  trefines (spec_mod  add_wrong_spec ()) add_wrong_mod.
 Proof.
   apply tsim_implies_trefines => n.
   go_i. intros. go. go_i. 
   go_s. left.
   eexists ("add_wrong", None),[],x.
   split!. 
-  go_s. eexists _,_. split!. rewrite lookup_insert_Some. left. auto. intros.
+  go_s. left. eexists _,_. split!. rewrite lookup_insert_Some. left. auto. intros.
   auto. go_s. intros. inversion H1.
 Qed.  
 
@@ -143,27 +144,27 @@ Definition newref_prog : gmap fid fndef :=
   <[("newref",None) := newref_lam]> $ ∅.
 Definition newref_mod := lam_mod newref_prog.
 
-Definition newref_itree : itree (moduleE lam_event unit) unit :=
-    ITree.forever(
-      '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));;;
-      TAssume (f= ("newref",None));;;;
-      x ← TAll _;;;
-      y ← TAll _;;; 
-      TAssume (vs = [ValNum x;ValNum y]);;;;
-      TAssume (y>0);;;;
-      l ← TExist _;;;
-      h' ← TExist _;;;
-      TVis (Outgoing, ELReturn (ValLoc l) h');;;;
+Definition newref_spec : spec  lam_event unit void:=
+    Spec.forever(
+      '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));
+      TAssume (f= ("newref",None));;
+      x ← TAll _;
+      y ← TAll _; 
+      TAssume (vs = [ValNum x;ValNum y]);;
+      TAssume (y>0);;
+      l ← TExist _;
+      h' ← TExist _;
+      TVis (Outgoing, ELReturn (ValLoc l) h');;
       (* ** add assertions*)
       TAssert( h'.(h_heap)!!l = Some (ValNum x))
     ) .
-Lemma newref_prog_refines_newref_itree :
-  trefines newref_mod (itree_mod newref_itree ()).
+Lemma newref_prog_refines_newref_spec :
+  trefines newref_mod (spec_mod newref_spec ()).
 Proof.
   apply tsim_implies_trefines => n.
   unshelve eapply tsim_remember.
   { simpl. exact (λ _ σa '(t, _),
-  t ≈ newref_itree ∧
+  t ≡ newref_spec ∧
   ∃h, σa= Lam Waiting [] h newref_prog). }
   {naive_solver. }
   {naive_solver. }
@@ -171,13 +172,13 @@ Proof.
   go_i. split!.
   - intros. go_s. go_s. exists (f, vs, h'). go. go_s. split!. go.
   go_s. intros. go. go_s. intros. go. go_s. intros. go. go_s. intros. destruct!. go. go_s. intros. go.
-  go_i. split!. intros. rewrite lookup_insert_Some in H4. destruct!. split!. 
+  go_i. split!. intros. rewrite lookup_insert_Some in H2. destruct!. split!. 
   (* ** newref part *)
   go_i. intros. split!.
-  go_s. exists l. go. go_s. exists h'0. go. go_i. go_s. split!.
+  go_s. exists l. go. go_s. exists h'0. go. go_i. go_i. go_s. split!.
   go. go_s.
-  split!. unfold heap_alloc_prop in H4. destruct!. inversion H2. apply heap_alloc_h_lookup. lia. lia.
-  rewrite -/newref_itree. go. apply H0. auto. split!. 
+  split!. unfold heap_alloc_prop in H2. destruct!. inversion H1. apply heap_alloc_h_lookup. lia. lia.
+  rewrite -/newref_spec. go. apply H0. auto. split!. 
   - intros. destruct!.
 Qed.
    
@@ -190,19 +191,19 @@ Definition newref_nonnum_prog : gmap fid fndef :=
   <[("newref_nonnum",None) := newref_nonnum_lam]> $ ∅.
 Definition newref_nonnum_mod := lam_mod newref_nonnum_prog.
 
-Definition newref_nonnum_itree : itree (moduleE lam_event unit) unit :=
-  h← TExist _;;;
-  TVis (Incoming, ELCall ("newref_nonnum",None) [] h);;;;
+Definition newref_nonnum_spec : spec  lam_event unit void :=
+  h← TExist _;
+  TVis (Incoming, ELCall ("newref_nonnum",None) [] h);;
   TUb.
-Lemma newref_nonnum_itree_refines_newref_nonnum_lam:
-  trefines (itree_mod newref_nonnum_itree ()) newref_nonnum_mod.
+Lemma newref_nonnum_spec_refines_newref_nonnum_lam:
+  trefines (spec_mod newref_nonnum_spec ()) newref_nonnum_mod.
 Proof.
   apply tsim_implies_trefines => n.
   go_i. intros. go. go_i. 
   go_s. left.
   eexists ("newref_nonnum", None),[],x.
   split!. 
-  go_s. eexists _,_. split!. rewrite lookup_insert_Some. left. auto. intros.
+  go_s. left.  eexists _,_. split!. rewrite lookup_insert_Some. left. auto. intros.
   auto. go_s. exists (0,0). exists ∅.  
   split!. 
 Qed.
@@ -216,12 +217,12 @@ Definition newref_zero_prog : gmap fid fndef :=
   <[("newref_zero",None) := newref_zero_lam]> $ ∅.
 Definition newref_zero_mod := lam_mod newref_zero_prog.
 
-Definition newref_zero_itree : itree (moduleE lam_event unit) unit :=
-  h← TExist _;;;
-  TVis (Incoming, ELCall ("newref_zero",None) [] h);;;;
+Definition newref_zero_spec : spec  lam_event unit void :=
+  h← TExist _;
+  TVis (Incoming, ELCall ("newref_zero",None) [] h);;
   TUb.
-Lemma newref_zero_itree_refines_newref_zero_lam:
-  trefines (itree_mod newref_zero_itree ()) newref_zero_mod.
+Lemma newref_zero_spec_refines_newref_zero_lam:
+  trefines (spec_mod newref_zero_spec ()) newref_zero_mod.
 Proof.
   apply tsim_implies_trefines => n.
   go_i. intros. go. go_i. go_s. left.
@@ -244,24 +245,24 @@ Definition id_prog : gmap fid fndef :=
 Definition id_mod := lam_mod id_prog.
 
 (* ** identity specification*)
-Definition id_simple_itree : itree (moduleE lam_event (list fid)) unit :=
-        '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));;;
-        fid_list ← TGet ;;;
-        TAssume (f = ("id",None));;;;
-        TAssume (vs = []);;;;
-        newfid ← TExist fid;;;
-        TPut (newfid::fid_list);;;;
-        TVis (Outgoing, ELReturn (ValFid newfid) h);;;;
-        '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));;;
-        fid_list ← TGet ;;;
-        TAssume (f ∈ fid_list);;;;
-        z ← TAll Z;;;
-        TAssume (vs = [ValNum z]);;;;
-        TVis (Outgoing, ELReturn (ValNum z) h);;;;
+Definition id_simple_spec : spec  lam_event (list fid) void :=
+        '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));
+        fid_list ← TGet ;
+        TAssume (f = ("id",None));;
+        TAssume (vs = []);;
+        newfid ← TExist fid;
+        TPut (newfid::fid_list);;
+        TVis (Outgoing, ELReturn (ValFid newfid) h);;
+        '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));
+        fid_list ← TGet ;
+        TAssume (f ∈ fid_list);;
+        z ← TAll Z;
+        TAssume (vs = [ValNum z]);;
+        TVis (Outgoing, ELReturn (ValNum z) h);;
         TUb.
 
-Lemma id_prog_refines_id_simple_itree :
-  trefines id_mod (itree_mod id_simple_itree []).
+Lemma id_prog_refines_id_simple_spec :
+  trefines id_mod (spec_mod id_simple_spec []).
 Proof.
     apply tsim_implies_trefines => n0 /=. unfold id_prog.
     tstep_i;  split; intros.
@@ -269,13 +270,13 @@ Proof.
     go_s. intros. go. go_i. split!.
       { intros. split!. subst. rewrite lookup_insert_Some in H2. destruct!. reflexivity.
       rewrite lookup_insert_Some in H2. destruct!. go_i. intros. split!.
-      go_s. exists ("id", Some n). go. go_s. go_i. go_s. split!.
+      go_s. exists ("id", Some n). go. go_s. go_i. go_i. go_s. split!.
       go. go_i. split;intros. 
         - go_s. exists (f, vs, h'0). go. go_s. split!. go. go_s.
         go_s. intros. go. go_s. intros. go. go_s. intros. go.
         go_i. split.
         *  intros. rewrite elem_of_cons in H2. destruct!. rewrite lookup_insert_Some in H4. destruct!.
-        split!. go_i. go_s. split!. go. go_s. auto. apply elem_of_nil in H2. inversion H2. 
+        split!. go_i. go_i. go_s. split!. go. go_s. auto. apply elem_of_nil in H2. inversion H2. 
         * intros. rewrite lookup_insert_None in H4. destruct!. rewrite elem_of_cons in H2. destruct!.
         apply elem_of_nil in H2. inversion H2. 
         - destruct!.  
@@ -285,20 +286,20 @@ Proof.
     Unshelve. auto.
 Qed.
 
-Definition id_loop_itree : itree (moduleE lam_event (list fid)) unit :=
-  ITree.forever(
-        '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));;;
-        fid_list ← TGet ;;;
+Definition id_loop_spec : spec  lam_event (list fid) void :=
+  Spec.forever(
+        '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));
+        fid_list ← TGet ;
         if (bool_decide(f = ("id",None)))
           then 
-          TAssume (vs = []);;;;
-          newfid ← TExist fid;;;
-          TPut (newfid::fid_list);;;;
+          TAssume (vs = []);;
+          newfid ← TExist fid;
+          TPut (newfid::fid_list);;
           TVis (Outgoing, ELReturn (ValFid newfid) h)
         else if (bool_decide(f∈fid_list))
           then 
-          z ← TAll Z;;;
-          TAssume (vs = [ValNum z]);;;;
+          z ← TAll Z;
+          TAssume (vs = [ValNum z]);;
           TVis (Outgoing, ELReturn (ValNum z) h)
         else TUb
   ).
@@ -336,13 +337,13 @@ Proof.
   apply IHl in H1. rewrite -H1. rewrite lookup_insert_ne. reflexivity. intro. subst. contradiction. 
 Qed.
 
-Lemma id_prog_refines_id_loop_itree :
-  trefines id_mod (itree_mod id_loop_itree []).
+Lemma id_prog_refines_id_loop_spec :
+  trefines id_mod (spec_mod id_loop_spec []).
 Proof.
   apply tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember.
   {simpl. exact (λ _ σa '(t, l),
-  t ≈ id_loop_itree ∧
+  t ≡ id_loop_spec ∧
   ∃h id_prog', σa= Lam Waiting [] h id_prog'/\ 
   id_prog' = fns_add_list id_prog l (Build_fndef ["x"] (Var "x") I) /\ 
   ("id",None)∉l). }
@@ -356,20 +357,20 @@ Proof.
    go_s. intros. go. 
    go_i. split!.
    * intros. 
-   rewrite lookup_add_list_not_in in H6; [|naive_solver]. rewrite lookup_insert_Some in H6.
+   rewrite lookup_add_list_not_in in H4; [|naive_solver]. rewrite lookup_insert_Some in H4.
    destruct!. split!.
-   go_i. intros. exists I. go_i. go_s. exists ("id", Some n). go.
-   go_s. go_s. split!.  rewrite -/id_loop_itree. go. apply H0. auto. split!.
+   go_i. intros. exists I. go_i. go_i. go_s. exists ("id", Some n). go.
+   go_s. go_s. split!.  rewrite -/id_loop_spec. go. apply H0. auto. split!.
    rewrite not_elem_of_cons. split!.
-   * intros.  apply lookup_add_list_None in H6. rewrite lookup_insert_None in H6. destruct!.
+   * intros.  apply lookup_add_list_None in H4. rewrite lookup_insert_None in H4. destruct!.
   - case_bool_decide.
    * (* f = ("id", Some n)*)
     go_s. intros. go. go_s. intros. go.  go_i. split!.
-    + intros. rewrite lookup_add_list_in in H7; auto. inversion H7. split!. naive_solver. subst.
-    go_i. go_s. rewrite -/id_loop_itree. split!. go. apply H0. auto.
+    + intros. rewrite lookup_add_list_in in H6; auto. inversion H6. split!. naive_solver. subst.
+    go_i. go_i. go_s. rewrite -/id_loop_spec. split!. go. apply H0. auto.
     split!. 
-    + intros. apply (lookup_add_list_in id_prog l (Build_fndef ["x"] (Var "x") I)) in H4.
-    rewrite H4 in H7. inversion H7. 
+    + intros. apply (lookup_add_list_in id_prog l (Build_fndef ["x"] (Var "x") I)) in H3.
+    rewrite H3 in H6. inversion H6. 
    * go_s. auto.  
   }
   Qed. 
@@ -388,21 +389,21 @@ Definition rec_id_prog : gmap fid fndef :=
   <[("rec_id",None) := rec_id_lam]> $ ∅.
 Definition rec_id_mod := lam_mod rec_id_prog.
 
-Definition rec_id_loop_itree : itree (moduleE lam_event (gmap fid unit)) unit :=
-  ITree.forever(
-        '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));;;
-        fid_map ← TGet ;;;
+Definition rec_id_loop_spec : spec  lam_event (gmap fid unit) void :=
+  Spec.forever(
+        '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));
+        fid_map ← TGet ;
         if (bool_decide(f = ("rec_id",None)))
           then 
-          TAssume (vs = []);;;;
-          newfid ← TExist fid;;;
-          TPut (insert newfid () fid_map);;;;
+          TAssume (vs = []);;
+          newfid ← TExist fid;
+          TPut (insert newfid () fid_map);;
           TVis (Outgoing, ELReturn (ValFid newfid) h)
         else if (bool_decide(f∈dom fid_map))
           then 
-          z ← TAll Z;;;
-          TAssume (vs = [ValNum z]);;;;
-          TAssume (z>=0);;;;
+          z ← TAll Z;
+          TAssume (vs = [ValNum z]);;
+          TAssume (z>=0);;
           TVis (Outgoing, ELReturn (ValNum z) h)
         else TUb
   ).
@@ -442,6 +443,8 @@ Proof.
   rewrite lookup_insert_ne; by destruct!.
 Qed.
   
+(* to remove*)
+(*
 Lemma rec_id_fundamental_lemma x prog f n' Ks h': 
   0<=x→
   prog !! f =
@@ -490,16 +493,17 @@ Proof.
   rewrite H5 in H0.
   inversion H0.
 Admitted.
+*)
 
-
-Lemma rec_id_prog_refines_rec_id_loop_itree :
-  trefines rec_id_mod (itree_mod rec_id_loop_itree ∅).
+(* ** TODO *)
+Lemma rec_id_prog_refines_rec_id_loop_spec :
+  trefines rec_id_mod (spec_mod rec_id_loop_spec ∅).
 Proof.
   apply tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember.
   {simpl. 
   exact (λ _ σa '(t, m),
-  t ≈ rec_id_loop_itree ∧
+  t ≡ rec_id_loop_spec ∧
   ∃h rec_id_prog', σa= Lam Waiting [] h rec_id_prog'/\ 
   map_Forall (λ key _, rec_id_prop (rec_id_prog' !! key ) key)  m/\ 
   ("rec_id",None)∉ dom m/\ 
@@ -513,30 +517,27 @@ Proof.
   - (* f = ("rec_id", None)*)
    go_s. intros. go. 
    go_i. split!.
-   * intros.  subst. rewrite -H6 in H8. rewrite lookup_insert_Some in H8. destruct!.
-   split!. go_i. intros. exists I. go_i. go_s. rewrite -/rec_id_loop_itree. exists ("rec_id", Some n).
-   go. go_s. go_s. split!. go. apply H0; auto. split!.  apply map_Forall_insert_2.
+   * intros.  subst. rewrite -H6 in H7. rewrite lookup_insert_Some in H7. destruct!.
+   split!. go_i. intros. exists I. go_i. go_s. rewrite -/rec_id_loop_spec. exists ("rec_id", Some n).
+   go. go_i. go_s. go_s. split!. go. apply H0; auto. split!.  apply map_Forall_insert_2.
     + (*prove rec_id_prop*) rewrite lookup_insert. split!. f_equal. apply AxProofIrrelevance . 
     + apply rec_id_map_forall_neq; auto. 
-    intro. rewrite map_Forall_lookup in H3. rewrite elem_of_dom in H7. unfold is_Some in H7. destruct!.
-    apply H3 in H7. unfold rec_id_prop in H7. rewrite H5 in H7. auto.
+    intro. rewrite map_Forall_lookup in H3. rewrite elem_of_dom in H5. unfold is_Some in H5. destruct!.
+    apply H3 in H5. unfold rec_id_prop in H5. rewrite H2 in H5. auto.
     + rewrite not_elem_of_dom. rewrite lookup_insert_None; split!. by rewrite - not_elem_of_dom.
     +  rewrite (lookup_insert_ne _ ("rec_id", Some n)). auto. auto. 
-   * intros. subst. rewrite -H6 in H8.   rewrite lookup_insert_None in H8. destruct!.
+   * intros. subst. rewrite -H6 in H7.   rewrite lookup_insert_None in H7. destruct!.
   - case_bool_decide.
    * (* f = ("rec_id", Some n)*)
     go_s. intros. go. go_s. intros. go.  go_i. split!.
-    + intros. rewrite elem_of_dom in H7. destruct H7. rewrite map_Forall_lookup in H3.
-    apply H3 in H7. rewrite H9 in H7. unfold rec_id_prop in H7. subst. split!. 
-    go_s. intros. rewrite -/rec_id_loop_itree. go.
+    + intros. rewrite elem_of_dom in H5. destruct H5. rewrite map_Forall_lookup in H3.
+    apply H3 in H5. rewrite H8 in H5. unfold rec_id_prop in H5. subst. split!. 
+    go_s. intros. rewrite -/rec_id_loop_spec. go.
 
     (* ** main theorem!!*)
-    assert (∀e, ReturnExt e = expr_fill [ReturnExtCtx] e).
-    auto.
-    rewrite H8.
     
     admit.
-    + intros. rewrite elem_of_dom in H1. destruct H1. rewrite H9 in H1. inversion H1. 
+    + intros. rewrite elem_of_dom in H1. destruct H1. rewrite H8 in H1. inversion H1. 
    * go_s. auto.  
   }
   Admitted.
@@ -562,25 +563,25 @@ Inductive clos_add_ctype:=
   | Initial 
   | Final (z:Z).
 
-Definition clos_add_loop_itree : itree (moduleE lam_event (gmap fid clos_add_ctype)) unit :=
-  ITree.forever(
-        '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));;;
-        fid_map ← TGet ;;;
+Definition clos_add_loop_spec : spec  lam_event (gmap fid clos_add_ctype) void :=
+  Spec.forever(
+        '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));
+        fid_map ← TGet ;
         match fid_map !! f with 
           | Some Main => 
-            TAssume (vs = []);;;;
-            newfid ← TExist fid;;;
-            TPut (insert newfid Initial fid_map);;;;
+            TAssume (vs = []);;
+            newfid ← TExist fid;
+            TPut (insert newfid Initial fid_map);;
             TVis (Outgoing, ELReturn (ValFid newfid) h)
           | Some Initial => 
-            x ← TAll _;;;
-            TAssume (vs = [ValNum x]);;;;
-            newfid ← TExist fid;;;
-            TPut (insert newfid (Final x) fid_map);;;;
+            x ← TAll _;
+            TAssume (vs = [ValNum x]);;
+            newfid ← TExist fid;
+            TPut (insert newfid (Final x) fid_map);;
             TVis (Outgoing, ELReturn (ValFid newfid) h)
           | Some (Final x) =>  
-            y ← TAll _;;;
-            TAssume (vs = [ValNum y]);;;;
+            y ← TAll _;
+            TAssume (vs = [ValNum y]);;
             TVis (Outgoing, ELReturn (ValNum (x+y)) h)
           | None => TUb 
         end
@@ -607,13 +608,13 @@ Definition clos_add_fns_m_prop (fns:gmap fid fndef) (m:gmap fid clos_add_ctype):
     |} ↔ m!!f = Some (Final n))
   .
 
-Lemma clos_add_prog_refines_clos_add_loop_itree :
-  trefines clos_add_mod (itree_mod clos_add_loop_itree (insert ("clos_add",None) Main ∅)).
+Lemma clos_add_prog_refines_clos_add_loop_spec :
+  trefines clos_add_mod (spec_mod clos_add_loop_spec (insert ("clos_add",None) Main ∅)).
 Proof.
   apply tsim_implies_trefines. intros.
   unshelve eapply tsim_remember.
   {simpl. exact (λ n s '(t,m),
-    t ≈ clos_add_loop_itree ∧
+    t ≡ clos_add_loop_spec ∧
     ∃h fns, s= Lam Waiting [] h fns ∧
     clos_add_fns_m_prop fns m
     ). }
@@ -621,29 +622,29 @@ Proof.
    rewrite lookup_insert_Some in H;rewrite lookup_insert_Some;naive_solver. }
   {simpl. intros. auto. }
   {simpl. intros. destruct!. go_i. split!.
-   {intros. go_s. go_s. rewrite -/clos_add_loop_itree. exists (f, vs, h'). go. go_s. split!. go. go_s.
+   {intros. go_s. go_s. rewrite -/clos_add_loop_spec. exists (f, vs, h'). go. go_s. split!. go. go_s.
     destruct (m!!f) eqn:V.  unfold clos_add_fns_m_prop in H4. remember (H4 f). destruct!. clear Heqa.
     - destruct c eqn:V'.
       + (* main case*) go_s. intros. go. go_i. split!; intros. 
-        * rewrite- H3 in V. rewrite H8 in V. inversion V. subst. split!.
-          go_i. intros. exists I. go_i. go_s. exists (f.1, Some n0). go. go_s. go_s. split!. go.
+        * rewrite- H2 in V. rewrite H7 in V. inversion V. subst. split!.
+          go_i. intros. exists I. go_i. go_s. exists (f.1, Some n0). go. go_i. go_s. go_s. split!. go.
           apply H0. auto. split!.  
           unfold clos_add_fns_m_prop. 
-          intros;split!; split;intros; 
-          rewrite lookup_insert_Some in H9; rewrite lookup_insert_Some; naive_solver.
-        * rewrite -H3 in V. rewrite H8 in V. inversion V.   
+          intros;split!; split;intros;
+          rewrite lookup_insert_Some in H8; rewrite lookup_insert_Some; naive_solver.
+        * rewrite -H2 in V. rewrite H7 in V. inversion V.   
       + (* Initial case*)  go_s. intros. go. go_s. intros. go. go_i. split!; intros. 
-        * rewrite -H6 in V. rewrite H8 in V. inversion V. subst. split!. 
-        go_i. intros. exists I. go_i. go_s. exists (f.1, Some n0). go. go_s. go_s. split!. go. apply H0.
+        * rewrite -H5 in V. rewrite H7 in V. inversion V. subst. split!. 
+        go_i. intros. exists I. go_i. go_s. exists (f.1, Some n0). go. go_i. go_s. go_s. split!. go. apply H0.
         auto. split!.
         unfold clos_add_fns_m_prop. 
         intros;split!; split;intros; 
-        rewrite lookup_insert_Some in H9; rewrite lookup_insert_Some; naive_solver.
-        * rewrite -H6 in V. rewrite H8 in V. inversion V.  
+        rewrite lookup_insert_Some in H8; rewrite lookup_insert_Some; naive_solver.
+        * rewrite -H5 in V. rewrite H7 in V. inversion V.  
       + (* Final case*) go_s. intros. go. go_s. intros. go. go_i. split!; intros. 
-        * rewrite -H7 in V. rewrite H8 in V. inversion V. subst. split!.
-          go_i. go_i. go_s. split!. go. apply H0. auto. split!. 
-        * rewrite -H7 in V. rewrite H8 in V. inversion V.  
+        * rewrite -H6 in V. rewrite H7 in V. inversion V. subst. split!.
+          go_i. go_i. go_i. go_s. split!. go. apply H0. auto. split!. 
+        * rewrite -H6 in V. rewrite H7 in V. inversion V.  
     - go_s. auto. 
    } 
    {intros. destruct!. }
