@@ -51,7 +51,7 @@ Implicit Types (e : mexpr Λ).
 
 Lemma sim_tgt_expr_raw_step e Π:
   (∀ σ κ Pσ, ⌜mexpr_rel Λ σ e⌝ -∗ ⌜Λ.(m_step) σ κ Pσ⌝ -∗ mstate_interp Λ σ ={∅}=∗ ▷ₒ
-      ((∃ P, Π κ P ∗ ∀ P', P P' -∗ ∃ σ', ⌜Pσ σ'⌝ ∗ P' σ') ∨
+      (Π κ (λ P', ∃ σ', ⌜Pσ σ'⌝ ∗ P' σ') ∨
          ∃ σ' e', ⌜κ = None⌝ ∗ ⌜Pσ σ'⌝ ∗ ⌜mexpr_rel Λ σ' e'⌝ ∗ mstate_interp Λ σ' ∗ TGT e' [{ Π }])) -∗
   TGT e [{ Π }].
 Proof.
@@ -116,8 +116,8 @@ Lemma sim_tgt_expr_step e Φ Π :
   TGT e [{ Π }] {{ Φ }}.
 Proof.
   iIntros "Hsim" (?). iIntros "HΦ" (??) "#? Hσ".
-  iApply sim_tgt_step_end. iIntros (???). iMod ("Hsim" with "[//] [//] [$]") as "Hsim".
-  do 2 iModIntro. iExists _. iFrame. iIntros (?) "[% [% Hsim]]".
+  iApply sim_tgt_bi_mono1. iApply sim_tgt_step_end. iIntros (???). iMod ("Hsim" with "[//] [//] [$]") as "Hsim".
+  do 2 iModIntro. iApply (bi_mono1_intro with "Hsim"). iIntros (?) "[% [% Hsim]]".
   iExists _. iSplit; [done|]. iApply "Hsim".
   iIntros (???) "? Hsim". iApply (sim_tgt_expr_raw_elim with "[$]"); [done|].
   by iApply "Hsim".
@@ -196,6 +196,16 @@ Lemma sim_src_expr_stop e Π Φ :
   Φ e Π -∗ SRC e [{ Π }] {{ Φ }}.
 Proof. iIntros "HΦ" (?) "HF". by iApply "HF". Qed.
 
+Lemma sim_src_expr_elim e Π σ K :
+  mexpr_rel Λ σ (mfill Λ K e) →
+  mstate_interp Λ σ -∗
+  SRC e [{ Π }] {{ _, _, False }} -∗
+  σ ≈{Λ}≈>ₛ Π.
+Proof.
+  iIntros (?) "Hσ He". iApply (sim_src_expr_raw_elim with "[$]"); [done|].
+  iApply "He". by iIntros (??) "?".
+Qed.
+
 Lemma sim_src_expr_step_None e Π Φ :
   (∀ K σ, ⌜mexpr_rel Λ σ (mfill Λ K e)⌝ -∗ mstate_interp Λ σ ==∗
     ∃ Pσ, ⌜m_step Λ σ None Pσ⌝ ∗
@@ -230,6 +240,9 @@ Proof.
 Qed.
 
 End sim_src.
+
+Global Typeclasses Opaque sim_tgt_expr sim_src_expr.
+Global Opaque sim_tgt_expr sim_src_expr.
 
 (* (** * [sim_expr_s] *) *)
 (* Definition sim_expr_s `{!dimsumGS EV Σ Λ_t Λ_s} (q : Qp) (e : mexpr Λ_s) : iProp Σ := *)
