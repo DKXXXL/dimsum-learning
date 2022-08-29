@@ -529,15 +529,38 @@ Proof.
    * intros. subst. rewrite -H6 in H7.   rewrite lookup_insert_None in H7. destruct!.
   - case_bool_decide.
    * (* f = ("rec_id", Some n)*)
-    go_s. intros. go. go_s. intros. go.  go_i. split!.
-    + intros. rewrite elem_of_dom in H5. destruct H5. rewrite map_Forall_lookup in H3.
-    apply H3 in H5. rewrite H8 in H5. unfold rec_id_prop in H5. subst. split!. 
+    go_s. intros. go. go_s. intros. go. go_s. intros. rewrite -/rec_id_loop_spec. go. 
+    simplify_eq/=.  go_i. split!.
+
+    (*unshelve eapply tsim_remember.
+    {simpl. 
+    exact (λ _ σa '(t, m),
+    ∃ x Ks e, x>=0/\
+    t ≡ (TVis (Outgoing, ELReturn x h');; rec_id_loop_spec)%spec /\ 
+    σa = Lam e [] h' rec_id_prog' /\
+    (LamExprFill e Ks (App (Val (ValFid f)) [Val (ValNum x)]))
+    ). }{simpl. auto. split!. exact H8. auto. apply _.  } { intros. simpl. auto. } 
+    intros. simplify_eq/=. destruct!. go_i. split!. intros. 
+    rewrite elem_of_dom in H5. destruct H5. rewrite map_Forall_lookup in H3.
+    apply H3 in H5. rewrite H12 in H5. unfold rec_id_prop in H5. subst. split!. 
+    go_i. split!. go_i. case_bool_decide. 
+    -- (*just stepping*) go_i.  admit.
+    -- go_i. apply H9; try auto. exists (x0-1). split!. 
+     admit. auto. 
+    go_s. intros. rewrite -/rec_id_loop_spec. go.
+    admit.
+    go_i.*)
+
+    
+    
+    +  intros. rewrite elem_of_dom in H5. destruct H5. rewrite map_Forall_lookup in H3.
+    apply H3 in H5. rewrite H7 in H5. unfold rec_id_prop in H5. subst. split!. 
     go_s. intros. rewrite -/rec_id_loop_spec. go.
 
     (* ** main theorem!!*)
     
     admit.
-    + intros. rewrite elem_of_dom in H1. destruct H1. rewrite H8 in H1. inversion H1. 
+    + intros. rewrite elem_of_dom in H1. destruct H1. rewrite H7 in H1. inversion H1. 
    * go_s. auto.  
   }
   Admitted.
