@@ -17,6 +17,13 @@ Class dimsumGS (Σ : gFunctors) := DimsumGS {
 }.
 Global Opaque dimsum_invGS.
 
+Definition dimsumΣ : gFunctors :=
+  #[ ord_laterΣ; invΣ ].
+
+Global Instance subG_dimsumΣ Σ :
+  subG (dimsumΣ) Σ → dimsumPreG Σ.
+Proof. solve_inG. Qed.
+
 (** * [sim_tgt] *)
 Section sim_tgt.
   Context {Σ : gFunctors} {EV : Type} `{!dimsumGS Σ}.
@@ -131,13 +138,19 @@ Section sim_tgt.
     σ ≈{ m }≈>ₜ Π.
   Proof. iIntros "Hsim". rewrite sim_tgt_unfold. iIntros "#?". by iApply "Hsim". Qed.
 
-  Lemma sim_tgt_stop σ Π :
-    Π None (λ P, P σ) -∗
+  Lemma sim_tgt_stop σ Π P :
+    Π None P -∗
+    (∀ P', P P' -∗ P' σ) -∗
     σ ≈{ m }≈>ₜ Π.
   Proof.
-    iIntros "?". rewrite sim_tgt_unfold. iIntros "?". iModIntro.
-    iLeft. iExists _. iFrame. by iIntros.
+    iIntros "??". rewrite sim_tgt_unfold. iIntros "?". iModIntro.
+    iLeft. iExists _. iFrame.
   Qed.
+
+  Lemma sim_tgt_stop' σ Π :
+    Π None (λ P, P σ) -∗
+    σ ≈{ m }≈>ₜ Π.
+  Proof. iIntros "HΠ". iApply (sim_tgt_stop with "HΠ"). iIntros (?) "$". Qed.
 
   Lemma sim_tgt_step σ Π :
     (∀ κ Pσ, ⌜m.(m_step) σ κ Pσ⌝ ={∅}=∗ ▷ₒ

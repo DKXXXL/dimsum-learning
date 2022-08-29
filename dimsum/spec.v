@@ -1,8 +1,11 @@
 From Paco Require Import paco.
-From ITree Require Export ITree ITreeFacts.
+From ITree Require Import ITree ITreeFacts.
 From ITree.Eq Require Import Paco2.
 From dimsum.core Require Export proof_techniques.
 From dimsum.core Require Import axioms.
+
+(** from ITree.Basics.Basics.v *)
+Notation void := Empty_set.
 
 (** This file is derived from
 https://github.com/DeepSpec/InteractionTrees/blob/4.0.0/theories/Core/ITreeDefinition.v

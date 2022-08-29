@@ -1,6 +1,5 @@
 From Paco Require Import paco.
-From ITree Require Export ITree ITreeFacts.
-From ITree Require Export ITree.
+From ITree Require Import ITree ITreeFacts.
 From dimsum.core Require Export proof_techniques spec.
 From dimsum.core Require Import axioms.
 

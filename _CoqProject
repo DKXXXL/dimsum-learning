@@ -53,3 +53,4 @@ dimsum/iris/sim.v
 dimsum/iris/expr.v
 # dimsum/iris/language.v
 dimsum/iris/iris.v
+dimsum_examples/iris/rec.v

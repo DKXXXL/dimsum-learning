@@ -1,4 +1,4 @@
 From dimsum.core Require Export module trefines.
-From dimsum.core.iris Require Export sim.
+From dimsum.core.iris Require Export sim expr.
 
 (** This file reexports all relevant modules and should be imported by clients. *)

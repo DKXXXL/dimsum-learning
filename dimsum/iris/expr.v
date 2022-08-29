@@ -68,7 +68,14 @@ Lemma sim_tgt_expr_raw_elim e Π σ :
   σ ≈{Λ}≈>ₜ Π.
 Proof. iIntros (?) "Hσ He". iApply sim_tgt_ctx. iIntros "#?". by iApply "He". Qed.
 
-Lemma sim_tgt_expr_bind e Π Φ K :
+Lemma sim_tgt_expr_ctx e Π Φ :
+  (ord_later_ctx -∗ TGT e [{ Π }] {{ Φ }}) -∗
+  TGT e [{ Π }] {{ Φ }}.
+Proof.
+  iIntros "Hsim" (?) "HΦ". iIntros (??) "#?". iApply ("Hsim" with "[$] [$] [//] [$]").
+Qed.
+
+Lemma sim_tgt_expr_bind K e Π Φ :
   TGT e [{ Π }] {{ e', Π', TGT mfill Λ K e' [{ Π' }] {{ Φ }} }} -∗
   TGT mfill Λ K e [{ Π }] {{ Φ }}.
 Proof.
@@ -163,6 +170,13 @@ Lemma sim_src_expr_raw_elim e Π σ :
   SRC e [{ Π }] -∗
   σ ≈{Λ}≈>ₛ Π.
 Proof. iIntros (?) "Hσ He". iApply sim_src_ctx. iIntros "#?". by iApply "He". Qed.
+
+Lemma sim_src_expr_ctx e Π Φ :
+  (ord_later_ctx -∗ SRC e [{ Π }] {{ Φ }}) -∗
+  SRC e [{ Π }] {{ Φ }}.
+Proof.
+  iIntros "Hsim" (?) "HΦ". iIntros (??) "#?". iApply ("Hsim" with "[$] [$] [//] [$]").
+Qed.
 
 Lemma sim_src_expr_bind e Π Φ K :
   SRC e [{ Π }] {{ e', Π', SRC mfill Λ K e' [{ Π' }] {{ Φ }} }} -∗
@@ -260,4 +274,14 @@ TGT if b then ... else [{ Π }] {{ Φ }}
 TGT Call locle [{ Π }] {{ λ e Π', TGT if e then ... else [{ Π' }] {{ Φ }} }}
 ---------------------------------------------------
 TGT if Call locle then... else ... [{ Π }] {{ Φ }}
+
+
+Left, (Call main vs, h), locle_prog ⪯ main_spec_prog
+---------------------------------------------
+None, (Waiting, ∅), locle_prog ⪯ main_spec_prog
+----------------------------------------------
+[main ∪r memmove]r +r [locle]s <= [main_spec]s
+
+
+
 *)
