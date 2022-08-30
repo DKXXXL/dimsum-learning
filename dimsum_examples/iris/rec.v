@@ -107,6 +107,10 @@ Section lemmas.
     by fold_leibniz.
   Qed.
 
+  Lemma rec_fn_intro f fn fns :
+    fns !! f = fn → rec_fn_auth fns -∗ f ↪ fn.
+  Proof. unseal. iIntros (?) "Htbl". iExists _. by iFrame. Qed.
+
   Lemma rec_fn_lookup f fn fns :
     rec_fn_auth fns -∗ f ↪ fn -∗ ⌜fns !! f = fn⌝.
   Proof.
@@ -149,7 +153,7 @@ Program Canonical Structure rec_mod_lang {Σ} `{!recGS Σ} := {|
   mfill := expr_heap_fill;
   mcomp_ectx := flip app;
   mtrans := rec_trans;
-  mexpr_rel σ e := eh_expr e = st_expr σ ∧ if eh_heap e is Some h then h = st_heap σ else True;
+  mexpr_rel σ e := st_expr σ = eh_expr e ∧ if eh_heap e is Some h then st_heap σ = h else True;
   mstate_interp := rec_state_interp;
 |}.
 Next Obligation. move => ???? [??]/=. by rewrite /expr_heap_fill/= expr_fill_app. Qed.
@@ -157,7 +161,7 @@ Next Obligation. move => ???? [??]/=. by rewrite /expr_heap_fill/= expr_fill_app
 Section lifting.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
 
-  Lemma sim_rec_Call_internal f fn es Π Φ vs `{!AsVals es vs None} :
+  Lemma sim_tgt_rec_Call_internal f fn es Π Φ vs `{!AsVals es vs None} :
     length vs = length (fd_args fn) →
     f ↪ Some fn -∗
     ▷ₒ Φ (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)) @ -) Π -∗
@@ -175,6 +179,34 @@ Section lifting.
     do 2 iModIntro. iExists _, (_ @ -). iSplit!. iFrame.
     by iApply sim_tgt_expr_stop2.
   Qed.
+
+  Lemma sim_tgt_rec_Waiting fns h Π Φ (b : bool) :
+    rec_fn_auth fns -∗
+    (rec_mapsto_auth (h_heap h) -∗
+     rec_alloc_auth (dom (h_heap h)) -∗
+     (∀ f fn vs h', ⌜fns !! f = Some fn⌝ -∗
+       ▷ₒ Π (Some (Incoming, ERCall f vs h')) (λ P,
+         ∀ σ,
+           (rec_mapsto_auth (h_heap h') -∗
+            rec_alloc_auth (dom (h_heap h')) -∗
+            σ ⤇ₜ λ Π', TGT Call f (Val <$> vs) @ - [{ Π' }] {{ Φ }}) -∗
+           P σ)) ∧
+      ∀ v h', ⌜b⌝ -∗
+       ▷ₒ Π (Some (Incoming, ERReturn v h')) (λ P, True)) -∗
+    TGT Waiting b @ h [{ Π }] {{ Φ }}.
+  Proof.
+    iIntros "#Hfns HΦ".
+    iApply sim_tgt_expr_step => /=. iIntros (? [e h0 fns0] ?? [??] Hp) "[Hh [Ha Hfns']]". simplify_eq/=.
+    iDestruct (rec_fn_auth_agree with "Hfns' Hfns") as %?. subst.
+    exploit prim_step_inv_head; [done|..].
+    { apply sub_redexes_are_values_item; case; naive_solver. }
+    { done. }
+    move => [? [Hstep ?]]. inv Hstep.
+    - iDestruct ("HΦ" with "[$] [$]") as "[HΦ _]". iDestruct ("HΦ" with "[//]") as "?".
+      do 2 iModIntro. admit.
+    - iDestruct ("HΦ" with "[$] [$]") as "[_ HΦ]". iDestruct ("HΦ" with "[//]") as "?".
+      do 2 iModIntro. admit.
+  Admitted.
 End lifting.
 
 Section memmove.
@@ -198,7 +230,7 @@ Section memmove.
     iApply ord_loeb; [done|].
     iIntros "!> #-#IH" (d d' s s' n hvs Hn Hd' Hs' Hle) "Hs Hd HΦ". simplify_eq.
     iApply (sim_tgt_expr_bind [] (_ @ -) with "[-]").
-    iApply (sim_rec_Call_internal with "Hf"); [done|]. iModIntro => /=.
+    iApply (sim_tgt_rec_Call_internal with "Hf"); [done|]. iModIntro => /=.
   Abort.
 
   Lemma sim_memmove Π Φ d s n hvs :
@@ -215,7 +247,7 @@ Section memmove.
   Proof.
     iIntros (->) "#Hmemmove #Hmemcpy #Hlocle Hs Hd HΦ".
     iApply (sim_tgt_expr_bind [] (_ @ -)).
-    iApply (sim_rec_Call_internal with "Hmemmove"); [done|]. iModIntro => /=.
+    iApply (sim_tgt_rec_Call_internal with "Hmemmove"); [done|]. iModIntro => /=.
     simpl.
   Abort.
 
@@ -266,7 +298,7 @@ Section link.
     iIntros (?) "?". iIntros ([[[??]?]?] ?); simplify_eq/=. by repeat case_match; simplify_eq/=.
   Qed.
 
-  Definition link_tgt_left_handler R (m1 m2 : mod_trans (io_event EV))
+  Definition link_tgt_left_handler R {m1 m2 : mod_trans (io_event EV)}
     (Π : option (io_event EV) → ((link_case EV * S * m_state m1 * m_state m2 → iProp Σ) → iProp Σ) → iProp Σ)
     (s : S) (σ2 : m_state m2)
     : option (io_event EV) → ((m_state m1 → iProp Σ) → iProp Σ) → iProp Σ :=
@@ -279,7 +311,7 @@ Section link.
             end%I.
 
   Lemma sim_tgt_link_left R m1 m2 s σ1 σ2 Π :
-    σ1 ≈{m1}≈>ₜ link_tgt_left_handler R m1 m2 Π s σ2 -∗
+    σ1 ≈{m1}≈>ₜ link_tgt_left_handler R Π s σ2 -∗
     (MLFLeft, s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
   Proof.
     iIntros "Hsim".
@@ -423,7 +455,7 @@ Section memmove.
       rec_link_trans {["main"; "memmove"; "memcpy"]} {["locle"]} rec_trans (spec_trans rec_event ()),
       spec_trans rec_event ()} (main_spec, ()).
   Proof.
-    iIntros "Hstate". iApply (sim_tgt_handler_intro with "[-]").
+    iIntros "[Hh [Ha #Hfns]]". iApply (sim_tgt_handler_intro with "[-]").
     iApply (sim_tgt_link_None with "[-]").
     iIntros "!>" (??????). destruct!/=. case_match; destruct!/=.
     unfold sim_tgt_handler.
@@ -440,8 +472,17 @@ Section memmove.
     iApply sim_src_expr_stop1. iIntros (?) "Hsrc". iSplit!.
     iApply (sim_tgt_handler_intro with "[-]").
     iApply (sim_tgt_link_left_recv with "[-]").
-    iApply (sim_tgt_expr_elim [] (_ @ _) with "Hstate [-]"); [done|] => /=.
-    (* iApply sim_src_expr_stop. *)
+    iApply (sim_tgt_expr_elim [] (_ @ _) with "[Ha Hh] [-]"); [done| by iFrame |] => /=.
+    iApply (sim_tgt_rec_Waiting with "[$]"). iIntros "Hh Ha".
+    iSplit; [|by iIntros].
+    iIntros (???? Hin) "!>". iIntros (?). simplify_map_eq.
+    iApply sim_src_stop. iSplit!. iIntros (?) "Htgt".
+    iApply (sim_tgt_handler_intro with "[-]").
+    iApply (sim_tgt_link_left with "[-]").
+    iApply ("Htgt" with "[Hh] [Ha]"). admit. admit.
+    iApply (sim_tgt_expr_bind [] (_ @ -)).
+    iApply sim_tgt_rec_Call_internal. 2: { by iApply (rec_fn_intro with "[$]"). } { done. }
+    iModIntro => /=.
   Admitted.
 End memmove.
 
