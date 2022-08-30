@@ -2269,17 +2269,36 @@ Proof.
     simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
     rewrite -expr_fill_app.
     inv_all head_step => //.
-    + (* binop*) admit.
-    + (* newref*) admit.
-    + (* load*) admit.
-    + (* store*) admit.
-    + (* if*) admit.
-    + (* lete*) admit.
+    + (* binop*) 
+      tstep_s. intros. tend. split!. apply Hloop. 
+      rewrite !expr_fill_app. split!;auto. exact H1. 
+      apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+    + (* newref*)
+      tstep_s. exists l, h'. intros. split!. symmetry in H0; naive_solver.
+      intros. tend.  split!;auto. exact H0. auto.
+      rewrite !expr_fill_app. apply Hloop. split!; auto. exact H1. 
+      apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+    + (* load*)
+      tstep_s. intros. tend. split!. exact H0. exact H2.
+      rewrite !expr_fill_app. apply Hloop. split!; auto. exact H1.
+      apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+    + (* store*) 
+      tstep_s. intros. tend. split!. symmetry. exact H0. exact H2.
+      rewrite !expr_fill_app. apply Hloop. split!; auto. exact H1.
+      apply is_static_expr_expr_fill; split! ;naive_solver.                    
+    + (* if*) 
+      tstep_s. intros. tend. split!. symmetry. exact H0. 
+      rewrite !expr_fill_app. apply Hloop. split!; auto. exact H1.
+      apply is_static_expr_expr_fill; split!. destruct b; naive_solver. 
+    + (* lete*) 
+      tstep_s. tend. split!.  
+      rewrite !expr_fill_app. apply Hloop. split!; auto. exact H1.
+      apply is_static_expr_expr_fill; split!. apply is_static_expr_subst. naive_solver.                  
     + (* fixe*) admit.
-    + (* var*) admit.
+    + (* var*) tstep_s. auto. 
     + (* internal app*) admit.
     + (* external app*) admit.
-  - (* right case*)admit. (*same case as before*) 
+  - (* right case*)admit. (*same case as before*)                                                       
   - tstep_i. split.
     + (*call?*) intros. unfold fns_inv in H. destruct!. tstep_s. split!.
       rewrite elem_get_string_set_union in H0. case_bool_decide. auto. case_bool_decide. auto.
