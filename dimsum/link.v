@@ -121,6 +121,17 @@ Section link.
     state_transform_trans (map_trans (seq_product_trans m1 m2) (link_filter R))
       (λ σ σ', σ' = link_state_trans R m1 m2 σ).
 
+  Global Instance link_trans_transform_wf R (m1 m2 : mod_trans (io_event EV)) :
+    StateTransformWf (map_trans (seq_product_trans m1 m2) (link_filter R))
+      (λ σ σ', σ' = link_state_trans R m1 m2 σ).
+  Proof.
+    constructor; [naive_solver|].
+    move => [[??]?] [[[??]?][[??]?]] [[[??]?][[??]?]] ?????; simplify_eq.
+    inv_all/= @m_step; inv_all @link_filter; destruct!.
+    all: eexists (_, _, _); do 3 f_equal; repeat case_match => //; simplify_eq/= => //.
+    all: unfold link_to_case in *; repeat case_match; simplify_eq => //.
+  Qed.
+
   Global Instance link_vis_no_all R (m1 m2 : mod_trans _) `{!VisNoAng m1} `{!VisNoAng m2}:
     VisNoAng (link_trans R m1 m2).
   Proof.
@@ -141,14 +152,9 @@ Section link.
     trefines (link_mod R m1 m2 σ) (link_mod R m1' m2' σ).
   Proof.
     move => ??.
-    apply: (state_transform_mod_trefines (Mod (map_trans _ _) _) (Mod (map_trans _ _) _)); [| | |done..].
-    - move => [[??]?] [[[??]?]?] [[[??]?]?] /=. naive_solver.
-    - move => [[??]?] [[[??]?][[??]?]] [[[??]?][[??]?]] ?????; simplify_eq.
-      inv_all/= @m_step; inv_all @link_filter; destruct!.
-      all: eexists (_, _, _); do 3 f_equal; repeat case_match => //; simplify_eq/= => //.
-      all: unfold link_to_case in *; repeat case_match; simplify_eq => //.
-    - apply: (map_mod_trefines (Mod (seq_product_trans _ _) _) (Mod (seq_product_trans _ _) _)) => /=.
-      by apply seq_product_mod_trefines.
+    apply: (state_transform_mod_trefines (Mod (map_trans _ _) _) (Mod (map_trans _ _) _)); [simpl; apply _| |done..].
+    apply: (map_mod_trefines (Mod (seq_product_trans _ _) _) (Mod (seq_product_trans _ _) _)) => /=.
+    by apply seq_product_mod_trefines.
   Qed.
 
   Lemma link_trans_step_left_i R m1 m2 s σ1 σ2 P `{!TStepI m1 σ1 P} :

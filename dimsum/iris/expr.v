@@ -89,9 +89,28 @@ Lemma sim_tgt_expr_wand e Π Φ Φ' :
   TGT e [{ Π }] {{ Φ }}.
 Proof. iIntros "Hsim Hwand" (?) "HΦ". iApply "Hsim". iIntros (??) "Hsim". iApply "HΦ". by iApply "Hwand". Qed.
 
-Lemma sim_tgt_expr_stop e Π Φ :
+Lemma sim_tgt_expr_stop1 e Π Φ :
+  (∀ σ, σ ⤇ₜ (λ Π', TGT e [{ Π' }] {{ Φ }}) -∗ Π None (λ P, P σ)) -∗
+  TGT e [{ Π }] {{ Φ }}.
+Proof.
+  iIntros "HΦ" (?) "HF". iIntros (??) "??".
+  iApply sim_tgt_stop. iApply "HΦ". iIntros (?) "Hsim".
+  iApply ("Hsim" with "[$] [//] [$] [$]").
+Qed.
+
+Lemma sim_tgt_expr_stop2 e Π Φ :
   Φ e Π -∗ TGT e [{ Π }] {{ Φ }}.
 Proof. iIntros "HΦ" (?) "HF". by iApply "HF". Qed.
+
+Lemma sim_tgt_expr_elim K e Π σ :
+  mexpr_rel Λ σ (mfill Λ K e) →
+  mstate_interp Λ σ -∗
+  TGT e [{ Π }] {{ _, _, False }} -∗
+  σ ≈{Λ}≈>ₜ Π.
+Proof.
+  iIntros (?) "Hσ He". iApply (sim_tgt_expr_raw_elim with "[$]"); [done|].
+  iApply "He". by iIntros (??) "?".
+Qed.
 
 Lemma sim_tgt_expr_step_None e Π Φ :
   (∀ K σ κ Pσ, ⌜mexpr_rel Λ σ (mfill Λ K e)⌝ -∗ ⌜Λ.(m_step) σ κ Pσ⌝ -∗ mstate_interp Λ σ ={∅}=∗ ▷ₒ
@@ -107,11 +126,10 @@ Qed.
 Lemma sim_tgt_expr_step e Φ Π :
   (∀ K σ κ Pσ, ⌜mexpr_rel Λ σ (mfill Λ K e)⌝ -∗ ⌜m_step Λ σ κ Pσ⌝ -∗ mstate_interp Λ σ ={∅}=∗ ▷ₒ
      Π κ (λ P, ∃ σ', ⌜Pσ σ'⌝ ∗
-       ((∀ Π' e',
+       ((∀ e',
            ⌜mexpr_rel Λ σ' (mfill Λ K e')⌝ -∗
            mstate_interp Λ σ' -∗
-           TGT e' [{ Π' }] {{ Φ }} -∗
-           σ' ≈{Λ}≈>ₜ Π') -∗
+           σ' ⤇ₜ λ Π', TGT e' [{ Π' }] {{ Φ }}) -∗
           P σ'))) -∗
   TGT e [{ Π }] {{ Φ }}.
 Proof.
@@ -119,7 +137,7 @@ Proof.
   iApply sim_tgt_bi_mono1. iApply sim_tgt_step_end. iIntros (???). iMod ("Hsim" with "[//] [//] [$]") as "Hsim".
   do 2 iModIntro. iApply (bi_mono1_intro with "Hsim"). iIntros (?) "[% [% Hsim]]".
   iExists _. iSplit; [done|]. iApply "Hsim".
-  iIntros (???) "? Hsim". iApply (sim_tgt_expr_raw_elim with "[$]"); [done|].
+  iIntros (??) "?". iIntros (?) "Hsim". iApply (sim_tgt_expr_raw_elim with "[$]"); [done|].
   by iApply "Hsim".
 Qed.
 
@@ -192,7 +210,16 @@ Lemma sim_src_expr_wand e Π Φ Φ' :
   SRC e [{ Π }] {{ Φ }}.
 Proof. iIntros "Hsim Hwand" (?) "HΦ". iApply "Hsim". iIntros (??) "Hsim". iApply "HΦ". by iApply "Hwand". Qed.
 
-Lemma sim_src_expr_stop e Π Φ :
+Lemma sim_src_expr_stop1 e Π Φ :
+  (∀ σ, σ ⤇ₛ (λ Π', SRC e [{ Π' }] {{ Φ }}) -∗ Π None σ) -∗
+  SRC e [{ Π }] {{ Φ }}.
+Proof.
+  iIntros "HΦ" (?) "HF". iIntros (??) "??".
+  iApply sim_src_stop. iApply "HΦ". iIntros (?) "Hsim".
+  iApply ("Hsim" with "[$] [//] [$] [$]").
+Qed.
+
+Lemma sim_src_expr_stop2 e Π Φ :
   Φ e Π -∗ SRC e [{ Π }] {{ Φ }}.
 Proof. iIntros "HΦ" (?) "HF". by iApply "HF". Qed.
 
@@ -223,18 +250,17 @@ Lemma sim_src_expr_step e Φ Π :
   (∀ K σ, ⌜mexpr_rel Λ σ (mfill Λ K e)⌝ -∗ mstate_interp Λ σ ==∗
      ∃ κ' Pσ_s, ⌜m_step Λ σ κ' Pσ_s⌝ ∗
        ∀ σ', ⌜Pσ_s σ'⌝ ={∅}=∗
-          ((∀ Π' e',
+          ((∀ e',
               ⌜mexpr_rel Λ σ' (mfill Λ K e')⌝ -∗
               mstate_interp Λ σ' -∗
-              SRC e' [{ Π' }] {{ Φ }} -∗
-              σ' ≈{Λ}≈>ₛ Π') -∗
+              σ' ⤇ₛ λ Π', SRC e' [{ Π' }] {{ Φ }}) -∗
           Π κ' σ')) -∗
   SRC e [{ Π }] {{ Φ }}.
 Proof.
   iIntros "He" (?). iIntros "HΦ" (??) "#? Hσ". iApply fupd_sim_src.
   iMod ("He" with "[//] [$]") as (???) "Hsim". iModIntro.
   iApply sim_src_step_end; [done|]. iIntros (??). iMod ("Hsim" with "[//]") as "Hsim".
-  iModIntro. iApply "Hsim". iIntros (???) "? Hsim".
+  iModIntro. iApply "Hsim". iIntros (??) "?". iIntros (?) "Hsim".
   iApply (sim_src_expr_raw_elim with "[$]"); [done|].
   by iApply "Hsim".
 Qed.

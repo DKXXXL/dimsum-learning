@@ -1,6 +1,13 @@
 From dimsum.core Require Export proof_techniques.
 
 (** * state transform *)
+Class StateTransformWf {EV S} (m : mod_trans EV) (R : S → m.(m_state) → Prop) := {
+  stwf_fun σ1 σ σ' : R σ1 σ → R σ1 σ' → σ = σ';
+  stwf_exist σ1 σ σ' κ Pσ :
+    m_step m σ κ Pσ → Pσ σ' → R σ1 σ → ∃ σ'', R σ'' σ';
+}.
+Global Hint Mode StateTransformWf + + + + : typeclass_instances.
+
 Inductive state_transform_step {EV S} (m : mod_trans EV) (R : S → m.(m_state) → Prop) :
   S → option EV → (S → Prop) → Prop :=
 | StateTransformStep σ σ' e Pσ:
@@ -38,16 +45,15 @@ Proof.
   apply: IH; naive_solver.
 Qed.
 
-Lemma state_transform_mod_trefines {EV S1 S2} (m1 m2 : module EV) (R1 : S1 → m1.(m_trans).(m_state) → Prop) (R2 : S2 → m2.(m_trans).(m_state) → Prop) σ1 σ2:
-  (∀ σ1 σ σ', R1 σ1 σ → R1 σ1 σ' → σ = σ') →
-  (∀ σ1 σ σ' κ Pσ, m_step m1.(m_trans) σ κ Pσ → Pσ σ' → R1 σ1 σ → ∃ σ'', R1 σ'' σ') →
+Lemma state_transform_mod_trefines {EV S1 S2} (m1 m2 : module EV) (R1 : S1 → m1.(m_trans).(m_state) → Prop) (R2 : S2 → m2.(m_trans).(m_state) → Prop) σ1 σ2 `{!StateTransformWf (m_trans m1) R1}:
   trefines m1 m2 →
   R1 σ1 m1.(m_init) →
   R2 σ2 m2.(m_init) →
   trefines (state_transform_mod m1 R1 σ1) (state_transform_mod m2 R2 σ2).
 Proof.
   destruct m1 as [m1 σ1'], m2 as [m2 σ2']. simplify_eq/=.
-  move => Heq Hstep Href HR1 HR2.
+  destruct StateTransformWf0 as [Heq Hstep].
+  move => Href HR1 HR2.
   apply wp_implies_refines => n.
   move: Href => /wp_complete/(_ n)/=.
   elim/o_lt_ind: n σ1 σ2 σ1' σ2' HR1 HR2 => n IH σ1 σ2 σ1' σ2' HR1 HRc2 Hwp.

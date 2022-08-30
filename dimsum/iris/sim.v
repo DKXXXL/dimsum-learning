@@ -5,6 +5,7 @@ From dimsum.core Require Export module trefines.
 From dimsum.core.iris Require Export ord_later.
 Set Default Proof Using "Type".
 
+(* TODO: rename to limo or lin_mon? for linear monotonicity *)
 Definition bi_mono1 {Σ A} (P : (A → iProp Σ) → iProp Σ) : (A → iProp Σ) → iProp Σ :=
   λ Q, (∃ Q', P Q' ∗ (∀ a, Q' a -∗ Q a))%I.
 
@@ -12,22 +13,10 @@ Section bi_mono1.
   Context {Σ : gFunctors} {A : Type}.
   Implicit Types (P : (A → iProp Σ) → iProp Σ).
 
-  Lemma bi_mono1_intro P Q Q' :
-    P Q' -∗
-    (∀ x, Q' x -∗ Q x) -∗
-    bi_mono1 P Q.
-  Proof. iIntros "? ?". iExists _. iFrame. Qed.
-
-  Lemma bi_mono1_intro' P Q :
+  Lemma bi_mono1_intro0 P Q :
     P Q -∗
     bi_mono1 P Q.
   Proof. iIntros "?". iExists _. iFrame. iIntros (?) "$". Qed.
-
-  Lemma bi_mono1_elim P Q :
-    bi_mono1 P Q -∗
-    (∀ Q', (∀ x, Q' x -∗ Q x) -∗ P Q' -∗ P Q) -∗
-    P Q.
-  Proof. iIntros "[% [??]] HP". iApply ("HP" with "[$] [$]"). Qed.
 
   Lemma bi_mono1_mono P Q1 Q2 :
     bi_mono1 P Q1 -∗
@@ -38,14 +27,6 @@ Section bi_mono1.
     iApply "HQ". by iApply "HQ1".
   Qed.
 
-  Lemma bi_mono1_dup P Q :
-    bi_mono1 (bi_mono1 P) Q -∗
-    bi_mono1 P Q.
-  Proof.
-    iIntros "[% [[% [HP HQ1]] HQ2]]". iExists _. iFrame "HP". iIntros (?) "?".
-    iApply "HQ2". by iApply "HQ1".
-  Qed.
-
   Lemma bi_mono1_mono_l P1 P2 Q :
     bi_mono1 P1 Q -∗
     (∀ Q, P1 Q -∗ P2 Q) -∗
@@ -53,7 +34,37 @@ Section bi_mono1.
   Proof.
     iIntros "[% [HP HQ1]] HQ". iExists _. iFrame "HQ1". by iApply "HQ".
   Qed.
+
+  Lemma bi_mono1_elim P Q :
+    bi_mono1 P Q -∗
+    (∀ Q', (∀ x, Q' x -∗ Q x) -∗ P Q' -∗ P Q) -∗
+    P Q.
+  Proof. iIntros "[% [??]] HP". iApply ("HP" with "[$] [$]"). Qed.
+
+  (** Derived laws *)
+  Lemma bi_mono1_dup P Q :
+    bi_mono1 (bi_mono1 P) Q -∗
+    bi_mono1 P Q.
+  Proof.
+    iIntros "?".
+    iApply (bi_mono1_elim with "[$] []").
+    iIntros (?) "??". by iApply (bi_mono1_mono with "[$]").
+  Qed.
+
+  Lemma bi_mono1_intro P Q Q' :
+    P Q' -∗
+    (∀ x, Q' x -∗ Q x) -∗
+    bi_mono1 P Q.
+  Proof.
+    iIntros "HP HQ".
+    iApply (bi_mono1_mono with "[HP] HQ").
+    by iApply bi_mono1_intro0.
+  Qed.
+
 End bi_mono1.
+
+(* TODO: enable this and prevent clients from unfolding bi_mono1 *)
+(* Global Typeclasses Opaque bi_mono1. *)
 
 (** * dimsumGS *)
 Class dimsumPreG (Σ : gFunctors) := DimsumPreG {
@@ -127,6 +138,15 @@ End sim_tgt.
 Notation " σ '≈{' m '}≈>ₜ' P " := (sim_tgt m σ P)
   (at level 70, format "σ  '≈{'  m  '}≈>ₜ'  P") : bi_scope.
 
+Definition sim_tgt_mapsto `{!dimsumGS Σ} {EV} (m : mod_trans EV) (σ : m_state m)
+  (H_s : (option EV → ((m_state m → iProp Σ) → iProp Σ) → iProp Σ) → iProp Σ) : iProp Σ :=
+  ∀ Π, H_s Π -∗ σ ≈{m}≈>ₜ Π.
+
+Notation "σ '⤇ₜ{' m } P " := (sim_tgt_mapsto m σ P)
+  (at level 20, only parsing) : bi_scope.
+Notation "σ '⤇ₜ' P " := (sim_tgt_mapsto _ σ P)
+  (at level 20, format "σ  '⤇ₜ'  P") : bi_scope.
+
 Section sim_tgt.
   Context {Σ : gFunctors} {EV : Type} `{!dimsumGS Σ}.
   Context (m : mod_trans EV).
@@ -173,11 +193,14 @@ Section sim_tgt.
     rewrite sim_tgt_unfold. iIntros "#?".
     iMod ("Hsim" with "[$]") as "[HΠ|Hsim]"; [iLeft| iRight].
     - iModIntro.
-      iDestruct "HΠ" as (?) "[? HP1]".
-      iDestruct ("Hc" with "[$]") as (?) "[? HP2]".
-      iExists _. iFrame. iIntros (?) "?".
-      iDestruct ("HP2" with "[$]") as (?) "[? HP3]".
-      iDestruct ("HP1" with "[$]") as "?". by iApply "HP3".
+      iDestruct (bi_mono1_mono_l with "[$] Hc") as "?".
+      iDestruct (bi_mono1_elim with "[$] []") as "?".
+      { iIntros (?) "Hsub ?". iApply (bi_mono1_mono with "[$]"). iIntros (?) "?".
+        by iDestruct (bi_mono1_mono_l with "[$] Hsub") as "?". }
+      iApply (bi_mono1_mono with "[$]").
+      iIntros (?) "?".
+      iDestruct (bi_mono1_elim with "[$] []") as "$".
+      by iIntros (?) "?".
     - iIntros "!>" (???). iMod ("Hsim" with "[//]") as "Hsim". do 2 iModIntro.
       iDestruct "Hsim" as "[HΠ|[% [% [% Hsim]]]]"; [iLeft|iRight].
       + iDestruct "HΠ" as (?) "[? HP1]".
@@ -197,7 +220,7 @@ Section sim_tgt.
     iIntros "Hsim Hwand".
     iApply (sim_tgt_wand_strong with "Hsim"). iIntros (??) "?".
     iApply (bi_mono1_intro with "[-]"); [by iApply "Hwand"|].
-    iIntros (?) "?". by iApply bi_mono1_intro'.
+    iIntros (?) "?". by iApply bi_mono1_intro0.
   Qed.
 
   Lemma sim_tgt_bi_mono σ Π:
@@ -211,7 +234,7 @@ Section sim_tgt.
   Proof.
     iIntros "Hsim". iApply (sim_tgt_wand_strong with "Hsim").
     iIntros (??) "?". iApply (bi_mono1_mono with "[$]").
-    iIntros (?) "?". by iApply bi_mono1_intro'.
+    iIntros (?) "?". by iApply bi_mono1_intro0.
   Qed.
 
   Lemma sim_tgt_bi_mono2 σ Π:
@@ -219,7 +242,7 @@ Section sim_tgt.
     σ ≈{ m }≈>ₜ Π.
   Proof.
     iIntros "Hsim". iApply (sim_tgt_wand_strong with "Hsim").
-    iIntros (??) "?". by iApply bi_mono1_intro'.
+    iIntros (??) "?". by iApply bi_mono1_intro0.
   Qed.
 
   Lemma fupd_sim_tgt σ Π :
@@ -236,7 +259,7 @@ Section sim_tgt.
     Π None (λ P', P' σ) -∗
     σ ≈{ m }≈>ₜ Π.
   Proof.
-    iIntros "?". rewrite sim_tgt_unfold. iIntros "?". iModIntro. iLeft. by iApply bi_mono1_intro'.
+    iIntros "?". rewrite sim_tgt_unfold. iIntros "?". iModIntro. iLeft. by iApply bi_mono1_intro0.
   Qed.
 
   Lemma sim_tgt_step σ Π :
@@ -247,7 +270,7 @@ Section sim_tgt.
     iIntros "Hsim". rewrite sim_tgt_unfold. iIntros "#?". iModIntro. iRight.
     iIntros (???). iMod ("Hsim" with "[//]") as "Hsim". do 2 iModIntro.
     iDestruct "Hsim" as "[?|?]"; [iLeft|by iRight].
-    by iApply bi_mono1_intro'.
+    by iApply bi_mono1_intro0.
   Qed.
 
   Lemma sim_tgt_step_end σ Π :
@@ -356,6 +379,15 @@ End sim_src.
 
 Notation " σ '≈{' m '}≈>ₛ' P " := (sim_src m σ P)
   (at level 70, format "σ  '≈{'  m  '}≈>ₛ'  P") : bi_scope.
+
+Definition sim_src_mapsto `{!dimsumGS Σ} {EV} (m : mod_trans EV) (σ : m_state m)
+  (H_s : (option EV → m_state m → iProp Σ) → iProp Σ) : iProp Σ :=
+  ∀ Π, H_s Π -∗ σ ≈{m}≈>ₛ Π.
+
+Notation "σ '⤇ₛ{' m } P " := (sim_src_mapsto m σ P)
+  (at level 20, only parsing) : bi_scope.
+Notation "σ '⤇ₛ' P " := (sim_src_mapsto _ σ P)
+  (at level 20, format "σ  '⤇ₛ'  P") : bi_scope.
 
 Section sim_src.
   Context {Σ : gFunctors} {EV : Type} `{!dimsumGS Σ}.
@@ -586,6 +618,17 @@ Section sim.
     iApply "HPre". iApply (sim_pre_mono with "[] Hsim").
     iIntros "!>" (??) "[? _]". by iFrame.
   Qed.
+
+  Lemma fupd_sim σ_t σ_s :
+    (|={∅}=> σ_t ⪯{m_t, m_s} σ_s) -∗
+    σ_t ⪯{m_t, m_s} σ_s.
+  Proof. iIntros "Hsim". rewrite sim_unfold. by iApply fupd_sim_tgt. Qed.
+
+  Lemma sim_ctx σ_t σ_s :
+    (ord_later_ctx -∗ σ_t ⪯{m_t, m_s} σ_s) -∗
+    σ_t ⪯{m_t, m_s} σ_s.
+  Proof. iIntros "Hsim". rewrite sim_unfold. by iApply sim_tgt_ctx. Qed.
+
 End sim.
 
 Theorem sim_adequacy Σ EV (m_t m_s : module EV) `{!dimsumPreG Σ} `{!VisNoAng (m_trans m_s)} :

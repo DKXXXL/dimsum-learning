@@ -51,6 +51,7 @@ dimsum/iris/mono_ord.v
 dimsum/iris/ord_later.v
 dimsum/iris/sim.v
 dimsum/iris/expr.v
+dimsum/iris/combinators.v
 # dimsum/iris/language.v
 dimsum/iris/iris.v
 dimsum_examples/iris/rec.v
