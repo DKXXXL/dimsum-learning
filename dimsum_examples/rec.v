@@ -1829,7 +1829,7 @@ Proof.
         apply: Hloop; [done|]. by split!.
       * tstep_s. split!.
         tstep_s. split!.
-        rewrite !expr_fill_app. apply: IHm; [|done|]; [lia|]. split!. by apply is_static_expr_expr_fill.
+        rewrite !expr_fill_app.  apply: IHm; [|done|]; [lia|]. split!. by apply is_static_expr_expr_fill.
     - destruct (to_val er') eqn:?; [ |apply: Hloop; naive_solver].
       destruct er'; simplify_eq/=.
       inversion HK; clear HK; simplify_eq/=.
