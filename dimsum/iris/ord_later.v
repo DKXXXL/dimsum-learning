@@ -112,7 +112,9 @@ Section definitions.
   Definition ord_later_ctx_eq : @ord_later_ctx = @ord_later_ctx_def := ord_later_ctx_aux.(seal_eq).
 
   Definition ord_later_def (P : iProp Σ) : iProp Σ :=
-    ∀ n, ord_later_auth n -∗ ord_later_auth n ∗ (∀ n', ⌜oS n' ⊆ n⌝ -∗ ord_later_auth n' -∗ ord_later_auth n' ∗ P).
+    ord_later_ctx -∗ ∃ n, ord_later_ub n ∗ ∀ n', ⌜oS n' ⊆ n⌝ -∗ ord_later_ub n' -∗ P.
+    (* Old version: *)
+    (* ∀ n, ord_later_auth n -∗ ord_later_auth n ∗ (∀ n', ⌜oS n' ⊆ n⌝ -∗ ord_later_auth n' -∗ ord_later_auth n' ∗ P). *)
   Definition ord_later_aux : seal (@ord_later_def). Proof. by eexists. Qed.
   Definition ord_later := ord_later_aux.(unseal).
   Definition ord_later_eq : @ord_later = @ord_later_def := ord_later_aux.(seal_eq).
@@ -152,15 +154,20 @@ Section lemmas.
 
   Lemma ord_later_intro P:
     P -∗ ▷ₒ P.
-  Proof. unseal. iIntros "HP" (n) "Ha". iFrame. iIntros (??) "$". Qed.
+  Proof.
+    unseal. iIntros "HP [% Hctx]".
+    iExists _. iFrame. by iIntros.
+  Qed.
 
   Lemma ord_later_mono P1 P2:
     ▷ₒ P1 -∗
     (P1 -∗ P2) -∗
     ▷ₒ P2.
   Proof.
-    unseal. iIntros "Hl HP" (n) "Ha". iDestruct ("Hl" with "Ha") as "[$ Hl]".
-    iIntros (n' ?) "Ha". iDestruct ("Hl" with "[//] Ha") as "[$ Hl]". by iApply "HP".
+    unseal. iIntros "Hl HP Hctx".
+    iDestruct ("Hl" with "Hctx") as (?) "[Hn Hl]".
+    iExists _. iFrame. iIntros (??) "?". iApply "HP".
+    by iApply "Hl".
   Qed.
 
   Lemma ord_later_alloc `{!ord_laterPreG Σ} n :
@@ -184,22 +191,32 @@ Section lemmas.
     (▷ₒ P1 ∗ ▷ₒ P2) -∗
     ▷ₒ (P1 ∗ P2).
   Proof.
-    unseal. iIntros "[HP1 HP2]" (n) "Htok".
-    iDestruct ("HP1" with "Htok") as "[Htok HP1]".
-    iDestruct ("HP2" with "Htok") as "[Htok HP2]".
-    iFrame. iIntros (n' ?) "Htok".
-    iDestruct ("HP1" with "[//] Htok") as "[Htok $]".
-    iDestruct ("HP2" with "[//] Htok") as "[Htok $]".
-    done.
+    unseal. iIntros "[HP1 HP2] #Hctx".
+    iDestruct ("HP1" with "[$]") as (n1) "[Hn1 HP1]".
+    iDestruct ("HP2" with "[$]") as (n2) "[Hn2 HP2]".
+    iExists (o_min n1 n2).
+    iCombine "Hn1 Hn2" as "Hn". rewrite mono_ord_ub_op. iFrame.
+    iIntros (??) "#?".
+    iDestruct ("HP1" with "[%] [$]") as "$". { etrans; [done|]. apply o_min_le_l. }
+    iDestruct ("HP2" with "[%] [$]") as "$". { etrans; [done|]. apply o_min_le_r. }
   Qed.
 
-  (* TODO: does this hold? *)
   Lemma ord_later_pers P :
     □ ▷ₒ P -∗ ▷ₒ □ P.
   Proof.
     iIntros "#HP".
-    unseal. iIntros (n) "Htok".
-  Abort. (* Does not seem to hold. *)
+    unseal. iIntros "#Hctx".
+    iDestruct ("HP" with "Hctx") as (?) "[? HP2]".
+    iExists _. iFrame "#". iIntros (??) "#?".
+    iModIntro. by iApply "HP2".
+  Qed.
+
+  Lemma ord_later_and P Q :
+    ▷ₒ P ∧ ▷ₒ Q -∗ ▷ₒ (P ∧ Q).
+  Proof.
+    iIntros "HPQ".
+    unseal. iIntros "#Hctx".
+  Abort. (* Is this provable? *)
 
   Lemma ord_loeb P:
     ord_later_ctx -∗
@@ -208,12 +225,9 @@ Section lemmas.
   Proof.
     unseal. iDestruct 1 as (n) "#Hub". iIntros "#Hl".
     iInduction n as [] "IH" using o_lt_ind.
-    iApply "Hl". iModIntro.
-    iIntros (n') "Hn'".
-    iDestruct (own_valid_2 with "Hn' Hub") as %[_ ?]%mono_ord_both_frac_valid.
-    iFrame. iIntros (n'' ?) "Ha".
-    rewrite {1}mono_ord_auth_ub_op. iDestruct "Ha" as "[Ha #Hn'']". iFrame.
-    iApply ("IH" with "[] Hn''"). iPureIntro. by etrans.
+    iApply "Hl". iModIntro. iIntros "_".
+    iExists _. iFrame "#".
+    iIntros (??) "#?". iApply "IH"; [done|]. by iModIntro.
   Qed.
 
   Lemma ord_later_sep_pers P1 P2:
@@ -229,10 +243,14 @@ Section lemmas.
     (ord_later_auth n ==∗ ∃ n', ⌜oS n' ⊆ n⌝ ∗ ord_later_auth n' ∗ (ord_later_auth n' -∗ P ==∗ Q)) -∗
     |==> Q.
   Proof.
-    unseal. iIntros "HP Ha Hwand".
-    iDestruct ("HP" with "Ha") as "[Ha HP]".
+    iIntros "HP Ha Hwand".
+    iDestruct (ord_later_ctx_alloc with "[$]") as "#?".
+    unseal.
+    iDestruct ("HP" with "[$]") as (n1) "[Hn1 HP]".
+    iDestruct (own_valid_2 with "Ha Hn1") as %?%mono_ord_both_valid.
     iMod ("Hwand" with "Ha") as (??) "[Ha Hwand]".
-    iDestruct ("HP" with "[//] Ha") as "[Ha HP]".
+    rewrite {1}mono_ord_auth_ub_op. iDestruct "Ha" as "[Ha Hn']".
+    iDestruct ("HP" with "[%] Hn'") as "HP". { by etrans. }
     by iApply ("Hwand" with "Ha").
   Qed.
 End lemmas.
@@ -267,7 +285,7 @@ Proof. done. Qed.
 
 Lemma modality_ord_later_mixin `{!ord_laterGS Σ} :
   (* TODO: Can we use [MIEnvTransform MaybeIntoOrdLater] instead of
-  MIEnvId? Seems tricky... *)
+  MIEnvId? Seems like we should, but it does not work for stupid reasons... *)
   modality_mixin ord_later MIEnvId (MIEnvTransform MaybeIntoOrdLater).
 Proof.
   split; simpl.

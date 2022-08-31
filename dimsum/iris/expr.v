@@ -41,7 +41,7 @@ Definition sim_tgt_expr {EV Σ Λ} `{!dimsumGS Σ}
 Notation "'TGT' e [{ Π }] {{ Φ } }" := (sim_tgt_expr e Π%I Φ%I)
   (at level 70, Π, Φ at level 200, only parsing) : bi_scope.
 
-Notation "'TGT' e [{ Π }] {{ e' , Π' , Φ } }" := (sim_tgt_expr e Π%I (λ e' Π', Φ))
+Notation "'TGT' e [{ Π }] {{ e' , Π' , Φ } }" := (sim_tgt_expr e Π%I (λ e' Π', Φ%I))
   (at level 70, Π, Φ at level 200,
     format "'[hv' 'TGT'  e  '/' [{  '[ ' Π  ']' }]  {{  '[ ' e' ,  Π' ,  '/' Φ  ']' } } ']'") : bi_scope.
 
@@ -175,7 +175,7 @@ Definition sim_src_expr {EV Σ Λ} `{!dimsumGS Σ}
 Notation "'SRC' e [{ Π }] {{ Φ } }" := (sim_src_expr e Π%I Φ%I)
   (at level 70, Π, Φ at level 200, only parsing) : bi_scope.
 
-Notation "'SRC' e [{ Π }] {{ e' , Π' , Φ } }" := (sim_src_expr e Π%I (λ e' Π', Φ)) (at level 70, Π, Φ at level 200,
+Notation "'SRC' e [{ Π }] {{ e' , Π' , Φ } }" := (sim_src_expr e Π%I (λ e' Π', Φ%I)) (at level 70, Π, Φ at level 200,
   format "'[hv' 'SRC'  e  '/' [{  '[ ' Π  ']' }]  {{  '[ ' e' ,  Π' ,  '/' Φ  ']' } } ']'") : bi_scope.
 
 Section sim_src.

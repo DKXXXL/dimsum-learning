@@ -160,10 +160,54 @@ Next Obligation. move => ???? [??]/=. by rewrite /expr_heap_fill/= expr_fill_app
 Section lifting.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
 
+  Lemma sim_tgt_rec_BinOp Π Φ v1 v2 v3 op :
+    eval_binop op v1 v2 = Some v3 →
+    (▷ₒ Φ (Val v3 @ -) Π) -∗
+    TGT BinOp (Val v1) op (Val v2) @ - [{ Π }] {{ Φ }}.
+  Proof.
+    iIntros (Hop) "HΦ".
+    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h fns] ?? [??] Hp) "[Hh [Ha Hfns]]". simplify_eq/=.
+    exploit prim_step_inv_head; [done|..].
+    { apply sub_redexes_are_values_item; case; naive_solver. }
+    { done. }
+    move => [? [Hstep ?]]. inv Hstep.
+    do 2 iModIntro. iExists _, (_ @ -). iSplit!. iFrame.
+    by iApply sim_tgt_expr_stop2.
+  Qed.
+
+  Lemma sim_tgt_rec_If Π Φ (b : bool) e1 e2 :
+    (▷ₒ TGT (if b then e1 else e2) @ - [{ Π }] {{ Φ }}) -∗
+    TGT If (Val (ValBool b)) e1 e2 @ - [{ Π }] {{ Φ }}.
+  Proof.
+    iIntros "HΦ".
+    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h fns] ?? [??] Hp) "[Hh [Ha Hfns]]". simplify_eq/=.
+    exploit prim_step_inv_head; [done|..].
+    { apply sub_redexes_are_values_item; case; naive_solver. }
+    { done. }
+    move => [? [Hstep ?]]. inv Hstep.
+    do 2 iModIntro. iExists _, (_ @ -). iSplit!. iFrame.
+  Qed.
+
+  Lemma sim_tgt_rec_AllocA e Π Φ vs :
+    Forall (λ z, 0 < z) vs.*2 →
+    (∀ ls, ([∗ list] l;n∈ls; vs.*2, [∗ list] o∈seqZ 0 n, (l +ₗ o) ↦ 0) -∗
+     ▷ₒ TGT subst_l vs.*1 (ValLoc <$> ls) e @ - [{ Π }] {{ e', Π',
+     ∃ v, ⌜e' = Val v @ -⌝ ∗ ([∗ list] l;n∈ls; vs.*2, [∗ list] o∈seqZ 0 n, ∃ v, (l +ₗ o) ↦ v) ∗ Φ e' Π' }}) -∗
+    TGT AllocA vs e @ - [{ Π }] {{ Φ }}.
+  Proof.
+    iIntros (Hall) "HΦ".
+    iApply sim_tgt_expr_step_None => /=. iIntros (? [e' h fns] ?? [??] Hp) "[Hh [Ha Hfns]]". simplify_eq/=.
+    exploit prim_step_inv_head; [done|..].
+    { apply sub_redexes_are_values_item; case; naive_solver. }
+    { done. }
+    move => [? [Hstep ?]]. inv Hstep.
+    do 2 iModIntro. iExists _, (_ @ -). iSplit!. iFrame. simpl.
+  Admitted.
+
   Lemma sim_tgt_rec_Call_internal f fn es Π Φ vs `{!AsVals es vs None} :
     length vs = length (fd_args fn) →
     f ↪ Some fn -∗
-    ▷ₒ Φ (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)) @ -) Π -∗
+    (▷ₒ TGT AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body)) @ - [{ Π }] {{ Φ }}) -∗
     TGT Call f es @ - [{ Π }] {{ Φ }}.
   Proof.
     destruct AsVals0. iIntros (?) "Hfn HΦ".
@@ -176,7 +220,6 @@ Section lifting.
     { done. }
     move => [? [Hstep ?]]. inv Hstep.
     do 2 iModIntro. iExists _, (_ @ -). iSplit!. iFrame.
-    by iApply sim_tgt_expr_stop2.
   Qed.
 
   Lemma sim_tgt_rec_Waiting fns h Π Φ (b : bool) :
@@ -236,10 +279,20 @@ Section memmove.
     iApply sim_tgt_expr_ctx. iIntros "#?".
     iRevert (d d' s s' n hvs Hn Hd' Hs' Hle) "Hs Hd HΦ".
     iApply ord_loeb; [done|].
-    iIntros "!> #-#IH" (d d' s s' n hvs Hn Hd' Hs' Hle) "Hs Hd HΦ". simplify_eq.
-    iApply (sim_tgt_expr_bind [] (_ @ -) with "[-]").
-    iApply (sim_tgt_rec_Call_internal with "Hf"); [done|]. iModIntro => /=.
-  Abort.
+    iIntros "!> #IH" (d d' s s' n hvs Hn Hd' Hs' Hle) "Hs Hd HΦ". simplify_eq.
+    iApply (sim_tgt_rec_Call_internal with "Hf"); [done|].
+    (* TODO: ask Robbert whether one can get rid of the following dance: *)
+    iDestruct (ord_later_pers with "IH") as "-#IH2". iClear "IH".
+    iModIntro => /=. iDestruct "IH2" as "#IH".
+    iApply sim_tgt_rec_AllocA; [econs|] => /=. iIntros (?) "?". destruct ls => //. iModIntro.
+    iApply (sim_tgt_expr_bind [IfCtx _ _] (_ @ -) with "[-]") => /=.
+    iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
+    iApply sim_tgt_rec_If. iModIntro => /=. case_bool_decide (0 < _).
+    2: { destruct hvs => //. iApply sim_tgt_expr_stop2. iSplit!. by iApply "HΦ". }
+    iApply (sim_tgt_expr_bind [LetECtx _ _] (_ @ -) with "[-]") => /=.
+    iApply (sim_tgt_expr_bind [StoreRCtx _] (_ @ -) with "[-]") => /=.
+    admit.
+  Admitted.
 
   Lemma sim_memmove Π Φ d s n hvs :
     n = Z.of_nat (length hvs) →
@@ -256,8 +309,35 @@ Section memmove.
     iIntros (->) "#Hmemmove #Hmemcpy #Hlocle Hs Hd HΦ".
     iApply (sim_tgt_expr_bind [] (_ @ -)).
     iApply (sim_tgt_rec_Call_internal with "Hmemmove"); [done|]. iModIntro => /=.
-    simpl.
-  Abort.
+    iApply sim_tgt_rec_AllocA; [econs|] => /=. iIntros (?) "?". destruct ls => //. iModIntro.
+    iApply (sim_tgt_expr_bind [IfCtx _ _] (_ @ -) with "[-]") => /=.
+    iApply "Hlocle". iIntros (b Hb) => /=.
+    iApply sim_tgt_rec_If. iModIntro => /=. destruct b.
+    - iApply (sim_memcpy with "[//] Hs Hd"). { done. } { by left. } { by rewrite bool_decide_true. }
+      { by rewrite bool_decide_true. } {
+        rewrite bool_decide_true // => /Hb Hx. symmetry in Hx. by rewrite bool_decide_eq_true in Hx.
+      }
+      iIntros "? ?". iSplit!. iApply sim_tgt_expr_stop2. iApply ("HΦ" with "[$] [$]").
+    - iApply (sim_tgt_expr_bind [CallCtx _ [] _] (_ @ -) with "[-]") => /=.
+      iApply (sim_tgt_expr_bind [BinOpRCtx _ _] (_ @ -) with "[-]") => /=.
+      iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
+      iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
+      iApply (sim_tgt_expr_bind [CallCtx _ [_] _] (_ @ -) with "[-]") => /=.
+      iApply (sim_tgt_expr_bind [BinOpRCtx _ _] (_ @ -) with "[-]") => /=.
+      iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
+      iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
+      iApply (sim_memcpy with "[//] Hs Hd"). { done. } { by right. }
+      { rewrite bool_decide_false; [|done]. rewrite offset_loc_assoc.
+        have -> : (length hvs + -1 + (- length hvs + 1)) = 0 by lia.
+        rewrite offset_loc_0. done. }
+      { rewrite bool_decide_false; [|done]. rewrite offset_loc_assoc.
+        have -> : (length hvs + -1 + (- length hvs + 1)) = 0 by lia.
+        rewrite offset_loc_0. done. } {
+        rewrite bool_decide_false // => /Hb Hx. symmetry in Hx. rewrite bool_decide_eq_false in Hx.
+        simpl. lia.
+      }
+      iIntros "? ?". iSplit!. iApply sim_tgt_expr_stop2. iApply ("HΦ" with "[$] [$]").
+  Qed.
 
   Lemma sim_locle Π Φ l1 l2 :
     (∀ b, ⌜l1.1 = l2.1 → b = bool_decide (l1.2 ≤ l2.2)⌝ -∗ Φ (Val (ValBool b) @ -) Π) -∗
@@ -491,6 +571,13 @@ Section memmove.
     iApply (sim_tgt_expr_bind [ReturnExtCtx _] (_ @ -)).
     iApply sim_tgt_rec_Call_internal. 2: { by iApply (rec_fn_intro with "[$]"). } { done. }
     iModIntro => /=.
+    iApply sim_tgt_rec_AllocA; [by econs|] => /=. iIntros (?) "Hl".
+    destruct ls as [|l []] => //=. 2: by iDestruct!.
+    have -> : (0%nat + 0) = 0 by []. have -> : (1%nat + 0) = 1 by []. have -> : (2%nat + 0) = 2 by [].
+    iDestruct "Hl" as "[[Hl0 [Hl1 [Hl2 _]]] _]". iModIntro.
+    iApply (sim_tgt_expr_bind [LetECtx _ _] (_ @ -) with "[-]") => /=.
+    iApply (sim_tgt_expr_bind [StoreLCtx _] (_ @ -) with "[-]") => /=.
+    iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
   Admitted.
 End memmove.
 
