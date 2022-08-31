@@ -2537,8 +2537,325 @@ Proof.
       all: apply is_static_expr_expr_fill; split! ;repeat case_match; auto.
 Qed.
   
-  
 
+(* Same proof as before, but with weaker invariant*)
+Lemma lam_syn_link_refines_link' fns1 fns2:
+  (get_string_set_from_fid_set fns1) ## (get_string_set_from_fid_set fns2) →
+  trefines (lam_mod (lam_syn_link fns1 fns2)) 
+  (lam_link  (get_string_set_from_fid_set fns1)  (get_string_set_from_fid_set fns2) (lam_mod fns1) (lam_mod fns2)).
+Proof.
+  move => Hdisj.
+  apply tsim_implies_trefines => /= n.
+  unshelve apply: tsim_remember. { exact: (λ _, lam_link_inv false fns1 fns2). }
+  { split!. econs.  1,2,3: done. } { done. }
+  move => /= {}n _ Hloop  [e1 s1 h1 fns1'] [[[ipfs cs] [el sl hl fnsl]] [er sr hr fnsr]] [m [K [Kl [Kr [e1'[el'[er' ?]]]]]]].
+  
+  destruct!/=. case_match; destruct!.
+  - (*left case*)
+    destruct (to_val el') eqn:?.
+    { destruct el' eqn:?; simplify_eq/=. clear H4. 
+    inversion H1;subst.
+      - tstep_i. tstep_i. intros. split!. exact H4. tstep_i. tstep_s. tstep_s. split!.
+        apply Hloop; auto.
+        split!; done.
+      - tstep_i. tstep_i. intros. split!. exact H5. tstep_s. tstep_s. split!.
+        tstep_s. right. 
+        inversion H0;subst;split!;  
+        destruct b'. rewrite orb_true_l. 
+        apply Hloop; auto. rewrite !expr_fill_app. split!; try done. apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+        simpl in H4; done.
+        apply Hloop; auto. rewrite !expr_fill_app. split!; try done. by rewrite !expr_fill_app. apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+        simpl in H4; done.
+        apply Hloop; auto. rewrite !expr_fill_app. split!; try done. apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+        simpl in H4; done.
+      - tstep_i. tstep_i. intros. split!. exact H5.
+        destruct b'. rewrite orb_true_l.
+        2: simpl in *;done.
+        tstep_s.
+        apply Hloop; auto. rewrite !expr_fill_app. split!; try done. apply is_static_expr_expr_fill; split!.  repeat case_match;auto.
+    }
+    tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]].
+    simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
+    rewrite -expr_fill_app.
+    inv_all head_step => //.
+    + (* binop*) 
+      tstep_s. intros. tend. split!. apply Hloop; auto. 
+      rewrite !expr_fill_app. split!;auto. exact H1. 
+      apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+    + (* newref*)
+      tstep_s. exists l, h'. intros. split!. symmetry in H0; naive_solver.
+      intros. tend.  split!;auto. exact H0. auto.
+      rewrite !expr_fill_app. apply Hloop;auto. split!; auto. exact H1. 
+      apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+    + (* load*)
+      tstep_s. intros. tend. split!. exact H0. exact H2.
+      rewrite !expr_fill_app. apply Hloop; auto. split!; auto. exact H1.
+      apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+    + (* store*) 
+      tstep_s. intros. tend. split!. symmetry. exact H0. exact H2.
+      rewrite !expr_fill_app. apply Hloop;auto. split!; auto. exact H1.
+      apply is_static_expr_expr_fill; split! ;naive_solver.                    
+    + (* if*) 
+      tstep_s. intros. tend. split!. symmetry. exact H0. 
+      rewrite !expr_fill_app. apply Hloop; auto. split!; auto. exact H1.
+      apply is_static_expr_expr_fill; split!. destruct b; naive_solver. 
+    + (* lete*) 
+      tstep_s. tend. split!.  
+      rewrite !expr_fill_app. apply Hloop; auto. split!; auto. exact H1.
+      apply is_static_expr_expr_fill; split!. apply is_static_expr_subst. naive_solver.                  
+    + (* fixe*) 
+      unfold fns_inv in H; destruct!.
+      inversion H1; subst.
+      --(* returns to None*)
+        tstep_s. split!. rewrite lookup_union_None in H7. destruct!. exact H0.
+        intros. tend. split!. apply Hloop;auto. rewrite !expr_fill_app.
+        assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H11 by auto.
+        assert (∀K e, expr_fill K (ReturnExt e) = expr_fill (ReturnExtCtx::K) e) as H13 by auto.
+        split!. 3,4: rewrite H13 H11; reflexivity.
+        unfold fns_inv. split!. unfold fns_add. rewrite insert_union_l. reflexivity.
+        rewrite insert_get_string_set_unchanged; auto. by rewrite H2.
+        rewrite insert_get_string_set_unchanged; auto. by rewrite H2.
+        apply LLCENoneToLeft. exact H6.
+        auto. auto. rewrite is_static_expr_expr_fill; split!.
+      --(* returns to right*)
+        tstep_s. split!. rewrite lookup_union_None in H7. destruct!. exact H0.
+        intros. tend. split!. apply Hloop;auto. rewrite !expr_fill_app.
+        assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H11 by auto.
+        assert (∀K e, expr_fill K (ReturnExt e) = expr_fill (ReturnExtCtx::K) e) as H12 by auto.
+        split!. 3,4: try rewrite H12; try rewrite H11; reflexivity.
+        unfold fns_inv. split!. unfold fns_add. rewrite insert_union_l. reflexivity.
+        rewrite insert_get_string_set_unchanged; auto. by rewrite H2.
+        rewrite insert_get_string_set_unchanged; auto. by rewrite H2.
+        apply LLCERighttoLeft. exact H5.
+        auto. auto. by rewrite expr_fill_app. rewrite is_static_expr_expr_fill; split!.
+      --(* returns to itself*)
+        tstep_s. split!. rewrite lookup_union_None in H7. destruct!. exact H0.
+        intros. tend. split!. apply Hloop;auto. rewrite !expr_fill_app.
+        assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H11 by auto.
+        assert (∀K e, expr_fill K (ReturnExt e) = expr_fill (ReturnExtCtx::K) e) as H12 by auto.
+        split!. 3,4: try rewrite H12; try rewrite H11; reflexivity.
+        unfold fns_inv. split!. unfold fns_add. rewrite insert_union_l. reflexivity.
+        rewrite insert_get_string_set_unchanged; auto. by rewrite H2.
+        rewrite insert_get_string_set_unchanged; auto. by rewrite H2.
+        apply LLCELeftToLeft. exact H5.
+        auto. auto. auto. rewrite is_static_expr_expr_fill; split!.
+    + (* var*) tstep_s. auto. 
+    + (* internal app*) 
+      unfold fns_inv in H; destruct!. rewrite elem_get_string_set_union in H7. 
+      tstep_s. destruct!.
+      -- (* in left case *) 
+        left. split!. intros. tend. split!. rewrite lookup_union_l. exact H0.
+        eapply lookup_disjoint_none_right. exact H. exact H7. auto.
+        apply Hloop;auto. assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H11 by auto. 
+        split!.
+        2,3: rewrite H11; reflexivity. apply LLCELeftToLeft. exact H1. by rewrite H2 in H7.
+        auto. auto. apply is_static_expr_subst_l. apply fn.(fd_static).
+      -- (* in right case *) 
+        right. split!. repeat case_bool_decide; try auto.
+        rewrite -H2 in H0.
+        exfalso. eapply elem_left_disjoint. exact H. exact H0. exact H7.
+        repeat case_bool_decide.
+        ++  exfalso. rewrite -H2 in H0. eapply elem_left_disjoint. exact H. exact H0. auto.
+        ++ split!. by rewrite H2. tstep_s. left. split!. tstep_s. left. split!. intros. tend. split!.
+           rewrite lookup_union_r. exact H5. eapply lookup_disjoint_none_left. exact H. exact H7.
+           auto. apply Hloop;auto. 
+           assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H11 by auto.
+           assert (∀K e, expr_fill K (ReturnExt e) = expr_fill (ReturnExtCtx::K) e) as H12 by auto.
+           split!.
+           all :try rewrite H12 ;try rewrite H11; try reflexivity; try auto. by apply LLCELeftToRight. 
+           apply is_static_expr_subst_l. apply fn.(fd_static).
+        ++ rewrite H4 in H7. contradiction.  
+    + (* external app*) 
+      unfold fns_inv in H; destruct!.
+      tstep_s. right.  split!; repeat case_bool_decide. 
+      rewrite elem_get_string_set_union in H7. 
+      assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
+      left. rewrite H2; done. contradiction.
+      done. done.
+      rewrite elem_get_string_set_union in H7.
+      assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
+      left. rewrite H2; done. contradiction.
+      rewrite elem_get_string_set_union in H7.
+      assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
+      right. rewrite H4; done. contradiction.
+      split!. auto. by rewrite H2. 
+      tend. split!. apply Hloop;auto.  split!; try done. apply LLCELeftToNone. exact H1. auto.
+  - (*right case*) 
+    destruct (to_val er') eqn:?.
+    { destruct er' eqn:?; simplify_eq/=. clear H4. 
+    inversion H1;subst.
+      - tstep_i. tstep_i. intros. split!. exact H4. tstep_i. tstep_s. tstep_s. split!.
+        apply Hloop; auto.
+        split!; done.
+      - tstep_i. tstep_i. intros. split!. exact H5. tstep_s. tstep_s. split!.
+        tstep_s. right. 
+        inversion H0;subst;split!;  
+        destruct b'. rewrite orb_true_l. 
+        apply Hloop; auto. rewrite !expr_fill_app. split!; try done. apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+        simpl in H4; done.
+        apply Hloop; auto. rewrite !expr_fill_app. split!; try done. by rewrite !expr_fill_app. apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+        simpl in H4; done.
+        apply Hloop; auto. rewrite !expr_fill_app. split!; try done. apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+        simpl in H4; done.
+      - tstep_i. tstep_i. intros. split!. exact H5.
+        destruct b'. rewrite orb_true_l.
+        2: simpl in *;done.
+        tstep_s.
+        apply Hloop; auto. rewrite !expr_fill_app. split!; try done. apply is_static_expr_expr_fill; split!.  repeat case_match;auto.
+    }
+    tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]].
+    simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
+    rewrite -expr_fill_app.
+    inv_all head_step => //.
+    + (* binop*) 
+      tstep_s. intros. tend. split!. apply Hloop; auto. 
+      rewrite !expr_fill_app. split!;auto. exact H1. 
+      apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+    + (* newref*)
+      tstep_s. exists l, h'. intros. split!. symmetry in H0; naive_solver.
+      intros. tend.  split!;auto. exact H0. auto.
+      rewrite !expr_fill_app. apply Hloop; auto. split!; auto. exact H1. 
+      apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+    + (* load*)
+      tstep_s. intros. tend. split!. exact H0. exact H2.
+      rewrite !expr_fill_app. apply Hloop; auto. split!; auto. exact H1.
+      apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+    + (* store*) 
+      tstep_s. intros. tend. split!. symmetry. exact H0. exact H2.
+      rewrite !expr_fill_app. apply Hloop;auto. split!; auto. exact H1.
+      apply is_static_expr_expr_fill; split! ;naive_solver.                    
+    + (* if*) 
+      tstep_s. intros. tend. split!. symmetry. exact H0. 
+      rewrite !expr_fill_app. apply Hloop;auto. split!; auto. exact H1.
+      apply is_static_expr_expr_fill; split!. destruct b; naive_solver. 
+    + (* lete*) 
+      tstep_s. tend. split!.  
+      rewrite !expr_fill_app. apply Hloop;auto. split!; auto. exact H1.
+      apply is_static_expr_expr_fill; split!. apply is_static_expr_subst. naive_solver.                  
+    + (* fixe*) 
+      unfold fns_inv in H; destruct!.
+      inversion H1; subst.
+      --(* returns to None*)
+        tstep_s. split!. rewrite lookup_union_None in H7. destruct!. exact H3.
+        intros. tend. split!. apply Hloop;auto. rewrite !expr_fill_app.
+        assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H11 by auto.
+        assert (∀K e, expr_fill K (ReturnExt e) = expr_fill (ReturnExtCtx::K) e) as H13 by auto.
+        split!. 3,5: rewrite H13 H11; reflexivity.
+        unfold fns_inv. split!. unfold fns_add. rewrite insert_union_r. reflexivity.
+        eapply lookup_disjoint_none_left. done. by rewrite H4.
+        rewrite insert_get_string_set_unchanged; auto. by rewrite H4.
+        rewrite insert_get_string_set_unchanged; auto. by rewrite H4.
+        apply LLCENoneToRight. done. 
+        auto. auto. rewrite is_static_expr_expr_fill; split!.
+      --(* returns to left*)
+        tstep_s. split!. rewrite lookup_union_None in H7. destruct!. exact H3.
+        intros. tend. split!. apply Hloop;auto. rewrite !expr_fill_app.
+        assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H11 by auto.
+        assert (∀K e, expr_fill K (ReturnExt e) = expr_fill (ReturnExtCtx::K) e) as H12 by auto.
+        split!. 3,5: try rewrite H12; try rewrite H11; reflexivity.
+        unfold fns_inv. split!. unfold fns_add. rewrite insert_union_r. reflexivity.
+        eapply lookup_disjoint_none_left. done. rewrite H4. done.
+        rewrite insert_get_string_set_unchanged; auto. by rewrite H4.
+        rewrite insert_get_string_set_unchanged; auto. by rewrite H4.
+        apply LLCELeftToRight. done. 
+        auto. auto. by rewrite expr_fill_app. rewrite is_static_expr_expr_fill; split!.
+      --(* returns to itself*)
+        tstep_s. split!. rewrite lookup_union_None in H7. destruct!. exact H3.
+        intros. tend. split!. apply Hloop;auto. rewrite !expr_fill_app.
+        assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H11 by auto.
+        assert (∀K e, expr_fill K (ReturnExt e) = expr_fill (ReturnExtCtx::K) e) as H12 by auto.
+        split!. 3,4: try rewrite H12; try rewrite H11; reflexivity.
+        unfold fns_inv. split!. unfold fns_add. rewrite insert_union_r. reflexivity.
+        eapply lookup_disjoint_none_left. done. rewrite H4. done.
+        rewrite insert_get_string_set_unchanged; auto. by rewrite H4.
+        rewrite insert_get_string_set_unchanged; auto. by rewrite H4.
+        apply LLCERightToRight. done.
+        auto. auto. auto. rewrite is_static_expr_expr_fill; split!.
+    + (* var*) tstep_s. auto. 
+    + (* internal app*) 
+      unfold fns_inv in H; destruct!. rewrite elem_get_string_set_union in H7. 
+      tstep_s. destruct!.
+      -- (* in left case *) 
+        right. split!. repeat case_bool_decide; try auto.
+        rewrite -H2 in H0.
+        exfalso. eapply elem_left_disjoint. exact H. exact H7. rewrite H4. done. 
+        repeat case_bool_decide.
+        ++ split!. eapply not_elem_of_disjoint. apply H7. done.
+           tstep_s. left. split!. tstep_s. left. split!. intros. tend. split!.
+           rewrite lookup_union_l. exact H3. eapply lookup_disjoint_none_right. exact H. exact H7.
+           auto. apply Hloop;auto. 
+           assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H11 by auto.
+           assert (∀K e, expr_fill K (ReturnExt e) = expr_fill (ReturnExtCtx::K) e) as H12 by auto.
+           split!.
+           all :try rewrite H12 ;try rewrite H11; try reflexivity; try auto. by apply LLCERighttoLeft. 
+           apply is_static_expr_subst_l. apply fn.(fd_static).
+        ++  exfalso. rewrite H2 in H7. auto.
+        ++ rewrite H2 in H7. contradiction. 
+      -- (* in right case *) 
+        left. split!. intros. tend. split!. rewrite lookup_union_r. exact H0.
+        eapply lookup_disjoint_none_left. exact H. exact H7. auto.
+        apply Hloop;auto. assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H11 by auto. 
+        split!.
+        2,4: rewrite H11; reflexivity. apply LLCERightToRight. exact H1. by rewrite H4 in H7.
+        auto. auto. apply is_static_expr_subst_l. apply fn.(fd_static).  
+    + (* external app*) 
+      unfold fns_inv in H; destruct!.
+      tstep_s. right.  split!; repeat case_bool_decide.
+      done. 
+      rewrite elem_get_string_set_union in H7. 
+      assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
+      right. rewrite H4; done. contradiction.
+      done. 
+      rewrite elem_get_string_set_union in H7.
+      assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
+      left. rewrite H2; done. contradiction.
+      rewrite elem_get_string_set_union in H7.
+      assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
+      right. rewrite H4; done. contradiction.
+      split!. auto. by rewrite H4. 
+      tend. split!. apply Hloop;auto.  split!; try done. apply LLCERightToNone. exact H1. auto.                                                     
+  - (* none case*) tstep_i. split.
+    + (*call?*) intros. unfold fns_inv in H. destruct!. tstep_s. split!.
+      rewrite elem_get_string_set_union in H0. case_bool_decide. auto. case_bool_decide. auto.
+      destruct H0;exfalso. rewrite H3 in H0. by apply H2 in H0. rewrite H5 in H0. by apply H4 in H0.
+      repeat case_bool_decide.
+      -- (* goto left*)
+      tstep_s. left. split!. rewrite H3. auto. tstep_s. left. split!.
+      rewrite H3; auto. intros.
+      tstep_i. split!. intros. split!. apply lookup_union_Some_l. exact H4.  auto.
+      assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H10 by auto.
+      assert (∀K e, expr_fill K (ReturnExt e) = expr_fill (ReturnExtCtx::K) e) as H11 by auto.
+      apply Hloop;auto. split!.
+      2,3:rewrite H11 H10. 2,3,4:done. apply LLCENoneToLeft. exact H1. auto.
+      apply is_static_expr_subst_l. apply fn.(fd_static).
+      -- (* goto right*)
+      tstep_s. left. split!. rewrite H5. auto. tstep_s. left. split!.
+      rewrite H5; auto. intros.
+      tstep_i. split!. intros. split!. apply lookup_union_Some_r. 
+      apply get_string_sets_disjoint_implies_sets_disjoint; auto. (*helpful lemma*) 
+      exact H6.  auto.
+      assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H10 by auto.
+      assert (∀K e, expr_fill K (ReturnExt e) = expr_fill (ReturnExtCtx::K) e) as H11 by auto.
+      apply Hloop;auto. split!.
+      2,4:rewrite H11 H10. 2,3,4:done. apply LLCENoneToRight. exact H1. auto.
+      apply is_static_expr_subst_l. apply fn.(fd_static).
+      -- (* contradiction*) rewrite elem_get_string_set_union in H0. destruct H0.
+        rewrite H3 in H0. contradiction. rewrite H5 in H0. contradiction. 
+    + (*ret?*) intros. destruct!.
+      tstep_s. inversion H1; subst; split!.
+      -- (* ret to left*)
+      assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H10 by auto.
+      assert (∀K e, expr_fill K (ReturnExt e) = expr_fill (ReturnExtCtx::K) e) as H11 by auto.
+      tstep_s. right. inversion H0;subst; split!; rewrite !expr_fill_app; apply Hloop;auto; split!.
+      all:try rewrite H11 H10; try done; try by rewrite expr_fill_app.
+      all: apply is_static_expr_expr_fill; split! ;repeat case_match; auto.
+      -- (* ret to right*)
+      assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H10 by auto.
+      assert (∀K e, expr_fill K (ReturnExt e) = expr_fill (ReturnExtCtx::K) e) as H11 by auto.
+      tstep_s. right. inversion H0;subst; split!; rewrite !expr_fill_app; apply Hloop; split!.
+      all:try rewrite H11 H10; try done; try by rewrite expr_fill_app.
+      all: apply is_static_expr_expr_fill; split! ;repeat case_match; auto.
+Qed.
 
 
 (* ** TODO test out the current invariant *)
