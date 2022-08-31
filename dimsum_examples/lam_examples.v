@@ -42,8 +42,8 @@ Lemma free_var_spec_refines_free_var_lam:
 Proof.
   apply tsim_implies_trefines => n /=. unfold free_var_spec, free_var_prog. 
   go_i. intros. go. go_i. go_s. left. eexists _,_,_. split!.
-  go_s. left. eexists _,_. split!. eauto. intros. auto.
-  unfold free_var_lam. simpl. go_s. auto. 
+  go_s. split!. eauto. intros. auto.
+  unfold free_var_lam in H. rewrite lookup_insert_Some in H. destruct!. simpl. go_s. auto. 
 Qed.
 
 
@@ -72,11 +72,9 @@ Proof.
   go_i. split!. intros. go_s. eexists (f, vs, h'). go.
   go_s. split!. go. go_s. intros. go. go_s. intros. go.
   go_s. intros. go. go_s. intros. go.
-  go_i. split!. unfold add_prog in *.  intros. 
-  rewrite lookup_insert_Some in H2.   destruct!. split!. go_i. go_i. go_i.
+  go_i. split!. intros. split!. unfold add_prog in *.  
+  rewrite lookup_insert_Some. split!.   destruct!. auto. subst.  go_i. go_i. go_i.
   go_s. split!. go. go_s.  auto.
-  intros.
-  subst. rewrite lookup_insert_None in H2. destruct!.
   intros. destruct!.
 Qed.
 
@@ -103,8 +101,8 @@ Proof.
   go_i. split!. intros. go_s. go_s. rewrite -/add_repeat_spec. eexists (f, vs, h'). go.
   go_s. intros. split. naive_solver. go. go_s. intros. go. go_s. intros.
   go. go_s. intros. go. go_s. intros. go. go_i. split.
-  intros. unfold add_prog. rewrite lookup_insert_Some in H4. destruct!/=; subst.
-  split!. go_i. go_i. go_i. go_s. split!. go. 
+  intros. unfold add_prog. split!. rewrite lookup_insert_Some. destruct!/=; subst.
+  split!. by subst. subst. go_i. go_i. go_i. go_s. split!. go. 
   eapply H0; auto. split!. naive_solver.
   intros. destruct!. }
 Qed. 
@@ -130,8 +128,8 @@ Proof.
   go_s. left.
   eexists ("add_wrong", None),[],x.
   split!. 
-  go_s. left. eexists _,_. split!. rewrite lookup_insert_Some. left. auto. intros.
-  auto. go_s. intros. inversion H1.
+  go_s. left. split!. intros. rewrite lookup_insert_Some in H. destruct!. 
+  go_s. intros. inversion H1.
 Qed.  
 
 (* ** newrefs *)
@@ -172,12 +170,12 @@ Proof.
   go_i. split!.
   - intros. go_s. go_s. exists (f, vs, h'). go. go_s. split!. go.
   go_s. intros. go. go_s. intros. go. go_s. intros. go. go_s. intros. destruct!. go. go_s. intros. go.
-  go_i. split!. intros. rewrite lookup_insert_Some in H2. destruct!. split!. 
+  go_i. split!. intros. split!. rewrite lookup_insert_Some . left;done. auto. 
   (* ** newref part *)
   go_i. intros. split!.
   go_s. exists l. go. go_s. exists h'0. go. go_i. go_i. go_s. split!.
   go. go_s.
-  split!. unfold heap_alloc_prop in H2. destruct!. inversion H1. apply heap_alloc_h_lookup. lia. lia.
+  split!. unfold heap_alloc_prop in H4. destruct!. inversion H1. apply heap_alloc_h_lookup. lia. lia.
   rewrite -/newref_spec. go. apply H0. auto. split!. 
   - intros. destruct!.
 Qed.
@@ -203,8 +201,8 @@ Proof.
   go_s. left.
   eexists ("newref_nonnum", None),[],x.
   split!. 
-  go_s. left.  eexists _,_. split!. rewrite lookup_insert_Some. left. auto. intros.
-  auto. go_s. exists (0,0). exists ∅.  
+  go_s. left. split!. intros. rewrite lookup_insert_Some in H. destruct!. 
+  go_s. exists (0,0). exists ∅.  
   split!. 
 Qed.
 
@@ -228,8 +226,8 @@ Proof.
   go_i. intros. go. go_i. go_s. left.
   eexists ("newref_zero", None),[],x.
   split!. 
-  go_s. split!. rewrite lookup_insert_Some. left. auto. 
-  auto. intros. go_s.
+  go_s. split!. intros. rewrite lookup_insert_Some in H. destruct!. 
+  go_s.
   eexists (0,0),∅. intros. destruct!.  split!. left. reflexivity.
 Qed. 
 
@@ -268,20 +266,20 @@ Proof.
     tstep_i;  split; intros.
     - go_s. exists (f,vs,h'). go. go_s. split!. go. go_s. go_s. intros. go.
     go_s. intros. go. go_i. split!.
-      { intros. split!. subst. rewrite lookup_insert_Some in H2. destruct!. reflexivity.
-      rewrite lookup_insert_Some in H2. destruct!. go_i. intros. split!.
-      go_s. exists ("id", Some n). go. go_s. go_i. go_i. go_s. split!.
-      go. go_i. split;intros. 
-        - go_s. exists (f, vs, h'0). go. go_s. split!. go. go_s.
+      { intros. split!.  rewrite lookup_insert_Some . split!. subst. auto. 
+      go_i. intros. split!.
+      go_s. exists ("id", Some n). go. go_s. go_i. go_i. go_s. split!. subst. done.
+      go. go_i. split;intros.  
+        - go_s. eexists (_,_,_). go. go_s. split!. go. go_s.
         go_s. intros. go. go_s. intros. go. go_s. intros. go.
         go_i. split.
-        *  intros. rewrite elem_of_cons in H2. destruct!. rewrite lookup_insert_Some in H4. destruct!.
-        split!. go_i. go_i. go_s. split!. go. go_s. auto. apply elem_of_nil in H2. inversion H2. 
-        * intros. rewrite lookup_insert_None in H4. destruct!. rewrite elem_of_cons in H2. destruct!.
-        apply elem_of_nil in H2. inversion H2. 
+        *  intros. split!.  rewrite lookup_insert_Some. left. split!. rewrite elem_of_cons in H5. destruct!.
+        auto. apply elem_of_nil in H5. done. subst. auto.
+        subst. go_i. go_i. go_s. split!. go. go_s. auto. 
+        * intros. rewrite lookup_insert_None in H3. destruct!.
         - destruct!.  
       }
-      {intros.  rewrite lookup_insert_None in H2. destruct!. } 
+      
     - destruct!. 
     Unshelve. auto.
 Qed.
@@ -356,21 +354,18 @@ Proof.
   - (* f = ("id", None)*)
    go_s. intros. go. 
    go_i. split!.
-   * intros. 
-   rewrite lookup_add_list_not_in in H4; [|naive_solver]. rewrite lookup_insert_Some in H4.
-   destruct!. split!.
+   * intros. split!. 
+   rewrite lookup_add_list_not_in; [|naive_solver]. rewrite lookup_insert_Some. left.
+   split!. by subst.
    go_i. intros. exists I. go_i. go_i. go_s. exists ("id", Some n). go.
-   go_s. go_s. split!.  rewrite -/id_loop_spec. go. apply H0. auto. split!.
+   go_s. go_s. split!. by subst.  rewrite -/id_loop_spec. go. apply H0. auto. split!. by subst.
    rewrite not_elem_of_cons. split!.
-   * intros.  apply lookup_add_list_None in H4. rewrite lookup_insert_None in H4. destruct!.
   - case_bool_decide.
    * (* f = ("id", Some n)*)
     go_s. intros. go. go_s. intros. go.  go_i. split!.
-    + intros. rewrite lookup_add_list_in in H6; auto. inversion H6. split!. naive_solver. subst.
+    + intros. split!. rewrite lookup_add_list_in; auto. subst;auto. subst. 
     go_i. go_i. go_s. rewrite -/id_loop_spec. split!. go. apply H0. auto.
     split!. 
-    + intros. apply (lookup_add_list_in id_prog l (Build_fndef ["x"] (Var "x") I)) in H3.
-    rewrite H3 in H6. inversion H6. 
    * go_s. auto.  
   }
   Qed. 
@@ -517,8 +512,8 @@ Proof.
   - (* f = ("rec_id", None)*)
    go_s. intros. go. 
    go_i. split!.
-   * intros.  subst. rewrite -H6 in H7. rewrite lookup_insert_Some in H7. destruct!.
-   split!. go_i. intros. exists I. go_i. go_s. rewrite -/rec_id_loop_spec. exists ("rec_id", Some n).
+   * intros.  subst. split!. rewrite -H6. rewrite lookup_insert_Some. left. split!. auto. 
+   go_i. intros. exists I. go_i. go_s. rewrite -/rec_id_loop_spec. exists ("rec_id", Some n).
    go. go_i. go_s. go_s. split!. go. apply H0; auto. split!.  apply map_Forall_insert_2.
     + (*prove rec_id_prop*) rewrite lookup_insert. split!. f_equal. apply AxProofIrrelevance . 
     + apply rec_id_map_forall_neq; auto. 
@@ -526,7 +521,6 @@ Proof.
     apply H3 in H5. unfold rec_id_prop in H5. rewrite H2 in H5. auto.
     + rewrite not_elem_of_dom. rewrite lookup_insert_None; split!. by rewrite - not_elem_of_dom.
     +  rewrite (lookup_insert_ne _ ("rec_id", Some n)). auto. auto. 
-   * intros. subst. rewrite -H6 in H7.   rewrite lookup_insert_None in H7. destruct!.
   - case_bool_decide.
    * (* f = ("rec_id", Some n)*)
     go_s. intros. go. go_s. intros. go. go_s. intros. rewrite -/rec_id_loop_spec. go. 
@@ -554,13 +548,12 @@ Proof.
     
     
     +  intros. rewrite elem_of_dom in H5. destruct H5. rewrite map_Forall_lookup in H3.
-    apply H3 in H5. rewrite H7 in H5. unfold rec_id_prop in H5. subst. split!. 
-    go_s. intros. rewrite -/rec_id_loop_spec. go.
+    apply H3 in H5. split!.  unfold rec_id_prop in H5. case_match; try done. subst. reflexivity. auto. simpl. 
+    
 
     (* ** main theorem!!*)
     
     admit.
-    + intros. rewrite elem_of_dom in H1. destruct H1. rewrite H7 in H1. inversion H1. 
    * go_s. auto.  
   }
   Admitted.
