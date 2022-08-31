@@ -75,6 +75,21 @@ Proof.
   iIntros "Hsim" (?) "HΦ". iIntros (??) "#?". iApply ("Hsim" with "[$] [$] [//] [$]").
 Qed.
 
+Lemma fupd_sim_tgt_expr e Π Φ :
+  (|={∅}=> TGT e [{ Π }] {{ Φ }}) -∗
+  TGT e [{ Π }] {{ Φ }}.
+Proof.
+  iIntros "Hsim" (?) "HΦ". iIntros (??) "#??". iApply fupd_sim_tgt. iApply ("Hsim" with "[$] [//] [//] [$]").
+Qed.
+
+Lemma sim_tgt_expr_bi_mono e Π Φ :
+  (TGT e [{ λ κ, bi_mono1 (Π κ) }] {{ Φ }}) -∗
+  TGT e [{ Π }] {{ Φ }}.
+Proof.
+  iIntros "Hsim" (?) "HΦ". iIntros (??) "#??". iApply sim_tgt_bi_mono1.
+  iApply ("Hsim" with "[$] [//] [//] [$]").
+Qed.
+
 Lemma sim_tgt_expr_bind K e Π Φ :
   TGT e [{ Π }] {{ e', Π', TGT mfill Λ K e' [{ Π' }] {{ Φ }} }} -∗
   TGT mfill Λ K e [{ Π }] {{ Φ }}.
@@ -188,6 +203,13 @@ Lemma sim_src_expr_raw_elim e Π σ :
   SRC e [{ Π }] -∗
   σ ≈{Λ}≈>ₛ Π.
 Proof. iIntros (?) "Hσ He". iApply sim_src_ctx. iIntros "#?". by iApply "He". Qed.
+
+Lemma fupd_sim_src_expr e Π Φ :
+  (|={∅}=> SRC e [{ Π }] {{ Φ }}) -∗
+  SRC e [{ Π }] {{ Φ }}.
+Proof.
+  iIntros "Hsim" (?) "HΦ". iIntros (??) "#??". iApply fupd_sim_src. iApply ("Hsim" with "[$] [//] [//] [$]").
+Qed.
 
 Lemma sim_src_expr_ctx e Π Φ :
   (ord_later_ctx -∗ SRC e [{ Π }] {{ Φ }}) -∗

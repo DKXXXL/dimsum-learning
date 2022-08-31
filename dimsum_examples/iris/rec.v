@@ -144,8 +144,7 @@ Definition expr_heap_fill (K : list expr_ectx) (e : expr_heap) : expr_heap :=
 Arguments expr_heap_fill !_ _ /.
 
 Notation "e @ h" := (ExprHeap e (Some h)) (at level 14) : stdpp_scope.
-Notation "e @ -" := (ExprHeap e None) (at level 14, only parsing) : stdpp_scope.
-Notation "e" := (ExprHeap e None) (at level 14, only printing) : stdpp_scope.
+Notation "e @ -" := (ExprHeap e None) (at level 14) : stdpp_scope.
 
 Program Canonical Structure rec_mod_lang {Σ} `{!recGS Σ} := {|
   mexpr := expr_heap;
@@ -189,24 +188,33 @@ Section lifting.
          ∀ σ,
            (rec_mapsto_auth (h_heap h') -∗
             rec_alloc_auth (dom (h_heap h')) -∗
-            σ ⤇ₜ λ Π', TGT Call f (Val <$> vs) @ - [{ Π' }] {{ Φ }}) -∗
+            σ ⤇ₜ λ Π', TGT ReturnExt b (Call f (Val <$> vs)) @ - [{ Π' }] {{ Φ }}) -∗
            P σ)) ∧
       ∀ v h', ⌜b⌝ -∗
-       ▷ₒ Π (Some (Incoming, ERReturn v h')) (λ P, True)) -∗
+       ▷ₒ Π (Some (Incoming, ERReturn v h')) (λ P, ∀ σ,
+           (rec_mapsto_auth (h_heap h') -∗
+            rec_alloc_auth (dom (h_heap h')) -∗
+            σ ⤇ₜ λ Π', TGT Val v @ - [{ Π' }] {{ Φ }}) -∗
+           P σ)) -∗
     TGT Waiting b @ h [{ Π }] {{ Φ }}.
   Proof.
     iIntros "#Hfns HΦ".
+    iApply sim_tgt_expr_bi_mono.
     iApply sim_tgt_expr_step => /=. iIntros (? [e h0 fns0] ?? [??] Hp) "[Hh [Ha Hfns']]". simplify_eq/=.
     iDestruct (rec_fn_auth_agree with "Hfns' Hfns") as %?. subst.
     exploit prim_step_inv_head; [done|..].
     { apply sub_redexes_are_values_item; case; naive_solver. }
     { done. }
     move => [? [Hstep ?]]. inv Hstep.
-    - iDestruct ("HΦ" with "[$] [$]") as "[HΦ _]". iDestruct ("HΦ" with "[//]") as "?".
-      do 2 iModIntro. admit.
-    - iDestruct ("HΦ" with "[$] [$]") as "[_ HΦ]". iDestruct ("HΦ" with "[//]") as "?".
-      do 2 iModIntro. admit.
-  Admitted.
+    - iDestruct ("HΦ" with "[$] [$]") as "[HΦ _]". iDestruct ("HΦ" with "[//]") as "HΦ".
+      do 2 iModIntro. iApply (bi_mono1_intro with "HΦ"). iIntros (?) "Htgt".
+      iSplit!. iIntros "Hc". iApply "Htgt". iIntros "??".
+      iApply "Hc"; [done|]. iFrame.
+    - iDestruct ("HΦ" with "[$] [$]") as "[_ HΦ]". iDestruct ("HΦ" with "[//]") as "HΦ".
+      do 2 iModIntro. iApply (bi_mono1_intro with "HΦ"). iIntros (?) "Htgt".
+      iSplit!. iIntros "Hc". iApply "Htgt". iIntros "??".
+      iApply "Hc"; [done|]. iFrame.
+  Qed.
 End lifting.
 
 Section memmove.
@@ -480,7 +488,7 @@ Section memmove.
     iApply (sim_tgt_handler_intro with "[-]").
     iApply (sim_tgt_link_left with "[-]").
     iApply ("Htgt" with "[Hh] [Ha]"). admit. admit.
-    iApply (sim_tgt_expr_bind [] (_ @ -)).
+    iApply (sim_tgt_expr_bind [ReturnExtCtx _] (_ @ -)).
     iApply sim_tgt_rec_Call_internal. 2: { by iApply (rec_fn_intro with "[$]"). } { done. }
     iModIntro => /=.
   Admitted.
