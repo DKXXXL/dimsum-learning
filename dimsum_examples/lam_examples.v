@@ -524,39 +524,44 @@ Proof.
   - case_bool_decide.
    * (* f = ("rec_id", Some n)*)
     go_s. intros. go. go_s. intros. go. go_s. intros. rewrite -/rec_id_loop_spec. go. 
-    simplify_eq/=.  go_i. split!.
+    simplify_eq/=.  rewrite elem_of_dom in H5. destruct H5. rewrite map_Forall_lookup in H3. 
+    apply H3 in H5. unfold rec_id_prop in H5. case_match; try done. 
+    unshelve eapply tsim_remember.
+    {simpl. exact (λ n σa '(t,m),
+    ∀n', 
+    n' ⊆ n → 
+    t ≡(TVis (Outgoing, ELReturn x h');; rec_id_loop_spec)%spec /\ 
+    ∃ e Ks e' s x', 
+    x'>=0 /\
+    LamExprFill e Ks e' /\ 
+    σa = Lam e s h' rec_id_prog' /\ 
+    e' = App (Val (ValFid f)) [Val (ValNum x')] /\ 
+    Lam (expr_fill Ks (Val(ValNum x'))) s h' rec_id_prog' ⪯{lam_trans, spec_trans lam_event (gmap fid ()), n', true} 
+    (t, m)
+    ). } { simpl. intros.  split!. done.  apply _. tstep_i. tstep_s. split!. go. apply H0; auto. split!. } {
+      simpl. intros. destruct!. intros. 
+      assert (n'1 ⊆ n). apply o_lt_impl_le in H9. eapply transitivity. done. done.
+      apply H10 in H11.  destruct!.  split!. all:try done. }
+    simpl.
+    intros n'' ineq Hloop.
+    intros. destruct!.
+    remember (H9 n'').
+    assert (n''⊆ n'') by auto.
+    apply a in H5. destruct!.
 
-    (*unshelve eapply tsim_remember.
-    {simpl. 
-    exact (λ _ σa '(t, m),
-    ∃ x Ks e, x>=0/\
-    t ≡ (TVis (Outgoing, ELReturn x h');; rec_id_loop_spec)%spec /\ 
-    σa = Lam e [] h' rec_id_prog' /\
-    (LamExprFill e Ks (App (Val (ValFid f)) [Val (ValNum x)]))
-    ). }{simpl. auto. split!. exact H8. auto. apply _.  } { intros. simpl. auto. } 
-    intros. simplify_eq/=. destruct!. go_i. split!. intros. 
-    rewrite elem_of_dom in H5. destruct H5. rewrite map_Forall_lookup in H3.
-    apply H3 in H5. rewrite H12 in H5. unfold rec_id_prop in H5. subst. split!. 
-    go_i. split!. go_i. case_bool_decide. 
-    -- (*just stepping*) go_i.  admit.
-    -- go_i. apply H9; try auto. exists (x0-1). split!. 
-     admit. auto. 
-    go_s. intros. rewrite -/rec_id_loop_spec. go.
-    admit.
-    go_i.*)
-
-    
-    
-    +  intros. rewrite elem_of_dom in H5. destruct H5. rewrite map_Forall_lookup in H3.
-    apply H3 in H5. split!.  unfold rec_id_prop in H5. case_match; try done. subst. reflexivity. auto. simpl. 
-    
-
+    tstep_i. split!.
+    intros. split!.
+    destruct (x'=?0) eqn:?; try done.  rewrite Z.eqb_eq in Heqb; subst.
+    -- (* 0 *) tstep_i. split!. tstep_i. go_i. done.
+    -- rewrite Z.eqb_neq in Heqb. tstep_i. split!. case_bool_decide; try done. tstep_i. tstep_i. apply Hloop. auto.
+    intros. split!. assert(x'+-1>=0) by lia. exact H16. apply _. simpl. tstep_i. tstep_i. 
+    assert (1 + (x' + -1) = x') by lia. rewrite H16. 
+    eapply tsim_mono; done.
     (* ** main theorem!!*)
-    
-    admit.
+  
    * go_s. auto.  
   }
-  Admitted.
+Qed.
   
 
 (* ** closure add*)
@@ -638,30 +643,24 @@ Proof.
    rewrite lookup_insert_Some in H;rewrite lookup_insert_Some;naive_solver. }
   {simpl. intros. auto. }
   {simpl. intros. destruct!. go_i. split!.
-   {intros. go_s. go_s. rewrite -/clos_add_loop_spec. exists (f, vs, h'). go. go_s. split!. go. go_s.
-    destruct (m!!f) eqn:V.  unfold clos_add_fns_m_prop in H4. remember (H4 f). destruct!. clear Heqa.
-    - destruct c eqn:V'.
-      + (* main case*) go_s. intros. go. go_i. split!; intros. 
-        * rewrite- H2 in V. rewrite H7 in V. inversion V. subst. split!.
-          go_i. intros. exists I. go_i. go_s. exists (f.1, Some n0). go. go_i. go_s. go_s. split!. go.
-          apply H0. auto. split!.  
-          unfold clos_add_fns_m_prop. 
-          intros;split!; split;intros;
-          rewrite lookup_insert_Some in H8; rewrite lookup_insert_Some; naive_solver.
-        * rewrite -H2 in V. rewrite H7 in V. inversion V.   
-      + (* Initial case*)  go_s. intros. go. go_s. intros. go. go_i. split!; intros. 
-        * rewrite -H5 in V. rewrite H7 in V. inversion V. subst. split!. 
-        go_i. intros. exists I. go_i. go_s. exists (f.1, Some n0). go. go_i. go_s. go_s. split!. go. apply H0.
-        auto. split!.
-        unfold clos_add_fns_m_prop. 
-        intros;split!; split;intros; 
-        rewrite lookup_insert_Some in H8; rewrite lookup_insert_Some; naive_solver.
-        * rewrite -H5 in V. rewrite H7 in V. inversion V.  
-      + (* Final case*) go_s. intros. go. go_s. intros. go. go_i. split!; intros. 
-        * rewrite -H6 in V. rewrite H7 in V. inversion V. subst. split!.
-          go_i. go_i. go_i. go_s. split!. go. apply H0. auto. split!. 
-        * rewrite -H6 in V. rewrite H7 in V. inversion V.  
-    - go_s. auto. 
+   {intros. go_s. go_s. rewrite -/clos_add_loop_spec. exists (f, vs, h'). go. go_s. split!. go.  go_s.
+   unfold clos_add_fns_m_prop in H4. remember (H4 f). destruct!. clear Heqa.
+   repeat case_match.
+    - (* main case*) go_s. intros. go.  go_i. split!; intros.
+      split!. by erewrite H2. subst. auto.  go_i. intros. exists I. go_i. go_i. go_s. exists (f.1, Some n0). go.
+      go_s. go_s. split!. go. apply H0; try done. split!. 
+      unfold clos_add_fns_m_prop, fns_add;intros;split!;split;intros H11;
+      rewrite lookup_insert_Some in H11; rewrite lookup_insert_Some; naive_solver.
+    - (* initial*) tstep_s. intros;go. tstep_s. intros; go. tstep_i. split!. intros. split!.
+      naive_solver. naive_solver. tstep_i. subst. tstep_i. intros. exists I. intros.
+      split!. done. tstep_i. tstep_i. tstep_s. exists (f.1, Some n0). go. tstep_s. go. tstep_s.
+      split!. go. apply H0; try done. split!. unfold clos_add_fns_m_prop.
+      intros;split!; split; unfold fns_add;rewrite !lookup_insert_Some;intros; naive_solver.
+    - (* final *) go_s. intros;go. tstep_s. intros;go. tstep_i. split!. intros. split!.
+      naive_solver. naive_solver. tstep_i. subst. tstep_i. intros. split!;try done.
+      tstep_i. tstep_i. tstep_s. split!. go. apply H0; try done. split!.
+    - (* none*) by tstep_s.
+
    } 
    {intros. destruct!. }
   }

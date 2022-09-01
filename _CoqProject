@@ -56,3 +56,4 @@ dimsum/iris/expr.v
 dimsum/iris/iris.v
 
 dimsum_examples/lam.v
+dimsum_examples/lam_examples.v
