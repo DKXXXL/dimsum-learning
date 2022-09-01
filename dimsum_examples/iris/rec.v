@@ -790,6 +790,11 @@ Section memmove.
     - move => Hi ??. simplify_eq/=. lia.
   Qed.
 
+  Lemma array_lookup_is_Some l l' vs :
+    is_Some (array l vs !! l') ↔ l.1 = l'.1 ∧ l.2 ≤ l'.2 < l.2 + length vs.
+  Proof. rewrite -not_eq_None_Some array_lookup_None. naive_solver lia. Qed.
+
+
   Lemma sim_memcpy Π Φ d d' s' s n o hvss hvsd :
     n = Z.of_nat (length hvss) →
     length hvss = length hvsd →
@@ -851,7 +856,7 @@ Section memmove.
           iApply ("IH" with "[%] [%] [//] [//] [%] Hm"). { lia. } { rewrite insert_length. done. } { simpl. lia. }
           iIntros "?". iSplit!. iApply ("HΦ" with "[-]").
           rewrite -insert_union_l. iApply (big_sepM_insert_2 with "[Hdv]"); [done|].
-          admit.
+          rewrite -insert_union_r_Some //. apply array_lookup_is_Some. split!; lia.
       + rewrite delete_union delete_insert. 2: { apply array_lookup_None => /=. lia. }
         rewrite delete_insert_ne. 2: { move => ?. subst. lia. }
         rewrite delete_notin. 2: { apply array_lookup_None => /=. lia. }
@@ -909,7 +914,7 @@ Section memmove.
           iIntros "?". iSplit!. iApply ("HΦ" with "[-]").
           rewrite -(insert_union_r _ ∅). 2: { apply array_lookup_None => /=. lia. }
           rewrite right_id_L -insert_union_l. iApply (big_sepM_insert_2 with "[Hdv]"); [done|].
-          admit.
+          rewrite -insert_union_r_Some //. apply array_lookup_is_Some. split!; lia.
       + rewrite delete_union delete_insert. 2: { apply array_lookup_None => /=. lia. }
         rewrite delete_insert_ne. 2: { move => ?. subst. lia. }
         rewrite delete_notin. 2: { apply array_lookup_None => /=. lia. }
@@ -924,7 +929,7 @@ Section memmove.
         iApply (big_sepM_insert_2 with "[Hdv]"); [done|].
         iApply (big_sepM_insert_2 with "[Hsv]"); [done|].
         done.
-  Admitted.
+  Qed.
 
   Lemma sim_memmove hvss hvsd Π Φ d s n :
     n = Z.of_nat (length hvss) →
@@ -1101,10 +1106,10 @@ Section memmove.
       rewrite !offset_loc_assoc.
       rewrite (big_sepM_delete _ _ (l +ₗ 1)). 2: { by simplify_map_eq. }
       rewrite delete_insert_delete.
-      rewrite delete_insert_ne //. 2: admit.
-      rewrite delete_insert_ne //. 2: admit.
+      rewrite delete_insert_ne //. 2: apply/loc_eq; split!; lia.
+      rewrite delete_insert_ne //. 2: apply/loc_eq; split!; lia.
       rewrite delete_insert //.
-      rewrite big_sepM_insert. 2: admit.
+      rewrite big_sepM_insert. 2: { rewrite lookup_insert_ne //. apply/loc_eq; split!; lia. }
       rewrite big_sepM_insert. 2: done.
       iDestruct "Hl" as "[Hl1 [Hl2 [Hl0 _]]]".
       iApply sim_tgt_rec_LetE. iModIntro => /=.
