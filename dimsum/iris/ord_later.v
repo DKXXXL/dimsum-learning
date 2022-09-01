@@ -216,7 +216,19 @@ Section lemmas.
   Proof.
     iIntros "HPQ".
     unseal. iIntros "#Hctx".
-  Abort. (* Is this provable? *)
+    iDestruct (bi.and_parallel with "HPQ []") as "HPQ".
+    { iSplit; iIntros "HP"; iSpecialize ("HP" with "[$]"); iExact "HP". }
+    rewrite bi.and_exist_l. iDestruct "HPQ" as (n2) "HPQ".
+    rewrite bi.and_exist_r. iDestruct "HPQ" as (n1) "HPQ".
+    iAssert (own ord_later_name (mono_ord_ub n1)) as "#Hn1". { iDestruct "HPQ" as "[[$ _] _]". }
+    iAssert (own ord_later_name (mono_ord_ub n2)) as "#Hn2". { iDestruct "HPQ" as "[_ [$ _]]". }
+    iExists (o_min n1 n2).
+    iCombine "Hn1 Hn2" as "Hn". rewrite mono_ord_ub_op. iFrame "#".
+    iIntros (??) "#Hn'".
+    iSplit.
+    - iDestruct "HPQ" as "[[_ HP] _]". iApply ("HP" with "[%] Hn'"). etrans; [done|]. apply o_min_le_l.
+    - iDestruct "HPQ" as "[_ [_ HP]]". iApply ("HP" with "[%] Hn'"). etrans; [done|]. apply o_min_le_r.
+  Qed.
 
   Lemma ord_loeb P:
     ord_later_ctx -∗
@@ -284,12 +296,12 @@ Global Instance into_ord_later_ord_later `{!ord_laterGS Σ} (P : iProp Σ) :
 Proof. done. Qed.
 
 Lemma modality_ord_later_mixin `{!ord_laterGS Σ} :
-  (* TODO: Can we use [MIEnvTransform MaybeIntoOrdLater] instead of
-  MIEnvId? Seems like we should, but it does not work for stupid reasons... *)
-  modality_mixin ord_later MIEnvId (MIEnvTransform MaybeIntoOrdLater).
+  modality_mixin ord_later (MIEnvTransform MaybeIntoOrdLater) (MIEnvTransform MaybeIntoOrdLater).
 Proof.
   split; simpl.
-  - iIntros (?). apply ord_later_intro.
+  - split.
+    + move => ?? ->. apply ord_later_pers.
+    + move => ??. apply ord_later_and.
   - iIntros (???). done.
   - apply ord_later_intro.
   - iIntros (?? Himpl) "HP". iApply (ord_later_mono with "HP"). iApply Himpl.

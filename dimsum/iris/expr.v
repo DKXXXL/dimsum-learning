@@ -98,6 +98,17 @@ Proof.
   iIntros (??) "Htgt". rewrite -mfill_comp. by iApply "Htgt".
 Qed.
 
+Lemma sim_tgt_expr_wand1 e Π Π' Φ  :
+  TGT e [{ Π' }] {{ Φ }} -∗
+  (∀ κ P, Π' κ P -∗ Π κ P) -∗
+  TGT e [{ Π }] {{ Φ }}.
+Proof.
+  iIntros "Hsim Hwand" (?) "HΦ".
+  iIntros (??) "#? Hσ".
+  iApply (sim_tgt_wand with "[Hσ HΦ Hsim] Hwand").
+  iApply ("Hsim" with "[$] [//] [$] [$]").
+Qed.
+
 Lemma sim_tgt_expr_wand e Π Φ Φ' :
   TGT e [{ Π }] {{ Φ' }} -∗
   (∀ e' Π', Φ' e' Π' -∗ Φ e' Π') -∗
@@ -224,6 +235,17 @@ Lemma sim_src_expr_bind e Π Φ K :
 Proof.
   iIntros "Hsim" (?) "HΦ". rewrite mfill_comp. iApply "Hsim".
   iIntros (??) "Htgt". rewrite -mfill_comp. by iApply "Htgt".
+Qed.
+
+Lemma sim_src_expr_wand1 e Π Π' Φ  :
+  SRC e [{ Π' }] {{ Φ }} -∗
+  (∀ κ P, Π' κ P -∗ Π κ P) -∗
+  SRC e [{ Π }] {{ Φ }}.
+Proof.
+  iIntros "Hsim Hwand" (?) "HΦ".
+  iIntros (??) "#? Hσ".
+  iApply (sim_src_wand with "[Hσ HΦ Hsim] Hwand").
+  iApply ("Hsim" with "[$] [//] [$] [$]").
 Qed.
 
 Lemma sim_src_expr_wand e Π Φ Φ' :
