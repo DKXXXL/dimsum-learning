@@ -376,19 +376,23 @@ Definition rec_id_lam: fndef := {|
   fd_body := FixE "f" ["x"] (
     If (BinOp (Var "x") EqOp (Val 0)) 
     (Val 0)
-    (BinOp (Val 1) AddOp (App (Var "f") ([BinOp (Var "x") AddOp (Val (-1))])))
+    (If (BinOp (Val 0) LtOp (Var "x") )
+      (BinOp (Val 1) AddOp (App (Var "f") ([BinOp (Var "x") AddOp (Val (-1))])))
+      (BinOp (Val (-1)) AddOp (App (Var "f") ([BinOp (Var "x") AddOp (Val (1))])))
+    )
+    
   );
   fd_static := I
 |}.
 Definition rec_id_prog : gmap fid fndef :=
-  <[("rec_id",None) := rec_id_lam]> $ ∅.
+  <[("id",None) := rec_id_lam]> $ ∅.
 Definition rec_id_mod := lam_mod rec_id_prog.
 
 Definition rec_id_loop_spec : spec  lam_event (gmap fid unit) void :=
   Spec.forever(
         '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));
         fid_map ← TGet ;
-        if (bool_decide(f = ("rec_id",None)))
+        if (bool_decide(f = ("id",None)))
           then 
           TAssume (vs = []);;
           newfid ← TExist fid;
@@ -409,7 +413,10 @@ Program Definition rec_id_prop elem key :=
     e = Build_fndef ["x"] 
     (If (BinOp (Var "x") EqOp (Val 0)) 
     (Val 0)
-    (BinOp (Val 1) AddOp (App (Val (ValFid key)) ([BinOp (Var "x") AddOp (Val (-1))])))) 
+    (If (BinOp (Val 0) LtOp (Var "x") )
+      (BinOp (Val 1) AddOp (App (Val (ValFid key)) ([BinOp (Var "x") AddOp (Val (-1))])))
+      (BinOp (Val (-1)) AddOp (App (Val (ValFid key)) ([BinOp (Var "x") AddOp (Val (1))])))
+    )) 
     _
   | _ => False
   end
@@ -438,57 +445,7 @@ Proof.
   rewrite lookup_insert_ne; by destruct!.
 Qed.
   
-(* to remove*)
-(*
-Lemma rec_id_fundamental_lemma x prog f n' Ks h': 
-  0<=x→
-  prog !! f =
-  Some
-    (Build_fndef ["x"]
-       (If (BinOp (Var "x") EqOp (Val 0)) (Val 0)
-          (BinOp (Val 1) AddOp
-             (App (Val (ValFid f)) [BinOp (Var "x") AddOp (Val (-1))])))
-       (rec_id_prop_obligation_1 f))→
-  Lam
-  (expr_fill Ks
-     (If (BinOp (Val x) EqOp (Val 0)) (Val 0)
-        (BinOp (Val 1) AddOp
-           (App (Val (ValFid f)) [BinOp (Val x) AddOp (Val (-1))])))) [f.1]
-  h' prog ⪯{lam_trans, lam_trans, n', true} 
-  Lam
-  (expr_fill Ks  (Val x)) [f.1]
-  h' prog 
-.
-Proof.
-  intros.
-  generalize dependent Ks.
-  remember (λ x,∀ Ks,
-  Lam(expr_fill Ks
-     (If (BinOp (Val x) EqOp (Val 0)) (Val 0)
-        (BinOp (Val 1) AddOp
-           (App (Val (ValFid f)) [BinOp (Val x) AddOp (Val (-1))])))) [f.1]
-  h' prog ⪯{lam_trans, lam_trans, n', true} 
-  Lam (expr_fill Ks  (Val x)) [f.1] h' prog ).
-  remember (natlike_rec P).
-  clear Heqp. subst.
-  apply p; auto.
-  - intros. go_i. split!. go_i. apply trefines_implies_tsim. reflexivity. (* reflexive*)
-  - intros. go_i. split!. go_i. case_bool_decide. assert (~0 ≤ x0) by lia. contradiction.
-    go_i. 
-    assert (Z.succ x0 + -1 = x0) by lia.
-    rewrite H4.
-    go_i.
-    split!.
-    intros. rewrite H0 in H5. inversion H5. split!.
-    assert (∀e, expr_fill Ks (BinOp (Val 1) AddOp e) = expr_fill ((BinOpRCtx 1 AddOp)::Ks) e) by auto.
-    rewrite H6.
-    apply trefines_implies_tsim.
-    admit. (*transitive*)
-  intros.
-  rewrite H5 in H0.
-  inversion H0.
-Admitted.
-*)
+
 
 (* ** TODO *)
 Lemma rec_id_prog_refines_rec_id_loop_spec :
@@ -501,28 +458,28 @@ Proof.
   t ≡ rec_id_loop_spec ∧
   ∃h rec_id_prog', σa= Lam Waiting [] h rec_id_prog'/\ 
   map_Forall (λ key _, rec_id_prop (rec_id_prog' !! key ) key)  m/\ 
-  ("rec_id",None)∉ dom m/\ 
-  rec_id_prog!!("rec_id",None)=rec_id_prog'!!("rec_id",None)). }
+  ("id",None)∉ dom m/\ 
+  rec_id_prog!!("id",None)=rec_id_prog'!!("id",None)). }
   {simpl. split!. reflexivity.  intro. intros. rewrite lookup_empty in H. inversion H. auto.  }
   {simpl. intros. destruct!. split!. }
   {simpl. intros. destruct!.
 
   go_i. split!;[|intros;destruct!]. intros. go_s. go_s. exists (f,vs,h'). go.
   go_s. split!. go. go_s. case_bool_decide.
-  - (* f = ("rec_id", None)*)
+  - (* f = ("id", None)*)
    go_s. intros. go. 
    go_i. split!.
    * intros.  subst. split!. rewrite -H6. rewrite lookup_insert_Some. left. split!. auto. 
-   go_i. intros. exists I. go_i. go_s. rewrite -/rec_id_loop_spec. exists ("rec_id", Some n).
+   go_i. intros. exists I. go_i. go_s. rewrite -/rec_id_loop_spec. exists ("id", Some n).
    go. go_i. go_s. go_s. split!. go. apply H0; auto. split!.  apply map_Forall_insert_2.
     + (*prove rec_id_prop*) rewrite lookup_insert. split!. f_equal. apply AxProofIrrelevance . 
     + apply rec_id_map_forall_neq; auto. 
     intro. rewrite map_Forall_lookup in H3. rewrite elem_of_dom in H5. unfold is_Some in H5. destruct!.
     apply H3 in H5. unfold rec_id_prop in H5. rewrite H2 in H5. auto.
     + rewrite not_elem_of_dom. rewrite lookup_insert_None; split!. by rewrite - not_elem_of_dom.
-    +  rewrite (lookup_insert_ne _ ("rec_id", Some n)). auto. auto. 
+    +  rewrite (lookup_insert_ne _ ("id", Some n)). auto. auto. 
   - case_bool_decide.
-   * (* f = ("rec_id", Some n)*)
+   * (* f = ("id", Some n)*)
     go_s. intros. go. go_s. intros. go. go_s. intros. rewrite -/rec_id_loop_spec. go. 
     simplify_eq/=.  rewrite elem_of_dom in H5. destruct H5. rewrite map_Forall_lookup in H3. 
     apply H3 in H5. unfold rec_id_prop in H5. case_match; try done. 
@@ -532,13 +489,12 @@ Proof.
     n' ⊆ n → 
     t ≡(TVis (Outgoing, ELReturn x h');; rec_id_loop_spec)%spec /\ 
     ∃ e Ks e' s x', 
-    x'>=0 /\
     LamExprFill e Ks e' /\ 
     σa = Lam e s h' rec_id_prog' /\ 
     e' = App (Val (ValFid f)) [Val (ValNum x')] /\ 
     Lam (expr_fill Ks (Val(ValNum x'))) s h' rec_id_prog' ⪯{lam_trans, spec_trans lam_event (gmap fid ()), n', true} 
     (t, m)
-    ). } { simpl. intros.  split!. done.  apply _. tstep_i. tstep_s. split!. go. apply H0; auto. split!. } {
+    ). } { simpl. intros.  split!.  apply _. tstep_i. tstep_s. split!. go. apply H0; auto. split!. } {
       simpl. intros. destruct!. intros. 
       assert (n'1 ⊆ n). apply o_lt_impl_le in H9. eapply transitivity. done. done.
       apply H10 in H11.  destruct!.  split!. all:try done. }
@@ -553,15 +509,164 @@ Proof.
     intros. split!.
     destruct (x'=?0) eqn:?; try done.  rewrite Z.eqb_eq in Heqb; subst.
     -- (* 0 *) tstep_i. split!. tstep_i. go_i. done.
-    -- rewrite Z.eqb_neq in Heqb. tstep_i. split!. case_bool_decide; try done. tstep_i. tstep_i. apply Hloop. auto.
-    intros. split!. assert(x'+-1>=0) by lia. exact H16. apply _. simpl. tstep_i. tstep_i. 
+    -- rewrite Z.eqb_neq in Heqb. tstep_i. split!. case_bool_decide; try done. tstep_i.
+    (* ** main theorem!!*)
+    tstep_i. case_bool_decide.
+    --- (* pos *) split!. tstep_i. tstep_i. apply Hloop. auto.
+    intros. split!. apply _. simpl. tstep_i. tstep_i. 
     assert (1 + (x' + -1) = x') by lia. rewrite H16. 
     eapply tsim_mono; done.
-    (* ** main theorem!!*)
-  
+    --- (* neg *) split!. tstep_i. tstep_i. apply Hloop. auto.
+    intros. split!. apply _. simpl. tstep_i. tstep_i. 
+    (*assert (1 + (x' + -1) = x') by lia.*)
+    assert ((-1 + (x' + 1))  = x') by lia. rewrite H16. 
+    eapply tsim_mono; done.
    * go_s. auto.  
   }
 Qed.
+
+
+
+(* ** testing liveness*)
+Definition id_lam_1: fndef := {|
+  fd_args := ["x"];
+  fd_body := 
+    Var "x" 
+  ;
+  fd_static := I
+|}.
+Definition id_prog_1 : gmap fid fndef :=
+  <[("id",None) := id_lam_1]> $ ∅.
+Definition id_mod_1 := lam_mod id_prog_1.
+
+
+Definition id_lam_2: fndef := {|
+  fd_args := ["x"];
+  fd_body := 
+    If (BinOp (Var "x") EqOp (Val 0)) 
+    (Val 0)
+    (If (BinOp (Val 0) LtOp (Var "x") )
+      (BinOp (Val 1) AddOp (App (Val(ValFid ("id",None)))  ([BinOp (Var "x") AddOp (Val (-1))])))
+      (BinOp (Val (-1)) AddOp (App (Val(ValFid ("id",None))) ([BinOp (Var "x") AddOp (Val (1))])))
+    )
+    
+  ;
+  fd_static := I
+|}.
+Definition id_prog_2 : gmap fid fndef :=
+  <[("id",None) := id_lam_2]> $ ∅.
+Definition id_mod_2 := lam_mod id_prog_2.
+
+Lemma Z_ind:  
+  ∀ (x:Z) (P:Z→Prop),
+    P 0 →
+    (forall x:Z, 0 <= x -> P x -> P (Z.succ x)) →
+    (forall x:Z, x <=0 -> P x -> P (Z.pred x)) →
+    ( P x)
+.
+Proof.
+  intros.
+  destruct (0<=?x) eqn:?.
+  assert (0<=x) by lia.
+  apply (natlike_ind P);auto.
+  assert (0<=-x) by lia.
+  assert (P x = (λ k, P(-k))(-x)). f_equal. by lia.
+  rewrite H3.
+  apply (natlike_ind (λ k,P (-k)));auto. intros.
+  remember (-x0) as x1.
+  assert (x0= -x1) by lia.
+  rewrite H6.
+  assert (- Z.succ (- x1) = Z.pred x1) by lia.
+  rewrite H7.
+  apply H1.
+  lia. auto. 
+Qed.
+
+Lemma id_mod_1_refines_id_mod_2:
+  trefines id_mod_1 id_mod_2.
+Proof.
+  apply tsim_implies_trefines => n0 /=.
+  unshelve eapply tsim_remember.
+  {simpl. 
+  exact (λ _ σ1 σ2,
+  ∃h,
+  σ1= Lam Waiting [] h id_prog_1/\ 
+  σ2= Lam Waiting [] h id_prog_2). }
+  { split!; done. }
+  {done. }
+  simpl. intros.
+  destruct!.
+  tstep_i. split!;intros;destruct!; try done.
+  tstep_s. left.
+  split!.
+  destruct (bool_decide(f=("id",None))) eqn:?;case_bool_decide; try done.
+  - subst.
+  destruct (bool_decide(length vs = 1%nat)) eqn:?;case_bool_decide; try done.
+  2:tstep_s;split!;intros; rewrite lookup_insert_Some in H3;destruct!. 
+  tstep_i. split!. intros. split!. rewrite lookup_insert_Some. naive_solver.
+  naive_solver.
+  destruct vs;try done. destruct vs;try done. 
+  tstep_i. tstep_i.
+  assert (∀v' σ Ks s e,LamExprFill e Ks (Val (ValNum v')) →
+  σ ⪯{lam_trans, lam_trans, n', true, tcons (Outgoing, ELReturn v h') tnil}
+   Lam e s h' id_prog_2 →
+  σ ⪯{lam_trans, lam_trans, n', true, tcons (Outgoing, ELReturn v h') tnil}
+   Lam (expr_fill Ks (App (Val (ValFid ("id", None)))
+  [Val (ValNum v')])) s h' id_prog_2
+  ). intros.
+  { 
+    generalize dependent s.
+    generalize dependent e.
+    generalize dependent Ks.
+    generalize dependent v'.
+    intro.
+    apply (Z_ind v').  
+   - (* case 0*) intros. tstep_s. left. split!. intros. rewrite lookup_insert_Some in H6.
+   destruct!. tstep_s. intros. tstep_s. intros. subst. inversion H6. tstep_s. destruct H4.
+   rewrite - lam_expr_fill_proof. apply H5.
+   - (* pos*)intros. tstep_s. left. split!. intros. rewrite lookup_insert_Some in H8.
+   destruct!. tstep_s. intros. case_bool_decide. assert (Z.succ x≠0) by lia. done.
+   tstep_s. intros. subst. inversion H8. tstep_s. intros. case_bool_decide.
+   inversion H11. tstep_s. intros. inversion H14. tstep_s. intros. subst.
+   assert (n1+n2=x%Z). inversion H16. inversion H18. lia.
+   rewrite H12.
+   assert (∀Ks e, expr_fill Ks (ReturnInt (BinOp (Val 1) AddOp e)) = 
+   expr_fill ((BinOpRCtx (1) AddOp):: ReturnIntCtx::Ks)e). done.
+   rewrite H15.  eapply H5. econs. auto. tstep_s. intros. tstep_s. destruct H6.
+   assert (n3+n4 = Z.succ x).  inversion H17. inversion H19. by lia.
+   rewrite H6. rewrite - lam_expr_fill_proof. auto.
+   assert (0<Z.succ x) by lia. done.
+   - (* neg *) intros. tstep_s. left. split!. intros. rewrite lookup_insert_Some in H8.
+   destruct!. tstep_s. intros. case_bool_decide. assert (Z.pred x≠0) by lia. done.
+   tstep_s. intros. subst. inversion H8. tstep_s. intros. case_bool_decide.
+   assert (¬0<Z.pred x) by lia. done.
+   inversion H11. tstep_s. intros. inversion H14. tstep_s. intros. subst.
+   assert (n1+n2=x%Z). inversion H16. inversion H18. lia.
+   rewrite H12.
+   assert (∀Ks e, expr_fill Ks (ReturnInt (BinOp (Val (-1)) AddOp e)) = 
+   expr_fill ((BinOpRCtx (-1) AddOp):: ReturnIntCtx::Ks)e). done.
+   rewrite H15.  eapply H5. econs. auto. tstep_s. intros. tstep_s. destruct H6.
+   assert (n3+n4 = Z.pred x).  inversion H17. inversion H19. by lia.
+   rewrite H6. rewrite - lam_expr_fill_proof. auto.
+   } 
+  assert (∀e, ReturnExt e = expr_fill [ReturnExtCtx] e) as H11 by auto.
+  rewrite H11.
+  destruct v eqn:?. 
+  eapply H4 . econs. auto. 
+  tstep_s. split!. apply H0;auto. split!.
+  all: tstep_s; left; split!; intros; rewrite lookup_insert_Some in H5;destruct!;
+  tstep_s; intros;done.
+  - tstep_s. split!. intros. rewrite lookup_insert_Some in H3. destruct!.
+Qed.
+
+
+  
+
+
+
+
+
+  
   
 
 (* ** closure add*)
