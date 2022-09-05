@@ -659,8 +659,14 @@ Proof.
   - tstep_s. split!. intros. rewrite lookup_insert_Some in H3. destruct!.
 Qed.
 
-
-  
+(*Note id_mod_2 does not refine id_mod_1. 
+Consider if the argument passed in not a number*)
+(*
+Lemma id_mod_2_refines_id_mod_1:
+  trefines id_mod_2 id_mod_1.
+Proof.
+Admitted.
+*)
 
 
 

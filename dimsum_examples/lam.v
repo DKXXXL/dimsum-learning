@@ -1792,7 +1792,165 @@ Proof.
 Qed.
 Global Hint Resolve lam_step_ReturnInt_s : typeclass_instances.
 
+Definition lam_proof_fns_match (fns1 fns2: gmap fid fndef):=
+  ∀ f, fns1!!f = None ↔ fns2!!f = None.
 
+Definition lam_proof_call (n : ordinal) (fns1 fns2 : gmap fid fndef) :=
+  (∀ n' f es1' es2' K1' K2' s1 s2 es1 es2 vs1' vs2' h1' h2' b,
+      LamExprFill es1' K1' (App (Val $ ValFid f) es1) →
+      LamExprFill es2' K2' (App (Val $ ValFid f) es2) →
+      n' ⊆ n →
+      Forall2 (λ e v, e = Val v) es1 vs1' →
+      Forall2 (λ e v, e = Val v) es2 vs2' →
+      vs1' = vs2' →
+      h1' = h2' →
+      ((s1= [] ↔ s2 = [])) →
+      (∀ v'' h'',
+          Lam (expr_fill K1' (Val v'')) s1  h'' fns1
+              (* TODO: it possible to make it b instead of false? *)
+              ⪯{lam_trans, lam_trans, n', false}
+              Lam (expr_fill K2' (Val v'')) s2 h'' fns2) →
+      Lam es1' s1 h1' fns1
+          ⪯{lam_trans, lam_trans, n', b}
+      Lam es2' s2 h2' fns2).
+
+Lemma lam_proof fns1 fns2: 
+  lam_proof_fns_match fns1 fns2 →
+  (∀ n K1 K2 s1 s2 f fn1 vs h,
+  fns1 !! f = Some fn1 →
+  ∃ fn2, fns2 !! f = Some fn2 ∧ length (fd_args fn1) = length (fd_args fn2) ∧ (
+    length vs = length (fd_args fn1) →
+  (* Call *)
+  lam_proof_call n fns1 fns2 →
+  (* Return *)
+  (∀ n' v1' v2' h1' h2' b,
+     n' ⊆ n →
+     v1' = v2' →
+     h1' = h2' →
+     Lam (expr_fill K1 (Val v1')) s1 h1' fns1
+         ⪯{lam_trans, lam_trans, n', b}
+     Lam (expr_fill K2 (Val v2')) s2 h2' fns2) →
+
+   Lam (expr_fill K1 ( subst_l fn1.(fd_args) vs (fd_body fn1))) s1 h fns1
+       ⪯{lam_trans, lam_trans, n, false}
+   Lam (expr_fill K2 (subst_l fn2.(fd_args) vs (fd_body fn2))) s2 h fns2)) →
+  trefines (lam_mod fns1) (lam_mod fns2).
+Proof.
+  intros.
+  unfold lam_proof_fns_match in H.  
+  apply: tsim_implies_trefines => n0 /=.
+  unshelve eapply tsim_remember.
+  {simpl. exact (λ n' '(Lam e1 s1 h1 fns1') '(Lam e2 s2 h2 fns2'),
+    ∃ K1 K2, 
+    fns1' = fns1 /\ 
+    fns2' = fns2 /\ 
+    e1 = expr_fill K1 Waiting /\ 
+    e2 = expr_fill K2 Waiting /\ 
+    ((s1= [] ↔ s2 = [])) /\
+    h1 = h2 /\
+    ∀ v' h',
+      s1 ≠ [] →
+      Lam (expr_fill K1 (Val v')) s1 h' fns1'
+          ⪯{lam_trans, lam_trans, n', false}
+      Lam (expr_fill K2 (Val v')) s2 h' fns2'
+  ). }
+  { exists [], [] ;try  done. }
+  {simpl. intros. destruct σi, σs. destruct!. exists K1,K2. split!;try  done. intros.
+  eapply tsim_mono; auto. }
+  simpl. intros. destruct σi, σs. destruct!.
+  tstep_both. split!.
+  2:{intros. tstep_s. right. eexists _,_. split. destruct st_stack1 eqn:?. destruct!.
+  destruct H7. assert ([]=[])by auto. apply H4 in H5. inversion H5.
+  naive_solver. split!. auto. tend. apply: tsim_mono_b. naive_solver. }
+  intros. tstep_s. left.
+  assert (f.1 ∈((get_string_set_from_fid_set fns2):gset string)).
+  rewrite elem_of_map in H3. destruct!. 
+  destruct (fns2!!x) eqn:?. rewrite elem_of_map. exists x. rewrite elem_of_dom. split!.
+  rewrite -H in Heqo. rewrite elem_of_dom in H5. rewrite Heqo in H5. destruct H5. inversion H3. 
+  split!; try done. 
+  tend. tstep_s. split!.
+  intros.
+  tstep_i.
+  split!. intros.
+  assert (∃ fn, fns1!! f = Some fn).
+  destruct (fns1!!f) eqn:?.
+  naive_solver.
+  rewrite H in Heqo. rewrite H5 in Heqo. done. destruct!.
+  assert (length vs = length (fd_args fn0)).
+  eapply H0 in H9. destruct!. rewrite H5 in H11. inversion H11. 
+  rewrite H14 in H6. rewrite H6. naive_solver.
+  split!; try done. 
+  unshelve eapply tsim_remember. 
+  { simpl. exact (λ n' '(Lam e1 s1 h1 fns1') '(Lam e2 s2 h2 fns2'),
+     ∃ K1 K2 f vs fn1 fn2,
+       fns1' = fns1 ∧
+       fns2' = fns2 ∧
+       h1 = h2 ∧
+       fns1 !! f = Some fn1 ∧
+       fns2 !! f = Some fn2 ∧
+       e1 = expr_fill K1 (subst_l (fd_args fn1) vs (fd_body fn1)) ∧
+       e2 = expr_fill K2 ( subst_l (fd_args fn2) vs (fd_body fn2)) ∧
+       length vs = length (fd_args fn1) ∧
+       ∀ v' h',
+         Lam (expr_fill K1 (Val v')) s1 h' fns1
+             ⪯{lam_trans, lam_trans, n', false}
+         Lam (expr_fill K2 (Val v')) s2 h' fns2
+  ). }
+  {simpl. exists (ReturnIntCtx::ReturnExtCtx::K1), (ReturnIntCtx::ReturnExtCtx::K2).
+  split!;try done. intros. tstep_s. tstep_i. tstep_i. tstep_s. split!.
+  apply H2; try done. split!; try done. }
+  {simpl. intros. destruct σi,σs. destruct!;split!; try done. intros.
+  eapply tsim_mono. auto. by apply o_lt_impl_le. }
+  simpl. intros. destruct σi, σs. destruct!.
+  exploit H0;try done.
+  move => [?[Hx[?]]]. rewrite H18 in Hx. inversion Hx. subst. apply;try done.
+  - unfold lam_proof_call.
+    move => n1 f' ?? Ka Kb ?? es1 es2 vs1' vs2' ??? [?][?] ? Hall1 Hall2 ????.
+    have ?: es1 = Val <$> vs1'. { clear -Hall1. elim: Hall1; naive_solver. } subst.
+    have ?: es2 = Val <$> vs2'. { clear -Hall2. elim: Hall2; naive_solver. } subst.
+    tstep_both. split!.
+    + intros. tstep_s. left. split!. 
+      { rewrite elem_of_map. rewrite elem_of_map in H14. destruct!.
+        rewrite elem_of_dom in H16.
+        destruct (fns2!!x) eqn:?. exists x. rewrite elem_of_dom. naive_solver.
+        rewrite  -H in Heqo. rewrite Heqo in H16. inversion H16. inversion H14. 
+      } (* simple lemma*)
+      intros. tend. 
+      assert (∃ fn, fns1!! f' = Some fn). {
+        destruct (fns1!!f') eqn:?.
+        naive_solver.
+        rewrite H in Heqo. rewrite H15 in Heqo. done. 
+      }
+      destruct!.
+      assert (length vs2' = length (fd_args fn3)).
+      {
+        eapply H0 in H19. destruct!. rewrite H19. rewrite H16.
+        rewrite H15 in H20. inversion H20. auto. 
+      }
+      split!; try done. 
+      apply H13; try done.
+      exists (ReturnIntCtx::Ka), (ReturnIntCtx:: Kb).
+       split!; try done. 
+       intros. tstep_i. tstep_s. eapply tsim_mono_b. naive_solver.  
+    + intros. tstep_s. right. split!; try done.
+      {
+       rewrite elem_of_map. rewrite elem_of_map in H14.
+       intro.
+       destruct!.
+       apply H14.
+       rewrite elem_of_dom in H19.
+       destruct (fns1!!x) eqn:?.
+       exists x. rewrite elem_of_dom.
+       naive_solver.
+       rewrite H in Heqo. rewrite Heqo in H19.
+       destruct H19 as [x0 H19]. inversion H19.
+      }
+      tend. apply H2. etrans. done. etrans. done. by apply o_lt_impl_le.
+      split!; try done.
+  - move => *. subst. apply: tsim_mono; [|done]. apply tsim_mono_b_false. naive_solver.
+Unshelve.
+all:done.
+Qed.
 
 (*
 (** * Proof techniques *)

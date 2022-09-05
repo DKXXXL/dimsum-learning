@@ -1516,7 +1516,7 @@ Proof.
   { move => /= ?? [???] [???] *. destruct!. split!; [done..|].
     move => ??. apply: tsim_mono; [naive_solver|]. by apply o_lt_impl_le. }
   move => n2 ? IH2 [???] [???] ?. destruct!.
-  exploit Hc; [done|]. move => [?[?[?]]]. simplify_eq.
+  exploit Hc; [done|]. move => [?[?[?]]]. simplify_eq. 
   apply; [lia|..].
   - move => n' f' ?? ?? es1 es2 vs1' vs2' ??? [?][?] ? Hall1 Hall2 ???.
     have ?: es1 = Val <$> vs1'. { clear -Hall1. elim: Hall1; naive_solver. } subst.
