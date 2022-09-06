@@ -668,27 +668,7 @@ Proof.
 Admitted.
 *)
 
-(* Same lemma, but using lam_proof *)
-Lemma id_mod_1_refines_id_mod_2':
-  trefines id_mod_1 id_mod_2.
-Proof.
-  apply lam_proof.
-  unfold lam_proof_fns_match.
-  intros.
-  rewrite !lookup_insert_None. naive_solver.
-  intros.
-  rewrite lookup_insert_Some in H.
-  destruct!.
-  split!. rewrite lookup_insert_Some. naive_solver.
-  auto.
-  intros.
-  destruct vs eqn:?; try done. destruct l eqn:?; try done.
-  subst.
-Admitted.
 
-
-
-  
   
 
 (* ** closure add*)
@@ -793,12 +773,77 @@ Proof.
   }
 Qed.
 
-
-Definition main_lam: fndef := {|
-  fd_args := ["input"];
-  fd_body := App (Val $ ValFid ("id",None)) [Var "input"];
-  fd_static := I
+(* test out lam_proof*)
+Definition clos_add_lam': fndef :={|
+fd_args := [];
+fd_body := 
+  FixE "" ["y"] (
+    FixE "" ["x"] (
+      BinOp (Var "x") AddOp (Var "y")
+    )
+);
+fd_static := I
 |}.
+Definition clos_add_prog' : gmap fid fndef :=
+  <[("clos_add",None) := clos_add_lam']> $ ∅.
+Definition clos_add_mod' := lam_mod clos_add_prog'.
 
-Definition main_prog: gmap fid fndef := 
-    <[("main",None) := main_lam]> $ ∅.
+Definition clos_add_refines_clos_add'_P :=
+  (λ (fns1 fns2:gmap fid fndef), 
+  ∀ f, 
+  let f1 := fns1 !! f in 
+  let f2 := fns2 !! f in 
+  (f1 = None /\f2 = None) \/
+  (f1 = Some clos_add_lam /\ f2 = Some clos_add_lam') \/
+  (f1=Some {|
+  fd_args := ["x"];
+  fd_body :=  FixE "" ["x"] (
+      BinOp (Var "x") AddOp (Var "y")
+    );fd_static := I
+  |} /\
+  f2=Some {|
+  fd_args := ["y"];
+  fd_body := 
+    FixE "" ["x"] (
+      BinOp (Var "x") AddOp (Var "y")
+    );fd_static := I
+  |}
+  )\/ 
+  (∃ v I1 I2, f1=Some {|
+  fd_args := ["y"];
+  fd_body := 
+      BinOp (Val v) AddOp (Var "y")
+    
+  ;
+  fd_static := I1
+  |} /\
+  f2=Some {|
+  fd_args := ["x"];
+  fd_body := 
+      BinOp (Var "x") AddOp (Val v)
+  ;
+  fd_static := I2
+  |}
+  )
+  ).
+
+Lemma clos_add_refines_clos_add' :
+  trefines clos_add_mod clos_add_mod'.
+Proof.
+  unshelve eapply lam_proof.
+  {exact clos_add_refines_clos_add'_P. }
+  {unfold clos_add_refines_clos_add'_P, lam_proof_fns_match. naive_solver. }
+  {unfold clos_add_refines_clos_add'_P. intros. unfold clos_add_prog, clos_add_prog'.
+   split!;  try rewrite !lookup_insert_None; try rewrite !lookup_insert_Some.
+   destruct (bool_decide(f = ("clos_add",None))) eqn:?;
+   case_bool_decide; naive_solver.
+   }
+  intros. unfold clos_add_refines_clos_add'_P in H.
+  specialize (H f) as Hf. destruct!;rewrite H0 in H1; inversion H1.
+  - (* clos_add_lam case*) 
+  split!. done.  done.
+  intros. destruct!. simpl. 
+
+
+
+Admitted.

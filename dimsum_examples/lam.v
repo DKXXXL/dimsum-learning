@@ -1868,7 +1868,7 @@ Lemma lam_proof fns1 fns2 (P:_ → _ → Prop):
      Lam (expr_fill K1 (Val v1')) s1 h1' fns1''
          ⪯{lam_trans, lam_trans, n', b}
      Lam (expr_fill K2 (Val v2')) s2 h2' fns2'') →
-
+    (∃tl1 tl2, s1 = f.1::tl1 /\ s2 = f.1::tl2)→
    Lam (expr_fill K1 ( subst_l fn1.(fd_args) vs (fd_body fn1))) s1 h fns1'
        ⪯{lam_trans, lam_trans, n, false}
    Lam (expr_fill K2 (subst_l fn2.(fd_args) vs (fd_body fn2))) s2 h fns2')) →
@@ -1937,6 +1937,7 @@ Proof.
        e1 = expr_fill K1 (subst_l (fd_args fn1) vs (fd_body fn1)) ∧
        e2 = expr_fill K2 ( subst_l (fd_args fn2) vs (fd_body fn2)) ∧
        length vs = length (fd_args fn1) ∧
+       (∃tl1 tl2, s1 = f.1::tl1 /\ s2 = f.1::tl2)/\
        ∀ v' h' fnsa fnsb,
         P fnsa fnsb →
          Lam (expr_fill K1 (Val v')) s1 h' fnsa
@@ -1968,7 +1969,7 @@ Proof.
       assert (length vs2' = length (fd_args fn3)).
       {
         eapply H1 in Pcond. destruct!.
-        rewrite H24 in H19. inversion H19; subst. rewrite H20. symmetry;done.
+        rewrite H23 in H19. inversion H19; subst. rewrite H20. symmetry;done.
         done.
       }
       split!; try done. 
@@ -1983,6 +1984,7 @@ Proof.
       tend. apply H3. etrans. done. etrans. done. by apply o_lt_impl_le.
       split!; try done. naive_solver.
   - move => *. subst. apply: tsim_mono; [|done]. apply tsim_mono_b_false. naive_solver.
+  - naive_solver. 
 Unshelve.
 all:done.
 Qed.
