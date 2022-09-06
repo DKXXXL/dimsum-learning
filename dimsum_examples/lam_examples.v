@@ -797,7 +797,7 @@ Definition clos_add_refines_clos_add'_P :=
   (f1 = Some clos_add_lam /\ f2 = Some clos_add_lam') \/
   (f1=Some {|
   fd_args := ["x"];
-  fd_body :=  FixE "" ["x"] (
+  fd_body :=  FixE "" ["y"] (
       BinOp (Var "x") AddOp (Var "y")
     );fd_static := I
   |} /\
@@ -843,7 +843,48 @@ Proof.
   - (* clos_add_lam case*) 
   split!. done.  done.
   intros. destruct!. simpl. 
+  tstep_i. intros. exists I. tstep_s. exists n0.
+  split.
+  specialize (H (f.1, Some n0)) as Hf'. destruct!; try done;  rewrite H4 in H1; inversion H1.
+  intros. assert (H4 = I) by apply AxProofIrrelevance. subst.
+  apply H6; try done.
+  unfold clos_add_refines_clos_add'_P. intros.
+  unfold fns_add.
+  rewrite !lookup_insert_None !lookup_insert_Some .
+  specialize (H f0) as Hf.
+  destruct (bool_decide(f0 = (f.1, Some n0))) eqn:?;
+  case_bool_decide; try done; destruct!.
+  all: try (rewrite H1 in H7; inversion H7).
+  1,2,3,4: naive_solver.
+  rewrite !lookup_insert_ne; naive_solver.
+  - (* clos 1*)
+  split!. done. done.
+  intros. destruct!. simpl.
+  destruct vs eqn:?; try done. destruct l eqn:?; try done.
+  tstep_i. intros.
+  specialize (H (f.1, Some n0)) as Hf'; destruct!; rewrite H1 in H4; try done.
+  eexists _.
+  tstep_s. split!; try done.
+  intros.
+  apply H6; try done.
+  unfold clos_add_refines_clos_add'_P. intros.
+  unfold fns_add.
+  rewrite !lookup_insert_None !lookup_insert_Some .
+  specialize (H f0) as Hf.
+  destruct (bool_decide(f0 = (f.1, Some n0))) eqn:?;
+  case_bool_decide; try done; destruct!.
+  right. right. right. split!; rewrite !lookup_insert_Some; naive_solver.
+  1,2,3:naive_solver.
+  right. right. right. split!; rewrite !lookup_insert_ne; done.
+  - (* clos 2*)
+  split!. done. done.
+  intros. destruct!. simpl.
+  destruct vs eqn:?; try done. destruct l eqn:?; try done.
+  tstep_s. intros. subst.
+  tstep_i.
+  apply H6; try done.
+  f_equal. lia. 
+Unshelve. repeat case_match; auto.
+Qed.
 
-
-
-Admitted.
+  
