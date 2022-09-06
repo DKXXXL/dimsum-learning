@@ -668,7 +668,23 @@ Proof.
 Admitted.
 *)
 
-
+(* Same lemma, but using lam_proof *)
+Lemma id_mod_1_refines_id_mod_2':
+  trefines id_mod_1 id_mod_2.
+Proof.
+  apply lam_proof.
+  unfold lam_proof_fns_match.
+  intros.
+  rewrite !lookup_insert_None. naive_solver.
+  intros.
+  rewrite lookup_insert_Some in H.
+  destruct!.
+  split!. rewrite lookup_insert_Some. naive_solver.
+  auto.
+  intros.
+  destruct vs eqn:?; try done. destruct l eqn:?; try done.
+  subst.
+Admitted.
 
 
 
