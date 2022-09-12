@@ -572,6 +572,7 @@ Definition val_in_bij (v1 v2 : val) : uPred heap_bijUR :=
   | ValNum n1, ValNum n2 => ⌜n1 = n2⌝
   | ValBool b1, ValBool b2 => ⌜b1 = b2⌝
   | ValLoc l1, ValLoc l2 => loc_in_bij l1 l2
+  | ValFid f1, ValFid f2 => ⌜f1 = f2⌝
   | _, _ => False
   end.
 
@@ -671,11 +672,11 @@ Proof.
   naive_solver.
 Qed.
 
-Lemma heap_in_bij_alloc l1 l2 hi hs n bij H:
+Lemma heap_in_bij_alloc l1 l2 hi hs v n bij H:
   heap_is_fresh hi l1 →
   heap_is_fresh hs l2 →
   heap_in_bij bij hi hs -∗
-  heap_in_bij (hb_share l1.1 l2.1 bij H) (heap_alloc hi l1 n) (heap_alloc hs l2 n).
+  heap_in_bij (hb_share l1.1 l2.1 bij H) (heap_alloc hi l1 v n) (heap_alloc hs l2 v n).
 Proof.
   iIntros ([Hi1 ?] [Hi2 ?]) "Hh". iIntros (p1 p2 o) => /=. iIntros ([[??]|[??]]%lookup_insert_Some); simplify_eq.
   - destruct l1 as [p1 ?], l2 as [p2 ?]; simplify_eq/=.

@@ -365,6 +365,7 @@ Definition val_in_bij (bij : heap_bij) (v1 v2 : val) : Prop :=
   | ValNum n1, ValNum n2 => n1 = n2
   | ValBool b1, ValBool b2 => b1 = b2
   | ValLoc l1, ValLoc l2 => hb_bij bij !! l2.1 = Some (HBShared l1.1) /\ l1.2 = l2.2
+  | ValFid f1, ValFid f2 => f1 = f2
   | _, _ => False
   end.
 
@@ -382,6 +383,7 @@ Proof.
    - destruct vii, vs => //=. { by eexists (ValNum _). } { by eexists (ValBool _). }
      move => [/heap_bij_merge_shared[?[??]] ?].
      eexists (ValLoc (_, _)) => /=. naive_solver.
+     { by eexists (ValFid _). }
    - move => [vi [??]]. destruct vii, vi, vs => //; simplify_eq/= => //.
      split; [|naive_solver congruence]. apply heap_bij_merge_shared. naive_solver.
 Qed.
@@ -472,10 +474,10 @@ Proof.
   move => ?; subst => /=. by apply: Hin.
 Qed.
 
-Lemma heap_in_bij_alloc_r l2 hi hs n bij:
+Lemma heap_in_bij_alloc_r l2 hi hs n v bij:
   heap_in_bij bij hi hs →
   (∀ p, hb_bij bij !! l2.1 = Some (HBShared p) → False) →
-  heap_in_bij bij hi (heap_alloc hs l2 n).
+  heap_in_bij bij hi (heap_alloc hs l2 v n).
 Proof.
   move => /= Hbij Hin ???? /=. rewrite lookup_union_r. 1: by apply Hbij.
   apply not_elem_of_list_to_map_1. contradict Hin.
@@ -561,10 +563,10 @@ Proof.
   exfalso. move: Hin => /elem_of_hb_player_s?. naive_solver.
 Qed.
 
-Lemma heap_preserved_alloc_r l n he hp bij:
+Lemma heap_preserved_alloc_r l v n he hp bij:
   l.1 ∉ bij →
   heap_preserved bij he hp →
-  heap_preserved bij he (heap_alloc hp l n).
+  heap_preserved bij he (heap_alloc hp l v n).
 Proof.
   move => Hni Hp p o /= ?. rewrite lookup_union_r; [by apply Hp|].
   apply not_elem_of_list_to_map_1 => /elem_of_list_fmap[[[??]?] [?/elem_of_list_fmap[?[??]]]]; simplify_eq/=.
