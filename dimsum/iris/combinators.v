@@ -92,9 +92,9 @@ End map.
 (** * seq_product *)
 
 Section seq_product.
-  Context {Σ : gFunctors} {EV : Type} `{!dimsumGS Σ}.
+  Context {Σ : gFunctors} {EV1 EV2 : Type} `{!dimsumGS Σ}.
 
-  Lemma sim_tgt_seq_product_None (m1 m2 : mod_trans EV) σ1 σ2 Π :
+  Lemma sim_tgt_seq_product_None (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π :
     (∀ p, ▷ₒ Π (Some (SPENone p)) (λ P, P (p, σ1, σ2))) -∗
     (SPNone, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₜ Π.
   Proof.
@@ -104,7 +104,7 @@ Section seq_product.
     iApply bi_mono1_intro0. iSplit!.
   Qed.
 
-  Lemma sim_tgt_seq_product_left (m1 m2 : mod_trans EV) σ1 σ2 Π :
+  Lemma sim_tgt_seq_product_left (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π :
     (σ1 ≈{m1}≈>ₜ λ κ Pσ,
       ∀ s', ⌜if κ is None then s' = SPLeft else True⌝ -∗
          Π ((λ e, SPELeft e s') <$> κ) (λ P, Pσ (λ σ', P (s', σ', σ2)))) -∗
@@ -142,7 +142,7 @@ Section seq_product.
       iIntros (??) "HΠ". by iApply bi_mono1_intro0.
   Qed.
 
-  Lemma sim_tgt_seq_product_right (m1 m2 : mod_trans EV) σ1 σ2 Π :
+  Lemma sim_tgt_seq_product_right (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π :
     (σ2 ≈{m2}≈>ₜ λ κ Pσ,
       ∀ s', ⌜if κ is None then s' = SPRight else True⌝ -∗
          Π ((λ e, SPERight e s') <$> κ) (λ P, Pσ (λ σ', P (s', σ1, σ')))) -∗
@@ -180,7 +180,7 @@ Section seq_product.
       iIntros (??) "HΠ". by iApply bi_mono1_intro0.
   Qed.
 
-  Lemma sim_src_seq_product_None p (m1 m2 : mod_trans EV) σ1 σ2 Π :
+  Lemma sim_src_seq_product_None p (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π :
     Π (Some (SPENone p)) (p, σ1, σ2) -∗
     (SPNone, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₛ Π.
   Proof.
@@ -188,7 +188,7 @@ Section seq_product.
     iIntros (??). by simplify_eq.
   Qed.
 
-  Lemma sim_src_seq_product_left (m1 m2 : mod_trans EV) σ1 σ2 Π `{!VisNoAng m1} :
+  Lemma sim_src_seq_product_left (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π `{!VisNoAng m1} :
     (σ1 ≈{m1}≈>ₛ λ κ σ', ∃ s', ⌜if κ is None then s' = SPLeft else True⌝ ∗
        Π ((λ e, SPELeft e s') <$> κ) (s', σ', σ2)) -∗
     (SPLeft, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₛ Π.
@@ -220,7 +220,7 @@ Section seq_product.
       iMod ("Hsim" with "[//]") as "Hsim". iModIntro. by iApply "Hsim".
   Qed.
 
-  Lemma sim_src_seq_product_right (m1 m2 : mod_trans EV) σ1 σ2 Π `{!VisNoAng m2} :
+  Lemma sim_src_seq_product_right (m1 : mod_trans EV1) (m2 : mod_trans EV2) σ1 σ2 Π `{!VisNoAng m2} :
     (σ2 ≈{m2}≈>ₛ λ κ σ', ∃ s', ⌜if κ is None then s' = SPRight else True⌝ ∗
        Π ((λ e, SPERight e s') <$> κ) (s', σ1, σ')) -∗
     (SPRight, σ1, σ2) ≈{seq_product_trans m1 m2}≈>ₛ Π.
@@ -252,7 +252,6 @@ Section seq_product.
       iMod ("Hsim" with "[//]") as "Hsim". iModIntro. by iApply "Hsim".
   Qed.
 End seq_product.
-
 
 (** * state_transform_mod *)
 
@@ -324,3 +323,165 @@ Section state_transform.
     - by iApply ("Hs" with "[//]").
   Qed.
 End state_transform.
+
+(** * seq_map *)
+
+Section seq_map.
+  Context {Σ : gFunctors} {EV1 EV2 : Type} `{!dimsumGS Σ}.
+  Implicit Types (f : mod_trans (sm_event EV1 EV2)).
+
+  Lemma sim_tgt_seq_map_filter m f σ σf Π :
+    (σf ≈{f}≈>ₜ λ κ Pσ,
+      match κ with
+      | None => Π None (λ P, Pσ (λ x, P (SMFilter, σ, x)))
+      | Some (SMEEmit e) => Π (Some e) (λ P, Pσ (λ x, P (SMFilter, σ, x)))
+      | Some (SMEReturn e) => Π None (λ P, Pσ (λ x, P (if e is Some e' then SMProgRecv e' else SMProg, σ, x)))
+      | _ => True
+      end) -∗
+    (SMFilter, σ, σf) ≈{seq_map_trans m f}≈>ₜ Π.
+  Proof.
+    iIntros "HΠ". iApply (sim_tgt_bi_mono1 with "[-]").
+    iApply sim_tgt_state_transform; [done|] => /=.
+    iApply (sim_tgt_map with "[-]").
+    iApply (sim_tgt_seq_product_right with "[-]").
+    iApply (sim_tgt_bi_mono2 with "[-]").
+    iApply (sim_tgt_wand with "HΠ").
+    iIntros (κ Pσ) "Hκ". iIntros (s' ? κ' ???).
+    destruct κ; destruct!/=; [inv_all @seq_map_filter|].
+    all: iApply (bi_mono1_intro with "Hκ"); iIntros (?) "HP".
+    all: iApply (bi_mono1_intro with "HP"); iIntros (?) "?"; iIntros ([[??]?] ?); by simplify_eq/=.
+  Qed.
+
+  Lemma sim_tgt_seq_map_filter_recv m f σ σf e Π :
+    (σf ≈{f}≈>ₜ λ κ Pσ,
+      if κ is Some e' then ⌜SMERecv e = e'⌝ -∗ Π None (λ P, Pσ (λ x, P (SMFilter, σ, x)))
+      else Π None (λ P, Pσ (λ x, P (SMFilterRecv e, σ, x)))
+      ) -∗
+    (SMFilterRecv e, σ, σf) ≈{seq_map_trans m f}≈>ₜ Π.
+  Proof.
+    iIntros "HΠ". iApply (sim_tgt_bi_mono1 with "[-]").
+    iApply sim_tgt_state_transform; [done|] => /=.
+    iApply (sim_tgt_map with "[-]").
+    iApply (sim_tgt_seq_product_right with "[-]").
+    iApply (sim_tgt_bi_mono2 with "[-]").
+    iApply (sim_tgt_wand with "HΠ").
+    iIntros (κ Pσ) "Hκ". iIntros (s' ? κ' ???).
+    destruct κ; destruct!/=; [inv_all @seq_map_filter|].
+    1: iSpecialize ("Hκ" with "[//]").
+    all: iApply (bi_mono1_intro with "Hκ"); iIntros (?) "HP".
+    all: iApply (bi_mono1_intro with "HP"); iIntros (?) "?"; iIntros ([[??]?] ?); by simplify_eq/=.
+  Qed.
+
+  Lemma sim_tgt_seq_map_prog m f σ σf Π :
+    (σ ≈{m}≈>ₜ λ κ Pσ,
+      if κ is Some e' then Π None (λ P, Pσ (λ x, P (SMFilterRecv e', x, σf)))
+      else Π None (λ P, Pσ (λ x, P (SMProg, x, σf)))
+    ) -∗
+    (SMProg, σ, σf) ≈{seq_map_trans m f}≈>ₜ Π.
+  Proof.
+    iIntros "HΠ". iApply (sim_tgt_bi_mono1 with "[-]").
+    iApply sim_tgt_state_transform; [done|] => /=.
+    iApply (sim_tgt_map with "[-]").
+    iApply (sim_tgt_seq_product_left with "[-]").
+    iApply (sim_tgt_bi_mono2 with "[-]").
+    iApply (sim_tgt_wand with "HΠ").
+    iIntros (κ Pσ) "Hκ". iIntros (s' ? κ' ???).
+    destruct κ; destruct!/=; [inv_all @seq_map_filter|].
+    all: iApply (bi_mono1_intro with "Hκ"); iIntros (?) "HP".
+    all: iApply (bi_mono1_intro with "HP"); iIntros (?) "?"; iIntros ([[??]?] ?); by simplify_eq/=.
+  Qed.
+
+  Lemma sim_tgt_seq_map_prog_recv m f σ σf e Π :
+    (σ ≈{m}≈>ₜ λ κ Pσ,
+      if κ is Some e' then ⌜e = e'⌝ -∗ Π None (λ P, Pσ (λ x, P (SMProg, x, σf)))
+      else Π None (λ P, Pσ (λ x, P (SMProgRecv e, x, σf)))
+      ) -∗
+    (SMProgRecv e, σ, σf) ≈{seq_map_trans m f}≈>ₜ Π.
+  Proof.
+    iIntros "HΠ". iApply (sim_tgt_bi_mono1 with "[-]").
+    iApply sim_tgt_state_transform; [done|] => /=.
+    iApply (sim_tgt_map with "[-]").
+    iApply (sim_tgt_seq_product_left with "[-]").
+    iApply (sim_tgt_bi_mono2 with "[-]").
+    iApply (sim_tgt_wand with "HΠ").
+    iIntros (κ Pσ) "Hκ". iIntros (s' ? κ' ???).
+    destruct κ; destruct!/=; [inv_all @seq_map_filter|].
+    1: iSpecialize ("Hκ" with "[//]").
+    all: iApply (bi_mono1_intro with "Hκ"); iIntros (?) "HP".
+    all: iApply (bi_mono1_intro with "HP"); iIntros (?) "?"; iIntros ([[??]?] ?); by simplify_eq/=.
+  Qed.
+
+  Lemma sim_src_seq_map_filter m f σ σf Π `{!VisNoAng m} `{!VisNoAng f} :
+    (σf ≈{f}≈>ₛ λ κ σf',
+      match κ with
+      | None => Π None (SMFilter, σ, σf')
+      | Some (SMEEmit e) => Π (Some e) (SMFilter, σ, σf')
+      | Some (SMEReturn e) => Π None (if e is Some e' then SMProgRecv e' else SMProg, σ, σf')
+      | _ => False
+      end) -∗
+    (SMFilter, σ, σf) ≈{seq_map_trans m f}≈>ₛ Π.
+  Proof.
+    iIntros "HΠ".
+    iApply sim_src_state_transform; [done|] => /=.
+    iApply (sim_src_map with "[-]").
+    iApply (sim_src_seq_product_right with "[-]").
+    iApply (sim_src_wand with "HΠ").
+    iIntros (κ σ') "Hκ".
+    repeat case_match => //; simplify_eq.
+    all: iSplit!; (once try econs).
+    all: iIntros ([[??]?] ?); by simplify_eq/=.
+  Qed.
+
+  Lemma sim_src_seq_map_filter_recv m f σ σf Π e `{!VisNoAng m} `{!VisNoAng f} :
+    (σf ≈{f}≈>ₛ λ κ σf',
+      if κ is Some e' then ⌜SMERecv e = e'⌝ ∗ Π None (SMFilter, σ, σf')
+      else Π None (SMFilterRecv e, σ, σf')
+    ) -∗
+    (SMFilterRecv e, σ, σf) ≈{seq_map_trans m f}≈>ₛ Π.
+  Proof.
+    iIntros "HΠ".
+    iApply sim_src_state_transform; [done|] => /=.
+    iApply (sim_src_map with "[-]").
+    iApply (sim_src_seq_product_right with "[-]").
+    iApply (sim_src_wand with "HΠ").
+    iIntros (κ σ') "Hκ".
+    repeat case_match => //; iDestruct!; simplify_eq.
+    all: iSplit!; (once try econs).
+    all: iIntros ([[??]?] ?); by simplify_eq/=.
+  Qed.
+
+  Lemma sim_src_seq_map_prog m f σ σf Π `{!VisNoAng m} `{!VisNoAng f} :
+    (σ ≈{m}≈>ₛ λ κ σ',
+      if κ is Some e' then Π None (SMFilterRecv e', σ', σf)
+      else Π None (SMProg, σ', σf)) -∗
+    (SMProg, σ, σf) ≈{seq_map_trans m f}≈>ₛ Π.
+  Proof.
+    iIntros "HΠ".
+    iApply sim_src_state_transform; [done|] => /=.
+    iApply (sim_src_map with "[-]").
+    iApply (sim_src_seq_product_left with "[-]").
+    iApply (sim_src_wand with "HΠ").
+    iIntros (κ σ') "Hκ".
+    repeat case_match => //; simplify_eq.
+    all: iSplit!; (once try econs).
+    all: iIntros ([[??]?] ?); by simplify_eq/=.
+  Qed.
+
+  Lemma sim_src_seq_map_prog_recv m f σ σf Π e `{!VisNoAng m} `{!VisNoAng f} :
+    (σ ≈{m}≈>ₛ λ κ σ',
+      if κ is Some e' then ⌜e = e'⌝ ∗ Π None (SMProg, σ', σf)
+      else Π None (SMProgRecv e, σ', σf)
+    ) -∗
+    (SMProgRecv e, σ, σf) ≈{seq_map_trans m f}≈>ₛ Π.
+  Proof.
+    iIntros "HΠ".
+    iApply sim_src_state_transform; [done|] => /=.
+    iApply (sim_src_map with "[-]").
+    iApply (sim_src_seq_product_left with "[-]").
+    iApply (sim_src_wand with "HΠ").
+    iIntros (κ σ') "Hκ".
+    repeat case_match => //; iDestruct!; simplify_eq.
+    all: iSplit!; (once try econs).
+    all: iIntros ([[??]?] ?); by simplify_eq/=.
+  Qed.
+End seq_map.

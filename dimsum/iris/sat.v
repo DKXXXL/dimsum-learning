@@ -198,11 +198,15 @@ Local Existing Instance sat_inG.
 Definition sat {Σ M} `{!satG Σ M} : gname → uPred M → iProp Σ :=
   λ γ P, (∃ m, ⌜uPred_holds P 0 m⌝ ∗ own γ (auth_frag m))%I.
 
-Definition sat_auth {Σ M} `{!satG Σ M} : gname → iProp Σ :=
+Definition sat_open {Σ M} `{!satG Σ M} : gname → iProp Σ :=
   λ γ, (∃ m, own γ (auth_auth (DfracOwn 1) m))%I.
 
+Definition sat_closed {Σ M} `{!satG Σ M} : gname → uPred M → iProp Σ :=
+  λ γ F, (∀ P', ⌜satisfiable (P' ∗ F)⌝ ==∗ sat_open γ ∗ sat γ P')%I.
+
 Global Instance: Params (@sat) 4 := {}.
-Global Instance: Params (@sat_auth) 4 := {}.
+Global Instance: Params (@sat_open) 4 := {}.
+Global Instance: Params (@sat_closed) 4 := {}.
 
 Section sat.
   Context {Σ : gFunctors} {M : ucmra}.
@@ -233,9 +237,9 @@ Section sat.
   Qed.
 
   Lemma sat_bupd γ P :
-    sat_auth γ -∗
+    sat_open γ -∗
     sat γ (|==> P) ==∗
-    sat_auth γ ∗ sat γ P.
+    sat_open γ ∗ sat γ P.
   Proof using Hdiscrete.
     iIntros "[%ma Ha] [%mf [%Hholds Hf]]".
     iCombine "Ha Hf" as "H".
@@ -327,7 +331,7 @@ Section sat.
   (** ** rules for interacting with [sat] *)
   Lemma sat_alloc P :
     satisfiable P →
-    ⊢ |==> ∃ γ, sat_auth γ ∗ sat γ P.
+    ⊢ |==> ∃ γ, sat_open γ ∗ sat γ P.
   Proof using Hdiscrete.
     move => [x [/cmra_discrete_valid_iff Hvalid ?]].
     iMod (own_alloc (● x ⋅ ◯ x)) as (γ) "[Ha Hf]". { by apply auth_both_valid_discrete. }
@@ -355,8 +359,8 @@ Section sat.
   Qed.
 
   Lemma sat_switch_bupd γ P Q G :
-    (P ==∗ ∃ P', P' ∗ ⌜sat_auth γ ∗ sat γ P' ∗ Q -∗ G⌝) →
-    sat_auth γ ∗ sat γ P ∗ Q ==∗ G.
+    (P ==∗ ∃ P', P' ∗ ⌜sat_open γ ∗ sat γ P' ∗ Q -∗ G⌝) →
+    sat_open γ ∗ sat γ P ∗ Q ==∗ G.
   Proof using Hdiscrete.
     iIntros (Himpl) "[Hauth [Hsat HQ]]".
     iDestruct (sat_mono with "Hsat") as "Hsat"; [done|].
@@ -365,10 +369,10 @@ Section sat.
     iApply HG. by iFrame.
   Qed.
 
-  Lemma sat_satisfiable γ P `{!∀ x : M, CoreCancelable x} :
+  Lemma sat_close γ P `{!∀ x : M, CoreCancelable x} :
     sat γ P -∗
-    sat_auth γ -∗
-    ∃ F, ⌜satisfiable (P ∗ F)⌝ ∗ (∀ P', ⌜satisfiable (P' ∗ F)⌝ ==∗ sat_auth γ ∗ sat γ P').
+    sat_open γ -∗
+    ∃ F, ⌜satisfiable (P ∗ F)⌝ ∗ sat_closed γ F.
   Proof using Hdiscrete.
     iIntros "[%m [%Hholds Hm]] [%a Ha]".
     iDestruct (own_valid_2 with "Ha Hm") as %[[f Heq] Hvalid]%auth_both_valid_discrete.

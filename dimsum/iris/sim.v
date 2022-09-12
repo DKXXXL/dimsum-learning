@@ -223,6 +223,30 @@ Section sim_tgt.
     iIntros (?) "?". by iApply bi_mono1_intro0.
   Qed.
 
+  Lemma sim_tgt_bind σ Π :
+    σ ≈{ m }≈>ₜ (λ κ Pσ', ⌜κ = None⌝ ∗ Pσ' (λ σ', σ' ≈{ m }≈>ₜ Π)) -∗
+    σ ≈{ m }≈>ₜ Π.
+  Proof.
+    iIntros "HΠ".
+    pose (F := (λ σ Ψ, ∀ Π, (∀ κ Pσ, Ψ κ Pσ -∗ ⌜κ = @None EV⌝ ∗ Pσ (λ σ', σ' ≈{ m }≈>ₜ Π)) -∗ σ ≈{ m }≈>ₜ Π)%I).
+    iAssert (∀ Π, σ ≈{ m }≈>ₜ Π -∗ F σ Π)%I as "Hgen"; last first.
+    { iApply ("Hgen" with "HΠ"). iIntros (??) "?". done. }
+    iIntros (?) "Hsim".
+    iApply (sim_tgt_ind with "[] Hsim"). { solve_proper. }
+    iIntros "!>" (??) "Hsim". iIntros (?) "Hc".
+    rewrite sim_tgt_unfold. iIntros "#?".
+    iMod ("Hsim" with "[$]") as "[HΠ|Hsim]".
+    - iDestruct "HΠ" as (?) "[? HP1]".
+      iDestruct ("Hc" with "[$]") as (?) "HP2".
+      iDestruct ("HP1" with "[$]") as "Hsim".
+      rewrite sim_tgt_unfold. by iApply "Hsim".
+    - iRight. iIntros "!>" (???). iMod ("Hsim" with "[//]") as "Hsim". do 2 iModIntro.
+      iDestruct "Hsim" as "[[% [? HP1]]|[% [% [% Hsim]]]]".
+      + iDestruct ("Hc" with "[$]") as (?) "HP2".
+        iDestruct ("HP1" with "[$]") as (??) "?". iRight. by iSplit!.
+      + iRight. iSplit!; [done|]. by iApply "Hsim".
+  Qed.
+
   Lemma sim_tgt_bi_mono σ Π:
     σ ≈{ m }≈>ₜ (λ κ Pσ, bi_mono1 (Π κ) (λ P, bi_mono1 Pσ P)) -∗
     σ ≈{ m }≈>ₜ Π.
