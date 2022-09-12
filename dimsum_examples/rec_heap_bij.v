@@ -672,11 +672,12 @@ Proof.
   naive_solver.
 Qed.
 
-Lemma heap_in_bij_alloc l1 l2 hi hs v n bij H:
+(* Change ValNum0 to arbitrary v?*)
+Lemma heap_in_bij_alloc l1 l2 hi hs n bij H:
   heap_is_fresh hi l1 →
   heap_is_fresh hs l2 →
   heap_in_bij bij hi hs -∗
-  heap_in_bij (hb_share l1.1 l2.1 bij H) (heap_alloc hi l1 v n) (heap_alloc hs l2 v n).
+  heap_in_bij (hb_share l1.1 l2.1 bij H) (heap_alloc hi l1 (ValNum 0) n) (heap_alloc hs l2 (ValNum 0)  n).
 Proof.
   iIntros ([Hi1 ?] [Hi2 ?]) "Hh". iIntros (p1 p2 o) => /=. iIntros ([[??]|[??]]%lookup_insert_Some); simplify_eq.
   - destruct l1 as [p1 ?], l2 as [p2 ?]; simplify_eq/=.
@@ -696,10 +697,10 @@ Proof.
         move => /elem_of_list_fmap[[[??]?] [?/elem_of_list_fmap[?[??]]]]; simplify_eq/=.
 Qed.
 
-Lemma heap_in_bij_alloc_r l2 hi hs n bij:
+Lemma heap_in_bij_alloc_r l2 hi hs n v bij:
   (∀ p, hb_bij bij !! l2.1 = Some (HBShared p) → False) →
   heap_in_bij bij hi hs -∗
-  heap_in_bij bij hi (heap_alloc hs l2 n).
+  heap_in_bij bij hi (heap_alloc hs l2 v n).
 Proof.
   iIntros (?) "Hh". iIntros (????). rewrite lookup_union_r. 1: by iApply "Hh".
   apply not_elem_of_list_to_map_1.
@@ -808,10 +809,10 @@ Proof.
     iApply heap_in_bij_mono_bij; [|done]. move => /= ?? /lookup_insert_Some?. naive_solver.
 Qed.
 
-Lemma heap_bij_inv_alloc_s hi hs ls n:
+Lemma heap_bij_inv_alloc_s hi hs ls v n:
   heap_is_fresh hs ls →
   heap_bij_inv hi hs ==∗
-  heap_bij_inv hi (heap_alloc hs ls n) ∗ heap_bij_const_s ls.1 (h_block (heap_alloc hs ls n) ls.1).
+  heap_bij_inv hi (heap_alloc hs ls v n) ∗ heap_bij_const_s ls.1 (h_block (heap_alloc hs ls v n) ls.1).
 Proof.
   iIntros ([Hnotin ?])  "[% [%Hsub [% [% [% [? [Ha Hbij]]]]]]]".
   iMod (heap_bij_alloc_const_s with "[$]") as "[? $]"; [set_solver|]. iModIntro.
@@ -827,11 +828,12 @@ Proof.
     iApply heap_in_bij_mono_bij; [|done]. move => /= ?? /lookup_insert_Some?. naive_solver.
 Qed.
 
+(* change ValNum 0 to arbitrary v?*)
 Lemma heap_bij_inv_alloc hi hs li ls n:
   heap_is_fresh hi li →
   heap_is_fresh hs ls →
   heap_bij_inv hi hs ==∗
-  heap_bij_inv (heap_alloc hi li n) (heap_alloc hs ls n) ∗ loc_in_bij li ls.
+  heap_bij_inv (heap_alloc hi li (ValNum 0) n) (heap_alloc hs ls (ValNum 0) n) ∗ loc_in_bij li ls.
 Proof.
   iIntros ([Hni1 ?] [??])  "[% [% [%Hsub [% [% [? [Ha Hbij]]]]]]]".
   have Hni2 : li.1 ∉ hb_provs_i bij.
@@ -984,8 +986,8 @@ Proof. elim: n => //= ??. apply _. Qed.
 (** * Proof techniques for [rec_heap_bij] *)
 Definition rec_heap_bij_call (n : ordinal) (fns1 fns2 : gmap string fndef) :=
   (∀ n' f es1' es2' K1' K2' es1 es2 vs1' vs2' h1' h2' b r rf',
-      RecExprFill es1' K1' (Call f es1) →
-      RecExprFill es2' K2' (Call f es2) →
+      RecExprFill es1' K1' (Call (Val $ ValFid f) es1) →
+      RecExprFill es2' K2' (Call (Val $ ValFid f) es2) →
       n' ⊆ n →
       Forall2 (λ e v, e = Val v) es1 vs1' →
       Forall2 (λ e v, e = Val v) es2 vs2' →
@@ -1152,17 +1154,17 @@ Qed.
 
 (** ** Reflexivity *)
 Lemma rec_heap_bij_sim_call_bind args vs' ws' es ei Ks Ki vss vsi n b hi hs fns1 fns2 rf f r
-  `{Hfill2: !RecExprFill ei Ki (Call f ((Val <$> vs') ++ (subst_map vsi <$> args)))}
-  `{Hfill1: !RecExprFill es Ks (Call f ((Val <$> ws') ++ (subst_map vss <$> args)))}:
+  `{Hfill2: !RecExprFill ei Ki (Call (Val $ ValFid f) ((Val <$> vs') ++ (subst_map vsi <$> args)))}
+  `{Hfill1: !RecExprFill es Ks (Call (Val $ ValFid f) ((Val <$> ws') ++ (subst_map vss <$> args)))}:
     satisfiable (heap_bij_inv hi hs ∗ ([∗ map] vi;vs ∈ vsi; vss, val_in_bij vi vs) ∗ ([∗ list] v; w ∈ vs'; ws', val_in_bij v w) ∗ r ∗ rf) →
     dom vss ⊆ dom vsi →
     rec_heap_bij_call n fns1 fns2 →
     (∀ vs ws hi' hs' b' n' rf',
       n' ⊆ n →
       satisfiable (heap_bij_inv hi' hs' ∗ ([∗ map] vi;vs ∈ vsi; vss, val_in_bij vi vs) ∗ ([∗ list] v; w ∈ vs' ++ vs; ws' ++ ws, val_in_bij v w) ∗ r ∗ rf') →
-      Rec (expr_fill Ki (Call f (Val <$> (vs' ++ vs)))) hi' fns1
+      Rec (expr_fill Ki (Call (Val $ ValFid f) (Val <$> (vs' ++ vs)))) hi' fns1
         ⪯{rec_trans, rec_heap_bij_trans rec_trans, n', b'}
-      (SMProg, Rec (expr_fill Ks (Call f (Val <$> (ws' ++ ws)))) hs' fns2, (PPInside, (), uPred_shrink rf'))
+      (SMProg, Rec (expr_fill Ks (Call (Val $ ValFid f) (Val <$> (ws' ++ ws)))) hs' fns2, (PPInside, (), uPred_shrink rf'))
     ) →
     Forall
     (λ e : expr,
@@ -1188,8 +1190,8 @@ Proof.
    rewrite !app_nil_r. eapply Hcont, Hsat. done.
  - eapply Forall_cons_1 in Hargs as [Harg Hall].
    apply: Harg.
-  + eapply rec_expr_fill_expr_fill, (rec_expr_fill_expr_fill _ [CallCtx _ _ _]), rec_expr_fill_end.
-  + eapply rec_expr_fill_expr_fill, (rec_expr_fill_expr_fill _ [CallCtx _ _ _]), rec_expr_fill_end.
+  + eapply rec_expr_fill_expr_fill, (rec_expr_fill_expr_fill _ [CallRCtx _ _ _]), rec_expr_fill_end.
+  + eapply rec_expr_fill_expr_fill, (rec_expr_fill_expr_fill _ [CallRCtx _ _ _]), rec_expr_fill_end.
   + done.
   + iSatMono. iIntros "(Hbij & #Hvals & #Hvals' & r & rf)". iFrame.
     iFrame "Hvals". iCombine "Hvals Hvals' r" as "r". iExact "r".
@@ -1215,7 +1217,7 @@ Lemma rec_heap_bij_sim_refl_static vss vsi e es ei hi hs n b Ki Ks fns1 fns2 r r
   satisfiable (heap_bij_inv hi hs ∗ ([∗ map] v1;v2 ∈ vsi; vss, val_in_bij v1 v2) ∗ r ∗ rf) →
   Rec ei hi fns1 ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, b} (SMProg, Rec es hs fns2, (PPInside, (), uPred_shrink rf)).
 Proof.
-  induction e as [x|v|e1 op e2 IH1 IH2|e IH|e1 e2 IH1 IH2|e e1 e2 IH IH1 IH2| x e1 e2 IH1 IH2| f args IH| | | |] in vss, vsi, hi, hs, n, b, Ks, Ki, es, ei, Hfill1, Hfill2, r, rf |-*;
+  induction e as [x|v|e1 op e2 IH1 IH2|e1 e2 IH1 IH2|e IH|e1 e2 IH1 IH2|e e1 e2 IH IH1 IH2| x e1 e2 IH1 IH2| f args IH1 IH2| | | |] in vss, vsi, hi, hs, n, b, Ks, Ki, es, ei, Hfill1, Hfill2, r, rf |-*;
     intros Hsub Hcall Hcont Hstatic Hsat;
     destruct Hfill1 as [->], Hfill2 as [->].
   - simpl. destruct (vss !! x) as [v|] eqn: Hlook; last first.
@@ -1241,6 +1243,7 @@ Proof.
     iDestruct (eval_binop_bij with "Hv Hw") as "[%u [% Hu]]"; first done.
     iSatStop. tstep_i. split!. eapply Hcont; first by etrans.
     iSatMono. iFrame.
+  - admit. 
   - simpl. simpl in Hstatic.
     apply: IH; simpl; [eauto..|]; last first.
     { iSatMono. iIntros "($ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
@@ -1294,7 +1297,7 @@ Proof.
     { by apply: rec_heap_bij_return_mono. }
     iSatMono. iIntros "(Hinv & Hv & (Hsub & r) & rf)". iFrame.
     iApply (big_sepM2_insert_2 with "[Hv]"); by iFrame.
-  - simpl. apply: (rec_heap_bij_sim_call_bind args nil nil);simpl; eauto.
+  - admit. (* simpl. apply: (rec_heap_bij_sim_call_bind args nil nil);simpl; eauto.
     + iSatMono. iIntros "($ & $ & $)".
     + clear Hsat. intros vs ws hi' hs' b' n' rf' Hn' Hsat'.
       apply: Hcall; simpl; eauto.
@@ -1304,12 +1307,12 @@ Proof.
     + eapply Forall_forall. intros x Hx.
       eapply Forall_forall in IH; last done.
       intros ???????????????. eapply IH; eauto.
-      simpl in Hstatic. by eapply forallb_True, Forall_forall in Hstatic.
+      simpl in Hstatic. by eapply forallb_True, Forall_forall in Hstatic. *)
   - done.
   - done.
   - done.
   - done.
-Qed.
+Admitted.
 
 Lemma rec_heap_bij_refl fns:
   trefines (rec_mod fns) (rec_heap_bij (rec_mod fns)).
@@ -1443,7 +1446,7 @@ Definition bij_alloc : fndef := {|
   fd_args := [];
   fd_vars := [("tmp", 1)];
   fd_body := (LetE "_" (Store (Var "tmp") (Val 1))
-             (LetE "_" (Call "ext" [])
+             (LetE "_" (Call (Val $ ValFid "ext") [])
              (Load (Var "tmp"))));
   fd_static := I;
 |}.
@@ -1451,7 +1454,7 @@ Definition bij_alloc : fndef := {|
 Definition bij_alloc_opt : fndef := {|
   fd_args := [];
   fd_vars := [];
-  fd_body := (LetE "_" (Call "ext" [])
+  fd_body := (LetE "_" (Call (Val $ ValFid "ext") [])
              (Val 1));
   fd_static := I;
 |}.
