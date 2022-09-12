@@ -1044,6 +1044,8 @@ End lifting.
 Section memmove.
   Context `{!dimsumGS Σ} `{!recGS Σ}.
 
+
+  (* TODO: create a version of the target triple where the Π stays unchanged *)
   Lemma sim_memcpy Π Φ d d' s' s n o hvss hvsd :
     n = Z.of_nat (length hvss) →
     length hvss = length hvsd →
@@ -1273,14 +1275,13 @@ Section memmove.
 
   Local Canonical Structure spec_mod_lang_unit.
 
-  Context `{!dimsumGS Σ} `{!recGS Σ}.
   Lemma memmove_sim  :
     rec_state_interp (rec_init (main_prog ∪ memmove_prog ∪ memcpy_prog)) None -∗
     (MLFNone, [], rec_init (main_prog ∪ memmove_prog ∪ memcpy_prog), (locle_spec, ())) ⪯{
       rec_link_trans {["main"; "memmove"; "memcpy"]} {["locle"]} rec_trans (spec_trans rec_event ()),
       spec_trans rec_event ()} (main_spec, ()).
   Proof.
-    iIntros "[#Hfns [Hh Ha]]". iApply (sim_tgt_handler_intro with "[-]").
+    iIntros "[#Hfns [Hh Ha]] /=". iApply (sim_tgt_handler_intro with "[-]").
     iApply (sim_tgt_link_None with "[-]").
     iIntros "!>" (??????). destruct!/=. case_match; destruct!/=.
     unfold sim_tgt_handler.
@@ -1307,12 +1308,12 @@ Section memmove.
     iApply (sim_tgt_handler_intro with "[-]").
     iApply (sim_tgt_link_left with "[-]").
     iApply fupd_sim_tgt.
-    iMod (rec_mapsto_alloc_big (h_heap h) with "Hh") as "[Hh _]". { apply map_disjoint_empty_r. }
+    iMod (rec_mapsto_alloc_big (h_heap h) with "Hh") as "[Hh _]". { apply map_disjoint_empty_r. } iModIntro.
     iApply ("Htgt" with "[Hh] [Ha]"). { by rewrite right_id_L. }
     { rewrite dom_empty_L. by iApply rec_alloc_fake. }
     iApply (sim_tgt_expr_bind [ReturnExtCtx _]).
     iApply sim_tgt_rec_Call_internal. 2: { by iApply (rec_fn_intro with "[$]"). } { done. }
-    do 2 iModIntro => /=.
+    iModIntro => /=.
     iApply sim_tgt_rec_AllocA; [by econs|] => /=. iIntros (?) "Hl".
     destruct ls as [|l []] => //=. 2: by iDestruct!.
     have -> : (0%nat + 0) = 0 by []. have -> : (1%nat + 0) = 1 by []. have -> : (2%nat + 0) = 2 by [].
@@ -1354,82 +1355,82 @@ Section memmove.
       iApply (big_sepM_insert_2 with "[Hl1]"); [done|].
       iApply (big_sepM_insert_2 with "[Hl2]"); [done|].
       done. }
-      iIntros "Hl" => /=. rewrite !array_cons !array_nil -!insert_union_l !left_id_L.
-      rewrite !offset_loc_assoc.
-      rewrite (big_sepM_delete _ _ (l +ₗ 1)). 2: { by simplify_map_eq. }
-      rewrite delete_insert_delete.
-      rewrite delete_insert_ne //. 2: apply/loc_eq; split!; lia.
-      rewrite delete_insert_ne //. 2: apply/loc_eq; split!; lia.
-      rewrite delete_insert //.
-      rewrite big_sepM_insert. 2: { rewrite lookup_insert_ne //. apply/loc_eq; split!; lia. }
-      rewrite big_sepM_insert. 2: done.
-      iDestruct "Hl" as "[Hl1 [Hl2 [Hl0 _]]]".
-      iApply sim_tgt_rec_LetE. iModIntro => /=.
-      iApply (sim_tgt_expr_bind [LetECtx _ _] with "[-]") => /=.
-      iApply (sim_tgt_expr_bind [CallCtx _ [] _] with "[-]") => /=.
-      iApply (sim_tgt_expr_bind [LoadCtx] with "[-]") => /=.
-      iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
-      iApply (sim_tgt_rec_Load with "Hl1"). iIntros "Hl1 !>" => /=.
-      iApply (sim_tgt_rec_Call_external). { by iApply (rec_fn_intro with "[$]"). }
-      iIntros (?) "Hh Ha !>". iIntros (σ') "Hlocle".
-      iIntros (??????). destruct!/=. rewrite bool_decide_false//.
-      iApply "Hsrc". iApply sim_src_TExist. iApply sim_src_TVis.
-      iIntros (?) "Hsrc". iSplit!. iApply bi_mono1_intro0.
-      iIntros (?) "Htgt". iApply (sim_tgt_handler_intro with "[-]").
-      iApply (sim_tgt_link_None with "[-]"). iIntros "!>" (??????). destruct!/=.
-      iApply "Hsrc". iApply sim_src_TExist. iApply sim_src_TVis.
-      iIntros (?) "Hsrc". iSplit!. iApply bi_mono1_intro0.
-      iApply (sim_tgt_handler_intro with "[-]"). iApply sim_tgt_stop.
-      iApply "Hsrc". iApply sim_src_TAssume. iIntros (?). iApply sim_src_expr_stop1.
-      iIntros (?) "Hsrc". iSplit!. iApply bi_mono1_intro0. case_match; destruct!/=.
-      iApply (sim_tgt_handler_intro with "[-]").
-      iApply (sim_tgt_link_left_recv with "[-]").
-      iApply "Htgt".
-      iApply (sim_tgt_rec_Waiting with "[$]").
-      iSplit; [iIntros; iModIntro; by iIntros|].
-      iIntros (???) "!>". iIntros (?). simplify_eq.
-      iApply sim_src_stop. iSplit!. iApply bi_mono1_intro0.
-      iIntros (?) "Htgt".
-      iApply (sim_tgt_handler_intro with "[-]").
-      iApply (sim_tgt_link_left with "[-]").
-      iApply ("Htgt" with "[$] [$]").
-      iApply sim_tgt_expr_stop2 => /=.
-      iApply (sim_tgt_rec_LetE with "[-]"). iIntros "!>" => /=.
-      iApply (sim_tgt_expr_bind [LetECtx _ _] with "[-]") => /=.
-      iApply (sim_tgt_expr_bind [CallCtx _ [] _] with "[-]") => /=.
-      iApply (sim_tgt_expr_bind [LoadCtx] with "[-]") => /=.
-      iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
-      iApply (sim_tgt_rec_Load with "Hl2"). iIntros "Hl2 !>" => /=.
-      iApply (sim_tgt_rec_Call_external). { by iApply (rec_fn_intro with "[$]"). }
-      iIntros (?) "Hh Ha !>". iIntros (??????). destruct!/=. rewrite bool_decide_false//.
-      iApply "Hsrc". iApply sim_src_TExist. iApply sim_src_TVis.
-      iIntros (?) "Hsrc". iSplit!. iApply bi_mono1_intro0.
-      iIntros (?) "Htgt". iApply (sim_tgt_handler_intro with "[-]").
-      iApply (sim_tgt_link_None with "[-]"). iIntros "!>" (??????). destruct!/=.
-      iApply "Hsrc". iApply sim_src_TExist. iApply sim_src_TVis.
-      iIntros (?) "Hsrc". iSplit!. iApply bi_mono1_intro0.
-      iApply (sim_tgt_handler_intro with "[-]"). iApply sim_tgt_stop.
-      iApply "Hsrc". iApply sim_src_TAssume. iIntros (?). iApply sim_src_expr_stop1.
-      iIntros (?) "Hsrc". iSplit!. iApply bi_mono1_intro0. case_match; destruct!/=.
-      iApply (sim_tgt_handler_intro with "[-]").
-      iApply (sim_tgt_link_left_recv with "[-]").
-      iApply "Htgt".
-      iApply (sim_tgt_rec_Waiting with "[$]").
-      iSplit; [iIntros; iModIntro; by iIntros|].
-      iIntros (???) "!>". iIntros (?). simplify_eq.
-      iApply sim_src_stop. iSplit!. iApply bi_mono1_intro0.
-      iIntros (?) "Htgt".
-      iApply (sim_tgt_handler_intro with "[-]").
-      iApply (sim_tgt_link_left with "[-]").
-      iApply ("Htgt" with "[$] [$]").
-      iApply sim_tgt_expr_stop2 => /=.
-      iApply (sim_tgt_rec_LetE with "[-]"). iIntros "!>" => /=.
-      iApply sim_tgt_expr_stop2 => /=. iSplit!.
-      iSplitL "Hl0 Hl1 Hl2".
-      { iSplit!. iSplitL "Hl0"; eauto with iFrame. iSplitL "Hl1"; eauto with iFrame. }
-      iApply sim_tgt_rec_ReturnExt. iIntros (?) "Hh Ha !>".
-      iIntros (??????). destruct!/=.
-      iApply "Hsrc". iApply sim_src_TUb_end.
+    iIntros "Hl" => /=. rewrite !array_cons !array_nil -!insert_union_l !left_id_L.
+    rewrite !offset_loc_assoc.
+    rewrite (big_sepM_delete _ _ (l +ₗ 1)). 2: { by simplify_map_eq. }
+    rewrite delete_insert_delete.
+    rewrite delete_insert_ne //. 2: apply/loc_eq; split!; lia.
+    rewrite delete_insert_ne //. 2: apply/loc_eq; split!; lia.
+    rewrite delete_insert //.
+    rewrite big_sepM_insert. 2: { rewrite lookup_insert_ne //. apply/loc_eq; split!; lia. }
+    rewrite big_sepM_insert. 2: done.
+    iDestruct "Hl" as "[Hl1 [Hl2 [Hl0 _]]]".
+    iApply sim_tgt_rec_LetE. iModIntro => /=.
+    iApply (sim_tgt_expr_bind [LetECtx _ _] with "[-]") => /=.
+    iApply (sim_tgt_expr_bind [CallCtx _ [] _] with "[-]") => /=.
+    iApply (sim_tgt_expr_bind [LoadCtx] with "[-]") => /=.
+    iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
+    iApply (sim_tgt_rec_Load with "Hl1"). iIntros "Hl1 !>" => /=.
+    iApply (sim_tgt_rec_Call_external). { by iApply (rec_fn_intro with "[$]"). }
+    iIntros (?) "Hh Ha !>". iIntros (σ') "Hlocle".
+    iIntros (??????). destruct!/=. rewrite bool_decide_false//.
+    iApply "Hsrc". iApply sim_src_TExist. iApply sim_src_TVis.
+    iIntros (?) "Hsrc". iSplit!. iApply bi_mono1_intro0.
+    iIntros (?) "Htgt". iApply (sim_tgt_handler_intro with "[-]").
+    iApply (sim_tgt_link_None with "[-]"). iIntros "!>" (??????). destruct!/=.
+    iApply "Hsrc". iApply sim_src_TExist. iApply sim_src_TVis.
+    iIntros (?) "Hsrc". iSplit!. iApply bi_mono1_intro0.
+    iApply (sim_tgt_handler_intro with "[-]"). iApply sim_tgt_stop.
+    iApply "Hsrc". iApply sim_src_TAssume. iIntros (?). iApply sim_src_expr_stop1.
+    iIntros (?) "Hsrc". iSplit!. iApply bi_mono1_intro0. case_match; destruct!/=.
+    iApply (sim_tgt_handler_intro with "[-]").
+    iApply (sim_tgt_link_left_recv with "[-]").
+    iApply "Htgt".
+    iApply (sim_tgt_rec_Waiting with "[$]").
+    iSplit; [iIntros; iModIntro; by iIntros|].
+    iIntros (???) "!>". iIntros (?). simplify_eq.
+    iApply sim_src_stop. iSplit!. iApply bi_mono1_intro0.
+    iIntros (?) "Htgt".
+    iApply (sim_tgt_handler_intro with "[-]").
+    iApply (sim_tgt_link_left with "[-]").
+    iApply ("Htgt" with "[$] [$]").
+    iApply sim_tgt_expr_stop2 => /=.
+    iApply (sim_tgt_rec_LetE with "[-]"). iIntros "!>" => /=.
+    iApply (sim_tgt_expr_bind [LetECtx _ _] with "[-]") => /=.
+    iApply (sim_tgt_expr_bind [CallCtx _ [] _] with "[-]") => /=.
+    iApply (sim_tgt_expr_bind [LoadCtx] with "[-]") => /=.
+    iApply sim_tgt_rec_BinOp; [done|]. iModIntro => /=.
+    iApply (sim_tgt_rec_Load with "Hl2"). iIntros "Hl2 !>" => /=.
+    iApply (sim_tgt_rec_Call_external). { by iApply (rec_fn_intro with "[$]"). }
+    iIntros (?) "Hh Ha !>". iIntros (??????). destruct!/=. rewrite bool_decide_false//.
+    iApply "Hsrc". iApply sim_src_TExist. iApply sim_src_TVis.
+    iIntros (?) "Hsrc". iSplit!. iApply bi_mono1_intro0.
+    iIntros (?) "Htgt". iApply (sim_tgt_handler_intro with "[-]").
+    iApply (sim_tgt_link_None with "[-]"). iIntros "!>" (??????). destruct!/=.
+    iApply "Hsrc". iApply sim_src_TExist. iApply sim_src_TVis.
+    iIntros (?) "Hsrc". iSplit!. iApply bi_mono1_intro0.
+    iApply (sim_tgt_handler_intro with "[-]"). iApply sim_tgt_stop.
+    iApply "Hsrc". iApply sim_src_TAssume. iIntros (?). iApply sim_src_expr_stop1.
+    iIntros (?) "Hsrc". iSplit!. iApply bi_mono1_intro0. case_match; destruct!/=.
+    iApply (sim_tgt_handler_intro with "[-]").
+    iApply (sim_tgt_link_left_recv with "[-]").
+    iApply "Htgt".
+    iApply (sim_tgt_rec_Waiting with "[$]").
+    iSplit; [iIntros; iModIntro; by iIntros|].
+    iIntros (???) "!>". iIntros (?). simplify_eq.
+    iApply sim_src_stop. iSplit!. iApply bi_mono1_intro0.
+    iIntros (?) "Htgt".
+    iApply (sim_tgt_handler_intro with "[-]").
+    iApply (sim_tgt_link_left with "[-]").
+    iApply ("Htgt" with "[$] [$]").
+    iApply sim_tgt_expr_stop2 => /=.
+    iApply (sim_tgt_rec_LetE with "[-]"). iIntros "!>" => /=.
+    iApply sim_tgt_expr_stop2 => /=. iSplit!.
+    iSplitL "Hl0 Hl1 Hl2".
+    { iSplit!. iSplitL "Hl0"; eauto with iFrame. iSplitL "Hl1"; eauto with iFrame. }
+    iApply sim_tgt_rec_ReturnExt. iIntros (?) "Hh Ha !>".
+    iIntros (??????). destruct!/=.
+    iApply "Hsrc". iApply sim_src_TUb_end.
     Unshelve. exact: tt.
   Qed.
 End memmove.
