@@ -85,7 +85,7 @@ Inductive expr : Set :=
 | Var (v : string)
 | Val (v : val)
 | BinOp (e1 : expr) (o : binop) (e2 : expr)
-| NewRef (e1:expr) (e2: expr)
+| NewRef (e:expr) 
 | Load (e : expr)
 | Store (e1 e2 : expr)
 | If (e e1 e2 : expr)
@@ -104,7 +104,7 @@ Lemma expr_ind (P : expr → Prop) :
   (∀ (x : string), P (Var x)) →
   (∀ (v : val), P (Val v)) →
   (∀ (e1 : expr) (op : binop) (e2 : expr), P e1 → P e2 → P (BinOp e1 op e2)) →
-  (∀ (e1 e2:expr), P e1 →P e2→ P (NewRef e1 e2)) →
+  (∀ (e:expr), P e→ P (NewRef e)) →
   (∀ (e : expr), P e → P (Load e)) →
   (∀ (e1 e2 : expr), P e1 → P e2 → P (Store e1 e2)) →
   (∀ (e1 e2 e3 : expr), P e1 → P e2 → P e3 → P (If e1 e2 e3)) →
@@ -137,7 +137,7 @@ Fixpoint assigned_vars (e : expr) : list string :=
   | Var v => []
   | Val v => []
   | BinOp e1 o e2 => assigned_vars e1 ++ assigned_vars e2
-  | NewRef e1 e2 => assigned_vars e1 ++ assigned_vars e2
+  | NewRef e => assigned_vars e
   | Load e => assigned_vars e
   | Store e1 e2 => assigned_vars e1 ++ assigned_vars e2
   | If e e1 e2 => assigned_vars e ++ assigned_vars e1 ++ assigned_vars e2
@@ -155,7 +155,7 @@ Fixpoint subst (x : string) (v : val) (e : expr) : expr :=
   | Var y => if bool_decide (x = y) then Val v else Var y
   | Val v => Val v
   | BinOp e1 o e2 => BinOp (subst x v e1) o (subst x v e2)
-  | NewRef e1 e2 => NewRef (subst x v e1) (subst x v e2)
+  | NewRef e => NewRef (subst x v e)
   | Load e => Load (subst x v e)
   | Store e1 e2 => Store (subst x v e1) (subst x v e2)
   | If e e1 e2 => If (subst x v e) (subst x v e1) (subst x v e2)
@@ -178,7 +178,7 @@ Fixpoint subst_map (x : gmap string val) (e : expr) : expr :=
   | Var y => if x !! y is Some v then Val v else Var y
   | Val v => Val v
   | BinOp e1 o e2 => BinOp (subst_map x e1) o (subst_map x e2)
-  | NewRef e1 e2 => NewRef (subst_map x e1) (subst_map x e2)
+  | NewRef e => NewRef (subst_map x e) 
   | Load e => Load (subst_map x e)
   | Store e1 e2 => Store (subst_map x e1) (subst_map x e2)
   | If e e1 e2 => If (subst_map x e) (subst_map x e1) (subst_map x e2)
@@ -311,8 +311,7 @@ Qed.
 Inductive expr_ectx :=
 | BinOpLCtx (op : binop) (e2 : expr)
 | BinOpRCtx (v1 : val) (op : binop)
-| NewRefLCtx (e2:expr)
-| NewRefRCtx (v1:val)
+| NewRefCtx
 | LoadCtx
 | StoreLCtx (e2 : expr)
 | StoreRCtx (v1 : val)
@@ -329,8 +328,7 @@ Definition expr_fill_item (Ki : expr_ectx) (e : expr) : expr :=
   match Ki with
   | BinOpLCtx op e2 => BinOp e op e2
   | BinOpRCtx v1 op => BinOp (Val v1) op e
-  | NewRefLCtx e2=> NewRef e e2
-  | NewRefRCtx v1 => NewRef (Val v1) e
+  | NewRefCtx => NewRef e 
   | LoadCtx => Load e
   | StoreLCtx e2 => Store e e2
   | StoreRCtx v1 => Store (Val v1) e
@@ -414,7 +412,7 @@ Fixpoint is_static_expr (allow_loc_closid: bool)  (e : expr) : bool :=
     | _ => true
     end)
   | BinOp e1 o e2 => is_static_expr allow_loc_closid e1 && is_static_expr allow_loc_closid e2
-  | NewRef e1 e2 => is_static_expr allow_loc_closid e1 && is_static_expr allow_loc_closid e2
+  | NewRef e => is_static_expr allow_loc_closid e
   | Load e => is_static_expr allow_loc_closid e
   | Store e1 e2 => is_static_expr allow_loc_closid e1 && is_static_expr allow_loc_closid e2
   | If e e1 e2 => 
@@ -587,14 +585,13 @@ Proof.
     + rewrite lookup_union_l //. by simplify_map_eq.
 Qed.
 
-(* Note: different from Rec. alloc not necessarily store 0*)
-Definition heap_alloc_h (h : gmap loc val) (l : loc) (v:val) (n : Z) : gmap loc val :=
-  (list_to_map ((λ z, (l +ₗ z, v)) <$> seqZ 0 n) ∪ h).
+Definition heap_alloc_h (h : gmap loc val) (l : loc) (n : Z) : gmap loc val :=
+  (list_to_map ((λ z, (l +ₗ z, ValNum 0)) <$> seqZ 0 n) ∪ h).
 
-Lemma heap_alloc_h_lookup h n v(l l' : loc):
+Lemma heap_alloc_h_lookup h n (l l' : loc):
   l.1 = l'.1 →
   l.2 ≤ l'.2 < l.2 + n →
-  heap_alloc_h h l v n !! l' = Some v.
+  heap_alloc_h h l n !! l' = Some (ValNum 0).
 Proof.
   destruct l as [p o], l' as [p' o'] => /=??; subst. apply lookup_union_Some_l.
   apply elem_of_list_to_map_1.
@@ -607,15 +604,15 @@ Qed.
 Global Opaque heap_alloc_h.
 
 
-Program Definition heap_alloc (h : heap_state) (l : loc) (v:val) (n : Z) : heap_state :=
-  Heap (heap_alloc_h h.(h_heap) l v n) ({[l.1]} ∪ h_provs h) _.
+Program Definition heap_alloc (h : heap_state) (l : loc) (n : Z) : heap_state :=
+  Heap (heap_alloc_h h.(h_heap) l n) ({[l.1]} ∪ h_provs h) _.
 Next Obligation.
-  move => ?????. move => [? /lookup_union_Some_raw[Hl|[? Hh]]]; apply elem_of_union; [left|right; by apply heap_wf].
+  move => ????. move => [? /lookup_union_Some_raw[Hl|[? Hh]]]; apply elem_of_union; [left|right; by apply heap_wf].
   move: Hl => /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap. set_solver.
 Qed.
 
-Definition heap_alloc_prop (h h':heap_state) (l:loc) (v:val) (n:Z):Prop:=
-  n=0 \/ (heap_is_fresh h l /\ h' = heap_alloc h l v n).
+Definition heap_alloc_prop (h h':heap_state) (l:loc) (n:Z):Prop:=
+  (heap_is_fresh h l /\ h' = heap_alloc h l n).
 
 
 (* ** removed*)
@@ -706,15 +703,15 @@ Qed.
 *)
 
 Global Transparent heap_alloc_h. (* TODO: remove this *)
-Lemma heap_alive_alloc h l l' v n :
+Lemma heap_alive_alloc h l l' n :
   l.1 = l'.1 →
   l'.2 ≤ l.2 < l'.2 + n →
-  heap_alive (heap_alloc h l' v n) l.
+  heap_alive (heap_alloc h l' n) l.
 Proof.
   destruct l as [p o], l' as [p' o'].
   move => ??. simplify_eq/=. rewrite /heap_alive/=/heap_alloc_h/offset_loc/=.
   apply lookup_union_is_Some. left. apply list_to_map_lookup_is_Some.
-  eexists v. apply elem_of_list_fmap. eexists (o - o').
+  eexists _. apply elem_of_list_fmap. eexists (o - o').
   split. f_equal. f_equal;lia. apply elem_of_seqZ. lia.
 Qed.
 Global Opaque heap_alloc_h.
@@ -807,10 +804,10 @@ Proof.
   move => Hp ???? /=. rewrite lookup_alter_ne; [by eapply Hp|naive_solver].
 Qed.
 
-Lemma heap_preserved_alloc l v n h m:
+Lemma heap_preserved_alloc l n h m:
   heap_preserved m h →
   m !! l.1 = None →
-  heap_preserved m (heap_alloc h l v n).
+  heap_preserved m (heap_alloc h l n).
 Proof.
   move => Hp ? l' f /= ?. rewrite lookup_union_r; [by apply Hp|].
   apply not_elem_of_list_to_map_1 => /elem_of_list_fmap[[[??]?] [?/elem_of_list_fmap[?[??]]]]; simplify_eq/=.
@@ -1045,10 +1042,10 @@ Inductive head_step : lam_state → option lam_event → (lam_state → Prop) �
 | BinOpS v1 op v2 lis h fns: (* v1 binop v2*)
   head_step (Lam (BinOp (Val v1) op (Val v2)) lis h fns) None (λ σ',
     ∃ v, eval_binop op v1 v2 = Some v ∧ σ' = Lam (Val v) lis h fns)
-| NewRefS v v' l lis h h' fns: (* ref v n *)
-  (∀n, v' = ValNum n →heap_alloc_prop h h' l v n) →
-  head_step (Lam (NewRef (Val v) (Val v')) lis h fns) None 
-  (λ σ', ∃n, ValNum n = v' /\n>0 /\ σ' = Lam (Val (ValLoc l)) lis h' fns) 
+| NewRefS v l lis h h' fns: (* ref v n *)
+  (∀n, v = ValNum n →heap_alloc_prop h h' l n) →
+  head_step (Lam (NewRef (Val v) ) lis h fns) None 
+  (λ σ', ∃n, ValNum n = v /\n>0 /\ σ' = Lam (Val (ValLoc l)) lis h' fns) 
 | LoadS v lis h fns: (* !v *)
   head_step (Lam (Load (Val v)) lis h fns) None 
   (λ σ', ∃l v', v = ValLoc l ∧ h.(h_heap)!!l = Some v' ∧ σ' = Lam (Val v') lis h fns)
@@ -1221,7 +1218,7 @@ Inductive static_expr : Set :=
 | SVar (v : string)
 | SVal (v : static_val)
 | SBinOp (e1 : static_expr) (o : binop) (e2 : static_expr)
-| SNewRef (e1 :static_expr) (e2 : static_expr)
+| SNewRef (e :static_expr)
 | SLoad (e : static_expr)
 | SStore (e1 e2 : static_expr)
 | SIf (e e1 e2 : static_expr)
@@ -1235,7 +1232,7 @@ Lemma static_expr_ind (P : static_expr → Prop) :
   (∀ (x : string), P (SVar x)) →
   (∀ (v : static_val), P (SVal v)) →
   (∀ (e1 : static_expr) (op : binop) (e2 : static_expr), P e1 → P e2 → P (SBinOp e1 op e2)) →
-  (∀ (e1 e2 : static_expr), P e1 → P e2 → P (SNewRef e1 e2)) →
+  (∀ (e: static_expr), P e → P (SNewRef e)) →
   (∀ (e : static_expr), P e → P (SLoad e)) →
   (∀ (e1 e2 : static_expr), P e1 → P e2 → P (SStore e1 e2)) →
   (∀ (e1 e2 e3 : static_expr), P e1 → P e2 → P e3 → P (SIf e1 e2 e3)) →
@@ -1255,7 +1252,7 @@ Fixpoint static_expr_to_expr (e : static_expr) : expr :=
   | SVar v => Var v
   | SVal v => Val (static_val_to_val v)
   | SBinOp e1 o e2 => BinOp (static_expr_to_expr e1) o (static_expr_to_expr e2)
-  | SNewRef e1 e2 => NewRef (static_expr_to_expr e1) (static_expr_to_expr e2)
+  | SNewRef e => NewRef (static_expr_to_expr e) 
   | SLoad e => Load (static_expr_to_expr e)
   | SStore e1 e2 => Store (static_expr_to_expr e1) (static_expr_to_expr e2)
   | SIf e e1 e2 => If (static_expr_to_expr e) (static_expr_to_expr e1) (static_expr_to_expr e2)
@@ -1277,7 +1274,7 @@ Fixpoint expr_to_static_expr (e : expr) : static_expr :=
   | Var v => SVar v
   | Val v => SVal (val_to_static_val v)
   | BinOp e1 o e2 => SBinOp (expr_to_static_expr e1) o (expr_to_static_expr e2)
-  | NewRef e1 e2 => SNewRef (expr_to_static_expr e1) (expr_to_static_expr e2)
+  | NewRef e => SNewRef (expr_to_static_expr e) 
   | Load e => SLoad (expr_to_static_expr e)
   | Store e1 e2 => SStore (expr_to_static_expr e1) (expr_to_static_expr e2)
   | If e e1 e2 => SIf (expr_to_static_expr e) (expr_to_static_expr e1) (expr_to_static_expr e2)
@@ -1394,15 +1391,10 @@ Lemma lam_expr_fill_BinOpR (v1 : val) e2 op K e' `{!LamExprFill e2 K e'} :
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply lam_expr_fill_proof. Qed.
 Global Hint Resolve lam_expr_fill_BinOpR : typeclass_instances.
 
-Lemma lam_expr_fill_NewRefL e1 e2 K e' `{!LamExprFill e1 K e'} :
-  LamExprFill (NewRef e1 e2) (K ++ [NewRefLCtx e2]) e'.
+Lemma lam_expr_fill_NewRef e K e' `{!LamExprFill e K e'} :
+  LamExprFill (NewRef e) (K ++ [NewRefCtx]) e'.
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply lam_expr_fill_proof. Qed.
-Global Hint Resolve lam_expr_fill_NewRefL : typeclass_instances.
-
-Lemma lam_expr_fill_NewRefR (v1 : val) e2 K e' `{!LamExprFill e2 K e'} :
-  LamExprFill (NewRef (Val v1) e2) (K ++ [NewRefRCtx v1]) e'.
-Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply lam_expr_fill_proof. Qed.
-Global Hint Resolve lam_expr_fill_NewRefR : typeclass_instances.
+Global Hint Resolve lam_expr_fill_NewRef: typeclass_instances.
 
 Lemma lam_expr_fill_Load e1 K e' `{!LamExprFill e1 K e'} :
   LamExprFill (Load e1) (K ++ [LoadCtx]) e'.
@@ -1532,23 +1524,23 @@ Qed.
 Global Hint Resolve lam_step_BinopOffset_i | 5 : typeclass_instances.
 
 (* ** TO VERIFY*)
-Lemma lam_step_Newref_i fns s h e K v n `{!LamExprFill e K (NewRef (Val v)  (Val (ValNum n)))}:
-  TStepI lam_trans (Lam e  s h fns) (λ G, ∀l h', heap_alloc_prop h h' l v n→
+Lemma lam_step_Newref_i fns s h e K n `{!LamExprFill e K (NewRef (Val (ValNum n)))}:
+  TStepI lam_trans (Lam e  s h fns) (λ G, ∀l h', heap_alloc_prop h h' l n→
   (G true None (λ G',n>0/\ ( G' (Lam (expr_fill K (Val (ValLoc l))) s h' fns))))).
 Proof.
   destruct LamExprFill0; subst.
   econs. intros. apply steps_impl_step_end. intros. apply prim_step_inv_head in H0. destruct H0 as [?[??]]. subst.
   inversion H0; simplify_eq. 
   eexists true,  _. 
-  split!. apply H. apply H8. reflexivity.  intros. simpl in H1. destruct!. naive_solver.   
+  split!. apply H. apply H7. reflexivity.  intros. simpl in H1. destruct!. naive_solver.   
   solve_sub_redexes_are_values. reflexivity. 
 Qed.
 Global Hint Resolve lam_step_Newref_i | 10 : typeclass_instances.
 
 
-Lemma lam_step_Newref_s fns s h e K v v' `{!LamExprFill e K (NewRef (Val v)  (Val v'))}:
+Lemma lam_step_Newref_s fns s h e K v  `{!LamExprFill e K (NewRef (Val v) )}:
   TStepS lam_trans (Lam e s h fns) (λ G, (G None (λ G', ∃ l h', 
-  (∀n, ValNum n = v'→heap_alloc_prop h h' l v n/\(n>0→ G' (Lam (expr_fill K (Val (ValLoc l))) s h' fns)))))).
+  (∀n, ValNum n = v→heap_alloc_prop h h' l n/\(n>0→ G' (Lam (expr_fill K (Val (ValLoc l))) s h' fns)))))).
 Proof.
   destruct LamExprFill0; subst.
   econs. intros. destruct!.   split!; [done|]. move => ? /=. intros. destruct!. eapply steps_spec_step_end. econs. 
@@ -2981,7 +2973,7 @@ Proof.
       * (*binop*) tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!;   [done..| ].
         apply is_static_expr_expr_fill; split!; apply is_static_expr_val.
-      * (*newref*) tstep_s => *. exists l, h'. intros.  split!. symmetry in H3. auto.
+      * (*newref*) tstep_s => *. exists l, h'. intros.  split!. symmetry in H0. auto.
         intros. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.
@@ -3081,7 +3073,7 @@ Proof.
       * (*binop*) tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!;   [done..| ].
         apply is_static_expr_expr_fill; split!; apply is_static_expr_val.
-      * (*newref*) tstep_s => *. exists l, h'. intros.  split!. symmetry in H3. auto.
+      * (*newref*) tstep_s => *. exists l, h'. intros.  split!. symmetry in H0. auto.
         intros. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.

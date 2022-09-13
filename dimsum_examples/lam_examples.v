@@ -134,8 +134,8 @@ Qed.
 
 (* ** newrefs *)
 Definition newref_lam: fndef :={|
-fd_args := ["x";"y"];
-fd_body := NewRef (Var "x") (Var "y");
+fd_args := ["x"];
+fd_body := NewRef (Var "x");
 fd_static := I
 |}.
 Definition newref_prog : gmap fid fndef :=
@@ -147,14 +147,13 @@ Definition newref_spec : spec  lam_event unit void:=
       '(f, vs, h) ← TReceive (λ '(f, vs, h), (Incoming, ELCall f vs h));
       TAssume (f= ("newref",None));;
       x ← TAll _;
-      y ← TAll _; 
-      TAssume (vs = [ValNum x;ValNum y]);;
-      TAssume (y>0);;
+      TAssume (vs = [ValNum x]);;
+      TAssume (x>0);;
       l ← TExist _;
       h' ← TExist _;
       TVis (Outgoing, ELReturn (ValLoc l) h');;
       (* ** add assertions*)
-      TAssert( h'.(h_heap)!!l = Some (ValNum x))
+      TAssert( h'.(h_heap)!!l = Some (ValNum 0))
     ) .
 Lemma newref_prog_refines_newref_spec :
   trefines newref_mod (spec_mod newref_spec ()).
@@ -169,20 +168,20 @@ Proof.
   intros ???[????][??][?[??]]. inversion H2; subst.
   go_i. split!.
   - intros. go_s. go_s. exists (f, vs, h'). go. go_s. split!. go.
-  go_s. intros. go. go_s. intros. go. go_s. intros. go. go_s. intros. destruct!. go. go_s. intros. go.
+  go_s. intros. go. go_s. intros. go. go_s. intros. go. go_s. intros. destruct!. go. 
   go_i. split!. intros. split!. rewrite lookup_insert_Some . left;done. auto. 
   (* ** newref part *)
   go_i. intros. split!.
   go_s. exists l. go. go_s. exists h'0. go. go_i. go_i. go_s. split!.
   go. go_s.
-  split!. unfold heap_alloc_prop in H4. destruct!. inversion H1. apply heap_alloc_h_lookup. lia. lia.
+  split!. unfold heap_alloc_prop in H2. destruct!. inversion H1. apply heap_alloc_h_lookup. lia. lia.
   rewrite -/newref_spec. go. apply H0. auto. split!. 
   - intros. destruct!.
 Qed.
    
 Definition newref_nonnum_lam: fndef :={|
 fd_args := [];
-fd_body := NewRef (Val (ValNum 0)) (Val(ValBool true));
+fd_body := NewRef (Val(ValBool true));
 fd_static := I
 |}.
 Definition newref_nonnum_prog : gmap fid fndef :=
@@ -208,7 +207,7 @@ Qed.
 
 Definition newref_zero_lam: fndef :={|
 fd_args := [];
-fd_body := NewRef (Val (ValNum 0)) (Val (ValNum 0));
+fd_body := NewRef  (Val (ValNum 0));
 fd_static := I
 |}.
 Definition newref_zero_prog : gmap fid fndef :=
@@ -228,7 +227,10 @@ Proof.
   split!. 
   go_s. split!. intros. rewrite lookup_insert_Some in H. destruct!. 
   go_s.
-  eexists (0,0),∅. intros. destruct!.  split!. left. reflexivity.
+  split!. intros. destruct!. split!; try done.
+  unfold heap_alloc_prop. split. apply heap_fresh_is_fresh.
+  done.
+  Unshelve. exact ∅. 
 Qed. 
 
 
