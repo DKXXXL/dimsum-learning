@@ -201,12 +201,12 @@ Definition sat {Σ M} `{!satG Σ M} : gname → uPred M → iProp Σ :=
 Definition sat_open {Σ M} `{!satG Σ M} : gname → iProp Σ :=
   λ γ, (∃ m, own γ (auth_auth (DfracOwn 1) m))%I.
 
-Definition sat_closed {Σ M} `{!satG Σ M} : gname → uPred M → iProp Σ :=
-  λ γ F, (∀ P', ⌜satisfiable (P' ∗ F)⌝ ==∗ sat_open γ ∗ sat γ P')%I.
+Definition sat_closed {Σ M} `{!satG Σ M} : gname → bool → uPred M → iProp Σ :=
+  λ γ b F, (∀ P', ⌜satisfiable (P' ∗ F)⌝ ==∗ sat_open γ ∗ sat γ (if b then P' ∗ F else P'))%I.
 
 Global Instance: Params (@sat) 4 := {}.
 Global Instance: Params (@sat_open) 4 := {}.
-Global Instance: Params (@sat_closed) 4 := {}.
+Global Instance: Params (@sat_closed) 5 := {}.
 
 Section sat.
   Context {Σ : gFunctors} {M : ucmra}.
@@ -329,13 +329,24 @@ Section sat.
   Proof. by rewrite /IntoPure sat_pure. Qed.
 
   (** ** rules for interacting with [sat] *)
-  Lemma sat_alloc P :
+  Lemma sat_alloc_open P :
     satisfiable P →
     ⊢ |==> ∃ γ, sat_open γ ∗ sat γ P.
   Proof using Hdiscrete.
     move => [x [/cmra_discrete_valid_iff Hvalid ?]].
     iMod (own_alloc (● x ⋅ ◯ x)) as (γ) "[Ha Hf]". { by apply auth_both_valid_discrete. }
     iModIntro. iExists _. iSplitL "Ha"; iExists _; by iFrame.
+  Qed.
+
+  Lemma sat_alloc_closed F :
+    ⊢ |==> ∃ γ, sat_closed γ true F.
+  Proof using Hdiscrete.
+    iMod (own_alloc (● ε)) as (γ) "Ha". { by apply auth_auth_valid, ucmra_unit_valid. }
+    iModIntro. iExists γ. iIntros (P [x [?%cmra_discrete_valid_iff ?]]).
+    iMod (own_update with "Ha") as "[Ha Hf]".
+    - apply auth_update_alloc. apply (op_local_update_discrete _ _ x).
+      move => _. by rewrite right_id.
+    - rewrite right_id. iModIntro. iSplitL "Ha"; iExists _; by iFrame.
   Qed.
 
   Lemma sat_switch γ P Q G :
@@ -372,7 +383,7 @@ Section sat.
   Lemma sat_close γ P `{!∀ x : M, CoreCancelable x} :
     sat γ P -∗
     sat_open γ -∗
-    ∃ F, ⌜satisfiable (P ∗ F)⌝ ∗ sat_closed γ F.
+    ∃ F, ⌜satisfiable (P ∗ F)⌝ ∗ sat_closed γ false F.
   Proof using Hdiscrete.
     iIntros "[%m [%Hholds Hm]] [%a Ha]".
     iDestruct (own_valid_2 with "Ha Hm") as %[[f Heq] Hvalid]%auth_both_valid_discrete.

@@ -485,3 +485,125 @@ Section seq_map.
     all: iIntros ([[??]?] ?); by simplify_eq/=.
   Qed.
 End seq_map.
+
+(** * prepost *)
+
+Section prepost.
+  Context {Σ : gFunctors} `{!dimsumGS Σ}.
+  Context {EV1 EV2 S : Type}.
+  Context {M : ucmra} `{!Shrink M} `{!satG Σ M} `{!CmraDiscrete M} `{!∀ x : M, CoreCancelable x}.
+  Implicit Types (i : EV2 → S → prepost (EV1 * S) M) (o : EV1 → S → prepost (EV2 * S) M).
+
+  Lemma sim_tgt_prepost_Outside i o m s σ x Π :
+    (∀ e, ▷ₒ Π (Some e) (λ P, P (SMFilter, σ, (PPRecv1 e, s, x)))) -∗
+    (SMFilter, σ, (PPOutside, s, x)) ≈{prepost_trans i o m}≈>ₜ Π.
+  Proof.
+    iIntros "HΠ".
+    iApply (sim_tgt_bi_mono1 with "[-]").
+    iApply (sim_tgt_seq_map_filter with "[-]").
+    iApply (sim_tgt_step_end with "[-]"). iIntros (???). inv_all @m_step. iSpecialize ("HΠ" $! _).
+    do 2 iModIntro. iApply (bi_mono1_intro with "HΠ"). iIntros (?) "?".
+    iSplit!.
+  Qed.
+
+  Lemma sim_tgt_prepost_Recv1 i o m s σ x Π e γ :
+    (∃ r y, ⌜pp_to_ex (i e s) (λ r' y', r = r' ∧ y = y')⌝ ∗
+        |==> sat_open γ ∗ sat γ (x ∗ y) ∗
+           ∀ x', sat_closed γ false x' -∗ Π None (λ P, P (SMProgRecv r.1, σ, (PPInside, r.2, uPred_shrink x')))) -∗
+    (SMFilter, σ, (PPRecv1 e, s, uPred_shrink x)) ≈{prepost_trans i o m}≈>ₜ Π.
+  Proof using Type*.
+    iIntros "HΠ".
+    iApply (sim_tgt_bi_mono1 with "[-]").
+    iApply (sim_tgt_seq_map_filter with "[-]").
+    iApply (sim_tgt_step with "[-]"). iIntros (???). inv_all @m_step.
+    iDestruct "HΠ" as (???) ">[? [? HΠ]]".
+    iDestruct (sat_close with "[$] [$]") as (??) "?".
+    do 2 iModIntro. iRight.
+    iSplit!. {
+      apply: pp_to_ex_mono; [done|]. move => ?? [??]; simplify_eq. split!.
+      by rewrite assoc uPred_expand_shrink.
+    }
+    iApply (sim_tgt_step_end with "[-]"). iIntros (???). inv_all @m_step.
+    do 2 iModIntro.
+    iApply (bi_mono1_intro with "[-]"). { by iApply "HΠ". }
+    iIntros (?) "?". iSplit!.
+  Qed.
+
+  Lemma sim_tgt_prepost_Inside i o m s σ x Π e γ b :
+    (sat_closed γ b x ∗ ∀ r y x', ⌜pp_to_ex (o e s) (λ r' y', r' = r ∧ y' = y)⌝ -∗
+       sat_open γ -∗ sat γ (if b then x ∗ y else y) -∗ sat γ x' -∗
+        ▷ₒ Π (Some r.1) (λ P, P (SMFilter, σ, (PPOutside, r.2, uPred_shrink x')))) -∗
+    (SMFilterRecv e, σ, (PPInside, s, uPred_shrink x)) ≈{prepost_trans i o m}≈>ₜ Π.
+  Proof using Type*.
+    iIntros "[Hclosed HΠ]".
+    iApply (sim_tgt_bi_mono1 with "[-]").
+    iApply sim_tgt_bind.
+    iApply (sim_tgt_seq_map_filter_recv with "[-]").
+    iApply (sim_tgt_step_end with "[-]"). iIntros (???). inv_all @m_step.
+    do 2 iModIntro. iIntros (?). iSplit!.
+    iApply (sim_tgt_seq_map_filter with "[-]").
+    iApply (sim_tgt_step with "[-]"). iIntros (???). inv_all @m_step.
+    revert select (satisfiable _). rewrite uPred_expand_shrink assoc => ?.
+    iMod ("Hclosed" with "[//]") as "[Ha Hsat]".
+    iAssert (sat γ (if b then x ∗ y else y) ∗ sat γ x')%I with "[Hsat]" as "[??]".
+    { destruct b; rewrite !sat_sep; iDestruct!; iFrame. }
+    iSpecialize ("HΠ" with "[//] [$] [$] [$]").
+    do 2 iModIntro. iRight. iSplit!.
+    iApply (sim_tgt_step with "[-]"). iIntros (???). inv_all @m_step.
+    do 2 iModIntro. iLeft.
+    iApply (bi_mono1_intro with "HΠ").
+    iIntros (?) "?". iSplit!.
+  Qed.
+
+  Lemma sim_src_prepost_Outside i o m s σ x Π `{!VisNoAng m}:
+    (∃ e, Π (Some e) (SMFilter, σ, (PPRecv1 e, s, x))) -∗
+    (SMFilter, σ, (PPOutside, s, x)) ≈{prepost_trans i o m}≈>ₛ Π.
+  Proof.
+    iIntros "[% HΠ]".
+    iApply (sim_src_seq_map_filter with "[-]").
+    iApply (sim_src_step_end with "[-]"). { econs. } iIntros ([[??]?] ?). simplify_eq.
+    by iModIntro.
+  Qed.
+
+  Lemma sim_src_prepost_Recv1 i o m s σ x Π e γ b `{!VisNoAng m}:
+    (sat_closed γ b x ∗ ∀ r y x', ⌜pp_to_ex (i e s) (λ r' y', r' = r ∧ y' = y)⌝ -∗
+           sat_open γ -∗ sat γ (if b then x ∗ y else y) -∗ sat γ x' -∗
+           Π None (SMProgRecv r.1, σ, (PPInside, r.2, uPred_shrink x'))) -∗
+    (SMFilter, σ, (PPRecv1 e, s, uPred_shrink x)) ≈{prepost_trans i o m}≈>ₛ Π.
+  Proof using Type*.
+    iIntros "[Hclosed HΠ]".
+    iApply (sim_src_seq_map_filter with "[-]").
+    iApply (sim_src_step with "[-]"). { econs. }
+    iIntros ([[??]?] [?[y[[x' [Hsat ?]]?]]]%pp_to_ex_exists). simplify_eq.
+    rewrite uPred_expand_shrink in Hsat.
+    iMod ("Hclosed" with "[%]") as "[Ha Hsat]". { by rewrite comm. }
+    iAssert (sat γ (if b then x ∗ y else y) ∗ sat γ x')%I with "[Hsat]" as "[??]".
+    { destruct b; rewrite !sat_sep; iDestruct!; iFrame. }
+    iModIntro. iApply (sim_src_step with "[-]"). { econs. }
+    iIntros ([[??]?] ?). iModIntro. simplify_eq.
+    iApply ("HΠ" with "[//] [$] [$] [$]").
+  Qed.
+
+  Lemma sim_src_prepost_Inside i o m s σ x Π e γ `{!VisNoAng m} :
+    (∃ r y, ⌜pp_to_ex (o e s) (λ r' y', r' = r ∧ y' = y)⌝ ∗
+       |==> sat_open γ ∗ sat γ (x ∗ y) ∗
+        ∀ x', sat_closed γ false x' -∗ Π (Some r.1) (SMFilter, σ, (PPOutside, r.2, uPred_shrink x'))) -∗
+    (SMFilterRecv e, σ, (PPInside, s, uPred_shrink x)) ≈{prepost_trans i o m}≈>ₛ Π.
+  Proof using Type*.
+    iIntros "HΠ".
+    iApply (sim_src_bind with "[-]").
+    iApply (sim_src_seq_map_filter_recv with "[-]").
+    iApply (sim_src_step_end with "[-]"). { econs. }
+    iIntros ([[??]?]?). simplify_eq.
+    iDestruct "HΠ" as (???) ">[? [? HΠ]]".
+    iDestruct (sat_close with "[$] [$]") as (? Hsat ) "?".
+    iModIntro. iSplit!.
+    iApply (sim_src_seq_map_filter with "[-]").
+    iApply (sim_src_step with "[-]").
+    { econs; [|done]. by rewrite uPred_expand_shrink comm (comm _ _ x). }
+    iIntros ([[??]?] ?). simplify_eq. iModIntro.
+    iApply (sim_src_step with "[-]"). { econs. }
+    iIntros ([[??]?] ?). simplify_eq. iModIntro.
+    iApply ("HΠ" with "[$]").
+  Qed.
+End prepost.
