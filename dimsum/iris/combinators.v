@@ -1,4 +1,5 @@
-From dimsum.core Require Import product seq_product state_transform.
+From dimsum.core Require Import product seq_product state_transform prepost.
+From dimsum.core.iris Require Import sat.
 From dimsum.core.iris Require Export sim.
 Set Default Proof Using "Type".
 
