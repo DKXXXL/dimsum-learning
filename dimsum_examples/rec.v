@@ -794,7 +794,7 @@ Global Instance event_set_vals_heap_split_assume_inj e : SplitAssumeInj2 (=) (=)
 Proof. done. Qed.
 
 Definition heap_alloc_prop (h h':heap_state) (l:loc) (v:val) (n:Z):Prop:=
-  n=0 \/ (heap_is_fresh h l /\ h' = heap_alloc h l v n).
+  n<=0 \/ (heap_is_fresh h l /\ h' = heap_alloc h l v n).
 
 (** ** Operational semantics *)
 Definition eval_binop (op : binop) (v1 v2 : val) : option val :=

@@ -39,6 +39,10 @@ Fixpoint pass (ren : gmap string string) (e : static_expr) (s : N) : (N * static
   match e with
   | SVar v => (s, SVar (default v (ren !! v)))
   | SVal v => (s, SVal v)
+  | SNewRef e1 e2 => 
+      let p1 := pass ren e1 s in
+      let p2 := pass ren e2 p1.1 in
+      (p2.1, SNewRef p1.2 p2.2)
   | SBinOp e1 o e2 =>
       let p1 := pass ren e1 s in
       let p2 := pass ren e2 p1.1 in
@@ -51,8 +55,9 @@ Fixpoint pass (ren : gmap string string) (e : static_expr) (s : N) : (N * static
       let p2 := pass ren e2 p1.1 in
       (p2.1, SStore p1.2 p2.2)
   | SCall f args =>
-      let p1 := state_bind (pass ren <$> args) s in
-      (p1.1, SCall f p1.2)
+      let p1 := pass ren f s in
+      let p2 := state_bind (pass ren <$> args) p1.1 in
+      (p2.1, SCall p1.2 p2.2)
   | SLetE v e1 e2 =>
       let p1 := pass ren e1 (s + 1) in
       let p2 := pass (<[v := ssa_var v s]> ren) e2 p1.1 in
@@ -86,9 +91,9 @@ Proof.
   revert ren s. induction e => //= ren s; try lia.
   all: rewrite ?IHe1 ?IHe2 ?IHe3 ?app_length; try lia.
   move: ren s.
-  revert select (Forall _ _). elim; csimpl; [lia|].
-  move => ?? IH1 _ IH2 ??. rewrite IH1 IH2 app_length. lia.
-Qed.
+  revert select (Forall _ _). elim; csimpl. intros. rewrite IHe. lia. 
+  move => ?? IH1 _ IH2 ??.  admit.
+Admitted.
 
 Lemma pass_vars ren s e :
   assigned_vars (static_expr_to_expr (pass ren e s).2) =

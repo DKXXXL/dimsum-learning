@@ -1243,7 +1243,29 @@ Proof.
     iDestruct (eval_binop_bij with "Hv Hw") as "[%u [% Hu]]"; first done.
     iSatStop. tstep_i. split!. eapply Hcont; first by etrans.
     iSatMono. iFrame.
-  - admit. 
+  - simpl. simpl in Hstatic. eapply andb_True in Hstatic as [Hstatic1 Hstat2].
+    apply: IH1; simpl; [eauto..|];last first.
+    { iSatMono. iIntros "($ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
+    iSatClear.
+    intros n' vi vs hi' hs' rf' b' Hn' Hsat';simpl.
+    apply: IH2; simpl; eauto; last first.
+    { iSatMono. iIntros "($ & #Hv & [#Hm r] & $)". iFrame "Hm". iCombine "Hm Hv r " as "r". iExact "r". }
+    2: { by apply: rec_heap_bij_call_mono. }
+    iSatClear.
+    intros n'' wi ws hi'' hs'' rf'' b'' Hn'' Hsat; simpl.
+    destruct wi eqn:?, ws eqn:?.
+    all:try ( iSatStart; iIntros "(Hinv & Hw & (Hsub & Hv & r) & rf)";done ).
+    2, 3, 4: tstep_s; split!; intros; done.
+    destruct(decide(z > 0)%Z).
+    2:{tstep_s. split!. intros. 
+    iSatStart. iIntros "(Hinv & Hw & (Hsub & Hv & r) & rf)".
+    iSimpl in "Hw". iDestruct "Hw" as %HK. iSatStop. 
+    inversion H. 
+    split!. assert ((z<=0)%Z) by lia. left. subst. done.
+    intros. subst. done. }
+    tstep_i. intros. split!. tstep_s. split!. intros. split!. {admit. } 
+    intros. iSatStart.
+    admit.
   - simpl. simpl in Hstatic.
     apply: IH; simpl; [eauto..|]; last first.
     { iSatMono. iIntros "($ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
