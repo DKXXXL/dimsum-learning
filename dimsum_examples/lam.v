@@ -1043,9 +1043,9 @@ Inductive head_step : lam_state → option lam_event → (lam_state → Prop) �
   head_step (Lam (BinOp (Val v1) op (Val v2)) lis h fns) None (λ σ',
     ∃ v, eval_binop op v1 v2 = Some v ∧ σ' = Lam (Val v) lis h fns)
 | NewRefS v l lis h h' fns: (* ref v n *)
-  (∀n, v = ValNum n →heap_alloc_prop h h' l n) →
+  (∀n, v = ValNum n → heap_alloc_prop h h' l n) →
   head_step (Lam (NewRef (Val v) ) lis h fns) None 
-  (λ σ', ∃n, ValNum n = v /\n>0 /\ σ' = Lam (Val (ValLoc l)) lis h' fns) 
+  (λ σ', ∃n, v = ValNum n /\n>0 /\ σ' = Lam (Val (ValLoc l)) lis h' fns) 
 | LoadS v lis h fns: (* !v *)
   head_step (Lam (Load (Val v)) lis h fns) None 
   (λ σ', ∃l v', v = ValLoc l ∧ h.(h_heap)!!l = Some v' ∧ σ' = Lam (Val v') lis h fns)
@@ -1540,11 +1540,11 @@ Global Hint Resolve lam_step_Newref_i | 10 : typeclass_instances.
 
 Lemma lam_step_Newref_s fns s h e K v  `{!LamExprFill e K (NewRef (Val v) )}:
   TStepS lam_trans (Lam e s h fns) (λ G, (G None (λ G', ∃ l h', 
-  (∀n, ValNum n = v→heap_alloc_prop h h' l n/\(n>0→ G' (Lam (expr_fill K (Val (ValLoc l))) s h' fns)))))).
+  (∀n, v = ValNum n →heap_alloc_prop h h' l n/\(n>0→ G' (Lam (expr_fill K (Val (ValLoc l))) s h' fns)))))).
 Proof.
   destruct LamExprFill0; subst.
   econs. intros. destruct!.   split!; [done|]. move => ? /=. intros. destruct!. eapply steps_spec_step_end. econs. 
-  done. econs. intros. symmetry in H1. apply H0 in H1. destruct!. exact H2. naive_solver. 
+  done. econs. intros. apply H0 in H1. destruct!. exact H2. naive_solver. 
 Qed. 
 Global Hint Resolve lam_step_Newref_s | 10 : typeclass_instances.
 
