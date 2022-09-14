@@ -47,12 +47,3 @@ dimsum_examples/print.v
 dimsum_examples/int_ptr_cast.v
 dimsum_examples/memmove.v
 dimsum_examples/coroutine_example.v
-dimsum/iris/sat.v
-dimsum/iris/mono_ord.v
-dimsum/iris/ord_later.v
-dimsum/iris/sim.v
-dimsum/iris/expr.v
-dimsum/iris/combinators.v
-# dimsum/iris/language.v
-dimsum/iris/iris.v
-dimsum_examples/iris/rec.v
