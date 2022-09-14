@@ -24,7 +24,6 @@ make -j 8
 
 You might need to run `eval $(opam env)` to update the environment of your shell.
 
-
 ## Differences to the Paper
 
 Before exploring the Coq development, note the following differences between the paper and the mechanization:
@@ -101,12 +100,12 @@ Section 5:
   - Linearize pass: `dimsum_examples/compiler/linearize.v`
   - Mem2Reg pass: `dimsum_examples/compiler/mem2reg.v`
   - Codegen pass: `dimsum_examples/compiler/codegen.v`
-- Rec-to-rec wrapper: `rec_heap_bij` in `dimsum_examples/rec_heap_bij.v`
+- Rec-to-Rec wrapper: `rec_heap_bij` in `dimsum_examples/rec_heap_bij.v`
 - `rec-to-asm-vertical`: `r2a_bij_vertical` in `dimsum_examples/r2a_bij_vertical.v`
 
 
 ### Axioms
-The development relies on the following non-constructive axioms:
+The development relies on the following non-constructive axioms (see `dimsum/axioms.v`):
 * Functional form of the (non extensional) axiom of choice, Choice (`FunctionalChoice` of `Coq.Logic.ChoiceFacts`)
 * (Dependent) Functional Extensionality, (D)FE (`functional_extensionality_dep` from `Coq.Logic.FunctionalExtensionality`)
 * Proof Irrelevance, PI (`proof_irrelevance` from `Coq.Logic.ProofIrrelevance`)
