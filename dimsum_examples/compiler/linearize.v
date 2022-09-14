@@ -42,6 +42,11 @@ Fixpoint pass (e : static_expr) : M var_val :=
       v ← fresh_var;
       cappend (λ x, LLetE v (LBinOp v1 o v2) x);;
       mret $ VVar v
+  | SMalloc e1 =>
+      v1 ← pass e1;
+      v ← fresh_var;
+      cappend (λ x, LLetE v (LMalloc v1) x);;
+      mret $ VVar v
   | SLoad e1 =>
       v1 ← pass e1;
       v ← fresh_var;
@@ -212,6 +217,26 @@ Proof.
       apply eq_None_not_Some => /Hvsi''. set_unfold; naive_solver lia.
     + move => ? /lookup_insert_is_Some'[|]; [naive_solver lia|].
       move => /Hvsi'' [|[?|?]]; [ |set_unfold; naive_solver lia..].
+      move => /Hvsi'; set_unfold; naive_solver lia.
+  - move => /= ? IH ????????????????? Hcont. prepare_goal.
+    apply :IH; [done|done|done|set_solver|set_solver|done|].
+    intros ???????Hvsi' =>/=. erewrite lookup_var_val_to_expr; [|done].
+    destruct v' eqn:?.
+    2,3: tstep_s; split!; intros; done.
+    destruct (decide (z>0)) eqn:?.
+    2:{ tstep_s. split!; intros. inversion H4.
+        split; last first. intros; subst; done.
+        split!. apply heap_fresh_is_fresh.
+        Unshelve. all: try auto. exact (0,0). exact ∅. }
+    tstep_i. intros. split; try done.
+    tstep_i. tstep_s. split!. intros. split!; [naive_solver|naive_solver|].
+    intros. rewrite -subst_subst_map_delete.
+    apply :tsim_mono_b. destruct!. apply: Hcont.
+    + lia.
+    + by simplify_map_eq.
+    + etrans; [done|]. apply insert_subseteq.
+      apply eq_None_not_Some => /Hvsi'. set_unfold; naive_solver lia.
+    + move => ? /lookup_insert_is_Some'[|]; [naive_solver lia|].
       move => /Hvsi'; set_unfold; naive_solver lia.
   - move => /= ? IH ????????????????? Hcont. prepare_goal.
     apply: IH; [done|done|done|set_solver|set_solver|done|].
