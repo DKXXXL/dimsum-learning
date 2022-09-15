@@ -1247,8 +1247,32 @@ Proof.
     destruct vi eqn:?, vs eqn:?;try (iSatStart; iIntros "(? & #v_bij & ? & ?)"; done).
     2, 3:tstep_s; split!;intros;done. 
     destruct (decide ((z0>0)%Z)) eqn:?.
-    admit.
-    admit.
+    2:{tstep_s. exists (heap_fresh ∅ hs'). eexists (heap_alloc hs' _ z0).
+      intros. inversion H. split!. apply heap_fresh_is_fresh. reflexivity.
+      intros; subst; done. } 
+    iSatStart.
+    iIntros "(h_inv & %v_bij & map_v_bij & rf')".
+    subst. iSatStop.
+    tstep_i.
+    intros.
+    destruct H as [l0 [ls' [ H1[H2 [H3 H4]]]]]. 
+    assert (heap_alloc_list [z0] [l0] hi' h') by naive_solver.
+    split!.
+    inversion H1.
+    clear H1 H2 H3 H4.
+    tstep_s.
+    exists (heap_fresh ∅ hs'). eexists (heap_alloc hs' _ z0).
+    intros. split!. apply heap_fresh_is_fresh. inversion H0. auto.
+    intros.
+    remember (heap_fresh ∅ hs') as l1.
+    remember (heap_alloc hs' l1 z0) as hs''.
+    assert (heap_alloc_list [z0] [l1] hs' hs'').
+    simpl. split!. rewrite Heql1. apply heap_fresh_is_fresh. 
+    apply Hcont. auto. 
+    iSatMonoBupd. iDestruct "map_v_bij" as "(_ & $)". iFrame.
+    iMod ((heap_bij_inv_alloc_list _ _ _ _ _ _ _ H H2) with  "[$]") as "(? & l_bij)".
+    iModIntro. iFrame.
+    iSimpl. iSimpl in "l_bij". iDestruct "l_bij" as "($ & ?)". 
   - simpl. simpl in Hstatic.
     apply: IH; simpl; [eauto..|]; last first.
     { iSatMono. iIntros "($ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
