@@ -16,13 +16,17 @@ Definition offset_loc (l : loc) (z : Z) : loc := (l.1, l.2 + z).
 Notation "l +ₗ z" := (offset_loc l%L z%Z) (at level 50, left associativity) : loc_scope.
 Global Typeclasses Opaque offset_loc.
 
+Lemma loc_eq (l1 l2 : loc) :
+  l1 = l2 ↔ l1.1 = l2.1 ∧ l1.2 = l2.2.
+Proof. destruct l1, l2; naive_solver. Qed.
+
 Lemma offset_loc_0 l :
   l +ₗ 0 = l.
-Proof. rewrite /offset_loc. destruct l => /=. f_equal. lia. Qed.
+Proof. apply loc_eq. split!. lia. Qed.
 
 Lemma offset_loc_assoc l n1 n2 :
   l +ₗ n1 +ₗ n2 = l +ₗ (n1 + n2).
-Proof. rewrite /offset_loc. destruct l => /=. f_equal. lia. Qed.
+Proof. apply loc_eq. split!. lia. Qed.
 
 Global Instance offset_loc_inj_r l : Inj eq eq (λ i, l +ₗ i).
 Proof. move => ??. rewrite /offset_loc /= => ?. simplify_eq. lia. Qed.
@@ -32,12 +36,12 @@ Proof. move => ??. rewrite /offset_loc /= => ?. simplify_eq. lia. Qed.
 
 Lemma offset_loc_S l i :
   l +ₗ S i = l +ₗ 1 +ₗ i.
-Proof. rewrite /offset_loc /=. f_equal. lia. Qed.
+Proof. apply loc_eq. split!. lia. Qed.
 
 Lemma offset_loc_add_sub l i j:
   i = - j →
   l +ₗ i +ₗ j = l.
-Proof. destruct l. rewrite /offset_loc /= => ?. f_equal. lia. Qed.
+Proof. move => ?. apply loc_eq. split!. lia. Qed.
 
 (** ** Syntax *)
 Inductive binop : Set :=

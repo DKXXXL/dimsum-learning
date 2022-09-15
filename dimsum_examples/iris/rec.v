@@ -8,10 +8,6 @@ Set Default Proof Using "Type".
 
 Local Open Scope Z_scope.
 
-  Lemma loc_eq (l1 l2 : loc) :
-    l1 = l2 ↔ l1.1 = l2.1 ∧ l1.2 = l2.2.
-  Proof. destruct l1, l2; naive_solver. Qed.
-
 Section sim.
   Context {Σ : gFunctors} {EV : Type} `{!dimsumGS Σ}.
 
