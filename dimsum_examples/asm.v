@@ -23,7 +23,7 @@ Inductive asm_instr_elem :=
 (* str r1, [f r2] *)
 | WriteMem (r1 r2 : string) (f : Z → Z)
 | Syscall
-| AllocMem (f : gmap string Z → Z)
+| AllocMem (r : string) (f : gmap string Z → Z)
 .
 
 Definition asm_instr := list asm_instr_elem.
@@ -91,11 +91,11 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
   asm_step (AsmState (AWaitingSyscall es) regs mem instrs)
            (Some (Incoming, EASyscallRet ret mem'))
            (λ σ', σ' = AsmState (ARunning es) (<["R0" := ret]>regs) mem' instrs)
-| SAllocMem f l es regs mem instrs:
+| SAllocMem f l es r regs mem instrs:
   mem_alloc_prop (f regs) mem l→
-  asm_step (AsmState (ARunning (AllocMem f :: es)) regs mem instrs) None (λ σ', 
+  asm_step (AsmState (ARunning (AllocMem r f :: es)) regs mem instrs) None (λ σ', 
     (f regs)>0 ∧
-    σ' = AsmState (ARunning es) (<["R1" := l]> regs) (mem_alloc_result (f regs) mem l) instrs)
+    σ' = AsmState (ARunning es) (<[r := l]> regs) (mem_alloc_result (f regs) mem l) instrs)
 | SJumpInternal regs instrs pc es mem:
   regs !!! "PC" = pc →
   instrs !! pc = Some es →
@@ -243,21 +243,21 @@ Proof.
 Qed.
 Global Hint Resolve asm_step_Syscall_ret_s : typeclass_instances.
 
-Lemma asm_step_Allocmem_i f es rs mem ins: 
-  TStepI asm_trans (AsmState (ARunning (AllocMem f::es)) rs mem ins)
+Lemma asm_step_Allocmem_i r f es rs mem ins: 
+  TStepI asm_trans (AsmState (ARunning (AllocMem r f::es)) rs mem ins)
             (λ G, ∀ l, mem_alloc_prop (f rs) mem l →
-              G true None (λ G', (f rs)> 0 ∧ G' (AsmState (ARunning es) (<["R1":=l]> rs) (mem_alloc_result (f rs) mem l) ins))).
+              G true None (λ G', (f rs)> 0 ∧ G' (AsmState (ARunning es) (<[r:=l]> rs) (mem_alloc_result (f rs) mem l) ins))).
 Proof.
   constructor => ? H. apply: steps_impl_step_end. intros.
   inv_all @m_step. split!; try naive_solver.
 Qed.
 Global Hint Resolve asm_step_Allocmem_i : typeclass_instances.
 
-Lemma asm_step_Allocmem_s f es rs mem ins: 
-  TStepS asm_trans (AsmState (ARunning (AllocMem f :: es)) rs mem ins)
+Lemma asm_step_Allocmem_s r f es rs mem ins: 
+  TStepS asm_trans (AsmState (ARunning (AllocMem r f :: es)) rs mem ins)
             (λ G, (G None (λ G', ∃ l, 
             mem_alloc_prop (f rs) mem l ∧ 
-            ((f rs)>0 → G' (AsmState (ARunning es) (<["R1":=l]> rs) (mem_alloc_result (f rs) mem l) ins))))).
+            ((f rs)>0 → G' (AsmState (ARunning es) (<[r:=l]> rs) (mem_alloc_result (f rs) mem l) ins))))).
 Proof.
   constructor => ??. split!. done. intros. simpl in H. destruct!.
   apply: steps_spec_step_end. econs. done. intros. simpl in H. naive_solver. 
@@ -580,7 +580,7 @@ Inductive deep_asm_instr :=
 | Aslt (rd r1 : string) (o : asm_operand) (* set rd to 1 if r1 <  o else to 0 *)
 | Aload (r r1 : string) (o2 : Z) (* ldr r, [r1 + o2] *)
 | Astore (r r1: string) (o2 : Z) (* str r, [r1 + o2] *)
-| Aalloc (o : asm_operand)
+| Aalloc (rd:string) (o : asm_operand)
 | Abranch (abs : bool) (o : asm_operand) (* abs: absolute or relative address? *)
 | Abranch_eq (abs : bool) (od : asm_operand) (r1 : string) (o : asm_operand)
 | Abranch_link (abs : bool) (o : asm_operand)
@@ -622,8 +622,8 @@ Definition deep_to_asm_instr (di : deep_asm_instr) : asm_instr :=
       WriteMem r r1 (λ v, v + o2);
       WriteReg "PC" (λ rs, rs !!! "PC" + 1)
     ]
-  | Aalloc o => [
-      AllocMem (λ rs, op_lookup rs o);
+  | Aalloc rd o => [
+      AllocMem rd (λ rs, op_lookup rs o);
       WriteReg "PC" (λ rs, rs !!! "PC" + 1)
     ]
   | Abranch abs o => [
