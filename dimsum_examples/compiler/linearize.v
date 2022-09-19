@@ -227,7 +227,7 @@ Proof.
     2:{ tstep_s. split!; intros. inversion H4.
         split; last first. intros; subst; done.
         split!. apply heap_fresh_is_fresh.
-        Unshelve. all: try auto. exact (0,0). exact ∅. }
+        Unshelve. all: apply inhabitant. }
     tstep_i. intros. split; try done.
     tstep_i. tstep_s. split!. intros. split!; [naive_solver|naive_solver|].
     intros. rewrite -subst_subst_map_delete.

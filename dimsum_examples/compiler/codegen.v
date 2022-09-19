@@ -186,6 +186,9 @@ Definition translate_lexpr_op (e : lexpr_op) : M unit :=
       | LeOp => cappend [Asle "R0" "R1" "R2"]
       | LtOp => cappend [Aslt "R0" "R1" "R2"]
       end
+  | LMalloc v1 => 
+      read_var_val "R1" v1 ;; 
+      cappend [Aalloc "R0" "R1"]
   | LLoad v1 =>
       read_var_val "R1" v1;;
       cappend [Aload "R0" "R1" 0]
@@ -1163,6 +1166,46 @@ Proof.
     + iPureIntro. destruct b1, b2 => //.
     + done.
     + done.
+  - rewrite -!app_assoc. 
+    iApply (read_var_val_correct with "Hp"); [done|compute_done|].
+    iIntros (?? v' ?) "Hv Hp". simplify_eq/=.
+    iIntros (??? Hins) "Hrf Hinv". iSatStop.
+    tstep_i => ??. simplify_map_eq'.  
+    move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
+    (* various destructs based on booleans and >0*)
+    destruct v' eqn:?.
+    2,3:tstep_s; split!; intros; done.
+    iSatStart. 
+    iDestruct "Hv" as "%Hv".
+    iSatStop.
+    inversion Hv.
+    destruct (decide (z>0)) eqn:?.
+    2:{tstep_s. split!. intros. inversion H2. split!. apply heap_fresh_is_fresh.
+      intros. rewrite -H4 in H3. done. }
+    tstep_i. intros. split!. 
+    {simplify_map_eq'; done. }
+    tstep_i. simplify_map_eq'.
+    tstep_s. 
+    assert (∃ hl, heap_is_fresh h hl).
+    eexists _. apply heap_fresh_is_fresh.
+    destruct!. split!.
+    intros. split!; [done | inversion H3; reflexivity|].
+    intros.
+    iSatStartBupd.
+    iDestruct "Hinv" as "(%& mem_inv & heap_inv & regs_inv)".
+    iMod (r2a_heap_alloc_test with "[heap_inv] [mem_inv]") as "(heap_inv' & mem_inv' &val_rel)".
+    all:try done.
+    (* Do something like r2a_heap_update_shared*)
+    iApply ("Hcont" with "[%] [%] [val_rel] [Hp] [%] Hrf") ; [by simplify_map_eq'|done | | | |].
+      + simpl. iExists _. iSplitR. 2:done. destruct H1. iPureIntro. lia.  
+      + iApply cr2a_places_inv_mono_rs; [|done].
+        apply map_preserved_insert_r_not_in; [compute_done| ].
+        subst. by apply map_preserved_insert_r_not_in; [compute_done|].
+      + by simplify_map_eq'.
+      + iModIntro. iExists ssz. iFrame. 
+      iApply cr2a_regs_inv_mono_insert; [compute_done|].
+      iApply cr2a_regs_inv_mono_insert; [compute_done|]. done.
+    Unshelve. all: apply inhabitant.
   - rewrite -!app_assoc.
     iApply (read_var_val_correct with "Hp"); [done|compute_done|].
     iIntros (?? v' ?) "Hv Hp". simplify_eq/=.
@@ -1215,7 +1258,7 @@ Proof.
     iIntros (????) "Hvs Hp" => /=. subst.
     iApply (Hcall with "Hvs Hp"); [done|].
     iIntros (?????). by iApply "Hcont".
-Qed.
+Qed. 
 
 Lemma translate_lexpr_correct s s' p p' n e e' rs vs res K h
       `{!RecExprFill e' K (subst_map vs (lexpr_to_expr e))}:

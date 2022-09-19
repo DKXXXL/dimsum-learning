@@ -366,7 +366,7 @@ Proof.
     iMod ((heap_bij_inv_alloc_list _ _ _ _ _ _ _ H5 H2) with  "[$]") as "(? & l_bij)".
     iModIntro. iFrame. iSimpl in "l_bij". iDestruct "l_bij" as  "($ & ?)".
     iExact "v_bij'".
-    Unshelve. all:try auto. exact ∅. 
+    Unshelve. all: apply inhabitant. 
   - simplify_crun_eq.
     rewrite is_var_dec bool_decide_decide in Hrun.
     destruct decide; simplify_crun_eq.

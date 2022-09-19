@@ -252,7 +252,7 @@ Lemma r2a_heap_alloc' rh p b:
 Proof.
   move => ?.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -pair_op_1. apply prod_update; [|done].
+  rewrite -pair_op_1. apply prod_update; [|done]. 
   by apply gmap_view_alloc.
 Qed.
 
@@ -981,6 +981,17 @@ Proof.
   - rewrite /r2a_heap_shared_agree/= (big_sepM_delete _ (alter (λ _, v) _ _) l); [|by simplify_map_eq].
     simplify_map_eq. rewrite delete_alter. iFrame. iExists _. iFrame.
 Qed.
+
+Lemma r2a_heap_alloc_test h hl z mem ml ss ssz : 
+  heap_is_fresh h hl →
+  mem_alloc_prop z mem ml→
+  r2a_heap_inv h -∗
+  r2a_mem_inv ss ssz mem ==∗
+  r2a_heap_inv (heap_alloc h hl z) ∗ 
+  r2a_mem_inv ss ssz (mem_alloc_result z mem ml) ∗ 
+  r2a_heap_shared hl.1 ml.
+Proof.
+  Admitted.
 
 Lemma r2a_heap_inv_add_provs h ps :
   r2a_heap_inv h -∗

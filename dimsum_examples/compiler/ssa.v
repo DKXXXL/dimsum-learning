@@ -143,7 +143,7 @@ Proof.
     tstep_i. intros. destruct!. split!.
     tstep_s. split!. intros. split!;last first. intros. by apply tsim_mono_b_false.
     inversion H0. all:done. 
-    Unshelve. all: auto. exact (0,0). exact ∅.
+    Unshelve. all: apply inhabitant. 
   - apply: IHes'; [done|done|] => /= ??.
     tstep_s => *. subst. tstep_i. split!. by apply tsim_mono_b_false.
   - apply: IHes'1; [done|done|] => /= ??.
