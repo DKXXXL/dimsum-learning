@@ -419,6 +419,21 @@ Proof.
   rewrite big_sepM_insert //. by iFrame.
 Qed.
 
+Lemma r2a_mem_allocator z mem ml: 
+  mem_alloc_prop z mem ml →
+  r2a_mem_auth mem ==∗ 
+  r2a_mem_auth (mem_alloc_result z mem ml) ∗ ([∗ list] a'∈seqZ ml z, r2a_mem_constant a' (Some 0)).
+Proof.
+  iIntros (mem_prop) "Hauth".
+  remember ((list_to_map ((λ x, (x,Some 0))<$> seqZ ml z)):gmap Z (option Z)) as mem'.
+  iMod ((r2a_mem_alloc_big' mem mem') with "Hauth") as "(Hauth' & Hconstant)".
+  {admit. }
+  iModIntro.
+  iSplitL "Hauth'".
+  - admit.
+  - admit.
+Admitted.
+
 Lemma r2a_mem_update' v' a v amem :
   r2a_mem_auth amem ∗ r2a_mem_constant a v ==∗ r2a_mem_auth (<[a := v']> amem) ∗ r2a_mem_constant a v'.
 Proof.
@@ -991,7 +1006,13 @@ Lemma r2a_heap_alloc_test h hl z mem ml ss ssz :
   r2a_mem_inv ss ssz (mem_alloc_result z mem ml) ∗ 
   r2a_heap_shared hl.1 ml.
 Proof.
-  Admitted.
+  iIntros (heapfresh memfresh).
+  iIntros "Hheap (? & Hmem)".
+  iMod ((r2a_mem_allocator _ _ _ memfresh) with "Hmem") as "(Hmem' & Hconstant)".
+  iMod ((r2a_heap_alloc_shared _ _ _ _ heapfresh) with "Hheap Hconstant")  as "(?&?)".
+  iModIntro.
+  iFrame.
+Qed.
 
 Lemma r2a_heap_inv_add_provs h ps :
   r2a_heap_inv h -∗
