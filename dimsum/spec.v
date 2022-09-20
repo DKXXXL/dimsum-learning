@@ -1,8 +1,11 @@
 From Paco Require Import paco.
-From ITree Require Export ITree ITreeFacts.
+From ITree Require Import ITree ITreeFacts.
 From ITree.Eq Require Import Paco2.
 From dimsum.core Require Export proof_techniques.
 From dimsum.core Require Import axioms.
+
+(** from ITree.Basics.Basics.v *)
+Notation void := Empty_set.
 
 (** This file is derived from
 https://github.com/DeepSpec/InteractionTrees/blob/4.0.0/theories/Core/ITreeDefinition.v
@@ -464,7 +467,7 @@ Proof.
   rewrite /equiv/spec_equiv !spec_to_itree_bind Heq1. by setoid_rewrite Heq2.
 Qed.
 
-Lemma spec_bind_bind {EV S R T U} (s : spec EV S R) (k : R → spec EV S U) (h : U → spec EV S T) :
+Lemma bind_bind {EV S R T U} (s : spec EV S R) (k : R → spec EV S U) (h : U → spec EV S T) :
   Spec.bind (Spec.bind s k) h ≡ Spec.bind s (fun r => Spec.bind (k r) h).
 Proof.
   rewrite /equiv/spec_equiv !spec_to_itree_bind bind_bind.

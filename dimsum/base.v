@@ -345,6 +345,18 @@ Proof.
 Qed.
 End curry_uncurry.
 
+Section theorems.
+Context `{FinMap K M}.
+Lemma insert_union_r_Some {A} (m1 m2 : M A) i x :
+  is_Some (m1 !! i) → m1 ∪ m2 = m1 ∪ <[i:=x]>m2.
+Proof.
+  intro. rewrite !insert_union_singleton_l. rewrite !(assoc_L (∪)).
+  f_equal. apply map_eq => j. destruct (decide (i = j)); simplify_eq/=.
+  - by rewrite lookup_union_l'.
+  - rewrite lookup_union_l //. by apply lookup_singleton_None.
+Qed.
+End theorems.
+
 (** ** Lemmas about map_difference *)
 Section theorems.
 Context `{FinMap K M}.

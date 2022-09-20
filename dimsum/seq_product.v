@@ -353,6 +353,16 @@ Definition seq_map_trans {EV1 EV2} (m : mod_trans EV1) (f : mod_trans (sm_event 
   (state_transform_trans (map_trans (seq_product_trans m f) seq_map_filter)
                        (λ σ σ', σ' = seq_map_state_trans m f σ)).
 
+Global Instance seq_map_trans_transform_wf {EV1 EV2} (m : mod_trans EV1) (f : mod_trans (sm_event EV1 EV2)) :
+  StateTransformWf (map_trans (seq_product_trans m f) seq_map_filter)
+                   (λ σ σ', σ' = seq_map_state_trans m f σ).
+Proof.
+  constructor; [naive_solver|].
+  unfold seq_map_state_trans. move => [[??]?] [[[??]?]?] [[[??]?]?] ?????; simplify_eq.
+  inv_all @m_step; inv_all @seq_map_filter; destruct!.
+  all: eexists (_, _, _); do 3 f_equal;repeat case_match => //; by simplify_eq/=.
+Qed.
+
 Global Instance seq_map_vis_no_all {EV1 EV2} (m : mod_trans EV1) (f : mod_trans (sm_event EV1 EV2)) `{!VisNoAng m} `{!VisNoAng f}:
   VisNoAng (seq_map_trans m f).
 Proof.
@@ -371,13 +381,9 @@ Lemma seq_map_mod_trefines {EV1 EV2} (m1 m2 : module EV1) (f : module (sm_event 
   trefines (seq_map_mod m1 f σ) (seq_map_mod m2 f σ).
 Proof.
   move => ?.
-  eapply (state_transform_mod_trefines (Mod (map_trans _ _) _) (Mod (map_trans _ _) _)); [| | |done..].
-  - move => [[??]?] [[[??]?]?] [[[??]?]?]. unfold seq_map_state_trans. naive_solver.
-  - unfold seq_map_state_trans. move => [[??]?] [[[??]?]?] [[[??]?]?] ?????; simplify_eq.
-    inv_all @m_step; inv_all @seq_map_filter; destruct!.
-    all: eexists (_, _, _); do 3 f_equal;repeat case_match => //; by simplify_eq/=.
-  - apply: (map_mod_trefines (Mod (seq_product_trans _ _) _) (Mod (seq_product_trans _ _) _)).
-    by apply seq_product_mod_trefines.
+  eapply (state_transform_mod_trefines (Mod (map_trans _ _) _) (Mod (map_trans _ _) _)); [simpl; apply _| |done..].
+  apply: (map_mod_trefines (Mod (seq_product_trans _ _) _) (Mod (seq_product_trans _ _) _)).
+  by apply seq_product_mod_trefines.
 Qed.
 
 (*

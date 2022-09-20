@@ -1,6 +1,5 @@
 From Paco Require Import paco.
-From ITree Require Export ITree ITreeFacts.
-From ITree Require Export ITree.
+From ITree Require Import ITree ITreeFacts.
 From dimsum.core Require Export proof_techniques spec.
 From dimsum.core Require Import axioms.
 
@@ -315,7 +314,7 @@ Global Hint Resolve spec_tstep_i : typeclass_instances.
 (** ** instances *)
 Lemma spec_tstep_bind {EV S} A B h (k : A → spec _ _ B) (t : spec EV S _) cont :
   SpecTStep cont (Spec.bind (Spec.bind t k) h) (Spec.bind t (fun r => Spec.bind (k r) h)).
-Proof. constructor. by rewrite spec_bind_bind. Qed.
+Proof. constructor. by rewrite bind_bind. Qed.
 Global Hint Resolve spec_tstep_bind : typeclass_instances.
 
 Lemma spec_tstep_ret {EV S} A h (x : A) cont:
