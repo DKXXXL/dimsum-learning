@@ -71,7 +71,6 @@ Inductive expr : Set :=
 | Var (v : string)
 | Val (v : val)
 | BinOp (e1 : expr) (o : binop) (e2 : expr)
-| Malloc (e : expr)
 | Load (e : expr)
 | Store (e1 e2 : expr)
 | If (e e1 e2 : expr)
@@ -89,7 +88,6 @@ Lemma expr_ind (P : expr → Prop) :
   (∀ (x : string), P (Var x)) →
   (∀ (v : val), P (Val v)) →
   (∀ (e1 : expr) (op : binop) (e2 : expr), P e1 → P e2 → P (BinOp e1 op e2)) →
-  (∀ (e : expr), P e → P (Malloc e)) →
   (∀ (e : expr), P e → P (Load e)) →
   (∀ (e1 e2 : expr), P e1 → P e2 → P (Store e1 e2)) →
   (∀ (e1 e2 e3 : expr), P e1 → P e2 → P e3 → P (If e1 e2 e3)) →
@@ -102,8 +100,8 @@ Lemma expr_ind (P : expr → Prop) :
   ∀ (e : expr), P e.
 Proof.
   move => *. generalize dependent P => P. match goal with | e : expr |- _ => revert e end.
-  fix FIX 1. move => [ ^e] => ???????? Hcall ????.
-  9: { apply Hcall. apply Forall_true => ?. by apply: FIX. }
+  fix FIX 1. move => [ ^e] => ??????? Hcall ????.
+  8: { apply Hcall. apply Forall_true => ?. by apply: FIX. }
   all: auto.
 Qed.
 
@@ -121,7 +119,6 @@ Fixpoint assigned_vars (e : expr) : list string :=
   | Var v => []
   | Val v => []
   | BinOp e1 o e2 => assigned_vars e1 ++ assigned_vars e2
-  | Malloc e => assigned_vars e
   | Load e => assigned_vars e
   | Store e1 e2 => assigned_vars e1 ++ assigned_vars e2
   | If e e1 e2 => assigned_vars e ++ assigned_vars e1 ++ assigned_vars e2
@@ -139,7 +136,6 @@ Fixpoint subst (x : string) (v : val) (e : expr) : expr :=
   | Var y => if bool_decide (x = y) then Val v else Var y
   | Val v => Val v
   | BinOp e1 o e2 => BinOp (subst x v e1) o (subst x v e2)
-  | Malloc e => Malloc (subst x v e)
   | Load e => Load (subst x v e)
   | Store e1 e2 => Store (subst x v e1) (subst x v e2)
   | If e e1 e2 => If (subst x v e) (subst x v e1) (subst x v e2)
@@ -161,7 +157,6 @@ Fixpoint subst_map (x : gmap string val) (e : expr) : expr :=
   | Var y => if x !! y is Some v then Val v else Var y
   | Val v => Val v
   | BinOp e1 o e2 => BinOp (subst_map x e1) o (subst_map x e2)
-  | Malloc e => Malloc (subst_map x e)
   | Load e => Load (subst_map x e)
   | Store e1 e2 => Store (subst_map x e1) (subst_map x e2)
   | If e e1 e2 => If (subst_map x e) (subst_map x e1) (subst_map x e2)
@@ -227,7 +222,6 @@ Qed.
 Inductive expr_ectx :=
 | BinOpLCtx (op : binop) (e2 : expr)
 | BinOpRCtx (v1 : val) (op : binop)
-| MallocCtx 
 | LoadCtx
 | StoreLCtx (e2 : expr)
 | StoreRCtx (v1 : val)
@@ -242,7 +236,6 @@ Definition expr_fill_item (Ki : expr_ectx) (e : expr) : expr :=
   match Ki with
   | BinOpLCtx op e2 => BinOp e op e2
   | BinOpRCtx v1 op => BinOp (Val v1) op e
-  | MallocCtx => Malloc e
   | LoadCtx => Load e
   | StoreLCtx e2 => Store e e2
   | StoreRCtx v1 => Store (Val v1) e
@@ -320,7 +313,6 @@ Fixpoint is_static_expr (allow_loc : bool) (e : expr) : bool :=
   | Var v => true
   | Val v => allow_loc || (if v is ValLoc _ then false else true)
   | BinOp e1 o e2 => is_static_expr allow_loc e1 && is_static_expr allow_loc e2
-  | Malloc e => is_static_expr allow_loc e
   | Load e1 => is_static_expr allow_loc e1
   | Store e1 e2 => is_static_expr allow_loc e1 && is_static_expr allow_loc e2
   | If e e1 e2 => is_static_expr allow_loc e && is_static_expr allow_loc e1 && is_static_expr allow_loc e2
@@ -786,10 +778,6 @@ Inductive head_step : rec_state → option rec_event → (rec_state → Prop) �
 | BinOpS v1 op v2 h fns:
   head_step (Rec (BinOp (Val v1) op (Val v2)) h fns) None (λ σ',
     ∃ v, eval_binop op v1 v2 = Some v ∧ σ' = Rec (Val v) h fns)
-| MallocS v1 h h' l fns: 
-  (∀n, v1 = ValNum n → heap_alloc_list [n] [l] h h') →
-  head_step (Rec (Malloc (Val v1) ) h fns) None 
-  (λ σ', ∃n, v1= ValNum n /\n>0 /\ σ' = Rec (Val (ValLoc l)) h' fns) 
 | LoadS v1 h fns:
   head_step (Rec (Load (Val v1)) h fns) None (λ σ',
     ∃ l v, v1 = ValLoc l ∧ h.(h_heap) !! l = Some v ∧ σ' = Rec (Val v) h fns)
@@ -945,7 +933,6 @@ Inductive static_expr : Set :=
 | SVar (v : string)
 | SVal (v : static_val)
 | SBinOp (e1 : static_expr) (o : binop) (e2 : static_expr)
-| SMalloc (e:static_expr)
 | SLoad (e : static_expr)
 | SStore (e1 e2 : static_expr)
 | SIf (e e1 e2 : static_expr)
@@ -957,7 +944,6 @@ Lemma static_expr_ind (P : static_expr → Prop) :
   (∀ (x : string), P (SVar x)) →
   (∀ (v : static_val), P (SVal v)) →
   (∀ (e1 : static_expr) (op : binop) (e2 : static_expr), P e1 → P e2 → P (SBinOp e1 op e2)) →
-  (∀ (e : static_expr), P e → P (SMalloc e)) →
   (∀ (e : static_expr), P e → P (SLoad e)) →
   (∀ (e1 e2 : static_expr), P e1 → P e2 → P (SStore e1 e2)) →
   (∀ (e1 e2 e3 : static_expr), P e1 → P e2 → P e3 → P (SIf e1 e2 e3)) →
@@ -966,8 +952,8 @@ Lemma static_expr_ind (P : static_expr → Prop) :
   ∀ (e : static_expr), P e.
 Proof.
   move => *. generalize dependent P => P. match goal with | e : static_expr |- _ => revert e end.
-  fix FIX 1. move => [ ^e] => ???????? Hcall.
-  9: { apply Hcall. apply Forall_true => ?. by apply: FIX. }
+  fix FIX 1. move => [ ^e] => ??????? Hcall.
+  8: { apply Hcall. apply Forall_true => ?. by apply: FIX. }
   all: auto.
 Qed.
 
@@ -976,7 +962,6 @@ Fixpoint static_expr_to_expr (e : static_expr) : expr :=
   | SVar v => Var v
   | SVal v => Val (static_val_to_val v)
   | SBinOp e1 o e2 => BinOp (static_expr_to_expr e1) o (static_expr_to_expr e2)
-  | SMalloc e => Malloc (static_expr_to_expr e)
   | SLoad e => Load (static_expr_to_expr e)
   | SStore e1 e2 => Store (static_expr_to_expr e1) (static_expr_to_expr e2)
   | SIf e e1 e2 => If (static_expr_to_expr e) (static_expr_to_expr e1) (static_expr_to_expr e2)
@@ -997,7 +982,6 @@ Fixpoint expr_to_static_expr (e : expr) : static_expr :=
   | Var v => SVar v
   | Val v => SVal (val_to_static_val v)
   | BinOp e1 o e2 => SBinOp (expr_to_static_expr e1) o (expr_to_static_expr e2)
-  | Malloc e => SMalloc (expr_to_static_expr e)
   | Load e => SLoad (expr_to_static_expr e)
   | Store e1 e2 => SStore (expr_to_static_expr e1) (expr_to_static_expr e2)
   | If e e1 e2 => SIf (expr_to_static_expr e) (expr_to_static_expr e1) (expr_to_static_expr e2)
@@ -1097,11 +1081,6 @@ Lemma rec_expr_fill_BinOpR (v1 : val) e2 op K e' `{!RecExprFill e2 K e'} :
   RecExprFill (BinOp (Val v1) op e2) (K ++ [BinOpRCtx v1 op]) e'.
 Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply rec_expr_fill_proof. Qed.
 Global Hint Resolve rec_expr_fill_BinOpR : typeclass_instances.
-
-Lemma rec_expr_fill_Malloc e1 K e' `{!RecExprFill e1 K e'} :
-  RecExprFill (Malloc e1) (K ++ [MallocCtx]) e'.
-Proof. constructor => /=. rewrite expr_fill_app /=. f_equal. apply rec_expr_fill_proof. Qed.
-Global Hint Resolve rec_expr_fill_Malloc : typeclass_instances.
 
 Lemma rec_expr_fill_Load e1 K e' `{!RecExprFill e1 K e'} :
   RecExprFill (Load e1) (K ++ [LoadCtx]) e'.
@@ -1304,32 +1283,6 @@ Proof.
   destruct v1, v2 => //. simplify_eq/=. naive_solver.
 Qed.
 Global Hint Resolve rec_step_BinopOffset_s | 5 : typeclass_instances.
-
-Lemma rec_step_Malloc_i fns h e K n `{!RecExprFill e K (Malloc (Val (ValNum n)))}:
-  TStepI rec_trans (Rec e h fns) (λ G, ∀l h', heap_alloc_list [n] [l] h h'→
-  (G true None (λ G',n>0/\ ( G' (Rec (expr_fill K (Val (ValLoc l))) h' fns))))).
-Proof.
-  destruct RecExprFill0; subst.
-  econs. intros. apply steps_impl_step_end. intros. apply prim_step_inv_head in H0. destruct H0 as [?[??]]. subst.
-  inversion H0; simplify_eq. 
-  eexists true,  _. 
-  split!. apply H. apply H6. reflexivity.  intros. simpl in H1. destruct!. naive_solver.   
-  solve_sub_redexes_are_values. reflexivity. 
-Qed.
-Global Hint Resolve rec_step_Malloc_i | 10 : typeclass_instances.
-
-Lemma rec_step_Malloc_s fns h e K v  `{!RecExprFill e K (Malloc (Val v) )}:
-  TStepS rec_trans (Rec e h fns) (λ G, (G None (λ G', ∃ l h', 
-  (∀n, v = ValNum n→heap_alloc_list [n] [l] h h' /\(n>0→ G' (Rec (expr_fill K (Val (ValLoc l))) h' fns)))))).
-Proof.
-  destruct RecExprFill0; subst.
-  econs. intros. destruct!.   split!; [done|]. intros. simpl in *. destruct!. eapply steps_spec_step_end. econs. 
-  done. econs.
-  2:{ simpl. naive_solver. }
-  intros.
-  apply H0 in H1. simpl. naive_solver. 
-Qed. 
-Global Hint Resolve rec_step_Malloc_s | 10 : typeclass_instances.
 
 Lemma rec_step_Load_i fns h e K l `{!RecExprFill e K (Load (Val (ValLoc l)))}:
   TStepI rec_trans (Rec e h fns) (λ G,
@@ -1893,10 +1846,6 @@ Proof.
     inv_all head_step => //.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
-    + tstep_s => *. split!. intros. apply H5 in H as H1. simpl in H1. split.
-      exact H1. intros. tend. split!;try done.
-      apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
-      by apply is_static_expr_expr_fill.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
@@ -1929,10 +1878,6 @@ Proof.
     rewrite -expr_fill_app.
     inv_all head_step => //.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
-      by apply is_static_expr_expr_fill.
-    + tstep_s => *. split!. intros. apply H5 in H as H1. simpl in H1. split.
-      exact H1. intros. tend. split!;try done.
-      apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
@@ -2012,10 +1957,6 @@ Proof.
       * tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.
-      * tstep_s => *. split!. intros. apply H5 in H as H'. split; try exact H'.
-        intros. tend. split!; [done..|].
-        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
-        by apply is_static_expr_expr_fill.
       * tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.
@@ -2057,10 +1998,6 @@ Proof.
       rewrite -expr_fill_app.
       inv_all/= head_step => //; destruct!.
       * tstep_s => *. tend. split!; [done..|].
-        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
-        by apply is_static_expr_expr_fill.
-      * tstep_s => *. split!. intros. apply H5 in H as H'. split; try exact H'.
-        intros. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.
       * tstep_s => *. tend. split!; [done..|].

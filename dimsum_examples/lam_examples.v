@@ -230,7 +230,7 @@ Proof.
   split!. intros. destruct!. split!; try done.
   unfold heap_alloc_prop. split. apply heap_fresh_is_fresh.
   done.
-  Unshelve. apply inhabitant.
+  Unshelve. exact ∅. 
 Qed. 
 
 
@@ -283,7 +283,7 @@ Proof.
       }
       
     - destruct!. 
-    Unshelve. auto. 
+    Unshelve. auto.
 Qed.
 
 Definition id_loop_spec : spec  lam_event (list fid) void :=
