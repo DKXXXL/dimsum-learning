@@ -1193,7 +1193,7 @@ Proof.
     intros.
     iSatStartBupd.
     iDestruct "Hinv" as "(%& mem_inv & heap_inv & regs_inv)".
-    iMod (r2a_heap_alloc_test with "[heap_inv] [mem_inv]") as "(heap_inv' & mem_inv' &val_rel)".
+    iMod (r2a_heap_alloc_mem with "[heap_inv] [mem_inv]") as "(heap_inv' & mem_inv' &val_rel)".
     all:try done.
     (* Do something like r2a_heap_update_shared*)
     iApply ("Hcont" with "[%] [%] [val_rel] [Hp] [%] Hrf") ; [by simplify_map_eq'|done | | | |].

@@ -1,6 +1,6 @@
 From iris.algebra.lib Require Import gmap_view.
 From dimsum.core Require Export proof_techniques prepost.
-From dimsum.core Require Import link.
+From dimsum.core Require Import link axioms.
 From dimsum.examples Require Import rec asm.
 
 Local Open Scope Z_scope.
@@ -427,12 +427,42 @@ Proof.
   iIntros (mem_prop) "Hauth".
   remember ((list_to_map ((λ x, (x,Some 0))<$> seqZ ml z)):gmap Z (option Z)) as mem'.
   iMod ((r2a_mem_alloc_big' mem mem') with "Hauth") as "(Hauth' & Hconstant)".
-  {admit. }
+  {unfold mem_alloc_prop in mem_prop. rewrite map_disjoint_spec. intros. subst.
+  apply elem_of_list_to_map_2 in H.
+  apply elem_of_list_fmap_2 in H.
+  destruct!. apply elem_of_seqZ in H2.
+  assert (mem!!(ml + (y0-ml)) = None). apply mem_prop. lia. 
+  assert (ml + (y0-ml) = y0) by lia.
+  rewrite H1 in H. rewrite H0 in H. done.
+  }
   iModIntro.
   iSplitL "Hauth'".
-  - admit.
-  - admit.
-Admitted.
+  - unfold mem_alloc_result. subst. 
+    assert (ml = ml + 0) by lia.
+    rewrite H.
+    rewrite - fmap_add_seqZ. rewrite -list_fmap_compose.
+    assert ((λ x : Z, (x, Some 0)) ∘ Z.add ml = (λ z0 : Z, (ml + 0 + z0, Some 0))).
+    apply AxFunctionalExtensionality. intros. simpl. f_equal. lia. rewrite H0. done.
+  - unfold r2a_mem_map. subst.  
+    destruct (decide (0 <= z)) eqn:?. clear Heqs.
+    rewrite - (Z2Nat.id z) . 2:done.
+    iInduction (Z.to_nat z) as [|z'] "IH". 
+    + rewrite (seqZ_nil _ _ ); simpl; done.
+    + rewrite seqZ_S. rewrite fmap_snoc list_to_map_app big_sepM_union. rewrite big_sepL_app.
+      iDestruct "Hconstant" as "(Hconst1 & Hconst2)".
+      iSplitL "Hconst1". iApply ("IH" with "Hconst1"). 
+      simpl. iSplitL;try done.
+      rewrite big_sepM_insert. 2: apply lookup_empty.
+      by iDestruct "Hconst2" as "($&?)".
+      set_unfold. rewrite map_disjoint_spec. intros.
+      rewrite lookup_insert_Some in H0. destruct!.
+      apply elem_of_list_to_map_2 in H.
+      apply elem_of_list_fmap_2 in H. destruct!.
+      apply elem_of_seqZ in H1.
+      assert (¬ ml + z' < ml + z') by lia. destruct!. done.
+    + assert (z ≤ 0) by lia.
+    rewrite (seqZ_nil _ _ H); simpl. done.
+Qed.
 
 Lemma r2a_mem_update' v' a v amem :
   r2a_mem_auth amem ∗ r2a_mem_constant a v ==∗ r2a_mem_auth (<[a := v']> amem) ∗ r2a_mem_constant a v'.
@@ -997,7 +1027,7 @@ Proof.
     simplify_map_eq. rewrite delete_alter. iFrame. iExists _. iFrame.
 Qed.
 
-Lemma r2a_heap_alloc_test h hl z mem ml ss ssz : 
+Lemma r2a_heap_alloc_mem h hl z mem ml ss ssz : 
   heap_is_fresh h hl →
   mem_alloc_prop z mem ml→
   r2a_heap_inv h -∗
