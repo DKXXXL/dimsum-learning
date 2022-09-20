@@ -35,6 +35,9 @@ Definition lexpr_op_pass (x: string) (e: lexpr_op) : M lexpr_op :=
     cassert UsedAsLoc (v1 ≠ VVar x);;
     cassert UsedAsLoc (v2 ≠ VVar x);;
     mret $ LBinOp v1 o v2
+  | LMalloc v1 => 
+    cassert UsedAsLoc (v1 ≠ VVar x);;
+    mret $ LMalloc v1
   | LLoad v =>
     if is_var v x then
       mret $ LVarVal v
@@ -317,7 +320,7 @@ Lemma pass_lexpr_op_correct ei' Ki ei Ks es es' x k (l: loc) n hi hs fns1 fns2 v
 Proof.
   intros Hcalls Hcont Hsat Hxs Hxi Hsub Hl Hrun.
   destruct Hfill1 as [->], Hfill2 as [->].
-  destruct es' as [v|v1 op v2|v|v1 v2|y vs]; simpl in Hrun.
+  destruct es' as [v|v1 op v2|v|v|v1 v2|y vs]; simpl in Hrun.
   - simplify_crun_eq.
     apply: lexpr_tsim_var_val; eauto; clear Hsat.
     intros v1 v2 _ _ Hsat; simpl.
@@ -334,6 +337,36 @@ Proof.
     iSatStop. tstep_i. split!.
     eapply Hcont; [done..|].
     iSatMono. iFrame.
+  - simplify_crun_eq.
+    apply: lexpr_tsim_var_val; eauto; clear Hsat.
+    intros v' w' _ _ Hsat; simpl.
+    destruct v' eqn:?, w' eqn:?.
+    all: try (iSatStart; iIntros "(? & #v_bij & ?)"; iDestruct "v_bij" as %?; done).
+    2,3: tstep_s; eexists _,_; intros; done.
+    inversion Heqv0.
+    destruct (decide ((z0>0)%Z)) eqn:?.
+    2:{ tstep_s. eexists _,_; intros;split; last first. inversion H0=> /=. rewrite -H2. intros;done.
+    split!. apply heap_fresh_is_fresh. inversion H0. naive_solver. }
+    iSatStart. iIntros "(vs_bij & #v_bij & h_bij & #v_bij' & h_bij' & r' &rf' )".
+    inversion H.
+    iDestruct "v_bij" as %?. subst. iSatStop.
+    tstep_i. intros. destruct H1 as [? [?[?[?[??]]]]].
+    assert (heap_alloc_list [z0] [l0] hi h') by naive_solver.
+    clear H1 H2 H3 H4.
+    split!.
+    tstep_s. 
+    remember (heap_fresh ∅ hs) as l1.
+    remember (heap_alloc hs l1 z0) as hs'.
+    exists l1, hs'. intros. split!. subst. apply heap_fresh_is_fresh. naive_solver.
+    assert (heap_alloc_list [z0] [l1] hs hs').  
+    split!. rewrite Heql1; apply heap_fresh_is_fresh.
+    intros. eapply Hcont;[done..|].
+    iSatMonoBupd.
+    iFrame.
+    iMod ((heap_bij_inv_alloc_list _ _ _ _ _ _ _ H5 H2) with  "[$]") as "(? & l_bij)".
+    iModIntro. iFrame. iSimpl in "l_bij". iDestruct "l_bij" as  "($ & ?)".
+    iExact "v_bij'".
+    Unshelve. all: apply inhabitant. 
   - simplify_crun_eq.
     rewrite is_var_dec bool_decide_decide in Hrun.
     destruct decide; simplify_crun_eq.

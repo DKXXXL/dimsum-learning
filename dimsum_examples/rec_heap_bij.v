@@ -1214,7 +1214,7 @@ Lemma rec_heap_bij_sim_refl_static vss vsi e es ei hi hs n b Ki Ks fns1 fns2 r r
   satisfiable (heap_bij_inv hi hs ∗ ([∗ map] v1;v2 ∈ vsi; vss, val_in_bij v1 v2) ∗ r ∗ rf) →
   Rec ei hi fns1 ⪯{rec_trans, rec_heap_bij_trans rec_trans, n, b} (SMProg, Rec es hs fns2, (PPInside, (), uPred_shrink rf)).
 Proof.
-  induction e as [x|v|e1 op e2 IH1 IH2|e IH|e1 e2 IH1 IH2|e e1 e2 IH IH1 IH2| x e1 e2 IH1 IH2| f args IH| | | |] in vss, vsi, hi, hs, n, b, Ks, Ki, es, ei, Hfill1, Hfill2, r, rf |-*;
+  induction e as [x|v|e1 op e2 IH1 IH2|e IH|e IH|e1 e2 IH1 IH2|e e1 e2 IH IH1 IH2| x e1 e2 IH1 IH2| f args IH| | | |] in vss, vsi, hi, hs, n, b, Ks, Ki, es, ei, Hfill1, Hfill2, r, rf |-*;
     intros Hsub Hcall Hcont Hstatic Hsat;
     destruct Hfill1 as [->], Hfill2 as [->].
   - simpl. destruct (vss !! x) as [v|] eqn: Hlook; last first.
@@ -1240,6 +1240,39 @@ Proof.
     iDestruct (eval_binop_bij with "Hv Hw") as "[%u [% Hu]]"; first done.
     iSatStop. tstep_i. split!. eapply Hcont; first by etrans.
     iSatMono. iFrame.
+  - simpl. simpl in Hstatic.
+    apply: IH; simpl; [eauto..|]; last first. 
+    { iSatMono. iIntros "($ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
+    iSatClear. intros n' vi vs hi' hs' rf' b' Hn' Hsat; simpl.
+    destruct vi eqn:?, vs eqn:?;try (iSatStart; iIntros "(? & #v_bij & ? & ?)"; done).
+    2, 3:tstep_s; split!;intros;done. 
+    destruct (decide ((z0>0)%Z)) eqn:?.
+    2:{tstep_s. exists (heap_fresh ∅ hs'). eexists (heap_alloc hs' _ z0).
+      intros. inversion H. split!. apply heap_fresh_is_fresh. reflexivity.
+      intros; subst; done. } 
+    iSatStart.
+    iIntros "(h_inv & %v_bij & map_v_bij & rf')".
+    subst. iSatStop.
+    tstep_i.
+    intros.
+    destruct H as [l0 [ls' [ H1[H2 [H3 H4]]]]]. 
+    assert (heap_alloc_list [z0] [l0] hi' h') by naive_solver.
+    split!.
+    inversion H1.
+    clear H1 H2 H3 H4.
+    tstep_s.
+    exists (heap_fresh ∅ hs'). eexists (heap_alloc hs' _ z0).
+    intros. split!. apply heap_fresh_is_fresh. inversion H0. auto.
+    intros.
+    remember (heap_fresh ∅ hs') as l1.
+    remember (heap_alloc hs' l1 z0) as hs''.
+    assert (heap_alloc_list [z0] [l1] hs' hs'').
+    simpl. split!. rewrite Heql1. apply heap_fresh_is_fresh. 
+    apply Hcont. auto. 
+    iSatMonoBupd. iDestruct "map_v_bij" as "(_ & $)". iFrame.
+    iMod ((heap_bij_inv_alloc_list _ _ _ _ _ _ _ H H2) with  "[$]") as "(? & l_bij)".
+    iModIntro. iFrame.
+    iSimpl. iSimpl in "l_bij". iDestruct "l_bij" as "($ & ?)". 
   - simpl. simpl in Hstatic.
     apply: IH; simpl; [eauto..|]; last first.
     { iSatMono. iIntros "($ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
@@ -1308,7 +1341,7 @@ Proof.
   - done.
   - done.
   - done.
-Qed.
+Admitted.
 
 Lemma rec_heap_bij_refl fns:
   trefines (rec_mod fns) (rec_heap_bij (rec_mod fns)).

@@ -43,6 +43,9 @@ Fixpoint pass (ren : gmap string string) (e : static_expr) (s : N) : (N * static
       let p1 := pass ren e1 s in
       let p2 := pass ren e2 p1.1 in
       (p2.1, SBinOp p1.2 o p2.2)
+  | SMalloc e1 => 
+      let p1 := pass ren e1 s in 
+      (p1.1, SMalloc p1.2)
   | SLoad e1 =>
       let p1 := pass ren e1 s in
       (p1.1, SLoad p1.2)
@@ -131,6 +134,16 @@ Proof.
   - apply: IHes'1; [done|done|] => /= ??.
     apply: IHes'2; [done|rewrite pass_state;naive_solver lia|] => /= ??.
     tstep_s => ??. tstep_i. split!. by apply tsim_mono_b_false.
+  - apply: IHes'; try done. intros => /=.
+    destruct v' eqn:?.
+    2,3: tstep_s;split!;intros; done.
+    destruct (decide (z>0)) eqn:?.
+    2:{ tstep_s. split!. intros. inversion H. split;last first. intros. rewrite -H1 in H0; done.
+      split!. apply heap_fresh_is_fresh. }
+    tstep_i. intros. destruct!. split!.
+    tstep_s. split!. intros. split!;last first. intros. by apply tsim_mono_b_false.
+    inversion H0. all:done. 
+    Unshelve. all: apply inhabitant. 
   - apply: IHes'; [done|done|] => /= ??.
     tstep_s => *. subst. tstep_i. split!. by apply tsim_mono_b_false.
   - apply: IHes'1; [done|done|] => /= ??.
