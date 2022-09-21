@@ -224,11 +224,11 @@ Section sim_tgt.
   Qed.
 
   Lemma sim_tgt_bind σ Π :
-    σ ≈{ m }≈>ₜ (λ κ Pσ', ⌜κ = None⌝ ∗ Pσ' (λ σ', σ' ≈{ m }≈>ₜ Π)) -∗
+    σ ≈{ m }≈>ₜ (λ κ Pσ', Π κ Pσ' ∨ ⌜κ = None⌝ ∗ Pσ' (λ σ', σ' ≈{ m }≈>ₜ Π)) -∗
     σ ≈{ m }≈>ₜ Π.
   Proof.
     iIntros "HΠ".
-    pose (F := (λ σ Ψ, ∀ Π, (∀ κ Pσ, Ψ κ Pσ -∗ ⌜κ = @None EV⌝ ∗ Pσ (λ σ', σ' ≈{ m }≈>ₜ Π)) -∗ σ ≈{ m }≈>ₜ Π)%I).
+    pose (F := (λ σ Ψ, ∀ Π, (∀ κ Pσ, Ψ κ Pσ -∗ Π κ Pσ ∨ ⌜κ = @None EV⌝ ∗ Pσ (λ σ', σ' ≈{ m }≈>ₜ Π)) -∗ σ ≈{ m }≈>ₜ Π)%I).
     iAssert (∀ Π, σ ≈{ m }≈>ₜ Π -∗ F σ Π)%I as "Hgen"; last first.
     { iApply ("Hgen" with "HΠ"). iIntros (??) "?". done. }
     iIntros (?) "Hsim".
@@ -237,12 +237,14 @@ Section sim_tgt.
     rewrite sim_tgt_unfold. iIntros "#?".
     iMod ("Hsim" with "[$]") as "[HΠ|Hsim]".
     - iDestruct "HΠ" as (?) "[? HP1]".
-      iDestruct ("Hc" with "[$]") as (?) "HP2".
+      iDestruct ("Hc" with "[$]") as "[HΠ | [% HP2]]".
+      { iModIntro. iLeft. by iApply (bi_mono1_intro with "HΠ"). }
       iDestruct ("HP1" with "[$]") as "Hsim".
       rewrite sim_tgt_unfold. by iApply "Hsim".
     - iRight. iIntros "!>" (???). iMod ("Hsim" with "[//]") as "Hsim". do 2 iModIntro.
       iDestruct "Hsim" as "[[% [? HP1]]|[% [% [% Hsim]]]]".
-      + iDestruct ("Hc" with "[$]") as (?) "HP2".
+      + iDestruct ("Hc" with "[$]") as "[HΠ | [% HP2]]".
+        { iLeft. by iApply (bi_mono1_intro with "HΠ"). }
         iDestruct ("HP1" with "[$]") as (??) "?". iRight. by iSplit!.
       + iRight. iSplit!; [done|]. by iApply "Hsim".
   Qed.
@@ -476,11 +478,11 @@ Section sim_src.
   Qed.
 
   Lemma sim_src_bind σ Π :
-    σ ≈{ m }≈>ₛ (λ κ σ', ⌜κ = None⌝ ∗ σ' ≈{ m }≈>ₛ Π) -∗
+    σ ≈{ m }≈>ₛ (λ κ σ', Π κ σ' ∨ ⌜κ = None⌝ ∗ σ' ≈{ m }≈>ₛ Π) -∗
     σ ≈{ m }≈>ₛ Π.
   Proof.
     iIntros "HΠ".
-    pose (F := (λ σ Ψ, ∀ Π, (∀ κ (σ' : m_state m), Ψ κ σ' -∗ ⌜κ = @None EV⌝ ∗ σ' ≈{ m }≈>ₛ Π) -∗ σ ≈{ m }≈>ₛ Π)%I).
+    pose (F := (λ σ Ψ, ∀ Π, (∀ κ (σ' : m_state m), Ψ κ σ' -∗ Π κ σ' ∨ ⌜κ = @None EV⌝ ∗ σ' ≈{ m }≈>ₛ Π) -∗ σ ≈{ m }≈>ₛ Π)%I).
     iAssert (∀ Π, σ ≈{ m }≈>ₛ Π -∗ F σ Π)%I as "Hgen"; last first.
     { iApply ("Hgen" with "HΠ"). iIntros (??) "?". done. }
     iIntros (?) "Hsim".
@@ -488,10 +490,11 @@ Section sim_src.
     iIntros "!>" (??) "Hsim". iIntros (?) "Hc".
     rewrite sim_src_unfold. iIntros "#?".
     iMod ("Hsim" with "[$]") as "[?|[% [% [% Hsim]]]]".
-    - iSpecialize ("Hc" with "[$]"). iDestruct "Hc" as "[_ Hc]". rewrite sim_src_unfold. by iApply "Hc".
+    - iSpecialize ("Hc" with "[$]"). iDestruct "Hc" as "[$|[_ Hc]]"; [done|].
+      rewrite sim_src_unfold. by iApply "Hc".
     - iModIntro. iRight. iExists _, _. iSplit; [done|]. iIntros (??). iMod ("Hsim" with "[//]") as "Hsim".
       case_match.
-      + by iDestruct ("Hc" with "[$]") as "[% ?]".
+      + by iDestruct ("Hc" with "[$]") as "[$|[% ?]]".
       + iModIntro. by iApply "Hsim".
   Qed.
 

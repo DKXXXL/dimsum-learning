@@ -2,7 +2,6 @@ From iris.algebra Require Import big_op gmap frac agree dfrac_agree.
 From iris.base_logic.lib Require Import ghost_map.
 From dimsum.core.iris Require Export iris.
 From dimsum.examples Require Export rec.
-From dimsum.core Require Import spec_mod.
 From dimsum.examples Require Import memmove.
 Set Default Proof Using "Type".
 
@@ -50,8 +49,14 @@ Section link.
       match κ with
             | None => Π None (λ P, Pσ (λ σ1', P (MLFLeft, s, σ1', σ2)))
             | Some e => ∀ p' s' e' ok, ⌜R SPLeft s e.2 p' s' e' ok⌝ -∗ ⌜e.1 = Outgoing⌝ -∗
-                 Π (if p' is SPNone then Some (Outgoing, e') else None)
-                 (λ P, Pσ (λ σ1', P (link_to_case ok p' e', s', σ1', σ2)))
+                 if p' is SPNone then
+                   Π (Some (Outgoing, e')) (λ P, Pσ (λ σ1', P (link_to_case ok p' e', s', σ1', σ2)))
+                 else
+                   (* It is ok to use Pσ here directly since there
+                   cannot be a non-trivial angelic choice since the
+                   module emitted an event. (If this is a problem, one
+                   can use a disjunction here.) *)
+                   Pσ (λ σ1', (link_to_case ok p' e', s', σ1', σ2) ≈{link_trans R m1 m2}≈>ₜ Π)
             end%I.
 
   Lemma sim_tgt_link_left R m1 m2 s σ1 σ2 Π :
@@ -60,17 +65,26 @@ Section link.
   Proof.
     iIntros "Hsim".
     iApply (sim_tgt_bi_mono1 with "[-]").
+    iApply sim_tgt_bind.
     iApply sim_tgt_state_transform; [done|] => /=.
     iApply (sim_tgt_map with "[-]").
     iApply sim_tgt_seq_product_left.
     iApply (sim_tgt_bi_mono2 with "[-]").
     iApply (sim_tgt_wand with "Hsim").
     iIntros (κ ?) "Hsim". iIntros (??????). destruct κ; destruct!/=.
-    - inv_all @link_filter.
-      iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
-      iIntros (?) "HP". iApply (bi_mono1_intro with "HP").
-      iIntros (?) "?". iIntros ([[[??]?]?]?). simplify_eq/=. by repeat case_match; simplify_eq/=.
-    - iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
+    - inv_all @link_filter. iSpecialize ("Hsim" $! s'). case_match.
+      + iRight. iSplit!.
+        iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
+        iIntros (?) "HP". iIntros ([[[??]?]?] ?). simplify_eq/=. repeat case_match => //; simplify_eq/=.
+        all: iApply (sim_tgt_wand with "HP []"); iIntros; by iApply bi_mono1_intro0.
+      + iRight. iSplit!.
+        iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
+        iIntros (?) "HP". iIntros ([[[??]?]?] ?). simplify_eq/=. repeat case_match => //; simplify_eq/=.
+        all: iApply (sim_tgt_wand with "HP []"); iIntros; by iApply bi_mono1_intro0.
+      + iLeft. iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
+        iIntros (?) "HP". iApply (bi_mono1_intro with "HP").
+        iIntros (?) "?". iIntros ([[[??]?]?]?). simplify_eq/=. by repeat case_match; simplify_eq/=.
+    - iLeft. iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
       iIntros (?) "HP". iApply (bi_mono1_intro with "HP").
       iIntros (?) "?". iIntros ([[[??]?]?]?). simplify_eq/=. done.
   Qed.
@@ -79,23 +93,24 @@ Section link.
     (σ1 ≈{m1}≈>ₜ λ κ Pσ,
       match κ with
       | None => Π None (λ P, Pσ (λ σ1', P (MLFRecvL e, s, σ1', σ2)))
-      | Some e' => ⌜e' = (Incoming, e)⌝ -∗ Π None (λ P, Pσ (λ σ1', P (MLFLeft, s, σ1', σ2)))
+      | Some e' => ⌜e' = (Incoming, e)⌝ -∗ Pσ (λ σ1', (MLFLeft, s, σ1', σ2) ≈{link_trans R m1 m2}≈>ₜ Π)
       end%I) -∗
     (MLFRecvL e, s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
   Proof.
     iIntros "Hsim".
     iApply (sim_tgt_bi_mono1 with "[-]").
+    iApply (sim_tgt_bind with "[-]").
     iApply sim_tgt_state_transform; [done|] => /=.
     iApply (sim_tgt_map with "[-]").
     iApply sim_tgt_seq_product_left.
     iApply (sim_tgt_bi_mono2 with "[-]").
     iApply (sim_tgt_wand with "Hsim").
     iIntros (κ ?) "Hsim". iIntros (??????). destruct κ; destruct!/=.
-    - inv_all @link_filter.
+    - inv_all @link_filter. iRight. iSplit!.
       iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
-      iIntros (?) "HP". iApply (bi_mono1_intro with "HP").
-      iIntros (?) "?". iIntros ([[[??]?]?]?). by simplify_eq/=.
-    - iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
+      iIntros (?) "HP".  iIntros ([[[??]?]?]?). simplify_eq/=.
+      iApply (sim_tgt_wand with "HP []"); iIntros; by iApply bi_mono1_intro0.
+    - iLeft. iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
       iIntros (?) "HP". iApply (bi_mono1_intro with "HP").
       iIntros (?) "?". iIntros ([[[??]?]?]?). simplify_eq/=. done.
   Qed.
@@ -108,8 +123,14 @@ Section link.
       match κ with
             | None => Π None (λ P, Pσ (λ σ2', P (MLFRight, s, σ1, σ2')))
             | Some e => ∀ p' s' e' ok, ⌜R SPRight s e.2 p' s' e' ok⌝ -∗ ⌜e.1 = Outgoing⌝ -∗
-                 Π (if p' is SPNone then Some (Outgoing, e') else None)
-                 (λ P, Pσ (λ σ2', P (link_to_case ok p' e', s', σ1, σ2')))
+                 if p' is SPNone then
+                   Π (Some (Outgoing, e')) (λ P, Pσ (λ σ2', P (link_to_case ok p' e', s', σ1, σ2')))
+                 else
+                   (* It is ok to use Pσ here directly since there
+                   cannot be a non-trivial angelic choice since the
+                   module emitted an event. (If this is a problem, one
+                   can use a disjunction here.) *)
+                   Pσ (λ σ2', (link_to_case ok p' e', s', σ1, σ2') ≈{link_trans R m1 m2}≈>ₜ Π)
             end%I.
 
   Lemma sim_tgt_link_right R m1 m2 s σ1 σ2 Π :
@@ -118,17 +139,26 @@ Section link.
   Proof.
     iIntros "Hsim".
     iApply (sim_tgt_bi_mono1 with "[-]").
+    iApply sim_tgt_bind.
     iApply sim_tgt_state_transform; [done|] => /=.
     iApply (sim_tgt_map with "[-]").
     iApply sim_tgt_seq_product_right.
     iApply (sim_tgt_bi_mono2 with "[-]").
     iApply (sim_tgt_wand with "Hsim").
     iIntros (κ ?) "Hsim". iIntros (??????). destruct κ; destruct!/=.
-    - inv_all @link_filter.
-      iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
-      iIntros (?) "HP". iApply (bi_mono1_intro with "HP").
-      iIntros (?) "?". iIntros ([[[??]?]?]?). simplify_eq/=. by repeat case_match; simplify_eq/=.
-    - iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
+    - inv_all @link_filter. iSpecialize ("Hsim" $! s'). case_match.
+      + iRight. iSplit!.
+        iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
+        iIntros (?) "HP". iIntros ([[[??]?]?] ?). simplify_eq/=. repeat case_match => //; simplify_eq/=.
+        all: iApply (sim_tgt_wand with "HP []"); iIntros; by iApply bi_mono1_intro0.
+      + iRight. iSplit!.
+        iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
+        iIntros (?) "HP". iIntros ([[[??]?]?] ?). simplify_eq/=. repeat case_match => //; simplify_eq/=.
+        all: iApply (sim_tgt_wand with "HP []"); iIntros; by iApply bi_mono1_intro0.
+      + iLeft. iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
+        iIntros (?) "HP". iApply (bi_mono1_intro with "HP").
+        iIntros (?) "?". iIntros ([[[??]?]?]?). simplify_eq/=. by repeat case_match; simplify_eq/=.
+    - iLeft. iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
       iIntros (?) "HP". iApply (bi_mono1_intro with "HP").
       iIntros (?) "?". iIntros ([[[??]?]?]?). simplify_eq/=. done.
   Qed.
@@ -137,306 +167,29 @@ Section link.
     (σ2 ≈{m2}≈>ₜ λ κ Pσ,
       match κ with
       | None => Π None (λ P, Pσ (λ σ2', P (MLFRecvR e, s, σ1, σ2')))
-      | Some e' => ⌜e' = (Incoming, e)⌝ -∗ Π None (λ P, Pσ (λ σ2', P (MLFRight, s, σ1, σ2')))
+      | Some e' => ⌜e' = (Incoming, e)⌝ -∗ Pσ (λ σ2', (MLFRight, s, σ1, σ2') ≈{link_trans R m1 m2}≈>ₜ Π)
       end%I) -∗
     (MLFRecvR e, s, σ1, σ2) ≈{link_trans R m1 m2}≈>ₜ Π.
   Proof.
     iIntros "Hsim".
     iApply (sim_tgt_bi_mono1 with "[-]").
+    iApply sim_tgt_bind.
     iApply sim_tgt_state_transform; [done|] => /=.
     iApply (sim_tgt_map with "[-]").
     iApply sim_tgt_seq_product_right.
     iApply (sim_tgt_bi_mono2 with "[-]").
     iApply (sim_tgt_wand with "Hsim").
     iIntros (κ ?) "Hsim". iIntros (??????). destruct κ; destruct!/=.
-    - inv_all @link_filter.
+    - inv_all @link_filter. iRight. iSplit!.
       iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
-      iIntros (?) "HP". iApply (bi_mono1_intro with "HP").
-      iIntros (?) "?". iIntros ([[[??]?]?]?). by simplify_eq/=.
-    - iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
+      iIntros (?) "HP". iIntros ([[[??]?]?]?). simplify_eq/=.
+      iApply (sim_tgt_wand with "HP []"); iIntros; by iApply bi_mono1_intro0.
+    - iLeft. iApply (bi_mono1_intro with "[Hsim]"); [by iApply "Hsim"|].
       iIntros (?) "HP". iApply (bi_mono1_intro with "HP").
       iIntros (?) "?". iIntros ([[[??]?]?]?). simplify_eq/=. done.
   Qed.
 End link.
 
-Definition spec_state_interp {Σ EV S} (state_interp : S → iProp Σ) : (spec EV S void * S) → option S → iProp Σ :=
-  λ s os, if os is Some s' then ⌜s.2 = s'⌝%I else state_interp s.2.
-
-Arguments spec_state_interp _ _ _ _ _ !_ /.
-
-Program Definition spec_mod_lang {Σ} (EV S : Type) (state_interp : S → iProp Σ)  : mod_lang EV Σ := {|
-  mexpr := spec EV S void;
-  mectx := unit;
-  mstate := S;
-  mfill _ := id;
-  mcomp_ectx _ _:= tt;
-  mtrans := spec_trans EV S;
-  mexpr_rel σ t := σ.1 ≡ t;
-  mstate_interp := spec_state_interp state_interp;
-|}.
-Next Obligation. done. Qed.
-
-Definition spec_mod_lang_unit {Σ} (EV : Type) : mod_lang EV Σ :=
-  spec_mod_lang EV unit (λ _, True%I).
-
-Section spec.
-  Context `{!dimsumGS Σ} {EV S : Type} {state_interp : S → iProp Σ}.
-
-  Global Instance sim_tgt_expr_spec_proper :
-    Proper ((≡) ==> (=) ==> (=) ==> (=) ==> (⊣⊢)) (sim_tgt_expr (Λ:=spec_mod_lang EV S state_interp)).
-  Proof.
-    move => ?? ? ?? -> ?? -> ?? ->.
-    Local Transparent sim_tgt_expr.
-    Local Typeclasses Transparent sim_tgt_expr.
-    iSplit; iIntros "HP" (?) "?"; iIntros (??); destruct!/=; iApply ("HP" with "[$]"); iPureIntro; split!.
-    all: by etrans; [done|].
-    Unshelve. all: exact tt.
-  Qed.
-
-  Global Instance sim_src_expr_spec_proper :
-    Proper ((≡) ==> (=) ==> (=) ==> (=) ==> (⊣⊢)) (sim_src_expr (Λ:=spec_mod_lang EV S state_interp)).
-  Proof.
-    move => ?? ? ?? -> ?? -> ?? ->.
-    Local Transparent sim_src_expr.
-    Local Typeclasses Transparent sim_src_expr.
-    iSplit; iIntros "HP" (?) "?"; iIntros (??); destruct!/=; iApply ("HP" with "[$]"); iPureIntro; split!.
-    all: by etrans; [done|].
-    Unshelve. all: exact tt.
-  Qed.
-
-  Let X := (spec_mod_lang EV _ state_interp).
-  Local Canonical Structure X.
-
-  Lemma sim_tgt_TVis k Π Φ e os :
-    (▷ₒ Π (Some e) (λ P, (∀ σ, σ ⤇ₜ (λ Π, TGT k tt @ ? os [{ Π }] {{ Φ }}) -∗ P σ))) -∗
-    TGT (Spec.bind (TVis e) k) @ ? os [{ Π }] {{ Φ }}.
-  Proof.
-    iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_tgt_expr_bi_mono.
-    iApply sim_tgt_expr_step. iIntros (?[??]?? Heq Hstep) "Hs". simplify_eq/=. iModIntro.
-    inv/= Hstep.
-    all: revert select (_ ≡ _); rewrite {1}Heq; try by move => /spec_equiv_inv.
-    move => /spec_equiv_inv //= [? Heq2]. simplify_eq/=.
-    iModIntro. iApply (bi_mono1_intro with "Hsim"). iIntros (?) "Hσ".
-    iSplit!. iIntros "Htgt". iApply "Hσ". by iApply "Htgt".
-  Qed.
-
-  Lemma sim_src_TVis k Π Φ e os :
-    (∀ σ, σ ⤇ₛ (λ Π, SRC k tt @ ? os [{ Π }] {{ Φ }}) -∗ Π (Some e) σ) -∗
-    SRC (Spec.bind (TVis e) k) @ ? os [{ Π }] {{ Φ }}.
-  Proof.
-    iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_src_expr_step. iIntros (?[??]?) "?". simplify_eq/=. iModIntro.
-    iExists _, _. iSplit. { iPureIntro. by econs. }
-    iIntros ([??] ?) "!> HΦ". simplify_eq.
-    iApply "Hsim". iIntros (?) "?". by iApply ("HΦ" with "[//] [$]").
-  Qed.
-
-  Lemma sim_tgt_TGet k Π Φ s :
-    (▷ₒ TGT (k s) @ s [{ Π }] {{ Φ }}) -∗
-    TGT (Spec.bind TGet k) @ s [{ Π }] {{ Φ }}.
-  Proof.
-    iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_tgt_expr_step_None. iIntros (?[??]?? Heq Hstep ?). simplify_eq/=. iModIntro.
-    inv/= Hstep.
-    all: revert select (_ ≡ _); rewrite {1}Heq; try by move => /spec_equiv_inv.
-    move => /spec_equiv_inv //= Heq2. simplify_eq/=.
-    iModIntro. rewrite Heq2. iSplit!. by iFrame.
-  Qed.
-
-  Lemma sim_src_TGet k Π Φ s :
-    SRC (k s) @ s [{ Π }] {{ Φ }} -∗
-    SRC (Spec.bind TGet k) @ s [{ Π }] {{ Φ }}.
-  Proof.
-    iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_src_expr_step_None. iIntros (?[??]? ?). simplify_eq/=. iModIntro.
-    iExists _. iSplit. { iPureIntro. by econs. }
-    iIntros ([??] ?) "!>". simplify_eq. iSplit!. by iFrame.
-  Qed.
-
-  Lemma sim_tgt_TPut k Π Φ s s' :
-    (▷ₒ TGT (k tt) @ s' [{ Π }] {{ Φ }}) -∗
-    TGT (Spec.bind (TPut s') k) @ s [{ Π }] {{ Φ }}.
-  Proof.
-    iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_tgt_expr_step_None. iIntros (?[??]?? Heq Hstep ?). simplify_eq/=. iModIntro.
-    inv/= Hstep.
-    all: revert select (_ ≡ _); rewrite {1}Heq; try by move => /spec_equiv_inv.
-    move => /spec_equiv_inv //= [? Heq2]. simplify_eq/=.
-    iModIntro. rewrite Heq2. iSplit!. by iFrame.
-  Qed.
-
-  Lemma sim_src_TPut k Π Φ s s' :
-    SRC (k tt) @ s' [{ Π }] {{ Φ }} -∗
-    SRC (Spec.bind (TPut s') k) @ s [{ Π }] {{ Φ }}.
-  Proof.
-    iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_src_expr_step_None. iIntros (?[??]? ?). simplify_eq/=. iModIntro.
-    iExists _. iSplit. { iPureIntro. by econs. }
-    iIntros ([??] ?) "!>". simplify_eq. iSplit!. by iFrame.
-  Qed.
-
-  Lemma sim_tgt_TAll {T} x k Π Φ os :
-    (▷ₒ TGT (k x) @ ? os [{ Π }] {{ Φ }}) -∗
-    TGT (Spec.bind (TAll T) k) @ ? os [{ Π }] {{ Φ }}.
-  Proof.
-    iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_tgt_expr_step_None. iIntros (?[??]?? Heq Hstep) "Hs". simplify_eq/=. iModIntro.
-    inv/= Hstep.
-    all: revert select (_ ≡ _); rewrite {1}Heq; try by move => /spec_equiv_inv.
-    move => /spec_equiv_inv //= [? Heq2]. simplify_eq/=.
-    iModIntro. rewrite Heq2. iSplit!. iFrame.
-  Qed.
-
-  Lemma sim_src_TAll {T} k Π Φ os :
-    (∀ x, SRC (k x) @ ? os [{ Π }] {{ Φ }}) -∗
-    SRC (Spec.bind (TAll T) k) @ ? os [{ Π }] {{ Φ }}.
-  Proof.
-    iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_src_expr_step_None. iIntros (?[??]?) "?". simplify_eq/=. iModIntro.
-    iExists _. iSplit. { iPureIntro. by econs. }
-    iIntros ([??] [??]) "!>". simplify_eq. iSplit!. iFrame. iApply "Hsim".
-  Qed.
-
-  Lemma sim_tgt_TExist {T} k Π Φ os :
-    (∀ x, ▷ₒ TGT (k x) @ ? os [{ Π }] {{ Φ }}) -∗
-    TGT (Spec.bind (TExist T) k) @ ? os [{ Π }] {{ Φ }}.
-  Proof.
-    iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_tgt_expr_step_None. iIntros (?[??]?? Heq Hstep) "Hs". simplify_eq/=. iModIntro.
-    inv/= Hstep.
-    all: revert select (_ ≡ _); rewrite {1}Heq; try by move => /spec_equiv_inv.
-    move => /spec_equiv_inv //= [? Heq2]. simplify_eq/=. iSpecialize ("Hsim" $! _).
-    iModIntro. rewrite Heq2. iSplit!. iFrame.
-  Qed.
-
-  Lemma sim_src_TExist {T} x k Π Φ os :
-    SRC (k x) @ ? os [{ Π }] {{ Φ }} -∗
-    SRC (Spec.bind (TExist T) k) @ ? os [{ Π }] {{ Φ }}.
-  Proof.
-    iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_src_expr_step_None. iIntros (?[??]?) "?". simplify_eq/=. iModIntro.
-    iExists _. iSplit. { iPureIntro. by econs. }
-    iIntros ([??] ?) "!>". simplify_eq. iSplit!. iFrame.
-  Qed.
-
-  (* TODO: Can these proofs be derived from the proofs before? *)
-  Lemma sim_tgt_TNb T (k : T → _) Π Φ os :
-    ⊢ TGT (Spec.bind TNb k) @ ? os [{ Π }] {{ Φ }}.
-  Proof.
-    rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_tgt_expr_step_None. iIntros (?[??]?? Heq Hstep) "Hs". simplify_eq/=. iModIntro.
-    inv/= Hstep.
-    all: revert select (_ ≡ _); rewrite {1}Heq; try by move => /spec_equiv_inv.
-    move => /spec_equiv_inv //= [? Heq2]. simplify_eq/=. destruct_all void.
-  Qed.
-
-  Lemma sim_tgt_TNb_end Π Φ os :
-    ⊢ TGT TNb @ ? os [{ Π }] {{ Φ }}.
-  Proof.
-    iApply sim_tgt_expr_step_None. iIntros (?[??]?? Heq Hstep) "Hs". simplify_eq/=. iModIntro.
-    inv/= Hstep.
-    all: revert select (_ ≡ _); rewrite {1}Heq; try by move => /spec_equiv_inv.
-    move => /spec_equiv_inv //= [? Heq2]. simplify_eq/=. destruct_all void.
-  Qed.
-
-  Lemma sim_src_TUb T (k : T → _) Π Φ os :
-    ⊢ SRC (Spec.bind TUb k) @ ? os [{ Π }] {{ Φ }}.
-  Proof.
-    rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_src_expr_step_None. iIntros (?[??]?) "?". simplify_eq/=. iModIntro.
-    iExists _. iSplit. { iPureIntro. by econs. }
-    iIntros ([??] [??]) "!>". destruct_all void.
-  Qed.
-
-  Lemma sim_src_TUb_end Π Φ os :
-    ⊢ SRC TUb @ ? os [{ Π }] {{ Φ }}.
-  Proof.
-    iApply sim_src_expr_step_None. iIntros (?[??]?) "?". simplify_eq/=. iModIntro.
-    iExists _. iSplit. { iPureIntro. by econs. }
-    iIntros ([??] [??]) "!>". destruct_all void.
-  Qed.
-
-  Lemma sim_tgt_TAssume k Π Φ (P : Prop) os :
-    P →
-    (▷ₒ TGT (k tt) @ ? os [{ Π }] {{ Φ }}) -∗
-    TGT (Spec.bind (TAssume P) k) @ ? os [{ Π }] {{ Φ }}.
-  Proof.
-    iIntros (?) "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_tgt_expr_step_None. iIntros (?[??]?? Heq Hstep) "Hs". simplify_eq/=. iModIntro.
-    inv/= Hstep.
-    all: revert select (_ ≡ _); rewrite {1}Heq; try by move => /spec_equiv_inv.
-    move => /spec_equiv_inv //= [? Heq2]. simplify_eq/=.
-    iModIntro. rewrite Heq2. iSplit!. iFrame.
-    Unshelve. done.
-  Qed.
-
-  Lemma sim_src_TAssume k Π Φ P os :
-    (⌜P⌝ -∗ SRC (k tt) @ ? os [{ Π }] {{ Φ }}) -∗
-    SRC (Spec.bind (TAssume P) k) @ ? os [{ Π }] {{ Φ }}.
-  Proof.
-    iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_src_expr_step_None. iIntros (?[??]?) "?". simplify_eq/=. iModIntro.
-    iExists _. iSplit. { iPureIntro. by econs. }
-    iIntros ([??] [??]) "!>". simplify_eq. iSplit!. iFrame. by iApply "Hsim".
-  Qed.
-
-  Lemma sim_tgt_TAssert k Π Φ (P : Prop) os :
-    (⌜P⌝ -∗ ▷ₒ TGT (k tt) @ ? os [{ Π }] {{ Φ }}) -∗
-    TGT (Spec.bind (TAssert P) k) @ ? os [{ Π }] {{ Φ }}.
-  Proof.
-    iIntros "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_tgt_expr_step_None. iIntros (?[??]?? Heq Hstep) "Hs". simplify_eq/=. iModIntro.
-    inv/= Hstep.
-    all: revert select (_ ≡ _); rewrite {1}Heq; try by move => /spec_equiv_inv.
-    move => /spec_equiv_inv //= [? Heq2]. simplify_eq/=. iSpecialize ("Hsim" with "[//]").
-    iModIntro. rewrite Heq2. iSplit!. iFrame.
-  Qed.
-
-  Lemma sim_src_TAssert k Π Φ (P : Prop) os :
-    P →
-    SRC (k tt) @ ? os [{ Π }] {{ Φ }} -∗
-    SRC (Spec.bind (TAssert P) k) @ ? os [{ Π }] {{ Φ }}.
-  Proof.
-    iIntros (?) "Hsim". rewrite unfold_bind/=. setoid_rewrite unfold_bind; simpl.
-    iApply sim_src_expr_step_None. iIntros (?[??]?) "?". simplify_eq/=. iModIntro.
-    iExists _. iSplit. { iPureIntro. by econs. }
-    iIntros ([??] ?) "!>". simplify_eq. iSplit!. iFrame.
-    Unshelve. done.
-  Qed.
-
-  Lemma sim_tgt_TAssumeOpt {T} o (x : T) k Π Φ os :
-    o = Some x →
-    TGT k x @ ? os [{ Π }] {{ Φ }} -∗
-    TGT (Spec.bind (TAssumeOpt o) k) @ ? os [{ Π }] {{ Φ }}.
-  Proof. iIntros (->) "Hsim". simpl. by rewrite unfold_bind/=. Qed.
-
-  Lemma sim_src_TAssumeOpt {T} (o : option T) k Π Φ os :
-    (∀ x, ⌜o = Some x⌝ -∗ SRC k x @ ? os [{ Π }] {{ Φ }}) -∗
-    SRC (Spec.bind (TAssumeOpt o) k) @ ? os [{ Π }] {{ Φ }}.
-  Proof.
-    iIntros "Hsim".
-    destruct o => /=.
-    - rewrite unfold_bind/=. by iApply "Hsim".
-    - iApply sim_src_TUb.
-  Qed.
-
-  Lemma sim_tgt_TAssertOpt {T} (o : option T) k Π Φ os :
-    (∀ x, ⌜o = Some x⌝ -∗ TGT k x @ ? os [{ Π }] {{ Φ }}) -∗
-    TGT (Spec.bind (TAssertOpt o) k) @ ? os [{ Π }] {{ Φ }}.
-  Proof.
-    iIntros "Hsim".
-    destruct o => /=.
-    - rewrite unfold_bind/=. by iApply "Hsim".
-    - iApply sim_tgt_TNb.
-  Qed.
-
-  Lemma sim_src_TAssertOpt {T} o (x : T) k Π Φ os :
-    o = Some x →
-    SRC k x @ ? os [{ Π }] {{ Φ }} -∗
-    SRC (Spec.bind (TAssertOpt o) k) @ ? os [{ Π }] {{ Φ }}.
-  Proof. iIntros (->) "Hsim". simpl. by rewrite unfold_bind/=. Qed.
-End spec.
 
 
 Definition array (l : loc) (vs : list val) : gmap loc val :=
@@ -1225,8 +978,6 @@ Section memmove.
 
   Local Canonical Structure spec_mod_lang_unit.
   Lemma sim_locle s fns fns1 Φ l1 l2 Π_s :
-    (* TODO: remove this by using sim_tgt_bind *)
-    (∀ P, P (λ σ', σ' ≈{rec_link_trans fns1 {["locle"]} _ _}≈>ₜ Π_s) -∗ Π_s None P) →
     let Π := λ κ P, (∀ σl, (σl ⤇ₜ λ Π, TGT locle_spec [{Π}] {{_, _, _, False}}) -∗
               link_tgt_left_handler (rec_link_filter fns1 {["locle"]}) Π_s s σl κ P)%I in
     rec_fn_auth fns -∗
@@ -1234,17 +985,17 @@ Section memmove.
     (∀ b, ⌜l1.1 = l2.1 → b = bool_decide (l1.2 ≤ l2.2)⌝ -∗ Φ (Val (ValBool b)) None Π) -∗
     TGT Call "locle" [Val (ValLoc l1); Val $ ValLoc l2] [{ Π }] {{ Φ }}.
   Proof.
-    iIntros (HΠ_s Π) "#Hfns #Hf HΦ".
+    iIntros (Π) "#Hfns #Hf HΦ".
     iApply (sim_tgt_rec_Call_external with "[$]"). iIntros (?) "?? !>". iIntros (σl) "Hσl".
     iIntros (??????). destruct!/=. case_bool_decide => //. rewrite (bool_decide_true (_ ∈ _)) //.
-    iApply HΠ_s. iIntros (σ') "Hσ'".
+    iIntros (σ') "Hσ'".
     iApply (sim_tgt_link_right_recv with "[-]"). iApply "Hσl".
     rewrite /locle_spec unfold_forever -/locle_spec.
     rewrite /TReceive bind_bind bind_bind.
     iApply (sim_tgt_TExist with "[-]"). iIntros ([[??]?]) "!>".
     rewrite bind_bind. setoid_rewrite bind_ret_l.
     iApply (sim_tgt_TVis with "[-]"). iIntros "!>" (?). simplify_eq/=.
-    iApply HΠ_s. iIntros (?) "Hσl".
+    iIntros (?) "Hσl".
     iApply (sim_tgt_link_right with "[-]"). iApply "Hσl".
     rewrite bind_bind. iApply (sim_tgt_TAssume with "[-]"); [done|]. iIntros "!>".
     rewrite bind_bind. iApply (sim_tgt_TAll with "[-]"). iIntros "!>".
@@ -1253,12 +1004,12 @@ Section memmove.
     rewrite bind_bind. iApply (sim_tgt_TExist with "[-]"). iIntros (b) "!>".
     rewrite bind_bind. iApply (sim_tgt_TAssert with "[-]"). iIntros (?) "!>".
     iApply (sim_tgt_TVis with "[-]"). iIntros "!>" (??????). destruct!/=.
-    iApply HΠ_s. iIntros (?) "Hσl".
+    iIntros (?) "Hσl".
     iApply (sim_tgt_link_left_recv with "[-]"). iApply "Hσ'".
     iApply (sim_tgt_rec_Waiting with "[$]").
     iSplit. { iIntros. iModIntro. iIntros. simplify_eq. }
     iIntros (???) "!>". iIntros (?). simplify_eq.
-    iApply HΠ_s. iIntros (?) "Hσ'".
+    iIntros (?) "Hσ'".
     iApply (sim_tgt_link_left with "[-]"). iApply ("Hσ'" with "[$] [$]").
     iApply (sim_tgt_expr_wand1 with "[HΦ]").
     { iApply sim_tgt_expr_stop2. by iApply "HΦ". }
@@ -1300,9 +1051,7 @@ Section memmove.
     iApply (sim_tgt_expr_elim (Some _) [] with "[] [-]"); [done| by iSplit |] => /=.
     iApply (sim_tgt_rec_Waiting with "[$]").
     iSplit; [|by iIntros].
-    iIntros (???? Hin) "!>". iIntros (?). simplify_map_eq.
-    iApply sim_src_stop. iSplit!. iApply bi_mono1_intro0. iIntros (?) "Htgt".
-    iApply (sim_tgt_handler_intro with "[-]").
+    iIntros (???? Hin) "!>". iIntros (?). simplify_map_eq. iIntros (?) "Htgt".
     iApply (sim_tgt_link_left with "[-]").
     iApply fupd_sim_tgt.
     iMod (rec_mapsto_alloc_big (h_heap h) with "Hh") as "[Hh _]". { apply map_disjoint_empty_r. } iModIntro.
@@ -1336,15 +1085,11 @@ Section memmove.
     { by iApply (rec_fn_intro with "[$]"). }
     { by iApply (rec_fn_intro with "[$]"). }
     { iIntros "!>" (???) "HΦ".
-      iApply sim_locle. 2: done. 2: { by iApply (rec_fn_intro with "[$]"). } 2: done.
-      Unshelve. all: shelve_unifiable. 2: exact tt. 2: {
+      iApply sim_locle. 1: done. 1: { by iApply (rec_fn_intro with "[$]"). } 1: done.
+      Unshelve. all: shelve_unifiable. 1: exact tt. {
         iIntros (??) "HΦ". iApply "HΦ". iIntros (?) "?".
         by iApply (sim_tgt_expr_elim None with "[] [-]"); [simpl; done..|].
       }
-      iIntros (?) "HP". unfold sim_tgt_handler.
-      iApply (sim_src_stop with "[-]"). iSplit!.
-      iApply (bi_mono1_intro with "HP"). iIntros (?) "?".
-      by iApply (sim_tgt_handler_intro with "[-]").
     }
     { rewrite !array_cons !array_nil -!insert_union_l !left_id_L.
       rewrite !offset_loc_assoc insert_insert.
@@ -1385,10 +1130,7 @@ Section memmove.
     iApply "Htgt".
     iApply (sim_tgt_rec_Waiting with "[$]").
     iSplit; [iIntros; iModIntro; by iIntros|].
-    iIntros (???) "!>". iIntros (?). simplify_eq.
-    iApply sim_src_stop. iSplit!. iApply bi_mono1_intro0.
-    iIntros (?) "Htgt".
-    iApply (sim_tgt_handler_intro with "[-]").
+    iIntros (???) "!>". iIntros (? ?) "Htgt". simplify_eq.
     iApply (sim_tgt_link_left with "[-]").
     iApply ("Htgt" with "[$] [$]").
     iApply sim_tgt_expr_stop2 => /=.
@@ -1414,10 +1156,7 @@ Section memmove.
     iApply "Htgt".
     iApply (sim_tgt_rec_Waiting with "[$]").
     iSplit; [iIntros; iModIntro; by iIntros|].
-    iIntros (???) "!>". iIntros (?). simplify_eq.
-    iApply sim_src_stop. iSplit!. iApply bi_mono1_intro0.
-    iIntros (?) "Htgt".
-    iApply (sim_tgt_handler_intro with "[-]").
+    iIntros (???) "!>". iIntros (??) "Htgt". simplify_eq.
     iApply (sim_tgt_link_left with "[-]").
     iApply ("Htgt" with "[$] [$]").
     iApply sim_tgt_expr_stop2 => /=.

@@ -541,7 +541,7 @@ Section prepost.
     iApply sim_tgt_bind.
     iApply (sim_tgt_seq_map_filter_recv with "[-]").
     iApply (sim_tgt_step_end with "[-]"). iIntros (???). inv_all @m_step.
-    do 2 iModIntro. iIntros (?). iSplit!.
+    do 2 iModIntro. iIntros (?). iRight. iSplit!.
     iApply (sim_tgt_seq_map_filter with "[-]").
     iApply (sim_tgt_step with "[-]"). iIntros (???). inv_all @m_step.
     revert select (satisfiable _). rewrite uPred_expand_shrink assoc => ?.
@@ -598,7 +598,7 @@ Section prepost.
     iIntros ([[??]?]?). simplify_eq.
     iDestruct "HΠ" as (???) ">[? [? HΠ]]".
     iDestruct (sat_close with "[$] [$]") as (? Hsat ) "?".
-    iModIntro. iSplit!.
+    iModIntro. iSplit!. iRight. iSplit!.
     iApply (sim_src_seq_map_filter with "[-]").
     iApply (sim_src_step with "[-]").
     { econs; [|done]. by rewrite uPred_expand_shrink comm (comm _ _ x). }
