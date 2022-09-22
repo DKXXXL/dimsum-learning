@@ -220,7 +220,7 @@ Proof.
       move => /Hvsi'; set_unfold; naive_solver lia.
   - move => /= ? IH ????????????????? Hcont. prepare_goal.
     apply: IH; [done|done|done|set_solver|set_solver|done|].
-    intros ???????Hvsi' =>/=. erewrite lookup_var_val_to_expr; [|done].
+    move => ? v' ???? Hvsi' /=. erewrite lookup_var_val_to_expr; [|done].
     destruct v' eqn:?.
     2,3: tstep_s; split!; done.
     destruct (decide (z>0)) eqn:?.
