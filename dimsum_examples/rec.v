@@ -786,14 +786,23 @@ Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
   | LtOp => z1 ← val_to_Z v1; z2 ← val_to_Z v2; Some (ValBool (bool_decide (z1 < z2)))
   end.
 
+Definition not_val_num v := 
+  match v with 
+    | ValNum _ => False
+    | _ => True 
+  end.
+
 Inductive head_step : rec_state → option rec_event → (rec_state → Prop) → Prop :=
 | BinOpS v1 op v2 h fns:
   head_step (Rec (BinOp (Val v1) op (Val v2)) h fns) None (λ σ',
     ∃ v, eval_binop op v1 v2 = Some v ∧ σ' = Rec (Val v) h fns)
-| MallocS v1 h h' l fns: 
-  (∀n, v1 = ValNum n → heap_alloc_list [n] [l] h h') →
-  head_step (Rec (Malloc (Val v1) ) h fns) None 
-  (λ σ', ∃n, v1= ValNum n /\n>0 /\ σ' = Rec (Val (ValLoc l)) h' fns) 
+| Malloc1S n h h' l fns: 
+  heap_alloc_list [n] [l] h h' →
+  head_step (Rec (Malloc (Val $ ValNum n)) h fns) None 
+  (λ σ', n>0 ∧ σ' = Rec (Val (ValLoc l)) h' fns) 
+| Malloc2S v h fns: 
+  not_val_num v →
+  head_step (Rec (Malloc $ Val v) h fns) None (λ σ', False)
 | LoadS v1 h fns:
   head_step (Rec (Load (Val v1)) h fns) None (λ σ',
     ∃ l v, v1 = ValLoc l ∧ h.(h_heap) !! l = Some v ∧ σ' = Rec (Val v) h fns)
@@ -949,7 +958,7 @@ Inductive static_expr : Set :=
 | SVar (v : string)
 | SVal (v : static_val)
 | SBinOp (e1 : static_expr) (o : binop) (e2 : static_expr)
-| SMalloc (e:static_expr)
+| SMalloc (e : static_expr)
 | SLoad (e : static_expr)
 | SStore (e1 e2 : static_expr)
 | SIf (e e1 e2 : static_expr)
@@ -1310,29 +1319,34 @@ Qed.
 Global Hint Resolve rec_step_BinopOffset_s | 5 : typeclass_instances.
 
 Lemma rec_step_Malloc_i fns h e K n `{!RecExprFill e K (Malloc (Val (ValNum n)))}:
-  TStepI rec_trans (Rec e h fns) (λ G, ∀l h', heap_alloc_list [n] [l] h h'→
-  (G true None (λ G',n>0/\ ( G' (Rec (expr_fill K (Val (ValLoc l))) h' fns))))).
+  TStepI rec_trans (Rec e h fns) (λ G, ∀ l h', heap_alloc_list [n] [l] h h' →
+  (G true None (λ G', n>0 ∧  G' (Rec (expr_fill K (Val (ValLoc l))) h' fns)))).
 Proof.
   destruct RecExprFill0; subst.
-  econs. intros. apply steps_impl_step_end. intros. apply prim_step_inv_head in H0. destruct H0 as [?[??]]. subst.
-  inversion H0; simplify_eq. 
-  eexists true,  _. 
-  split!. apply H. apply H6. reflexivity.  intros. simpl in H1. destruct!. naive_solver.   
-  solve_sub_redexes_are_values. reflexivity. 
+  constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| | ?[??]].
+  { solve_sub_redexes_are_values. } { done. } subst.
+  inv_all head_step.
+  naive_solver.
+  done.
 Qed.
 Global Hint Resolve rec_step_Malloc_i | 10 : typeclass_instances.
 
 Lemma rec_step_Malloc_s fns h e K v  `{!RecExprFill e K (Malloc (Val v) )}:
-  TStepS rec_trans (Rec e h fns) (λ G, (G None (λ G', ∃ l h', 
-  (∀n, v = ValNum n→heap_alloc_list [n] [l] h h' /\(n>0→ G' (Rec (expr_fill K (Val (ValLoc l))) h' fns)))))).
+  TStepS rec_trans (Rec e h fns) (λ G, (G None (λ G', 
+    if v is ValNum n 
+      then  
+        ∃ l h', (heap_alloc_list [n] [l] h h' ∧ 
+        (n > 0 → G' (Rec (expr_fill K (Val (ValLoc l))) h' fns)))
+      else 
+        True
+        ))).
 Proof.
   destruct RecExprFill0; subst.
-  econs. intros. destruct!.   split!; [done|]. intros. simpl in *. destruct!. eapply steps_spec_step_end. econs. 
-  done. econs.
-  2:{ simpl. naive_solver. }
-  intros.
-  apply H0 in H1. simpl. naive_solver. 
-Qed. 
+  constructor => ? HG. split!; [done|]. move => ??.
+  case_match; destruct!;
+  (* ** Not sure why this parenthesis is necessary*)
+  (apply: steps_spec_step_end; [econs;[done|econs; done]| naive_solver]).
+Qed.
 Global Hint Resolve rec_step_Malloc_s | 10 : typeclass_instances.
 
 Lemma rec_step_Load_i fns h e K l `{!RecExprFill e K (Load (Val (ValLoc l)))}:
@@ -1897,10 +1911,11 @@ Proof.
     inv_all head_step => //.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
-    + tstep_s => *. split!. intros. apply H5 in H as H1. simpl in H1. split.
-      exact H1. intros. tend. split!;try done.
+    + tstep_s => *. revert select (heap_alloc_list _ _ _ _) => /= *. destruct!.
+      split! => *; [done|]. tend. split!; [done..|].
       apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
+    + tstep_s. case_match; done. 
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
@@ -1934,10 +1949,11 @@ Proof.
     inv_all head_step => //.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
-    + tstep_s => *. split!. intros. apply H5 in H as H1. simpl in H1. split.
-      exact H1. intros. tend. split!;try done.
+    + tstep_s => *. revert select (heap_alloc_list _ _ _ _) => /= *. destruct!.
+      split! => *; [done|]. tend. split!; [done..|].
       apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
+    + tstep_s. case_match; done. 
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
@@ -2016,10 +2032,10 @@ Proof.
       * tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.
-      * tstep_s => *. split!. intros. apply H5 in H as H'. split; try exact H'.
-        intros. tend. split!; [done..|].
+      * tstep_s => *. split! => *; [done|]. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.
+      * tstep_s. case_match; done.
       * tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.
@@ -2063,10 +2079,10 @@ Proof.
       * tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.
-      * tstep_s => *. split!. intros. apply H5 in H as H'. split; try exact H'.
-        intros. tend. split!; [done..|].
+      * tstep_s => *. split! => *; [done|]. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.
+      * tstep_s. case_match; done.
       * tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         by apply is_static_expr_expr_fill.

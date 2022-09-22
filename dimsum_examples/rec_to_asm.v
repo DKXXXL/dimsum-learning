@@ -419,29 +419,29 @@ Proof.
   rewrite big_sepM_insert //. by iFrame.
 Qed.
 
-Lemma r2a_mem_allocator z mem ml: 
-  mem_alloc_prop z mem ml →
+Lemma r2a_mem_allocator z mem a: 
+  mem_range_free mem a z →
   r2a_mem_auth mem ==∗ 
-  r2a_mem_auth (mem_alloc_result z mem ml) ∗ ([∗ list] a'∈seqZ ml z, r2a_mem_constant a' (Some 0)).
+  r2a_mem_auth (mem_alloc_result mem a z) ∗ ([∗ list] a'∈seqZ a z, r2a_mem_constant a' (Some 0)).
 Proof.
   iIntros (mem_prop) "Hauth".
-  remember ((list_to_map ((λ x, (x,Some 0))<$> seqZ ml z)):gmap Z (option Z)) as mem'.
+  remember ((list_to_map ((λ x, (x,Some 0))<$> seqZ a z)):gmap Z (option Z)) as mem'.
   iMod ((r2a_mem_alloc_big' mem mem') with "Hauth") as "(Hauth' & Hconstant)".
-  {unfold mem_alloc_prop in mem_prop. rewrite map_disjoint_spec. intros. subst.
+  {unfold mem_range_free in mem_prop. rewrite map_disjoint_spec. intros. subst.
   apply elem_of_list_to_map_2 in H.
   apply elem_of_list_fmap_2 in H.
   destruct!. apply elem_of_seqZ in H2.
-  assert (mem!!(ml + (y0-ml)) = None). apply mem_prop. lia. 
-  assert (ml + (y0-ml) = y0) by lia.
+  assert (mem!!(a + (y0-a)) = None). apply mem_prop. lia. 
+  assert (a + (y0 - a) = y0) by lia.
   rewrite H1 in H. rewrite H0 in H. done.
   }
   iModIntro.
   iSplitL "Hauth'".
   - unfold mem_alloc_result. subst. 
-    assert (ml = ml + 0) by lia.
+    assert (a = a + 0) by lia.
     rewrite H.
     rewrite - fmap_add_seqZ. rewrite -list_fmap_compose.
-    assert ((λ x : Z, (x, Some 0)) ∘ Z.add ml = (λ z0 : Z, (ml + 0 + z0, Some 0))).
+    assert ((λ x : Z, (x, Some 0)) ∘ Z.add a = (λ z0 : Z, (a + 0 + z0, Some 0))).
     apply AxFunctionalExtensionality. intros. simpl. f_equal. lia. rewrite H0. done.
   - unfold r2a_mem_map. subst.  
     destruct (decide (0 <= z)) eqn:?. clear Heqs.
@@ -459,7 +459,7 @@ Proof.
       apply elem_of_list_to_map_2 in H.
       apply elem_of_list_fmap_2 in H. destruct!.
       apply elem_of_seqZ in H1.
-      assert (¬ ml + z' < ml + z') by lia. destruct!. done.
+      assert (¬ a + z' < a + z') by lia. destruct!. done.
     + assert (z ≤ 0) by lia.
     rewrite (seqZ_nil _ _ H); simpl. done.
 Qed.
@@ -1027,14 +1027,14 @@ Proof.
     simplify_map_eq. rewrite delete_alter. iFrame. iExists _. iFrame.
 Qed.
 
-Lemma r2a_heap_alloc_mem h hl z mem ml ss ssz : 
+Lemma r2a_heap_alloc_mem h hl z mem a ss ssz : 
   heap_is_fresh h hl →
-  mem_alloc_prop z mem ml→
+  mem_range_free mem a z →
   r2a_heap_inv h -∗
   r2a_mem_inv ss ssz mem ==∗
   r2a_heap_inv (heap_alloc h hl z) ∗ 
-  r2a_mem_inv ss ssz (mem_alloc_result z mem ml) ∗ 
-  r2a_heap_shared hl.1 ml.
+  r2a_mem_inv ss ssz (mem_alloc_result mem a z) ∗ 
+  r2a_heap_shared hl.1 a.
 Proof.
   iIntros (heapfresh memfresh).
   iIntros "Hheap (? & Hmem)".

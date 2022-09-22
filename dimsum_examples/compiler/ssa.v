@@ -135,14 +135,11 @@ Proof.
     apply: IHes'2; [done|rewrite pass_state;naive_solver lia|] => /= ??.
     tstep_s => ??. tstep_i. split!. by apply tsim_mono_b_false.
   - apply: IHes'; try done. intros => /=.
-    destruct v' eqn:?.
-    2,3: tstep_s;split!;intros; done.
+    destruct v' eqn:?; [| tstep_s; done..].
     destruct (decide (z>0)) eqn:?.
-    2:{ tstep_s. split!. intros. inversion H. split;last first. intros. rewrite -H1 in H0; done.
-      split!. apply heap_fresh_is_fresh. }
-    tstep_i. intros. destruct!. split!.
-    tstep_s. split!. intros. split!;last first. intros. by apply tsim_mono_b_false.
-    inversion H0. all:done. 
+    2:{ tstep_s. split! => *; [apply heap_fresh_is_fresh|]. done. }
+    tstep_i => *. destruct!. split!.
+    tstep_s => *. split! => *; [done|]. by apply tsim_mono_b_false.
     Unshelve. all: apply inhabitant. 
   - apply: IHes'; [done|done|] => /= ??.
     tstep_s => *. subst. tstep_i. split!. by apply tsim_mono_b_false.

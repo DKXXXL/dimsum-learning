@@ -58,12 +58,11 @@ Inductive asm_ev :=
 
 Definition asm_event := io_event asm_ev.
 
-(* various alloc meme defs and lemmas*)
-Definition mem_alloc_prop (num:Z) (mem:gmap Z (option Z)) (l:Z) := 
-  ∀ i, 0 ≤ i < num → mem !! (l+i) = None.
+Definition mem_range_free (mem : gmap Z (option Z)) (a : Z) (n : Z) := 
+  ∀ i, 0 ≤ i < n → mem !! (a + i) = None.
 
-Definition mem_alloc_result (n:Z) (mem:gmap Z (option Z)) (l:Z) : gmap Z (option Z) :=
-  (list_to_map ((λ z, (l +z, Some 0)) <$> seqZ 0 n) ∪ mem).
+Definition mem_alloc_result (mem : gmap Z (option Z)) (a : Z) (n : Z) : gmap Z (option Z) :=
+  (list_to_map ((λ z, (a + z, Some 0)) <$> seqZ 0 n) ∪ mem).
 
 Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) → Prop :=
 | SWriteReg regs instrs r f es mem:
@@ -91,11 +90,11 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
   asm_step (AsmState (AWaitingSyscall es) regs mem instrs)
            (Some (Incoming, EASyscallRet ret mem'))
            (λ σ', σ' = AsmState (ARunning es) (<["R0" := ret]>regs) mem' instrs)
-| SAllocMem f l es r regs mem instrs:
-  mem_alloc_prop (f regs) mem l→
+| SAllocMem f a es r regs mem instrs:
+  mem_range_free mem a (f regs)→
   asm_step (AsmState (ARunning (AllocMem r f :: es)) regs mem instrs) None (λ σ', 
-    (f regs)>0 ∧
-    σ' = AsmState (ARunning es) (<[r := l]> regs) (mem_alloc_result (f regs) mem l) instrs)
+    f regs > 0 ∧
+    σ' = AsmState (ARunning es) (<[r := a]> regs) (mem_alloc_result mem a (f regs)) instrs)
 | SJumpInternal regs instrs pc es mem:
   regs !!! "PC" = pc →
   instrs !! pc = Some es →
@@ -243,26 +242,26 @@ Proof.
 Qed.
 Global Hint Resolve asm_step_Syscall_ret_s : typeclass_instances.
 
-Lemma asm_step_Allocmem_i r f es rs mem ins: 
+Lemma asm_step_AllocMem_i r f es rs mem ins: 
   TStepI asm_trans (AsmState (ARunning (AllocMem r f::es)) rs mem ins)
-            (λ G, ∀ l, mem_alloc_prop (f rs) mem l →
-              G true None (λ G', (f rs)> 0 ∧ G' (AsmState (ARunning es) (<[r:=l]> rs) (mem_alloc_result (f rs) mem l) ins))).
+            (λ G, ∀ a, mem_range_free mem a (f rs) →
+              G true None (λ G', f rs > 0 ∧ G' (AsmState (ARunning es) (<[r:=a]> rs) (mem_alloc_result mem a (f rs)) ins))).
 Proof.
-  constructor => ? H. apply: steps_impl_step_end. intros.
-  inv_all @m_step. split!; try naive_solver.
+  constructor => ? ?. apply: steps_impl_step_end => ???. 
+  inv_all @m_step. split!; naive_solver.
 Qed.
-Global Hint Resolve asm_step_Allocmem_i : typeclass_instances.
+Global Hint Resolve asm_step_AllocMem_i : typeclass_instances.
 
-Lemma asm_step_Allocmem_s r f es rs mem ins: 
+Lemma asm_step_AllocMem_s r f es rs mem ins: 
   TStepS asm_trans (AsmState (ARunning (AllocMem r f :: es)) rs mem ins)
-            (λ G, (G None (λ G', ∃ l, 
-            mem_alloc_prop (f rs) mem l ∧ 
-            ((f rs)>0 → G' (AsmState (ARunning es) (<[r:=l]> rs) (mem_alloc_result (f rs) mem l) ins))))).
+            (λ G, (G None (λ G', ∃ a, 
+            mem_range_free mem a (f rs) ∧ 
+            (f rs > 0 → G' (AsmState (ARunning es) (<[r:=a]> rs) (mem_alloc_result mem a (f rs)) ins))))).
 Proof.
-  constructor => ??. split!. done. intros. simpl in H. destruct!.
-  apply: steps_spec_step_end. econs. done. intros. simpl in H. naive_solver. 
+  constructor => ??. split!;[done| ]=> ? /= ?. destruct!.
+  apply: steps_spec_step_end. by econs. naive_solver. 
 Qed.
-Global Hint Resolve asm_step_Allocmem_s : typeclass_instances.
+Global Hint Resolve asm_step_AllocMem_s : typeclass_instances.
 
 Lemma asm_step_Jump_i rs ins mem:
   TStepI asm_trans (AsmState (ARunning []) rs mem ins) (λ G,
@@ -450,8 +449,8 @@ Proof.
     + tstep_both. tstep_s => *. split!; [done|]. tend.
       tstep_both => *. tstep_s => *. split!; [|done|]; [done|].
       tstep_s. split!. tend. apply: Hloop; [done|]. naive_solver.
-    + tstep_both. intros. tstep_s. split!; [done|]. intros. tend.
-      split!. apply:Hloop; [done|]. naive_solver.
+    + tstep_both => *. tstep_s. split!; [done|]. move => *. tend.
+      split!. apply: Hloop; [done|]. naive_solver.
   - destruct i as [|[??|???|???| |?]?].
     + tstep_i => pc ?. case_match eqn: Hunion. 1: move: Hunion => /lookup_union_Some_raw[Hl|[? Hl]].
       * have ?: ins2 !! pc = None by apply: map_disjoint_Some_l.
@@ -471,8 +470,8 @@ Proof.
     + tstep_both. tstep_s => *. split!; [done|]. tend.
       tstep_both => *. tstep_s => *. split!; [|done|]; [done|].
       tstep_s. split!. tend. apply: Hloop; [done|]. naive_solver.
-    + tstep_both. intros. tstep_s. split!; [done|]. intros. tend.
-      split!. apply:Hloop; [done|]. naive_solver.
+    + tstep_both => *. tstep_s. split!; [done|]. move => *. tend.
+      split!. apply: Hloop; [done|]. naive_solver.
   - tstep_i => pc???? Hin.
     tstep_s. eexists (EAJump _ _). split!.
     { move: Hin => /lookup_union_Some_raw[?|[??]]; simplify_eq; by simpl_map_decide. }
@@ -509,7 +508,7 @@ Proof.
     + tstep_both => *. destruct!. tstep_s. split!; [done|]. tend.
       tstep_both => *. destruct!; case_match; destruct!/=. tstep_s. split!; [done|]. tend.
       tstep_i => *. simplify_eq/=. apply: Hloop; [done|]. naive_solver.
-    + tstep_both. intros. tstep_s. split!;[done|]. tend.
+    + tstep_both => *. tstep_s. split!; [done|]. tend.
       split!. apply: Hloop; [done|]. naive_solver.
   - destruct i as [|[??|???|???| |?]?].
     + tstep_i => pc ?. case_match => *; destruct!/=.
@@ -529,7 +528,7 @@ Proof.
     + tstep_both => *. destruct!. tstep_s. split!; [done|]. tend.
       tstep_both => *. destruct!; case_match; destruct!/=. tstep_s. split!; [done|]. tend.
       tstep_i => *. simplify_eq/=. apply: Hloop; [done|]. naive_solver.
-    + tstep_both. intros. tstep_s. split!;[done|]. tend.
+    + tstep_both => *. tstep_s. split!;[done|]. tend.
       split!. apply: Hloop; [done|]. naive_solver.
   - tstep_i => -[] /= *; destruct!/=.
     tstep_s.
@@ -580,7 +579,7 @@ Inductive deep_asm_instr :=
 | Aslt (rd r1 : string) (o : asm_operand) (* set rd to 1 if r1 <  o else to 0 *)
 | Aload (r r1 : string) (o2 : Z) (* ldr r, [r1 + o2] *)
 | Astore (r r1: string) (o2 : Z) (* str r, [r1 + o2] *)
-| Aalloc (rd:string) (o : asm_operand)
+| Aalloc (rd : string) (o : asm_operand)
 | Abranch (abs : bool) (o : asm_operand) (* abs: absolute or relative address? *)
 | Abranch_eq (abs : bool) (od : asm_operand) (r1 : string) (o : asm_operand)
 | Abranch_link (abs : bool) (o : asm_operand)

@@ -1172,29 +1172,24 @@ Proof.
     iIntros (??? Hins) "Hrf Hinv". iSatStop.
     tstep_i => ??. simplify_map_eq'.  
     move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
-    (* various destructs based on booleans and >0*)
     destruct v' eqn:?.
-    2,3:tstep_s; split!; intros; done.
+    2,3: by tstep_s. 
     iSatStart. 
     iDestruct "Hv" as "%Hv".
     iSatStop.
-    inversion Hv.
     destruct (decide (z>0)) eqn:?.
-    2:{tstep_s. split!. intros. inversion H2. split!. apply heap_fresh_is_fresh.
-      intros. rewrite -H4 in H3. done. }
-    tstep_i. intros. split!. 
+    2: {tstep_s. split! => *; [apply heap_fresh_is_fresh|done]. }
+    tstep_i => *. split!. 
     {simplify_map_eq'; done. }
     tstep_i. simplify_map_eq'.
-    tstep_s. 
-    assert (∃ hl, heap_is_fresh h hl).
-    eexists _. apply heap_fresh_is_fresh.
-    destruct!. split!.
-    intros. split!; [done | inversion H3; reflexivity|].
-    intros.
+    tstep_s.
+    assert (∃ l, heap_is_fresh h l). split!; apply heap_fresh_is_fresh.
+    destruct!. 
+    split! => *; [done|].
     iSatStartBupd.
     iDestruct "Hinv" as "(%& mem_inv & heap_inv & regs_inv)".
     iMod (r2a_heap_alloc_mem with "[heap_inv] [mem_inv]") as "(heap_inv' & mem_inv' &val_rel)".
-    all:try done.
+    all: try done.
     (* Do something like r2a_heap_update_shared*)
     iApply ("Hcont" with "[%] [%] [val_rel] [Hp] [%] Hrf") ; [by simplify_map_eq'|done | | | |].
       + simpl. iExists _. iSplitR. 2:done. destruct H1. iPureIntro. lia.  

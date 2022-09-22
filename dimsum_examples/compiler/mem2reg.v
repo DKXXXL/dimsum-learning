@@ -342,30 +342,24 @@ Proof.
     intros v' w' _ _ Hsat; simpl.
     destruct v' eqn:?, w' eqn:?.
     all: try (iSatStart; iIntros "(? & #v_bij & ?)"; iDestruct "v_bij" as %?; done).
-    2,3: tstep_s; eexists _,_; intros; done.
-    inversion Heqv0.
+    2,3: by tstep_s. 
     destruct (decide ((z0>0)%Z)) eqn:?.
-    2:{ tstep_s. eexists _,_; intros;split; last first. inversion H0=> /=. rewrite -H2. intros;done.
-    split!. apply heap_fresh_is_fresh. inversion H0. naive_solver. }
+    2:{ tstep_s => *. split! => *; [apply heap_fresh_is_fresh|done]. }
     iSatStart. iIntros "(vs_bij & #v_bij & h_bij & #v_bij' & h_bij' & r' &rf' )".
-    inversion H.
     iDestruct "v_bij" as %?. subst. iSatStop.
-    tstep_i. intros. destruct H1 as [? [?[?[?[??]]]]].
-    assert (heap_alloc_list [z0] [l0] hi h') by naive_solver.
-    clear H1 H2 H3 H4.
+    tstep_i => *. 
+    destruct!.
+    assert (∃ l hi', heap_alloc_list [z0] [l0] hi hi') by naive_solver.
     split!.
-    tstep_s. 
-    remember (heap_fresh ∅ hs) as l1.
-    remember (heap_alloc hs l1 z0) as hs'.
-    exists l1, hs'. intros. split!. subst. apply heap_fresh_is_fresh. naive_solver.
-    assert (heap_alloc_list [z0] [l1] hs hs').  
-    split!. rewrite Heql1; apply heap_fresh_is_fresh.
-    intros. eapply Hcont;[done..|].
+    assert (∃ l hs', heap_alloc_list [z0] [l] hs hs'). split!; apply heap_fresh_is_fresh.
+    destruct!.
+    tstep_s. split! => *. repeat revert select (heap_alloc_list _ _ _ _) => /= *. destruct!; done. 
+    eapply Hcont; [done..|].
     iSatMonoBupd.
     iFrame.
-    iMod ((heap_bij_inv_alloc_list _ _ _ _ _ _ _ H5 H2) with  "[$]") as "(? & l_bij)".
-    iModIntro. iFrame. iSimpl in "l_bij". iDestruct "l_bij" as  "($ & ?)".
-    iExact "v_bij'".
+    iMod ((heap_bij_inv_alloc_list) with  "[$]") as "(? & l_bij)"; [done..|].
+    iModIntro. iFrame. iSimpl in "l_bij". iDestruct "l_bij" as  "($ & ?)". 
+    repeat revert select (heap_alloc_list _ _ _ _) => /= *. destruct!. iSplit; done.
     Unshelve. all: apply inhabitant. 
   - simplify_crun_eq.
     rewrite is_var_dec bool_decide_decide in Hrun.

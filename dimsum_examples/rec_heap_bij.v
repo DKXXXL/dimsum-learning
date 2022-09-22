@@ -1244,35 +1244,27 @@ Proof.
     apply: IH; simpl; [eauto..|]; last first. 
     { iSatMono. iIntros "($ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
     iSatClear. intros n' vi vs hi' hs' rf' b' Hn' Hsat; simpl.
-    destruct vi eqn:?, vs eqn:?;try (iSatStart; iIntros "(? & #v_bij & ? & ?)"; done).
-    2, 3:tstep_s; split!;intros;done. 
+    destruct vi eqn:?, vs eqn:?; try (iSatStart; iIntros "(? & #v_bij & ? & ?)"; done).
+    2, 3: tstep_s; split!;done. 
     destruct (decide ((z0>0)%Z)) eqn:?.
-    2:{tstep_s. exists (heap_fresh ∅ hs'). eexists (heap_alloc hs' _ z0).
-      intros. inversion H. split!. apply heap_fresh_is_fresh. reflexivity.
-      intros; subst; done. } 
+    2:{tstep_s. split! => *; [apply heap_fresh_is_fresh|done]. } 
     iSatStart.
     iIntros "(h_inv & %v_bij & map_v_bij & rf')".
     subst. iSatStop.
-    tstep_i.
-    intros.
-    destruct H as [l0 [ls' [ H1[H2 [H3 H4]]]]]. 
-    assert (heap_alloc_list [z0] [l0] hi' h') by naive_solver.
-    split!.
-    inversion H1.
-    clear H1 H2 H3 H4.
-    tstep_s.
-    exists (heap_fresh ∅ hs'). eexists (heap_alloc hs' _ z0).
-    intros. split!. apply heap_fresh_is_fresh. inversion H0. auto.
-    intros.
-    remember (heap_fresh ∅ hs') as l1.
-    remember (heap_alloc hs' l1 z0) as hs''.
-    assert (heap_alloc_list [z0] [l1] hs' hs'').
-    simpl. split!. rewrite Heql1. apply heap_fresh_is_fresh. 
-    apply Hcont. auto. 
+    tstep_i => *. split!. destruct!.
+    assert (∃ hi'', heap_alloc_list [z0] [l] hi' hi'') by naive_solver.
+    assert (∃ l hs'', heap_alloc_list [z0] [l] hs' hs'').
+    split!; apply heap_fresh_is_fresh.
+    destruct!.
+    tstep_s. split! => *. revert select (heap_alloc_list _ _ _ _ ) => /=; naive_solver. 
+    apply Hcont; [done|].
     iSatMonoBupd. iDestruct "map_v_bij" as "(_ & $)". iFrame.
-    iMod ((heap_bij_inv_alloc_list _ _ _ _ _ _ _ H H2) with  "[$]") as "(? & l_bij)".
+    iMod ((heap_bij_inv_alloc_list) with  "[$]") as "(? & l_bij)"; [done..|].
     iModIntro. iFrame.
-    iSimpl. iSimpl in "l_bij". iDestruct "l_bij" as "($ & ?)". 
+    iSimpl. iSimpl in "l_bij". 
+    repeat revert select (heap_alloc_list _ _ _ _ ) => /= *.
+    destruct!. by iDestruct "l_bij" as "($ & ?)". 
+    Unshelve. all: apply inhabitant.
   - simpl. simpl in Hstatic.
     apply: IH; simpl; [eauto..|]; last first.
     { iSatMono. iIntros "($ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
@@ -1341,7 +1333,7 @@ Proof.
   - done.
   - done.
   - done.
-Admitted.
+Qed.
 
 Lemma rec_heap_bij_refl fns:
   trefines (rec_mod fns) (rec_heap_bij (rec_mod fns)).
