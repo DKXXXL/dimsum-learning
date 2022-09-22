@@ -1320,7 +1320,7 @@ Global Hint Resolve rec_step_BinopOffset_s | 5 : typeclass_instances.
 
 Lemma rec_step_Malloc_i fns h e K n `{!RecExprFill e K (Malloc (Val (ValNum n)))}:
   TStepI rec_trans (Rec e h fns) (λ G, ∀ l h', heap_alloc_list [n] [l] h h' →
-  (G true None (λ G', n>0 ∧  G' (Rec (expr_fill K (Val (ValLoc l))) h' fns)))).
+  (G true None (λ G', n > 0 ∧  G' (Rec (expr_fill K (Val (ValLoc l))) h' fns)))).
 Proof.
   destruct RecExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| | ?[??]].
