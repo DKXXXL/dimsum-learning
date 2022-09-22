@@ -1500,8 +1500,8 @@ Global Hint Resolve rec_step_If_s | 10 : typeclass_instances.
 (** * Proof techniques *)
 Definition rec_proof_call (n : ordinal) (fns1 fns2 : gmap string fndef) :=
   (∀ n' f es1' es2' K1' K2' es1 es2 vs1' vs2' h1' h2' b,
-      RecExprFill es1' K1' (Call (Val$ ValFid f) es1) →
-      RecExprFill es2' K2' (Call (Val$ ValFid f) es2) →
+      RecExprFill es1' K1' (Call (Val f) es1) →
+      RecExprFill es2' K2' (Call (Val f) es2) →
       n' ⊆ n →
       Forall2 (λ e v, e = Val v) es1 vs1' →
       Forall2 (λ e v, e = Val v) es2 vs2' →
@@ -1593,6 +1593,17 @@ Proof.
   - move => n' f' ?? ?? es1 es2 vs1' vs2' ??? [?][?] ? Hall1 Hall2 ???.
     have ?: es1 = Val <$> vs1'. { clear -Hall1. elim: Hall1; naive_solver. } subst.
     have ?: es2 = Val <$> vs2'. { clear -Hall2. elim: Hall2; naive_solver. } subst.
+    destruct f' eqn:?.
+    1,2,3: tstep_s;left; split!.
+    destruct (fns1!!f0) eqn:?.
+    + destruct (decide(length vs2'= length (fd_args f1))) eqn:?.
+      -- admit.
+      -- admit.
+    + admit.
+    
+
+
+    (*tstep_i. split!; intros.
     tstep_both. split.
     + move => fn1' ?. tstep_s. split!. left.
       have [fn2' ?] : is_Some (fns2 !! f'). { apply not_eq_None_Some. naive_solver. }
@@ -1603,8 +1614,8 @@ Proof.
     + move => ?. tstep_s. split!. right. split!; [naive_solver|done|]. tend.
       apply IH; [etrans; [done|]; etrans; [|done]; apply o_le_S|]. split!; [done..|].
       naive_solver.
-  - move => *. subst. apply: tsim_mono; [|done]. apply tsim_mono_b_false. naive_solver.
-Qed.
+  - move => *. subst. apply: tsim_mono; [|done]. apply tsim_mono_b_false. naive_solver.*)
+Admitted.
 
 Lemma rec_prepost_proof {S} {M : ucmra} `{!Shrink M} R `{!∀ b, PreOrder (R b)} i o fns1 fns2 (s0 : S) (r0 : uPred M):
   (* R true: public transition relation, R false: private transition relation *)

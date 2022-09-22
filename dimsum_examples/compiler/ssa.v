@@ -170,9 +170,9 @@ Proof.
       apply lookup_insert_Some. right. split!. move => ?. subst. move: Hvsi.
       apply: eq_None_ne_Some_1. naive_solver lia.
     + move => ? s'. rewrite !pass_state => ?. apply lookup_insert_None. naive_solver lia.
-  - admit. (* rewrite -(app_nil_l (subst_map vsi <$> _)) -(app_nil_l (subst_map vss <$> _)).
+  - admit. (*rewrite -(app_nil_l (subst_map vsi <$> _)) -(app_nil_l (subst_map vss <$> _)).
     change ([]) with (Val <$> []). move: [] => vs. move: s vs h Hvars.
-    revert select (Forall _ _). elim.
+    revert select (Forall _ _). elim. (*Do IHes' first, then improve Hcall in Rec*)
     + move => ???? /=. rewrite app_nil_r.
       apply: Hcall; [done| | |done|done|done].
       { apply Forall2_fmap_l. apply Forall_Forall2_diag. by apply Forall_true. }
