@@ -91,7 +91,7 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
            (Some (Incoming, EASyscallRet ret mem'))
            (λ σ', σ' = AsmState (ARunning es) (<["R0" := ret]>regs) mem' instrs)
 | SAllocMem f a es r regs mem instrs:
-  mem_range_free mem a (f regs)→
+  mem_range_free mem a (f regs) →
   asm_step (AsmState (ARunning (AllocMem r f :: es)) regs mem instrs) None (λ σ', 
     f regs > 0 ∧
     σ' = AsmState (ARunning es) (<[r := a]> regs) (mem_alloc_result mem a (f regs)) instrs)
