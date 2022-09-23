@@ -137,7 +137,7 @@ Proof.
   - apply: IHes'; [done..|]. move => ? v'/=.
     destruct v' eqn:?; [|tstep_s; done..].
     destruct (decide (z > 0)) eqn:?.
-    2:{ tstep_s. split! => *; [apply heap_fresh_is_fresh|]. done. }
+    2:{ tstep_s. split! => *; [apply heap_fresh_is_fresh|done]. }
     tstep_i => *. destruct!. split!.
     tstep_s => *. split! => *; [done|]. by apply tsim_mono_b_false.
     Unshelve. all: apply inhabitant. 
