@@ -252,7 +252,7 @@ Lemma r2a_heap_alloc' rh p b:
 Proof.
   move => ?.
   rewrite -uPred.ownM_op. apply uPred.bupd_ownM_update.
-  rewrite -pair_op_1. apply prod_update; [|done]. 
+  rewrite -pair_op_1. apply prod_update; [|done].
   by apply gmap_view_alloc.
 Qed.
 
@@ -422,46 +422,47 @@ Qed.
 Lemma r2a_mem_allocator z mem a: 
   mem_range_free mem a z →
   r2a_mem_auth mem ==∗ 
-  r2a_mem_auth (mem_alloc_result mem a z) ∗ ([∗ list] a'∈seqZ a z, r2a_mem_constant a' (Some 0)).
+  r2a_mem_auth (mem_alloc mem a z) ∗ ([∗ list] a'∈seqZ a z, r2a_mem_constant a' (Some 0)).
 Proof.
   iIntros (mem_prop) "Hauth".
-  remember ((list_to_map ((λ x, (x,Some 0))<$> seqZ a z)):gmap Z (option Z)) as mem'.
+  remember ((list_to_map ((λ x, (x, Some 0)) <$> seqZ a z)) : gmap Z (option Z)) as mem'.
   iMod ((r2a_mem_alloc_big' mem mem') with "Hauth") as "(Hauth' & Hconstant)".
-  {unfold mem_range_free in mem_prop. rewrite map_disjoint_spec. intros. subst.
+  {unfold mem_range_free in mem_prop. rewrite map_disjoint_spec => ??? H H'; subst.
   apply elem_of_list_to_map_2 in H.
   apply elem_of_list_fmap_2 in H.
-  destruct!. apply elem_of_seqZ in H2.
-  assert (mem!!(a + (y0-a)) = None). apply mem_prop. lia. 
-  assert (a + (y0 - a) = y0) by lia.
-  rewrite H1 in H. rewrite H0 in H. done.
+  destruct H as [x[? H]]. apply elem_of_seqZ in H.
+  assert (mem !! (a + (x - a)) = None) as H1. { apply mem_prop. lia. } 
+  assert (a + (x - a) = x) as H2 by lia.
+  destruct!. 
+  rewrite H2 in H1. rewrite H1 in H'. done.
   }
   iModIntro.
   iSplitL "Hauth'".
-  - unfold mem_alloc_result. subst. 
-    assert (a = a + 0) by lia.
+  - unfold mem_alloc. subst. 
+    assert (a = a + 0) as H by lia.
     rewrite H.
-    rewrite - fmap_add_seqZ. rewrite -list_fmap_compose.
-    assert ((λ x : Z, (x, Some 0)) ∘ Z.add a = (λ z0 : Z, (a + 0 + z0, Some 0))).
-    apply AxFunctionalExtensionality. intros. simpl. f_equal. lia. rewrite H0. done.
+    rewrite -fmap_add_seqZ -list_fmap_compose.
+    assert ((λ x : Z, (x, Some 0)) ∘ Z.add a = (λ z0 : Z, (a + 0 + z0, Some 0))) as H0.
+    { apply AxFunctionalExtensionality => *. simpl. f_equal. lia. } by rewrite H0. 
   - unfold r2a_mem_map. subst.  
-    destruct (decide (0 <= z)) eqn:?. clear Heqs.
-    rewrite - (Z2Nat.id z) . 2:done.
+    destruct (decide (0 <= z)) eqn:?.
+    + clear Heqs. rewrite -(Z2Nat.id z). 2: done.
     iInduction (Z.to_nat z) as [|z'] "IH". 
-    + rewrite (seqZ_nil _ _ ); simpl; done.
-    + rewrite seqZ_S. rewrite fmap_snoc list_to_map_app big_sepM_union. rewrite big_sepL_app.
+    -- rewrite (seqZ_nil _ _ ); simpl; done.
+    -- rewrite seqZ_S fmap_snoc list_to_map_app big_sepM_union. 
+      ++ rewrite big_sepL_app.
       iDestruct "Hconstant" as "(Hconst1 & Hconst2)".
-      iSplitL "Hconst1". iApply ("IH" with "Hconst1"). 
-      simpl. iSplitL;try done.
-      rewrite big_sepM_insert. 2: apply lookup_empty.
+      iSplitL "Hconst1"; [iApply ("IH" with "Hconst1")|]. 
+      simpl. iSplitL; [rewrite big_sepM_insert;[| apply lookup_empty]|done].
       by iDestruct "Hconst2" as "($&?)".
-      set_unfold. rewrite map_disjoint_spec. intros.
+      ++ set_unfold. rewrite map_disjoint_spec => ??? H H0. 
       rewrite lookup_insert_Some in H0. destruct!.
       apply elem_of_list_to_map_2 in H.
-      apply elem_of_list_fmap_2 in H. destruct!.
+      apply elem_of_list_fmap_2 in H as [?[? H1]]. 
       apply elem_of_seqZ in H1.
-      assert (¬ a + z' < a + z') by lia. destruct!. done.
+      assert (¬ a + z' < a + z') by lia. by destruct!.
     + assert (z ≤ 0) by lia.
-    rewrite (seqZ_nil _ _ H); simpl. done.
+      rewrite (seqZ_nil _ _ H); by simpl. 
 Qed.
 
 Lemma r2a_mem_update' v' a v amem :
@@ -1033,7 +1034,7 @@ Lemma r2a_heap_alloc_mem h hl z mem a ss ssz :
   r2a_heap_inv h -∗
   r2a_mem_inv ss ssz mem ==∗
   r2a_heap_inv (heap_alloc h hl z) ∗ 
-  r2a_mem_inv ss ssz (mem_alloc_result mem a z) ∗ 
+  r2a_mem_inv ss ssz (mem_alloc mem a z) ∗ 
   r2a_heap_shared hl.1 a.
 Proof.
   iIntros (heapfresh memfresh).

@@ -19,7 +19,7 @@ Inductive error :=
 | AssertionFailed (s : string)
 | TooManyArgs
 .
- 
+
 Definition variable_registers : list string :=
   ["R19"; "R20"; "R21"; "R22"; "R23"; "R24"; "R25"; "R26"; "R27"; "R28"; "R29"].
 
@@ -1172,25 +1172,24 @@ Proof.
     iIntros (??? Hins) "Hrf Hinv". iSatStop.
     tstep_i => ??. simplify_map_eq'.  
     move: Hins => /deep_to_asm_instrs_cons_inv[??]. simplify_map_eq.
-    destruct v' eqn:?.
+    destruct v' as [z| |] eqn:?.
     2,3: by tstep_s. 
     iSatStart. 
     iDestruct "Hv" as "%Hv".
     iSatStop.
-    destruct (decide (z>0)) eqn:?.
+    destruct (decide (z > 0)) eqn:?.
     2: {tstep_s. split! => *; [apply heap_fresh_is_fresh|done]. }
     tstep_i => *. split!. 
     {simplify_map_eq'; done. }
     tstep_i. simplify_map_eq'.
     tstep_s.
-    assert (∃ l, heap_is_fresh h l). split!; apply heap_fresh_is_fresh.
+    assert (∃ l, heap_is_fresh h l) as H1. {split!; apply heap_fresh_is_fresh. }
     destruct!. 
     split! => *; [done|].
     iSatStartBupd.
     iDestruct "Hinv" as "(%& mem_inv & heap_inv & regs_inv)".
     iMod (r2a_heap_alloc_mem with "[heap_inv] [mem_inv]") as "(heap_inv' & mem_inv' &val_rel)".
     all: try done.
-    (* Do something like r2a_heap_update_shared*)
     iApply ("Hcont" with "[%] [%] [val_rel] [Hp] [%] Hrf") ; [by simplify_map_eq'|done | | | |].
       + simpl. iExists _. iSplitR. 2:done. destruct H1. iPureIntro. lia.  
       + iApply cr2a_places_inv_mono_rs; [|done].

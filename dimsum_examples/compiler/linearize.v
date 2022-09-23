@@ -221,9 +221,9 @@ Proof.
   - move => /= ? IH ????????????????? Hcont. prepare_goal.
     apply: IH; [done|done|done|set_solver|set_solver|done|].
     move => ? v' ???? Hvsi' /=. erewrite lookup_var_val_to_expr; [|done].
-    destruct v' eqn:?.
+    destruct v' as [z| |] eqn:?.
     2,3: tstep_s; split!; done.
-    destruct (decide (z>0)) eqn:?.
+    destruct (decide (z > 0)) eqn:?.
     2:{ tstep_s. split! => *; [apply heap_fresh_is_fresh|]. tstep_s => *; done. 
         Unshelve. all: apply inhabitant. }
     tstep_i => *. split; [done|]. destruct!.

@@ -47,7 +47,7 @@ Proof. destruct v => //=. by destruct v. Qed.
 Inductive lexpr_op :=
 | LVarVal (v : var_val)
 | LBinOp (v1 : var_val) (o : binop) (v2 : var_val)
-| LMalloc (v :var_val)
+| LMalloc (v : var_val)
 | LLoad (v : var_val)
 | LStore (v1 v2 : var_val)
 | LCall (f : string) (args : list var_val).

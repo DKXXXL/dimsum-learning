@@ -1244,26 +1244,25 @@ Proof.
     apply: IH; simpl; [eauto..|]; last first. 
     { iSatMono. iIntros "($ & #Hm & r & $)". iFrame "Hm". iCombine "Hm r" as "r". iExact "r". }
     iSatClear. intros n' vi vs hi' hs' rf' b' Hn' Hsat; simpl.
-    destruct vi eqn:?, vs eqn:?; try (iSatStart; iIntros "(? & #v_bij & ? & ?)"; done).
-    2, 3: tstep_s; split!;done. 
-    destruct (decide ((z0>0)%Z)) eqn:?.
+    destruct vi as [zi| |] eqn:?, vs as [zs| |] eqn:?; try (iSatStart; iIntros "(? & #v_bij & ? & ?)"; done).
+    2, 3: tstep_s; split!; done. 
+    destruct (decide ((zs > 0)%Z)) eqn:?.
     2:{tstep_s. split! => *; [apply heap_fresh_is_fresh|done]. } 
     iSatStart.
     iIntros "(h_inv & %v_bij & map_v_bij & rf')".
     subst. iSatStop.
-    tstep_i => *. split!. destruct!.
-    assert (∃ hi'', heap_alloc_list [z0] [l] hi' hi'') by naive_solver.
-    assert (∃ l hs'', heap_alloc_list [z0] [l] hs' hs'').
-    split!; apply heap_fresh_is_fresh.
+    tstep_i => ?? H. split!. destruct H as [l ?]; destruct!.
+    assert (∃ hi'', heap_alloc_list [zs] [l] hi' hi'') by naive_solver.
+    assert (∃ l hs'', heap_alloc_list [zs] [l] hs' hs'').
+    { split!; apply heap_fresh_is_fresh. }
     destruct!.
-    tstep_s. split! => *. revert select (heap_alloc_list _ _ _ _ ) => /=; naive_solver. 
+    tstep_s. split! => *; [destruct!/=; naive_solver|]. 
     apply Hcont; [done|].
     iSatMonoBupd. iDestruct "map_v_bij" as "(_ & $)". iFrame.
     iMod ((heap_bij_inv_alloc_list) with  "[$]") as "(? & l_bij)"; [done..|].
     iModIntro. iFrame.
-    iSimpl. iSimpl in "l_bij". 
-    repeat revert select (heap_alloc_list _ _ _ _ ) => /= *.
-    destruct!. by iDestruct "l_bij" as "($ & ?)". 
+    iSimpl. iSimpl in "l_bij".
+    destruct!/=. by iDestruct "l_bij" as "($ & ?)". 
     Unshelve. all: apply inhabitant.
   - simpl. simpl in Hstatic.
     apply: IH; simpl; [eauto..|]; last first.

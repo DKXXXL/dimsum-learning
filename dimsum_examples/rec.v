@@ -796,11 +796,11 @@ Inductive head_step : rec_state → option rec_event → (rec_state → Prop) �
 | BinOpS v1 op v2 h fns:
   head_step (Rec (BinOp (Val v1) op (Val v2)) h fns) None (λ σ',
     ∃ v, eval_binop op v1 v2 = Some v ∧ σ' = Rec (Val v) h fns)
-| Malloc1S n h h' l fns: 
+| MallocS n h h' l fns: 
   heap_alloc_list [n] [l] h h' →
   head_step (Rec (Malloc (Val $ ValNum n)) h fns) None 
-  (λ σ', n>0 ∧ σ' = Rec (Val (ValLoc l)) h' fns) 
-| Malloc2S v h fns: 
+  (λ σ', n > 0 ∧ σ' = Rec (Val (ValLoc l)) h' fns) 
+| MallocUBS v h fns: 
   not_val_num v →
   head_step (Rec (Malloc $ Val v) h fns) None (λ σ', False)
 | LoadS v1 h fns:
@@ -1325,9 +1325,7 @@ Proof.
   destruct RecExprFill0; subst.
   constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| | ?[??]].
   { solve_sub_redexes_are_values. } { done. } subst.
-  inv_all head_step.
-  naive_solver.
-  done.
+  inv_all head_step; [naive_solver|done].
 Qed.
 Global Hint Resolve rec_step_Malloc_i | 10 : typeclass_instances.
 
@@ -1335,8 +1333,8 @@ Lemma rec_step_Malloc_s fns h e K v  `{!RecExprFill e K (Malloc (Val v) )}:
   TStepS rec_trans (Rec e h fns) (λ G, (G None (λ G', 
     if v is ValNum n 
       then  
-        ∃ l h', (heap_alloc_list [n] [l] h h' ∧ 
-        (n > 0 → G' (Rec (expr_fill K (Val (ValLoc l))) h' fns)))
+        ∃ l h', heap_alloc_list [n] [l] h h' ∧ 
+        (n > 0 → G' (Rec (expr_fill K (Val (ValLoc l))) h' fns))
       else 
         True
         ))).
@@ -1344,7 +1342,6 @@ Proof.
   destruct RecExprFill0; subst.
   constructor => ? HG. split!; [done|]. move => ??.
   case_match; destruct!;
-  (* ** Not sure why this parenthesis is necessary*)
   (apply: steps_spec_step_end; [econs;[done|econs; done]| naive_solver]).
 Qed.
 Global Hint Resolve rec_step_Malloc_s | 10 : typeclass_instances.
@@ -1911,7 +1908,7 @@ Proof.
     inv_all head_step => //.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
-    + tstep_s => *. revert select (heap_alloc_list _ _ _ _) => /= *. destruct!.
+    + tstep_s => *.  destruct!/=. 
       split! => *; [done|]. tend. split!; [done..|].
       apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
@@ -1949,7 +1946,7 @@ Proof.
     inv_all head_step => //.
     + tstep_s => *. tend. split!; [done..|]. apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.
-    + tstep_s => *. revert select (heap_alloc_list _ _ _ _) => /= *. destruct!.
+    + tstep_s => *. destruct!/=. 
       split! => *; [done|]. tend. split!; [done..|].
       apply: Hloop. rewrite !expr_fill_app. split!; [done..| ].
       by apply is_static_expr_expr_fill.

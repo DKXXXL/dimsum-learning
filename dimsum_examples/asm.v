@@ -61,7 +61,7 @@ Definition asm_event := io_event asm_ev.
 Definition mem_range_free (mem : gmap Z (option Z)) (a : Z) (n : Z) := 
   ∀ i, 0 ≤ i < n → mem !! (a + i) = None.
 
-Definition mem_alloc_result (mem : gmap Z (option Z)) (a : Z) (n : Z) : gmap Z (option Z) :=
+Definition mem_alloc (mem : gmap Z (option Z)) (a : Z) (n : Z) : gmap Z (option Z) :=
   (list_to_map ((λ z, (a + z, Some 0)) <$> seqZ 0 n) ∪ mem).
 
 Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) → Prop :=
@@ -94,7 +94,7 @@ Inductive asm_step : asm_state → option asm_event → (asm_state → Prop) →
   mem_range_free mem a (f regs) →
   asm_step (AsmState (ARunning (AllocMem r f :: es)) regs mem instrs) None (λ σ', 
     f regs > 0 ∧
-    σ' = AsmState (ARunning es) (<[r := a]> regs) (mem_alloc_result mem a (f regs)) instrs)
+    σ' = AsmState (ARunning es) (<[r := a]> regs) (mem_alloc mem a (f regs)) instrs)
 | SJumpInternal regs instrs pc es mem:
   regs !!! "PC" = pc →
   instrs !! pc = Some es →
@@ -245,10 +245,10 @@ Global Hint Resolve asm_step_Syscall_ret_s : typeclass_instances.
 Lemma asm_step_AllocMem_i r f es rs mem ins: 
   TStepI asm_trans (AsmState (ARunning (AllocMem r f::es)) rs mem ins)
             (λ G, ∀ a, mem_range_free mem a (f rs) →
-              G true None (λ G', f rs > 0 ∧ G' (AsmState (ARunning es) (<[r:=a]> rs) (mem_alloc_result mem a (f rs)) ins))).
+              G true None (λ G', f rs > 0 ∧ G' (AsmState (ARunning es) (<[r:=a]> rs) (mem_alloc mem a (f rs)) ins))).
 Proof.
   constructor => ? ?. apply: steps_impl_step_end => ???. 
-  inv_all @m_step. split!; naive_solver.
+  inv_all @m_step. split!; naive_solver. 
 Qed.
 Global Hint Resolve asm_step_AllocMem_i : typeclass_instances.
 
@@ -256,10 +256,10 @@ Lemma asm_step_AllocMem_s r f es rs mem ins:
   TStepS asm_trans (AsmState (ARunning (AllocMem r f :: es)) rs mem ins)
             (λ G, (G None (λ G', ∃ a, 
             mem_range_free mem a (f rs) ∧ 
-            (f rs > 0 → G' (AsmState (ARunning es) (<[r:=a]> rs) (mem_alloc_result mem a (f rs)) ins))))).
+            (f rs > 0 → G' (AsmState (ARunning es) (<[r:=a]> rs) (mem_alloc mem a (f rs)) ins))))).
 Proof.
   constructor => ??. split!;[done| ]=> ? /= ?. destruct!.
-  apply: steps_spec_step_end. by econs. naive_solver. 
+  apply: steps_spec_step_end; [by econs|naive_solver]. 
 Qed.
 Global Hint Resolve asm_step_AllocMem_s : typeclass_instances.
 

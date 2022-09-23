@@ -340,26 +340,26 @@ Proof.
   - simplify_crun_eq.
     apply: lexpr_tsim_var_val; eauto; clear Hsat.
     intros v' w' _ _ Hsat; simpl.
-    destruct v' eqn:?, w' eqn:?.
+    destruct v' as [zi| |] eqn:?, w' as [zs| |] eqn:?.
     all: try (iSatStart; iIntros "(? & #v_bij & ?)"; iDestruct "v_bij" as %?; done).
     2,3: by tstep_s. 
-    destruct (decide ((z0>0)%Z)) eqn:?.
+    destruct (decide ((zs > 0)%Z)) eqn:?.
     2:{ tstep_s => *. split! => *; [apply heap_fresh_is_fresh|done]. }
     iSatStart. iIntros "(vs_bij & #v_bij & h_bij & #v_bij' & h_bij' & r' &rf' )".
     iDestruct "v_bij" as %?. subst. iSatStop.
-    tstep_i => *. 
+    tstep_i => ??[li?]. 
     destruct!.
-    assert (∃ l hi', heap_alloc_list [z0] [l0] hi hi') by naive_solver.
+    assert (∃ hi', heap_alloc_list [zs] [li] hi hi') by naive_solver.
     split!.
-    assert (∃ l hs', heap_alloc_list [z0] [l] hs hs'). split!; apply heap_fresh_is_fresh.
+    assert (∃ l hs', heap_alloc_list [zs] [l] hs hs'). {split!; apply heap_fresh_is_fresh. }
     destruct!.
-    tstep_s. split! => *. repeat revert select (heap_alloc_list _ _ _ _) => /= *. destruct!; done. 
+    tstep_s. split! => *; [by destruct!/=|].
     eapply Hcont; [done..|].
     iSatMonoBupd.
     iFrame.
     iMod ((heap_bij_inv_alloc_list) with  "[$]") as "(? & l_bij)"; [done..|].
-    iModIntro. iFrame. iSimpl in "l_bij". iDestruct "l_bij" as  "($ & ?)". 
-    repeat revert select (heap_alloc_list _ _ _ _) => /= *. destruct!. iSplit; done.
+    iModIntro. iFrame. iSimpl in "l_bij". iDestruct "l_bij" as  "($ & ?)".
+    destruct!/=. iSplit; done.
     Unshelve. all: apply inhabitant. 
   - simplify_crun_eq.
     rewrite is_var_dec bool_decide_decide in Hrun.
