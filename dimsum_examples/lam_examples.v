@@ -201,8 +201,7 @@ Proof.
   eexists ("newref_nonnum", None),[],x.
   split!. 
   go_s. left. split!. intros. rewrite lookup_insert_Some in H. destruct!. 
-  go_s. exists (0,0). exists ∅.  
-  split!. 
+  by go_s.
 Qed.
 
 Definition newref_zero_lam: fndef :={|
@@ -229,7 +228,7 @@ Proof.
   go_s.
   split!. intros. destruct!. split!; try done.
   unfold heap_alloc_prop. split. apply heap_fresh_is_fresh.
-  done.
+  done. done.
   Unshelve. exact ∅. 
 Qed. 
 

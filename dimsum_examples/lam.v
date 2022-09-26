@@ -1,6 +1,7 @@
 From dimsum.core Require Export proof_techniques link prepost.
 From dimsum.core Require Import axioms.
-
+(* to delete *)
+(* Set Default Goal Selector "!". *)
 Local Open Scope Z_scope.
 
 (** * Lam, a higher-order functional language with closures*)
@@ -50,7 +51,7 @@ Inductive val :=
   | ValNum (z : Z) 
   | ValBool (b : bool) 
   | ValLoc (l : loc)
-  | ValFid (id: fid)
+  | ValFid (id : fid)
 .
 
 Global Instance val_inhabited : Inhabited val := populate (ValNum 0).
@@ -73,7 +74,7 @@ Definition val_to_loc (v : val) : option loc :=
   | ValLoc l => Some l
   | _ => None
   end.
-Definition val_to_fid (v:val ) : option fid := 
+Definition val_to_fid (v : val) : option fid := 
   match v with 
   | ValFid f => Some f 
   | _ => None 
@@ -85,18 +86,17 @@ Inductive expr : Set :=
 | Var (v : string)
 | Val (v : val)
 | BinOp (e1 : expr) (o : binop) (e2 : expr)
-| NewRef (e:expr) 
+| NewRef (e : expr) 
 | Load (e : expr)
 | Store (e1 e2 : expr)
 | If (e e1 e2 : expr)
 | LetE (v : string) (e1 e2 : expr)
-| FixE (f:string) (args:list string) (e:expr)
-| App (e :expr) (args : list expr)
+| FixE (f: string) (args : list string) (e : expr)
+| App (e : expr) (args : list expr)
 (* Returning to the context, insert automatically during execution. *)
 | ReturnExt (e : expr)
-| ReturnInt (e:expr) (* Needed because we want to generate closures of same name as linking*)
+| ReturnInt (e : expr) (* Needed because we want to generate closures of same name as linking*)
 | Waiting 
-
 .
 End expr.
 
@@ -104,24 +104,23 @@ Lemma expr_ind (P : expr → Prop) :
   (∀ (x : string), P (Var x)) →
   (∀ (v : val), P (Val v)) →
   (∀ (e1 : expr) (op : binop) (e2 : expr), P e1 → P e2 → P (BinOp e1 op e2)) →
-  (∀ (e:expr), P e→ P (NewRef e)) →
+  (∀ (e : expr), P e → P (NewRef e)) →
   (∀ (e : expr), P e → P (Load e)) →
   (∀ (e1 e2 : expr), P e1 → P e2 → P (Store e1 e2)) →
   (∀ (e1 e2 e3 : expr), P e1 → P e2 → P e3 → P (If e1 e2 e3)) →
   (∀ (v : string) (e1 e2 : expr), P e1 → P e2 → P (LetE v e1 e2)) →
-  (∀ (f:string) (args:list string) (e:expr), P e →P( FixE f args e))→
-  (∀ (e :expr ) (args : list expr), P e → Forall P args → P (App e args)) →
+  (∀ (f : string) (args : list string) (e : expr), P e → P(FixE f args e))→
+  (∀ (e : expr ) (args : list expr), P e → Forall P args → P (App e args)) →
   (∀ (e : expr), P e → P (ReturnExt  e)) →
   (∀ (e : expr), P e → P (ReturnInt  e)) →
-  (P Waiting ) →
+  (P Waiting) →
   ∀ (e : expr), P e.
 Proof.
   move => *. generalize dependent P => P. match goal with | e : expr |- _ => revert e end.
   fix FIX 1. move => [ ^e] => ????????? Happ ???. 
-  10: { apply Happ. auto. apply Forall_true => ?. by apply: FIX. }
+  10: { apply Happ; [auto|]. apply Forall_true => ?. by apply: FIX. }
   all: auto.
 Qed.
-
 
 Global Instance val_inj : Inj (=) (=) Val.
 Proof. move => ?? []. done. Qed.
@@ -195,90 +194,42 @@ Fixpoint subst_map (x : gmap string val) (e : expr) : expr :=
 Lemma subst_map_empty e :
   subst_map ∅ e = e.
 Proof.
-  intros.
-  induction e; simpl; 
-  try rewrite IHe1; try rewrite IHe2; try rewrite IHe3; try rewrite IHe; auto.
-  rewrite delete_empty. rewrite IHe2. reflexivity.
-  rewrite delete_empty. f_equal. 
+  induction e as [| |??? IHe1 IHe2|? IHe1|? IHe1|?? IHe1 IHe2|??? IHe1 IHe2 IHe3|??? IHe1 IHe2|??? IHe1|?? IHe1 IHe2|? IHe1|? IHe1|].
+  all: simpl; try rewrite IHe1; try rewrite IHe2; try rewrite IHe3; auto.
+  - by rewrite delete_empty IHe2.
+  - rewrite delete_empty. f_equal. 
     induction args; simpl; auto.
     rewrite delete_empty; auto.
-    f_equal. induction args.
-    - reflexivity.
-    - simpl. inversion H; subst. rewrite H2. apply IHargs in H3. f_equal.
-     unfold fmap in H3. auto.
-     Qed.
-
-Lemma foldl_cons:
-∀ {A B : Type} (f : A → B → A) (a : A) (l : list B) (x : B),
- (foldl f (f a x) l) =foldl f a (x:: l) .
-intros. simpl. reflexivity.
+  - f_equal. induction args.
+    -- reflexivity.
+    -- simpl. inversion IHe2; subst. f_equal; [done|naive_solver]. 
 Qed.
-
-Lemma foldl_delete xs x v l: 
-x ∈ l →foldl
-  (λ (m : gmap string val) (k : string),
-     delete k m) (<[x:=v]> xs) l =
-foldl
-  (λ (m : gmap string val) (k : string),
-     delete k m) xs l.
-Proof. 
-  generalize dependent xs.
-   induction l; intros. rewrite elem_of_nil in H; contradiction.
-   rewrite elem_of_cons in H. destruct H.
-   simpl. subst. rewrite delete_insert_delete. reflexivity.
-   assert (x=a \/ x≠a). apply AxClassic.
-   destruct H0; subst.
-    simpl. rewrite delete_insert_delete. reflexivity.
-   simpl. rewrite delete_insert_ne. naive_solver. naive_solver. 
-  Qed.
-   
-  Lemma foldl_delete_notin xs x v l: 
-  x ∉ l →foldl
-    (λ (m : gmap string val) (k : string),
-       delete k m) (<[x:=v]> xs) l =
-       <[x:=v]> (foldl
-    (λ (m : gmap string val) (k : string),
-       delete k m) xs l).
-    Proof.
-      intros. generalize dependent xs.
-      induction l; simpl. reflexivity.
-      rewrite not_elem_of_cons in H.
-      destruct H. intros.
-      rewrite delete_insert_ne.
-      naive_solver. naive_solver.
-    Qed.
-
 
 Lemma subst_map_subst x v e xs :
   subst_map (<[x:=v]> xs) e = subst_map xs (subst x v e).
 Proof.
-  (*TODO: use fmap_cons*)
   generalize dependent xs.
-  induction e; intros; simpl; 
-  try rewrite IHe1; try rewrite IHe2; try rewrite IHe3; try rewrite IHe;auto.
-  - case_bool_decide; simplify_map_eq; auto.
-  - case_bool_decide. f_equal. rewrite delete_insert_ne. rewrite IHe2. reflexivity. auto.
-  subst. rewrite delete_insert_delete. reflexivity.
-  - f_equal. case_bool_decide. f_equal. 
-  assert (foldl (λ (m : gmap string val) (k : string), delete k m)(delete f (<[x:=v]> xs)) args = 
-        foldl (λ (m : gmap string val) (k : string), delete k m)  (<[x:=v]> xs) (f::args)).
-  apply (foldl_cons (λ (m : gmap string val) 
-  (k : string), delete k m) (<[x:=v]> xs) args f).
-  rewrite H0.  
-  assert (foldl (λ (m : gmap string val) (k : string), delete k m)(delete f (xs)) args = 
-  foldl (λ (m : gmap string val) (k : string), delete k m)  (xs) (f::args)).
-  apply (foldl_cons (λ (m : gmap string val) 
-  (k : string), delete k m) ( xs) args f). rewrite H1.
-  remember (f::args) as l. apply foldl_delete. naive_solver. rewrite delete_insert_ne. rewrite foldl_delete_notin.
-  assert (foldl (λ (m : gmap string val) (k : string), delete k m)(delete f (xs)) args = 
-  foldl (λ (m : gmap string val) (k : string), delete k m)  (xs) (f::args)).
-  apply (foldl_cons (λ (m : gmap string val) 
-  (k : string), delete k m) ( xs) args f). auto. rewrite not_elem_of_cons in H. destruct H. auto. rewrite not_elem_of_cons in H. destruct H;auto.
-  - f_equal. induction args. reflexivity. simpl. f_equal. inversion H; subst; auto. inversion H; subst.
-  apply IHargs in H3. unfold fmap in H3. auto.
-  Qed.
-  
-  
+  induction e as [| |??? IHe1 IHe2|? IHe1|? IHe1|?? IHe1 IHe2|??? IHe1 IHe2 IHe3|??? IHe1 IHe2|a ?? IHe1|?? IHe1 IHe2|? IHe1|? IHe1|] => m/=.
+  all: try rewrite IHe1; try rewrite IHe2; try rewrite IHe3; auto.
+  - case_bool_decide; by simplify_map_eq.
+  - case_bool_decide; f_equal. 
+    + rewrite delete_insert_ne; [by rewrite IHe2|done].
+    + subst; by rewrite delete_insert_delete.
+  - f_equal. case_bool_decide as H.
+    + f_equal. apply elem_of_cons in H. destruct!.
+      -- by rewrite delete_insert_delete.
+      -- destruct (decide (x = a)) eqn:?; subst; [by rewrite delete_insert_delete|].
+         rewrite delete_insert_ne; [|done].
+         generalize dependent m. induction args as [|hd tl IH]; [by apply elem_of_nil in H|simpl].
+         apply elem_of_cons in H. destruct! => *; [by rewrite delete_insert_delete|].
+         destruct (decide(x = hd)) eqn:?; subst; [by rewrite delete_insert_delete|].
+         rewrite delete_commute delete_insert_ne; [|done]. rewrite delete_commute. naive_solver.
+    + apply not_elem_of_cons in H. destruct H as [H1 H2]. 
+      generalize dependent m. induction args as [|hd tl IH] => /=*; [by rewrite delete_insert_ne|].
+      apply not_elem_of_cons in H2; destruct!. rewrite delete_commute delete_insert_ne; [|done].
+      rewrite delete_commute. naive_solver. 
+  - f_equal. induction args; [done|]. simpl. inversion IHe2; subst. f_equal; [done|naive_solver].
+Qed.
 
 Lemma subst_map_subst_map e xs ys:
   subst_map (xs ∪ ys) e = subst_map ys (subst_map xs e).
@@ -317,8 +268,8 @@ Inductive expr_ectx :=
 | StoreRCtx (v1 : val)
 | IfCtx (e2 e3 : expr)
 | LetECtx (v : string) (e2: expr)
-| AppLCtx (el: list expr)
-| AppRCtx (v1: val) (arg1: list val) (arg2: list expr)
+| AppLCtx (el : list expr)
+| AppRCtx (v1 : val) (arg1 : list val) (arg2 : list expr)
 | ReturnExtCtx 
 | ReturnIntCtx 
 .
@@ -335,7 +286,7 @@ Definition expr_fill_item (Ki : expr_ectx) (e : expr) : expr :=
   | IfCtx e2 e3 => If e e2 e3
   | LetECtx v e2 => LetE v e e2
   | AppLCtx el => App e el
-  | AppRCtx v vl el => App (Val v) ((Val<$> vl) ++ e::el)
+  | AppRCtx v vl el => App (Val v) ((Val <$> vl) ++ e :: el)
   | ReturnExtCtx => ReturnExt e
   | ReturnIntCtx => ReturnInt e
   end.
@@ -426,9 +377,9 @@ Fixpoint is_static_expr (allow_loc_closid: bool)  (e : expr) : bool :=
   end.
 
 Lemma is_static_expr_value v: 
-   is_static_expr true  (Val v).
+   is_static_expr true (Val v).
 Proof.
-  simpl. destruct v; auto. destruct id; destruct o;auto.
+  simpl. by repeat case_match. 
 Qed.
 
 Lemma is_static_expr_forallb vs:
@@ -438,24 +389,25 @@ Proof.
 Qed.  
 
 (*For is_static_expr_subst. Is this a proven lemma?*)
-Lemma Forall_implication {A:Type}(P Q:A -> Prop) args: 
+(*Lemma Forall_implication {A:Type}(P Q:A -> Prop) args: 
   Forall (λ x, P x) args -> Forall (λ x, ((P x) -> (Q x))) args -> Forall (λ x, Q x) args.
   Proof.
     induction args; intros. constructor.
     constructor; inversion H; inversion H0; subst; eauto.
-  Qed. 
+  Qed. *)
 
 Lemma is_static_expr_subst x v e:
   is_static_expr true e →
   is_static_expr true (subst x v e).
 Proof.
-  elim: e; intros; try naive_solver; simpl.
-  - case_bool_decide.  apply is_static_expr_value. auto.
-  - case_bool_decide; naive_solver.
-  - case_bool_decide; naive_solver.  
-  - simpl in H1. apply andb_prop_elim in H1. destruct H1. apply andb_prop_intro.
-  split. eauto. apply forallb_True, Forall_fmap. apply forallb_True in H2.
-  apply Forall_implication with (λ x : expr, is_static_expr true x); auto.
+  elim: e; try naive_solver; simpl.
+  - move => *. case_bool_decide; [apply is_static_expr_value|done]. 
+  - move => *. case_bool_decide; naive_solver.
+  - move => *. case_bool_decide; naive_solver.  
+  - move => ? args ? HForall H. apply andb_prop_intro; split!; [naive_solver|]. 
+    induction args as [|hd tl IH]; [done|simpl]. inversion HForall. apply andb_prop_intro. split!. 
+    + apply andb_prop_elim in H. destruct!/=. naive_solver.
+    + subst. apply IH; [done|]. apply andb_prop_elim in H. apply andb_prop_intro. destruct!/=. split!; done.  
 Qed.
 
 Lemma is_static_expr_subst_l xs vs e:
@@ -477,12 +429,8 @@ Qed.
 
 Lemma is_static_expr_val v: is_static_expr true (Val v).
 Proof.
-  destruct v; auto.
-  destruct id; destruct o; auto.
+  simpl. by repeat case_match.
 Qed.
-
-
-
 
 (** ** heap *)
 Record heap_state : Set := Heap {
@@ -611,7 +559,7 @@ Next Obligation.
   move: Hl => /(elem_of_list_to_map_2 _ _ _)/elem_of_list_fmap. set_solver.
 Qed.
 
-Definition heap_alloc_prop (h h':heap_state) (l:loc) (n:Z):Prop:=
+Definition heap_alloc_prop (h h' : heap_state) (l : loc) (n : Z) : Prop :=
   (heap_is_fresh h l /\ h' = heap_alloc h l n).
 
 
@@ -712,7 +660,9 @@ Proof.
   move => ??. simplify_eq/=. rewrite /heap_alive/=/heap_alloc_h/offset_loc/=.
   apply lookup_union_is_Some. left. apply list_to_map_lookup_is_Some.
   eexists _. apply elem_of_list_fmap. eexists (o - o').
-  split. f_equal. f_equal;lia. apply elem_of_seqZ. lia.
+  split.
+  - f_equal. f_equal;lia.
+  - apply elem_of_seqZ. lia.
 Qed.
 Global Opaque heap_alloc_h.
 
@@ -848,18 +798,18 @@ Lemma fndef_eq fn1 fn2 :
 Proof. split; [naive_solver|]. destruct fn1, fn2 => /=. move => [??]. subst. f_equal. apply proof_irrel. Qed.
 
 
-Definition fns_state:= gmap fid fndef.
-Definition empty_fns_state: fns_state := ∅.
-Definition fns_fresh (fns:fns_state) (f:fid):= f ∉ dom fns.
-Definition fns_alive (fns:fns_state) (f:fid):= f ∈ dom fns.
-Definition fns_add (fns:fns_state) (f :fid) (v:fndef) := <[f:=v]>fns.
-Definition fns_lookup (fns:fns_state) (f:fid) := fns !!f.
+Definition fns_state := gmap fid fndef.
+Definition empty_fns_state : fns_state := ∅.
+Definition fns_fresh (fns : fns_state) (f : fid) := f ∉ dom fns.
+Definition fns_alive (fns : fns_state) (f : fid) := f ∈ dom fns.
+Definition fns_add (fns : fns_state) (f : fid) (v : fndef) := <[f:=v]>fns.
+Definition fns_lookup (fns : fns_state) (f : fid) := fns !!f.
 Add Printing Constructor fndef.
 
 (** ** state *)
 Record lam_state := Lam {
   st_expr : expr;
-  st_stack: list string;
+  st_stack : list string;
   st_heap : heap_state;
   st_fns : fns_state;
 }.
@@ -870,8 +820,8 @@ Definition lam_init (fns : gmap fid fndef) : lam_state :=
 
 (** ** rec_event *)
 Inductive lam_ev : Type :=
-| ELCall (id : fid) (args: list val) (h:heap_state)
-| ELReturn (ret: val) (h:heap_state).
+| ELCall (id : fid) (args : list val) (h : heap_state)
+| ELReturn (ret : val) (h : heap_state).
 
 Global Instance lam_ev_inhabited : Inhabited lam_ev := populate (ELReturn inhabitant ∅).
 
@@ -889,8 +839,6 @@ Definition heap_of_event (e : lam_ev) : heap_state :=
   | ELCall f vs h => h
   | ELReturn v h => h
   end.
-
-
 
 Definition event_set_vals_heap (e : lam_ev) (vs : list val) (h : heap_state) : lam_ev :=
   match e with
@@ -916,51 +864,49 @@ Proof. done. Qed.
 
 
 (* get first component of fns key to produce gset*)
-Definition get_string_set_from_fid_set (s:gmap fid fndef):gset string:=
-  set_map(λ f:fid, f.1) (dom s).
+Definition get_string_set_from_fid_set (s : gmap fid fndef) : gset string:=
+  set_map (λ f:fid, f.1) (dom s).
 
 Lemma insert_get_string_set_unchanged hd m n e: 
   hd ∈ get_string_set_from_fid_set m →
   get_string_set_from_fid_set (fns_add m (hd,n) e) = get_string_set_from_fid_set m .
 Proof.
-  unfold get_string_set_from_fid_set, fns_add.
-  intros. set_solver.
+  set_solver.
 Qed.
 
 Lemma elem_get_string_set_union s m1 m2: 
-  (s∈get_string_set_from_fid_set (m1 ∪ m2))↔
-  (s∈get_string_set_from_fid_set m1 \/ s∈get_string_set_from_fid_set m2).
+  (s∈get_string_set_from_fid_set (m1 ∪ m2)) ↔
+  (s∈get_string_set_from_fid_set m1 ∨ s∈get_string_set_from_fid_set m2).
 Proof.
-  unfold get_string_set_from_fid_set, fns_add.
-  intros. set_solver. 
+  set_solver.
 Qed.
 
 
 Lemma lookup_disjoint_none_left m1 m2 key payload: 
-get_string_set_from_fid_set m1## get_string_set_from_fid_set m2→key∈get_string_set_from_fid_set m2→
-m1!!(key,payload)=None.
+  get_string_set_from_fid_set m1 ## get_string_set_from_fid_set m2 → 
+  key ∈ get_string_set_from_fid_set m2 →
+  m1 !! (key,payload) = None.
 Proof.
-  intros.  unfold get_string_set_from_fid_set in *. 
+  move => H H0.  
   symmetry in H.
-  remember (not_elem_of_disjoint _ _ _ H0 H). clear Heqn.
+  remember (not_elem_of_disjoint _ _ _ H0 H) as n. 
   destruct (m1!!(key,payload)) eqn:K; auto.
-  unfold not in n.
-  assert (key ∈ ((set_map (λ f : fid, f.1) (dom m1)):gset string)).
-  rewrite elem_of_map. exists (key,payload). split!. rewrite elem_of_dom. auto. apply n in H1.
-  inversion H1.
+  assert (key ∈ ((set_map (λ f : fid, f.1) (dom m1)):gset string)) as H1.
+  { rewrite elem_of_map. exists (key,payload). split!. by rewrite elem_of_dom. }
+  by apply n in H1.
 Qed.
 
 Lemma lookup_disjoint_none_right m1 m2 key payload: 
-get_string_set_from_fid_set m1## get_string_set_from_fid_set m2→key∈get_string_set_from_fid_set m1→
-m2!!(key,payload)=None.
+  get_string_set_from_fid_set m1 ## get_string_set_from_fid_set m2 → 
+  key ∈ get_string_set_from_fid_set m1 →
+  m2 !! (key,payload) = None.
 Proof.
-  intros. unfold get_string_set_from_fid_set in *.
-  remember (not_elem_of_disjoint _ _ _ H0 H). clear Heqn.
+  move => H H0. 
+  remember (not_elem_of_disjoint _ _ _ H0 H) as n. 
   destruct (m2!!(key,payload)) eqn:K; auto.
-  unfold not in n.
-  assert (key ∈ ((set_map (λ f : fid, f.1) (dom m2)):gset string)).
-  rewrite elem_of_map. exists (key,payload). split!. rewrite elem_of_dom. auto. apply n in H1.
-  inversion H1.
+  assert (key ∈ ((set_map (λ f : fid, f.1) (dom m2)):gset string)) as H1.
+  { rewrite elem_of_map. exists (key,payload). split!. by rewrite elem_of_dom. }
+  by apply n in H1.
 Qed.
 
 
@@ -969,10 +915,9 @@ Lemma lookup_get_string_disjoint_union_left m1 m2 s o:
   s ∈ get_string_set_from_fid_set m1 →
   (m1 ∪ m2) !! (s, o) = m1 !! (s, o).
 Proof.
-  intros.
+  move => H H0.
   remember (lookup_disjoint_none_right _ _ _ o H H0).
-  clear Heqe.
-  apply lookup_union_l; auto.
+  by apply lookup_union_l.
 Qed.
 
 
@@ -981,28 +926,26 @@ Lemma lookup_get_string_disjoint_union_right m1 m2 s o:
   s ∈ get_string_set_from_fid_set m2 →
   (m1 ∪ m2) !! (s, o) = m2 !! (s, o).
 Proof.
-  intros.
+  move => H H0.
   remember (lookup_disjoint_none_left _ _ _ o H H0).
-  clear Heqe.
-  apply lookup_union_r; auto.
+  by apply lookup_union_r.
 Qed.
 
 Lemma get_string_sets_disjoint_implies_sets_disjoint m1 m2:
   get_string_set_from_fid_set m1 ## get_string_set_from_fid_set m2 → 
   m1 ##ₘ m2.
 Proof.
-  unfold get_string_set_from_fid_set.
-  intros.
+  unfold get_string_set_from_fid_set => H.
   apply map_disjoint_dom_2.
   set_solver.
 Qed.
 
-Lemma elem_left_disjoint (s1 s2:gset string) x: s1##s2→ x∈s1 → x∉ s2.
+Lemma elem_left_disjoint (s1 s2 : gset string) x: s1 ## s2 → x∈s1 → x ∉ s2.
 Proof.
   set_solver.
 Qed.
 
-Lemma elem_right_disjoint (s1 s2:gset string) x: s1##s2→ x∈s2 → x∉ s1.
+Lemma elem_right_disjoint (s1 s2 : gset string) x: s1 ## s2 → x ∈ s2 → x ∉ s1.
 Proof.
   set_solver.
 Qed.
@@ -1011,15 +954,14 @@ Lemma get_string_set_same_matching_fns a b:
   (∀ f, a !! f = None ↔ b !! f = None) →
   get_string_set_from_fid_set a = get_string_set_from_fid_set b.
 Proof.
-  intros.
-  set_unfold.
-  intros.
+  move => H.
+  set_unfold => x.
   split; intros; destruct!; split!;try done; rewrite elem_of_dom;
-  rewrite elem_of_dom in H2; inversion H2.
-  destruct (b!! x0) eqn:?. naive_solver. rewrite -H in Heqo.
-  rewrite H0 in Heqo. inversion Heqo.    
-  destruct (a!! x0) eqn:?. naive_solver. rewrite H in Heqo.
-  rewrite H0 in Heqo. inversion Heqo.
+  rewrite elem_of_dom in H2; inversion H2 as [fnd H0].
+  - destruct (b !! x0) eqn:Heqo; [naive_solver|]. rewrite -H in Heqo.
+    by rewrite H0 in Heqo.
+  - destruct (a !! x0) eqn:Heqo; [naive_solver|]. rewrite H in Heqo.
+    by rewrite H0 in Heqo.
 Qed.   
 
 
@@ -1038,14 +980,24 @@ Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
   | LtOp => z1 ← val_to_Z v1; z2 ← val_to_Z v2; Some (ValBool (bool_decide (z1 < z2)))
   end.
 
+Definition not_val_num v := 
+  match v with 
+    | ValNum _ => False
+    | _ => True
+  end.
+
 Inductive head_step : lam_state → option lam_event → (lam_state → Prop) → Prop :=
 | BinOpS v1 op v2 lis h fns: (* v1 binop v2*)
   head_step (Lam (BinOp (Val v1) op (Val v2)) lis h fns) None (λ σ',
     ∃ v, eval_binop op v1 v2 = Some v ∧ σ' = Lam (Val v) lis h fns)
-| NewRefS v l lis h h' fns: (* ref v n *)
-  (∀n, v = ValNum n → heap_alloc_prop h h' l n) →
-  head_step (Lam (NewRef (Val v) ) lis h fns) None 
-  (λ σ', ∃n, v = ValNum n /\n>0 /\ σ' = Lam (Val (ValLoc l)) lis h' fns) 
+| NewRefS n l lis h h' fns: 
+  (heap_alloc_prop h h' l n) → 
+  head_step (Lam (NewRef (Val $ ValNum n)) lis h fns) None 
+  (λ σ', n > 0 ∧ σ' = Lam (Val $ ValLoc l) lis h' fns)
+| NewRefUBS v lis h fns: 
+  not_val_num v →
+  head_step (Lam (NewRef (Val v)) lis h fns) None 
+  (λ σ', False)
 | LoadS v lis h fns: (* !v *)
   head_step (Lam (Load (Val v)) lis h fns) None 
   (λ σ', ∃l v', v = ValLoc l ∧ h.(h_heap)!!l = Some v' ∧ σ' = Lam (Val v') lis h fns)
@@ -1161,12 +1113,10 @@ Lemma prim_step_inv K e lis h fns κ Pσ:
   ∃ K' e' Pσ', e = expr_fill K' e' ∧ head_step (Lam e' lis h fns) κ Pσ' ∧
       Pσ = (λ σ, ∃ e2 lis2 h2 fns2, Pσ' (Lam e2 lis2 h2 fns2) ∧ σ = Lam (expr_fill (K' ++ K) e2) lis2 h2 fns2).
 Proof.
-  inversion 1; simplify_eq => eNone.
+  inversion 1; simplify_eq => ?.
   revert select (expr_fill _ _ = expr_fill _ _) => Heq. move: (Heq) => /step_by_val Hg.
-  apply (Hg lis h fns κ Pσ0 eNone) in H7 as M. 
-  destruct M. exists x, e', Pσ0. subst.
-  split.
-  rewrite expr_fill_app in Heq. naive_solver. split;naive_solver.
+  have [//|??]:= Hg _ _ _ _ _ _ ltac:(done). subst.
+  rewrite expr_fill_app in Heq. naive_solver.
 Qed.
   
 
@@ -1223,8 +1173,8 @@ Inductive static_expr : Set :=
 | SStore (e1 e2 : static_expr)
 | SIf (e e1 e2 : static_expr)
 | SLetE (v : string) (e1 e2 : static_expr)
-| SFixE (f:string) (args: list string) (e:static_expr)
-| SApp (f: static_expr) (args : list static_expr)
+| SFixE (f : string) (args : list string) (e : static_expr)
+| SApp (f : static_expr) (args : list static_expr)
 .
 
 End static_expr.
@@ -1237,13 +1187,13 @@ Lemma static_expr_ind (P : static_expr → Prop) :
   (∀ (e1 e2 : static_expr), P e1 → P e2 → P (SStore e1 e2)) →
   (∀ (e1 e2 e3 : static_expr), P e1 → P e2 → P e3 → P (SIf e1 e2 e3)) →
   (∀ (v : string) (e1 e2 : static_expr), P e1 → P e2 → P (SLetE v e1 e2)) →
-  (∀ (f:string) (args: list string) (e:static_expr), P e → P (SFixE f args e)) →
+  (∀ (f : string) (args : list string) (e : static_expr), P e → P (SFixE f args e)) →
   (∀ (f : static_expr) (args : list static_expr), P f → Forall P args → P (SApp f args)) →
   ∀ (e : static_expr), P e.
 Proof.
   move => *. generalize dependent P => P. match goal with | e : static_expr |- _ => revert e end.
   fix FIX 1. move => [ ^e] => ????????? Hcall.
-  10: { apply Hcall. by apply:FIX. apply Forall_true => ?. by apply: FIX. }
+  10: { apply Hcall; [by apply FIX|]. apply Forall_true => ?. by apply: FIX. }
   all: auto.
 Qed.
 
@@ -1289,19 +1239,13 @@ Lemma static_expr_to_expr_to_static_expr e :
   static_expr_to_expr (expr_to_static_expr e) = e.
 Proof.
   elim: e => //=; try (move => *; f_equal; naive_solver).
-  - intros[]; auto; simpl. naive_solver. destruct id eqn:K; destruct o; naive_solver.
-  - move => f args Hall Hargs. f_equal. 
-  intros. apply andb_prop_elim in H. destruct H.
-  f_equal. naive_solver. rewrite -list_fmap_compose.
-  (* TODO improve this proof*)
-  rewrite forallb_True in H0.
-  apply (Forall_implication _ (λ H:expr ,static_expr_to_expr (expr_to_static_expr H) = H)  _) in H0; auto.
-  rewrite <-list_fmap_id.
-  apply Forall_fmap_ext_1.
-  remember (@Forall_iff expr (λ x : expr, static_expr_to_expr (expr_to_static_expr x) = x)
-  args (λ x : expr, (static_expr_to_expr ∘ expr_to_static_expr) x = id x)) as L.
-  naive_solver.
-  Qed.
+  - intros[]; auto; simpl; [done|]. repeat case_match; [done|]. by destruct!. 
+  - move => f args Hall Hargs. f_equal => H. 
+    apply andb_prop_elim in H. destruct H.
+    f_equal; [naive_solver|]. rewrite -list_fmap_compose.
+    induction args as [|hd tl IH]; [done|simpl].
+    inversion Hargs. destruct!/=. f_equal; naive_solver.
+Qed.
   
 Record static_fndef : Type := {
   sfd_args : list string;
@@ -1310,8 +1254,13 @@ Record static_fndef : Type := {
 
 Lemma static_expr_monotone e: is_static_expr false e → is_static_expr true e.
 Proof.
-  induction e;try  naive_solver. destruct v;auto. destruct id,o;auto.
-  simpl. intros. induction args. simpl. naive_solver. simpl. simpl in H0. inversion H. naive_solver.
+  induction e => /=; try naive_solver.
+  - by repeat case_match. 
+  - move => /andb_prop_elim [He Hargs]. apply andb_prop_intro; split!; [naive_solver|].
+    induction args => /=; [done|].
+    apply andb_prop_elim in Hargs as [Ha Hargs']. revert select (Forall _ _) => HForall.
+    inversion HForall; subst. 
+    apply andb_prop_intro; split!; naive_solver.
 Qed.
   
 Program Definition static_fndef_to_fndef (fn : static_fndef) : fndef := {|
@@ -1460,7 +1409,7 @@ Proof.
   destruct LamExprFill0; subst.
   constructor. intros.
   eexists _, _.  split; [done|] => /= ??.
-  eapply steps_spec_step_end. econs. done. econs. intros ?  ?. simpl in H0. naive_solver.
+  eapply steps_spec_step_end; [econs; [done|econs]|naive_solver].
 Qed.
 Global Hint Resolve lam_step_Var_s : typeclass_instances.
 
@@ -1469,8 +1418,9 @@ Lemma lam_step_Binop_i fns s h e K (v1 v2 : val) op `{!LamExprFill e K (BinOp (V
     (G true None (λ G', ∃ v', eval_binop op v1 v2 = Some v' ∧ G' (Lam (expr_fill K (Val v')) s h fns)))).
 Proof.
   destruct LamExprFill0; subst.
-  econs. intros. apply steps_impl_step_end. intros. apply prim_step_inv_head in H0. destruct H0 as [?[??]]. subst.
-  inversion H0; simplify_eq. naive_solver. solve_sub_redexes_are_values. reflexivity.
+  econs => *. apply steps_impl_step_end =>  ?? /prim_step_inv_head[| |?[??]].
+  { solve_sub_redexes_are_values. } { done. }
+  subst. inv_all head_step. naive_solver.
 Qed.
 Global Hint Resolve lam_step_Binop_i | 10 : typeclass_instances.
 
@@ -1478,13 +1428,12 @@ Lemma lam_step_Binop_s fns s h e K  (v1 v2 : val) op `{!LamExprFill e K (BinOp (
   TStepS lam_trans (Lam e  s h fns) (λ G,
     (G None (λ G', ∀ v', eval_binop op v1 v2 = Some v' → G' (Lam (expr_fill K (Val v')) s h fns)))).
 Proof.
-  destruct LamExprFill0; subst. constructor. intros.  split!. exact H.
-  intros. eapply steps_spec_step_end. econs. auto. constructor. intros.
-  naive_solver.
+  destruct LamExprFill0; subst. econs => *. split! => *; [done|]. 
+  apply: steps_spec_step_end; [econs; [done|econs]|naive_solver]. 
 Qed.
 Global Hint Resolve lam_step_Binop_s | 10 : typeclass_instances.
 
-(* can be removed?*)
+(* TODO: BEAUTIFY PROOFS*)
 Lemma lam_step_BinopAdd_i fns s h e K n1 n2 `{!LamExprFill e K (BinOp (Val (ValNum n1)) AddOp (Val (ValNum n2)))}:
   TStepI lam_trans (Lam e s h fns) (λ G,
     (G true None (λ G', G' (Lam (expr_fill K (Val (ValNum (n1 + n2)))) s h fns)))).
@@ -1499,7 +1448,7 @@ Lemma lam_step_BinopAdd_s fns s h e K (v1 v2 : val) `{!LamExprFill e K (BinOp (V
     (G None (λ G', ∀ n1 n2, v1 = ValNum n1 → v2 = ValNum n2 → G' (Lam (expr_fill K (Val (ValNum (n1 + n2)))) s h fns)))).
 Proof.
   destruct LamExprFill0; subst.
-  constructor =>  ? HG. split!. exact HG. intros. tstep_s. split! => ? /bind_Some[?[? /bind_Some[?[??]]]].
+  constructor =>  ? HG. split!; [exact HG|]. intros. tstep_s. split! => ? /bind_Some[?[? /bind_Some[?[??]]]].
   destruct v1,v2; naive_solver.
 Qed. 
 Global Hint Resolve lam_step_BinopAdd_s | 5 : typeclass_instances.
@@ -1518,34 +1467,36 @@ Lemma lam_step_BinopOffset_s fns s h e K (v1 v2 : val) `{!LamExprFill e K (BinOp
     (G None (λ G', ∀ l z, v1 = ValLoc l → v2 = ValNum z → G' (Lam (expr_fill K (Val (ValLoc(l+ₗz)))) s h fns)))).
 Proof.
   destruct LamExprFill0; subst.
-  constructor =>  ? HG. split!. exact HG. intros. tstep_s. split! => ? /bind_Some[?[? /bind_Some[?[??]]]].
+  constructor =>  ? HG. split!; [exact HG|]. intros. tstep_s. split! => ? /bind_Some[?[? /bind_Some[?[??]]]].
   destruct v1,v2; naive_solver.
 Qed. 
 Global Hint Resolve lam_step_BinopOffset_i | 5 : typeclass_instances.
 
 (* ** TO VERIFY*)
 Lemma lam_step_Newref_i fns s h e K n `{!LamExprFill e K (NewRef (Val (ValNum n)))}:
-  TStepI lam_trans (Lam e  s h fns) (λ G, ∀l h', heap_alloc_prop h h' l n→
-  (G true None (λ G',n>0/\ ( G' (Lam (expr_fill K (Val (ValLoc l))) s h' fns))))).
+  TStepI lam_trans (Lam e s h fns) (λ G, ∀ l h', heap_alloc_prop h h' l n →
+  (G true None (λ G', n > 0 ∧ ( G' (Lam (expr_fill K (Val (ValLoc l))) s h' fns))))).
 Proof.
   destruct LamExprFill0; subst.
-  econs. intros. apply steps_impl_step_end. intros. apply prim_step_inv_head in H0. destruct H0 as [?[??]]. subst.
-  inversion H0; simplify_eq. 
-  eexists true,  _. 
-  split!. apply H. apply H7. reflexivity.  intros. simpl in H1. destruct!. naive_solver.   
-  solve_sub_redexes_are_values. reflexivity. 
+  econs => ? HG. apply: steps_impl_step_end => ?? /prim_step_inv_head[| |?[??]].
+  { solve_sub_redexes_are_values. }
+  { done. }
+  inv_all head_step; [naive_solver|done].
 Qed.
 Global Hint Resolve lam_step_Newref_i | 10 : typeclass_instances.
 
 
 Lemma lam_step_Newref_s fns s h e K v  `{!LamExprFill e K (NewRef (Val v) )}:
-  TStepS lam_trans (Lam e s h fns) (λ G, (G None (λ G', ∃ l h', 
-  (∀n, v = ValNum n →heap_alloc_prop h h' l n/\(n>0→ G' (Lam (expr_fill K (Val (ValLoc l))) s h' fns)))))).
+  TStepS lam_trans (Lam e s h fns) (λ G, (G None (λ G', 
+    if v is ValNum n 
+      then ∃ l h', heap_alloc_prop h h' l n ∧ (n > 0 → G' (Lam (expr_fill K (Val (ValLoc l))) s h' fns))
+      else True ))).   
 Proof.
   destruct LamExprFill0; subst.
-  econs. intros. destruct!.   split!; [done|]. move => ? /=. intros. destruct!. eapply steps_spec_step_end. econs. 
-  done. econs. intros. apply H0 in H1. destruct!. exact H2. naive_solver. 
-Qed. 
+  econs => ? HG. split! => *; [done|].
+  case_match; destruct!;
+  (apply: steps_spec_step_end; [econs;[done|econs; done]| naive_solver]).
+Qed.
 Global Hint Resolve lam_step_Newref_s | 10 : typeclass_instances.
 
 
@@ -1653,8 +1604,12 @@ Lemma lam_step_Fix_i fns hd tl h e K f args body`{!LamExprFill e K (FixE f args 
   (fns_add fns (hd, Some n) fn_entry) )))).
 Proof.
   destruct LamExprFill0; subst.
-  econs. intros. apply steps_impl_step_end. intros. apply prim_step_inv_head in H0. destruct H0 as [?[??]]. subst.
-  inversion H0; simplify_eq. naive_solver. solve_sub_redexes_are_values. reflexivity. 
+  econs. intros. apply steps_impl_step_end. intros. 
+  apply prim_step_inv_head in H0.
+  - destruct H0 as [?[??]]. subst.
+  inversion H0; simplify_eq.  naive_solver.
+  - solve_sub_redexes_are_values.
+  - reflexivity. 
 Qed.
 Global Hint Resolve lam_step_Fix_i | 10 : typeclass_instances.
 
@@ -1668,8 +1623,7 @@ Lemma lam_step_Fix_s fns hd tl h e K f args body`{!LamExprFill e K (FixE f args 
 Proof.
   destruct LamExprFill0; subst.
   econs. intros.  split!; [done|].  intros. simpl in H0. destruct H0.
-  eapply steps_spec_step_end. econs. 
-  done. econs. destruct H0.  done. intros. naive_solver.
+  eapply steps_spec_step_end; [econs; [done|econs; destruct H0; done]|naive_solver]. 
 Qed. 
 Global Hint Resolve lam_step_Fix_s | 10 : typeclass_instances.
 
@@ -1688,7 +1642,7 @@ Proof.
     move => /= ??? e' [_ Heq]. rewrite right_id_L in Heq. by apply: list_expr_val_inv.
   } { done. } subst.
   rewrite right_id_L in Hstep. inv Hstep.
-  - destruct!; split!. auto. auto. simpl. intros. destruct!.  naive_solver.
+  - destruct!; split!; auto. intros. destruct!.  naive_solver.
   - naive_solver.
 Qed.
 Global Hint Resolve lam_step_App_i : typeclass_instances.
@@ -1703,13 +1657,11 @@ Lemma lam_step_App_s fns s h e K v  vs `{!LamExprFill e K (App (Val v) es)} `{!A
   ValFid f = v /\ f.1 ∉ get_string_set_from_fid_set fns/\ G' (Lam (expr_fill K Waiting) s  h fns))).
 Proof.
   destruct AsVals0, LamExprFill0; subst. rewrite right_id_L.
-  econs. intros. destruct!. eexists _,_ . split. exact H2.
-  intros. simpl in H0. eapply steps_spec_step_end. 
-  econs. naive_solver.  apply CallInternalS. exact H. intros. simpl in H1.
-  destruct!.  auto.
-  eexists _,_. split. exact H. intros. destruct H0 as [?[??]].
-  subst. eapply steps_spec_step_end. econs. auto. econs. auto. 
-  intros. naive_solver. 
+  econs. intros. destruct!; eexists _,_ ; split. { exact H2. }
+  { intros. simpl in H0. eapply steps_spec_step_end; [econs; [done|econs; done]|].
+  naive_solver. }
+  { exact H. }
+  move => *. destruct!/=. eapply steps_spec_step_end; [econs; [auto|econs; done]| naive_solver].
 Qed.
 Global Hint Resolve lam_step_App_s : typeclass_instances.
 
@@ -1740,11 +1692,8 @@ Lemma lam_step_Waiting_s fns s h e K `{!LamExprFill e K Waiting}:
    ).
 Proof.
   destruct LamExprFill0; subst.
-  constructor => ? HG. destruct!. split!. exact H0. intros.
-  eapply steps_spec_step_end. econs. auto. econs. auto. 
-  simpl. intros. naive_solver.
-  eexists _,_. split. naive_solver. eauto.
-  intros. eapply steps_spec_step_end. econs. auto. econs. naive_solver. 
+  constructor => ? HG. destruct!; (split!; [done|]); move => *; 
+  (apply: steps_spec_step_end; [econs; [done|econs; done]|naive_solver]).
 Qed.
 Global Hint Resolve lam_step_Waiting_s : typeclass_instances.
 
@@ -1808,13 +1757,11 @@ Proof.
   intros.
   unfold lam_proof_fns_match in H.
   split; intros; destruct!.
-  destruct (fns2 !! f) eqn:?.
-  naive_solver.
+  - destruct (fns2 !! f) eqn:?; [naive_solver|].
   rewrite - H in Heqo.
   rewrite H0 in Heqo.
   inversion Heqo.
-  destruct (fns1 !! f) eqn:?.
-  naive_solver.
+  - destruct (fns1 !! f) eqn:?; [naive_solver|].
   rewrite H in Heqo.
   rewrite H0 in Heqo.
   inversion Heqo.
@@ -1889,35 +1836,35 @@ Proof.
   eapply tsim_mono; auto. }
   simpl. intros. destruct σi, σs. destruct!.
   tstep_both. split!.
-  2:{intros. tstep_s. right. eexists _,_. split. destruct st_stack1 eqn:?. destruct!.
-  destruct H7. assert ([]=[]) as ref by auto. apply H6 in ref. inversion ref.
-  naive_solver. split!. auto. tend. apply: tsim_mono_b. naive_solver. }
+  2:{intros. tstep_s. right. eexists _,_. split. 
+  - destruct st_stack1 eqn:?; [|naive_solver].
+  destruct!. destruct H7. assert ([]=[]) as ref by auto. apply H6 in ref. inversion ref.
+  - split!; [auto|tend]. apply: tsim_mono_b. naive_solver. }
   intros. tstep_s. left.
   (*assert (f.1 ∈((get_string_set_from_fid_set fns2):gset string)).
   rewrite elem_of_map in H4. destruct!. 
   destruct (fns2!!x) eqn:?. rewrite elem_of_map. exists x. rewrite elem_of_dom. split!.
   rewrite -H in Heqo. rewrite elem_of_dom in H8. rewrite Heqo in H8. destruct H8. inversion H4.
   done.*) 
-  split!; try done.
-  erewrite <- get_string_set_same_matching_fns; naive_solver.
+  split!; [|done|].
+  { erewrite <- get_string_set_same_matching_fns; naive_solver. }
   tend. tstep_s. split!.
-  erewrite <- get_string_set_same_matching_fns; naive_solver.
+  { erewrite <- get_string_set_same_matching_fns; naive_solver. }
   intros.
   tstep_i.
   split!. intros.
   assert (∃ fn, st_fns0!! f = Some fn).
   {
-    erewrite fns_match_some. exists fn; naive_solver. unfold lam_proof_fns_match.
+    erewrite fns_match_some; [exists fn; naive_solver|]. unfold lam_proof_fns_match.
     naive_solver.
   }
   destruct!.
   assert (length vs = length (fd_args fn0)).
   {
-    eapply H1 in H5. destruct!. rewrite H12 in H6. inversion H6. subst.
+    eapply H1 in H5; [|done]. destruct!. rewrite H12 in H6. inversion H6. subst.
     rewrite H5. naive_solver.
-    done.
   }
-  split!; try done.
+  split!; [done..|].
 
   unshelve eapply tsim_remember. 
   { simpl. exact (λ n' '(Lam e1 s1 h1 fns1') '(Lam e2 s2 h2 fns2'),
@@ -1940,7 +1887,7 @@ Proof.
   split!;try done. intros. tstep_s. tstep_i. tstep_i. tstep_s. split!.
   apply H3; try done. split!; try done. }
   {simpl. intros. destruct σi,σs. destruct!;split!; try done. intros.
-  eapply tsim_mono. auto. by apply o_lt_impl_le. }
+  eapply tsim_mono; [auto|by apply o_lt_impl_le]. }
   simpl. intros. destruct σi, σs. destruct!.
   exploit H1;try done. 
   move => [?[Hx[?]]]. rewrite H18 in Hx. inversion Hx. subst. apply;try done.
@@ -1954,15 +1901,14 @@ Proof.
       } (* simple lemma*)
       intros. tend. 
       assert (∃ fn, fnsa!! f' = Some fn). {
-        erewrite <-fns_match_some. exists fn2; naive_solver. unfold lam_proof_fns_match.
+        erewrite <-fns_match_some; [exists fn2; naive_solver|]. unfold lam_proof_fns_match.
         naive_solver.
       }
       destruct!.
       assert (length vs2' = length (fd_args fn3)).
       {
-        eapply H1 in Pcond. destruct!.
+        eapply H1 in Pcond; [|done]. destruct!.
         rewrite H23 in H19. inversion H19; subst. rewrite H20. symmetry;done.
-        done.
       }
       split!; try done. 
       apply H14; try done.
@@ -1973,7 +1919,7 @@ Proof.
       {
         erewrite <- get_string_set_same_matching_fns; naive_solver.
       }
-      tend. apply H3. etrans. done. etrans. done. by apply o_lt_impl_le.
+      tend. apply H3; [etrans; [done|etrans;[done|by apply o_lt_impl_le]]|]. 
       split!; try done. naive_solver.
   - move => *. subst. apply: tsim_mono; [|done]. apply tsim_mono_b_false. naive_solver.
   - naive_solver. 
@@ -2304,7 +2250,7 @@ Proof.
   move => Hdisj.
   apply tsim_implies_trefines => /= n.
   unshelve apply: tsim_remember. { exact: (λ _, lam_link_inv true fns1 fns2). }
-  { split!. econs.  1,2,3: done. } { done. }
+  { split!. { econs. }  all: done. } { done. }
   move => /= {}n _ Hloop  [e1 s1 h1 fns1'] [[[ipfs cs] [el sl hl fnsl]] [er sr hr fnsr]] [m [K [Kl [Kr [e1'[el'[er' ?]]]]]]].
   have {}Hloop : ∀ σi σs,
             lam_link_inv false fns1 fns2 σi σs
@@ -2323,16 +2269,16 @@ Proof.
       * inversion H; subst.
         -- tstep_s. tstep_s. split!.
         tstep_s. right. split!. tstep_i.
-        rewrite !expr_fill_app.  eapply IHm. 2: exact H. lia. split!. by apply is_static_expr_expr_fill.
+        rewrite !expr_fill_app.  eapply IHm. 2: exact H. { lia. } split!. by apply is_static_expr_expr_fill.
         -- tstep_s. tstep_s. split!.
         tstep_s. right. split!. tstep_i.
         rewrite expr_fill_app . rewrite (expr_fill_app _ Kr').  eapply IHm.
-        2: apply LLCELeftToRight; auto; exact H3.  lia. split!. by apply is_static_expr_expr_fill.
+        2: apply LLCELeftToRight; auto; exact H3. { lia. } split!. by apply is_static_expr_expr_fill.
         -- tstep_s. tstep_s. split!.
         tstep_s. right. split!. tstep_i.
         rewrite expr_fill_app . rewrite (expr_fill_app _ Kr').  eapply IHm.
-        2: apply LLCERightToRight; auto; exact H3.  lia. split!. by apply is_static_expr_expr_fill.
-      * tstep_s. tstep_i. rewrite !expr_fill_app. eapply IHm. 2: exact H. lia.
+        2: apply LLCERightToRight; auto; exact H3. { lia. } split!. by apply is_static_expr_expr_fill.
+      * tstep_s. tstep_i. rewrite !expr_fill_app. eapply IHm. 2: exact H. { lia. }
         split!. by apply is_static_expr_expr_fill.
     - destruct (to_val er') eqn:?; [ |apply: Hloop;naive_solver].
       destruct er'; simplify_eq/=.
@@ -2342,16 +2288,16 @@ Proof.
       * inversion H; subst.
         -- tstep_s. tstep_s. split!.
         tstep_s. right. split!. tstep_i.
-        rewrite !expr_fill_app.  eapply IHm. 2: exact H. lia. split!. by apply is_static_expr_expr_fill.
+        rewrite !expr_fill_app.  eapply IHm. 2: exact H. { lia. } split!. by apply is_static_expr_expr_fill.
         -- tstep_s. tstep_s. split!.
         tstep_s. right. split!. tstep_i.
         rewrite expr_fill_app . rewrite (expr_fill_app _ Kl').  eapply IHm.
-        2: apply LLCERighttoLeft; auto; exact H3.  lia. split!. by apply is_static_expr_expr_fill.
+        2: apply LLCERighttoLeft; auto; exact H3. { lia. } split!. by apply is_static_expr_expr_fill.
         -- tstep_s. tstep_s. split!.
         tstep_s. right. split!. tstep_i.
         rewrite expr_fill_app . rewrite (expr_fill_app _ Kl').  eapply IHm.
-        2: apply LLCELeftToLeft; auto; exact H3.  lia. split!. by apply is_static_expr_expr_fill.
-      * tstep_s. tstep_i. rewrite !expr_fill_app. eapply IHm. 2: exact H. lia.
+        2: apply LLCELeftToLeft; auto; exact H3. { lia. } split!. by apply is_static_expr_expr_fill.
+      * tstep_s. tstep_i. rewrite !expr_fill_app. eapply IHm. 2: exact H. { lia. }
         split!. by apply is_static_expr_expr_fill.
     - apply: Hloop; naive_solver.
   }
@@ -2362,20 +2308,22 @@ Proof.
     inv_all head_step => //.
     + (* binop*) 
       tstep_s. intros. tend. split!. apply Hloop. 
-      rewrite !expr_fill_app. split!;auto. exact H1. 
+      rewrite !expr_fill_app. split!;auto; [done|]. 
       apply is_static_expr_expr_fill; split!; repeat case_match;auto.
     + (* newref*)
-      tstep_s. exists l, h'. intros. split!. symmetry in H0; naive_solver.
-      intros. tend.  split!;auto. exact H0. auto.
-      rewrite !expr_fill_app. apply Hloop. split!; auto. exact H1. 
-      apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+      tstep_s. split!; [done|].
+      move => *. tend.
+      split!. apply: Hloop. rewrite !expr_fill_app. split!; [done..|].
+      apply is_static_expr_expr_fill. split!.
+    + (* newreUB *)
+      tstep_s. case_match; done.  
     + (* load*)
-      tstep_s. intros. tend. split!. exact H0. exact H2.
-      rewrite !expr_fill_app. apply Hloop. split!; auto. exact H1.
+      tstep_s. intros. tend. split!; [done..|].
+      rewrite !expr_fill_app. apply Hloop. split!; auto. { exact H1. }
       apply is_static_expr_expr_fill; split!; repeat case_match;auto.
     + (* store*) 
-      tstep_s. intros. tend. split!. symmetry. exact H0. exact H2.
-      rewrite !expr_fill_app. apply Hloop. split!; auto. exact H1.
+      tstep_s. intros. tend. split!; [done..|]. 
+      rewrite !expr_fill_app. apply Hloop. split!; auto. { exact H1. }
       apply is_static_expr_expr_fill; split! ;naive_solver.                    
     + (* if*) 
       tstep_s. intros. tend. split!. symmetry. exact H0. 
@@ -2471,10 +2419,12 @@ Proof.
       rewrite !expr_fill_app. split!;auto. exact H1. 
       apply is_static_expr_expr_fill; split!; repeat case_match;auto.
     + (* newref*)
-      tstep_s. exists l, h'. intros. split!. symmetry in H0; naive_solver.
-      intros. tend.  split!;auto. exact H0. auto.
-      rewrite !expr_fill_app. apply Hloop. split!; auto. exact H1. 
-      apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+      tstep_s. split!; [done|].
+      move => *. tend.
+      split!. apply: Hloop. rewrite !expr_fill_app. split!; [done..|].
+      apply is_static_expr_expr_fill. split!.
+    + (* newreUB *)
+      tstep_s. case_match; done.  
     + (* load*)
       tstep_s. intros. tend. split!. exact H0. exact H2.
       rewrite !expr_fill_app. apply Hloop. split!; auto. exact H1.
@@ -2661,11 +2611,12 @@ Proof.
       tstep_s. intros. tend. split!. apply Hloop; auto. 
       rewrite !expr_fill_app. split!;auto. exact H1. 
       apply is_static_expr_expr_fill; split!; repeat case_match;auto.
-    + (* newref*)
-      tstep_s. exists l, h'. intros. split!. symmetry in H0; naive_solver.
-      intros. tend.  split!;auto. exact H0. auto.
-      rewrite !expr_fill_app. apply Hloop;auto. split!; auto. exact H1. 
-      apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+    + (* newref *)
+      tstep_s. split! => *; [done|]. tend. split!. apply: Hloop; [auto|].
+      rewrite !expr_fill_app. split!; [done..|].
+      apply is_static_expr_expr_fill; split!. 
+    + (* newrefUB *)
+      tstep_s. case_match; done.
     + (* load*)
       tstep_s. intros. tend. split!. exact H0. exact H2.
       rewrite !expr_fill_app. apply Hloop; auto. split!; auto. exact H1.
@@ -2790,11 +2741,12 @@ Proof.
       tstep_s. intros. tend. split!. apply Hloop; auto. 
       rewrite !expr_fill_app. split!;auto. exact H1. 
       apply is_static_expr_expr_fill; split!; repeat case_match;auto.
-    + (* newref*)
-      tstep_s. exists l, h'. intros. split!. symmetry in H0; naive_solver.
-      intros. tend.  split!;auto. exact H0. auto.
-      rewrite !expr_fill_app. apply Hloop; auto. split!; auto. exact H1. 
-      apply is_static_expr_expr_fill; split!; repeat case_match;auto.
+    + (* newref *)
+      tstep_s. split! => *; [done|]. tend. split!. apply: Hloop; [auto|].
+      rewrite !expr_fill_app. split!; [done..|].
+      apply is_static_expr_expr_fill; split!. 
+    + (* newrefUB *)
+      tstep_s. case_match; done.
     + (* load*)
       tstep_s. intros. tend. split!. exact H0. exact H2.
       rewrite !expr_fill_app. apply Hloop; auto. split!; auto. exact H1.
@@ -2973,10 +2925,11 @@ Proof.
       * (*binop*) tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!;   [done..| ].
         apply is_static_expr_expr_fill; split!; apply is_static_expr_val.
-      * (*newref*) tstep_s => *. exists l, h'. intros.  split!. symmetry in H0. auto.
-        intros. tend. split!; [done..|].
-        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
-        by apply is_static_expr_expr_fill.
+      * (*newref*) 
+        tstep_s. split!; [done|]. move => *.
+        tend. split!. rewrite !expr_fill_app. apply: Hloop; [done|].
+        split!; [done..|]. apply is_static_expr_expr_fill. split!.
+      * (*newrefUB*) tstep_s. case_match; done. 
       * (*load*) tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         apply is_static_expr_expr_fill; split!; apply is_static_expr_val.
@@ -3073,10 +3026,11 @@ Proof.
       * (*binop*) tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!;   [done..| ].
         apply is_static_expr_expr_fill; split!; apply is_static_expr_val.
-      * (*newref*) tstep_s => *. exists l, h'. intros.  split!. symmetry in H0. auto.
-        intros. tend. split!; [done..|].
-        apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
-        by apply is_static_expr_expr_fill.
+      * (*newref*) 
+        tstep_s. split!; [done|]. move => *.
+        tend. split!. rewrite !expr_fill_app. apply: Hloop; [done|].
+        split!; [done..|]. apply is_static_expr_expr_fill. split!.
+      * (*newrefUB*) tstep_s. case_match; done. 
       * (*load*) tstep_s => *. tend. split!; [done..|].
         apply: Hloop; [done|]. rewrite !expr_fill_app. split!; [done..| ].
         apply is_static_expr_expr_fill; split!; apply is_static_expr_val.
