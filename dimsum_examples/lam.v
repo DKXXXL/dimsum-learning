@@ -1,7 +1,7 @@
 From dimsum.core Require Export proof_techniques link prepost.
 From dimsum.core Require Import axioms.
 (* to delete *)
-(* Set Default Goal Selector "!". *)
+(*Set Default Goal Selector "!". *)
 Local Open Scope Z_scope.
 
 (** * Lam, a higher-order functional language with closures*)
@@ -986,6 +986,12 @@ Definition not_val_num v :=
     | _ => True
   end.
 
+Definition not_val_fid v := 
+  match v with 
+    | ValFid _ => False
+    | _ => True
+  end.
+
 Inductive head_step : lam_state → option lam_event → (lam_state → Prop) → Prop :=
 | BinOpS v1 op v2 lis h fns: (* v1 binop v2*)
   head_step (Lam (BinOp (Val v1) op (Val v2)) lis h fns) None (λ σ',
@@ -1033,6 +1039,10 @@ Inductive head_step : lam_state → option lam_event → (lam_state → Prop) �
   f.1∉get_string_set_from_fid_set fns →
   head_step (Lam (App (Val (ValFid f)) (Val <$> args)) lis h fns) (Some (Outgoing, ELCall f args h)) 
   (λ σ', σ' = Lam (Waiting) lis h fns)
+| CallUBS v args lis h fns: (* App non fid *)
+  not_val_fid v →
+  head_step (Lam (App (Val v) (Val <$> args)) lis h fns) None 
+  (λ σ', False)
 | ReturnInternalS v hd tl h fns: (* returning internal, i.e. popping the stack*)
   head_step (Lam (ReturnInt (Val v)) (hd::tl) h fns) None
   (λ σ',  σ' = Lam (Val v) tl h fns)
@@ -1636,32 +1646,37 @@ Lemma lam_step_App_i fns s h e K f vs es `{!LamExprFill e K (App (Val (ValFid f)
             G' (Lam (expr_fill K Waiting) s  h fns)))
     ).
 Proof.
-  destruct AsVals0, LamExprFill0; subst.
-  constructor => ? HG. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[Hstep ?]]. {
-    apply sub_redexes_are_values_item; case; try naive_solver.
-    move => /= ??? e' [_ Heq]. rewrite right_id_L in Heq. by apply: list_expr_val_inv.
-  } { done. } subst.
-  rewrite right_id_L in Hstep. inv Hstep.
-  - destruct!; split!; auto. intros. destruct!.  naive_solver.
-  - naive_solver.
+  destruct LamExprFill0, AsVals0; subst.
+  econs => ? [??]. apply steps_impl_step_end => ?? /prim_step_inv_head[| |?[Hstep ?]].
+  { apply sub_redexes_are_values_item; case; try naive_solver.
+    move => /= ??? e' [_ Heq]. rewrite right_id_L in Heq. by apply: list_expr_val_inv. }
+  { done. }
+  subst. rewrite right_id_L in Hstep. inv Hstep; naive_solver.
 Qed.
 Global Hint Resolve lam_step_App_i : typeclass_instances.
 
 (* Not sure*)
 (* TODO*)
 Lemma lam_step_App_s fns s h e K v  vs `{!LamExprFill e K (App (Val v) es)} `{!AsVals es vs None}:
-  TStepS lam_trans (Lam e s h fns) (λ G,( ∃f , ValFid f = v /\f.1 ∈get_string_set_from_fid_set fns /\ 
-  G  None (λ G',  (∀ fn, fns !! f = Some fn →length vs = length fn.(fd_args) →
-  G' (Lam (expr_fill (ReturnIntCtx:: K) ((subst_l fn.(fd_args) vs fn.(fd_body)))) (f.1::s) h fns)))) \/
-  ∃ f, G  (Some (Outgoing, ELCall  f vs h)) (λ G', 
-  ValFid f = v /\ f.1 ∉ get_string_set_from_fid_set fns/\ G' (Lam (expr_fill K Waiting) s  h fns))).
+  TStepS lam_trans (Lam e s h fns) (λ G,
+    if v is ValFid f then 
+      (f.1 ∈ get_string_set_from_fid_set fns ∧ G None  
+        (λ G', ∀ fn, fns !! f = Some fn → length vs = length fn.(fd_args) → 
+          G' (Lam (expr_fill (ReturnIntCtx :: K) (subst_l fn.(fd_args) vs fn.(fd_body))) (f.1 :: s) h fns)))
+          ∨
+      (f.1 ∉ get_string_set_from_fid_set fns ∧ G (Some (Outgoing, ELCall  f vs h)) (λ G', G' (Lam (expr_fill K Waiting) s  h fns)))
+      else 
+      G None (λ G', True)).
 Proof.
-  destruct AsVals0, LamExprFill0; subst. rewrite right_id_L.
-  econs. intros. destruct!; eexists _,_ ; split. { exact H2. }
-  { intros. simpl in H0. eapply steps_spec_step_end; [econs; [done|econs; done]|].
-  naive_solver. }
-  { exact H. }
-  move => *. destruct!/=. eapply steps_spec_step_end; [econs; [auto|econs; done]| naive_solver].
+  destruct LamExprFill0, AsVals0; subst.
+  econs => ? HG. case_match. 
+  4: { destruct!. 
+      - split!; [done|]. move => ??. rewrite right_id_L. apply: steps_spec_step_end; [econs; [done|by econs]|].
+        naive_solver.
+      - split!; [done|]. move => ??. rewrite right_id_L. apply: steps_spec_step_end; [econs; [done|by econs]|].
+        naive_solver. }
+  all: split!; [done..|]; move => *; apply: steps_spec_step_end;
+      [rewrite right_id_L; econs; [done|by econs]|naive_solver].
 Qed.
 Global Hint Resolve lam_step_App_s : typeclass_instances.
 
@@ -2381,26 +2396,28 @@ Proof.
         2,3: rewrite H11; reflexivity. apply LLCELeftToLeft. exact H1. by rewrite H2 in H8.
         auto. auto. apply is_static_expr_subst_l. apply fn.(fd_static).
       -- (* in right case *) 
-        right. split!. repeat case_bool_decide; try auto.
-        rewrite -H2 in H0.
-        exfalso. eapply elem_left_disjoint. exact H. exact H0. exact H8.
-        repeat case_bool_decide.
+        right. split!. by eapply elem_left_disjoint. repeat case_bool_decide; try auto.
         ++  exfalso. rewrite -H2 in H0. eapply elem_left_disjoint. exact H. exact H0. auto.
-        ++ split!. by rewrite H2. tstep_s. left. split!. tstep_s. left. split!. intros. tend. split!.
-           rewrite lookup_union_r. exact H5. eapply lookup_disjoint_none_left. exact H. exact H8.
-           auto. apply Hloop. 
+        ++ repeat case_bool_decide; try done. rewrite H4 in H8. rewrite elem_of_disjoint in Hdisj.
+          exfalso. naive_solver.
+          tstep_s. split!. tstep_s. split! => *. tend. split!.
+           rewrite lookup_union_r; [done|by eapply lookup_disjoint_none_left].
+           { done. }  apply Hloop. 
            assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H11 by auto.
            assert (∀K e, expr_fill K (ReturnExt e) = expr_fill (ReturnExtCtx::K) e) as H12 by auto.
            split!.
            all :try rewrite H12 ;try rewrite H11; try reflexivity; try auto. by apply LLCELeftToRight. 
-           apply is_static_expr_subst_l. apply fn.(fd_static).
-        ++ rewrite H4 in H8. contradiction.  
+           apply is_static_expr_subst_l. apply (fd_static).
+           by rewrite H4 in H8.
     + (* external app*) 
       unfold fns_inv in H; destruct!.
       tstep_s. right.  split!; repeat case_bool_decide. 
+      rewrite elem_get_string_set_union in H8. move => ?. 
+      assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
+      by left. done. 
       rewrite elem_get_string_set_union in H8. 
       assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
-      left. rewrite H2; done. contradiction.
+      left. rewrite H2; done. done.
       done. done.
       rewrite elem_get_string_set_union in H8.
       assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
@@ -2408,8 +2425,12 @@ Proof.
       rewrite elem_get_string_set_union in H8.
       assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
       right. rewrite H4; done. contradiction.
-      split!. auto. by rewrite H2. 
+      split!. auto. 
       tend. split!. apply Hloop.  split!; try done. apply LLCELeftToNone. exact H1. auto.
+    + (* app UB *)
+      destruct v eqn:?. 
+      4: done.
+      all: tstep_s; split!. 
   - (*right case*) tstep_both. apply: steps_impl_step_end => ?? /prim_step_inv[//|?[?[?[?[??]]]]].
     simplify_eq. revert select (Is_true (is_static_expr _ _)) => /is_static_expr_expr_fill/=[??]//.
     rewrite -expr_fill_app.
@@ -2485,11 +2506,11 @@ Proof.
       unfold fns_inv in H; destruct!. rewrite elem_get_string_set_union in H8. 
       tstep_s. destruct!.
       -- (* in left case *) 
-        right. split!. repeat case_bool_decide; try auto.
+        right. split!. by eapply elem_right_disjoint. repeat case_bool_decide; try auto.
         rewrite -H2 in H0.
         exfalso. eapply elem_left_disjoint. exact H. exact H8. rewrite H4. done. 
         repeat case_bool_decide.
-        ++ split!. eapply not_elem_of_disjoint. apply H8. done.
+        ++ split!. 
            tstep_s. left. split!. tstep_s. left. split!. intros. tend. split!.
            rewrite lookup_union_l. exact H3. eapply lookup_disjoint_none_right. exact H. exact H8.
            auto. apply Hloop. 
@@ -2509,20 +2530,26 @@ Proof.
         auto. auto. apply is_static_expr_subst_l. apply fn.(fd_static).  
     + (* external app*) 
       unfold fns_inv in H; destruct!.
-      tstep_s. right.  split!; repeat case_bool_decide.
-      done. 
-      rewrite elem_get_string_set_union in H8. 
+      tstep_s. right.  split!; repeat case_bool_decide. rewrite elem_get_string_set_union in H8 => ?.
       assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
-      right. rewrite H4; done. contradiction.
+      by right. contradiction.
       done. 
       rewrite elem_get_string_set_union in H8.
       assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
-      left. rewrite H2; done. contradiction.
+      right. by rewrite H4. done. 
+      done.
       rewrite elem_get_string_set_union in H8.
       assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
-      right. rewrite H4; done. contradiction.
-      split!. auto. by rewrite H4. 
-      tend. split!. apply Hloop.  split!; try done. apply LLCERightToNone. exact H1. auto.                                                     
+      left. by rewrite H2. done.
+      rewrite elem_get_string_set_union in H8.
+      assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
+      right. by rewrite H4. done.
+      split!. auto.  
+      tend. split!. apply Hloop.  split!; try done. apply LLCERightToNone. exact H1. auto.
+    + (* appUB *)
+      destruct v eqn:?.
+      4: done.
+      all: by tstep_s.                                                      
   - (* none case*) tstep_i. split.
     + (*call?*) intros. unfold fns_inv in H. destruct!. tstep_s. split!.
       rewrite elem_get_string_set_union in H0. case_bool_decide. auto. case_bool_decide. auto.
@@ -2681,12 +2708,11 @@ Proof.
         2,3: rewrite H11; reflexivity. apply LLCELeftToLeft. exact H1. by rewrite H2 in H7.
         auto. auto. apply is_static_expr_subst_l. apply fn.(fd_static).
       -- (* in right case *) 
-        right. split!. repeat case_bool_decide; try auto.
-        rewrite -H2 in H0.
-        exfalso. eapply elem_left_disjoint. exact H. exact H0. exact H7.
+        right. split!. by eapply elem_left_disjoint.  repeat case_bool_decide; try auto.
+        rewrite elem_of_disjoint in Hdisj. exfalso. rewrite H4 in H7; naive_solver.
         repeat case_bool_decide.
         ++  exfalso. rewrite -H2 in H0. eapply elem_left_disjoint. exact H. exact H0. auto.
-        ++ split!. by rewrite H2. tstep_s. left. split!. tstep_s. left. split!. intros. tend. split!.
+        ++ tstep_s. left. split!. tstep_s. left. split!. intros. tend. split!.
            rewrite lookup_union_r. exact H5. eapply lookup_disjoint_none_left. exact H. exact H7.
            auto. apply Hloop;auto. 
            assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H11 by auto.
@@ -2698,18 +2724,27 @@ Proof.
     + (* external app*) 
       unfold fns_inv in H; destruct!.
       tstep_s. right.  split!; repeat case_bool_decide. 
-      rewrite elem_get_string_set_union in H7. 
+      rewrite elem_get_string_set_union in H7 => ?. 
       assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
-      left. rewrite H2; done. contradiction.
-      done. done.
-      rewrite elem_get_string_set_union in H7.
+      by left. contradiction.
+      rewrite elem_get_string_set_union in H7 => ?.
       assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
       left. rewrite H2; done. contradiction.
       rewrite elem_get_string_set_union in H7.
       assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
       right. rewrite H4; done. contradiction.
-      split!. auto. by rewrite H2. 
+      split!.
+      rewrite elem_get_string_set_union in H7. 
+      assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
+      left. rewrite H2; done. contradiction.
+      rewrite elem_get_string_set_union in H7.
+      assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
+      right. rewrite H4; done. contradiction.
+      split!; [done|].
       tend. split!. apply Hloop;auto.  split!; try done. apply LLCELeftToNone. exact H1. auto.
+    + destruct v eqn:?.
+      4: done.
+      all: by tstep_s.
   - (*right case*) 
     destruct (to_val er') eqn:?.
     { destruct er' eqn:?; simplify_eq/=. clear H4. 
@@ -2807,12 +2842,12 @@ Proof.
       unfold fns_inv in H; destruct!. rewrite elem_get_string_set_union in H7. 
       tstep_s. destruct!.
       -- (* in left case *) 
-        right. split!. repeat case_bool_decide; try auto.
-        rewrite -H2 in H0.
-        exfalso. eapply elem_left_disjoint. exact H. exact H7. rewrite H4. done. 
+        right. split!. repeat case_bool_decide; try auto. by eapply elem_left_disjoint. 
         repeat case_bool_decide.
-        ++ split!. eapply not_elem_of_disjoint. apply H7. done.
-           tstep_s. left. split!. tstep_s. left. split!. intros. tend. split!.
+        done.
+        by rewrite H2 in H7. done.
+        repeat case_bool_decide.
+        ++ tstep_s. left. split!. tstep_s. left. split!. intros. tend. split!.
            rewrite lookup_union_l. exact H3. eapply lookup_disjoint_none_right. exact H. exact H7.
            auto. apply Hloop;auto. 
            assert (∀K e, expr_fill K (ReturnInt e) = expr_fill (ReturnIntCtx::K) e) as H11 by auto.
@@ -2831,20 +2866,27 @@ Proof.
         auto. auto. apply is_static_expr_subst_l. apply fn.(fd_static).  
     + (* external app*) 
       unfold fns_inv in H; destruct!.
-      tstep_s. right.  split!; repeat case_bool_decide.
-      done. 
+      tstep_s. right.  split!; repeat case_bool_decide. intro.
       rewrite elem_get_string_set_union in H7. 
       assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
-      right. rewrite H4; done. contradiction.
+      by right. contradiction.
       done. 
       rewrite elem_get_string_set_union in H7.
       assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
-      left. rewrite H2; done. contradiction.
+      right. by rewrite H4. contradiction.
+      done.
       rewrite elem_get_string_set_union in H7.
       assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
-      right. rewrite H4; done. contradiction.
-      split!. auto. by rewrite H4. 
-      tend. split!. apply Hloop;auto.  split!; try done. apply LLCERightToNone. exact H1. auto.                                                     
+      left. by rewrite H2. contradiction.
+      rewrite elem_get_string_set_union in H7.
+      assert (f.1 ∈ get_string_set_from_fid_set fnsl ∨ f.1 ∈ get_string_set_from_fid_set fnsr).
+      right. by rewrite H4. contradiction.
+      split!. auto. 
+      tend. split!. apply Hloop;auto.  split!; try done. apply LLCERightToNone. exact H1. auto.
+    + (* app UB*)
+      destruct v eqn:?.
+      4: done.
+      all: by tstep_s.                                                     
   - (* none case*) tstep_i. split.
     + (*call?*) intros. unfold fns_inv in H. destruct!. tstep_s. split!.
       rewrite elem_get_string_set_union in H0. case_bool_decide. auto. case_bool_decide. auto.
@@ -2978,7 +3020,7 @@ Proof.
           ** rewrite insert_get_string_set_unchanged; auto. rewrite H4. auto. 
           ** apply is_static_expr_expr_fill. split!.
       * (* var*) by tstep_s.
-      * (* app internal in fnsl*) tstep_s => *.  left. exists (s,o). split!. unfold fns_inv in *.
+      * (* app internal in fnsl*) tstep_s => *.  left. split!. unfold fns_inv in *.
         destruct!. simpl in H7. rewrite elem_get_string_set_union. left. auto. (* simple by apply lookup_union_Some_l.*)
         intros. tend. unfold fns_inv in *. destruct!. split!.
         rewrite lookup_get_string_disjoint_union_left in H3; auto. exact H3. 
@@ -3001,9 +3043,12 @@ Proof.
         split!.
         4: rewrite !H13. 2, 4:rewrite !H12. 2,3,4:done. apply LLCELeftToRight. exact H1.
         destruct!; simpl; auto. auto. apply is_static_expr_subst_l. apply fn.(fd_static). 
-        -- (* app external*) tstep_s. right. eexists (s,o), _. split!. done.
-            destruct H. destruct!. intro. rewrite elem_get_string_set_union in H. destruct!. rewrite H10 in H.  contradiction. 
+        -- (* app external*) tstep_s. right. split!. unfold fns_inv in H. destruct! => H'. rewrite elem_get_string_set_union in H'. 
+            destruct!. by rewrite H10 in H'. done. 
             tend. split!. apply Hloop; try done. split!; try done. econs. exact H1. done.
+      * destruct v eqn:?.
+        4: done.
+        all: by tstep_s.
   - (* ** MLRight case*)
     destruct (to_val er') eqn:?.
     + (* ** is a value*) 
@@ -3082,7 +3127,7 @@ Proof.
           ** rewrite insert_get_string_set_unchanged; auto. rewrite H8. auto. 
           ** apply is_static_expr_expr_fill. split!.
       * (* var*) by tstep_s.
-      * (* app internal in fnsl*) tstep_s => *.  left. exists (s,o). split!. unfold fns_inv in *.
+      * (* app internal in fnsl*) tstep_s => *.  left. split!. unfold fns_inv in *.
         destruct!. simpl in H7. rewrite elem_get_string_set_union. right. auto. (* simple by apply lookup_union_Some_l.*)
         intros. tend. unfold fns_inv in *. destruct!. split!.
         rewrite lookup_get_string_disjoint_union_right in H3; auto. exact H3. 
@@ -3105,9 +3150,14 @@ Proof.
         split!.
         3: rewrite !H12. 2, 3:rewrite !H11. 2,3,4:done. apply LLCERighttoLeft. exact H1.
         destruct!; simpl; auto. auto. apply is_static_expr_subst_l. apply fn.(fd_static). 
-        -- (* app external*) tstep_s. right. eexists (s,o), _. split!. done.
-            destruct H. destruct!. intro. rewrite elem_get_string_set_union in H. destruct!. rewrite H5 in H.  contradiction. 
+        -- (* app external*) tstep_s. right. split!. unfold fns_inv in H. destruct!.
+            move => H'. rewrite elem_get_string_set_union in H'. destruct!.
+            by rewrite H6 in H'. done.
             tend. split!. apply Hloop; try done. split!; try done. econs. exact H1. done.
+      * (* app UB *) 
+        destruct v eqn:?.
+        4: done.
+        all: by tstep_s.
   - tstep_i => *.
     repeat match goal with | x : lam_ev |- _ => destruct x end; simplify_eq/=; destruct!/=.
     +repeat case_bool_decide => //.  unfold fns_inv in H. destruct!.  
