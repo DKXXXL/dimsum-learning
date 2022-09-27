@@ -1,7 +1,7 @@
 From stdpp Require Import pretty.
 From dimsum.core Require Export proof_techniques.
 From dimsum.examples Require Import rec.
-
+Set Default Goal Selector "!".
 Local Open Scope Z_scope.
 Set Default Proof Using "Type".
 
@@ -91,10 +91,10 @@ Proof.
   all: rewrite ?IHe1 ?IHe2 ?IHe3 ?app_length; try lia.
   rewrite IHe.
   move: ren s.
-  revert select (Forall _ _). elim; csimpl. intros.  lia. 
+  revert select (Forall _ _). elim; csimpl; [lia|]. 
   move => ?? IH1 _ IH2 ??. rewrite IH1. 
-  assert (∀ (a b c:N), (a + b +c)%N = ((a+c)+b)%N) by lia.
-  rewrite H  IH2 app_length. lia.
+  have ->: (∀ (a b c : N), (a + b + c)%N = ((a + c) + b)%N) by lia.
+  rewrite IH2 app_length. lia.
 Qed.
 
 Lemma pass_vars ren s e :
@@ -109,13 +109,12 @@ Proof.
               | |- imap _ _ = imap _ _ => apply imap_ext => * /=
               | |- ssa_var _ _ = ssa_var _ _ => f_equal
               end; try lia.
-  auto.
+  { auto. }
   revert s. revert select (Forall _ _).
   elim => //; csimpl => ?? IH1 _ IH2 s.
   rewrite imap_app pass_state. 
-  assert (∀ (a b c:N), (a + b +c)%N = ((a+c)+b)%N) by lia.
-  rewrite H IH2. f_equal. 
-  rewrite IH1. 
+  have ->: (∀ (a b c : N), (a + b + c)%N = ((a + c) + b)%N) by lia.
+  rewrite IH2. f_equal; [rewrite IH1|]. 
   all: apply imap_ext; intros; f_equal; lia.
 Qed.
 
