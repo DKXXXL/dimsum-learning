@@ -49,7 +49,7 @@ Inductive lexpr_op :=
 | LBinOp (v1 : var_val) (o : binop) (v2 : var_val)
 | LLoad (v : var_val)
 | LStore (v1 v2 : var_val)
-| LCall (f : string) (args : list var_val).
+| LCall (f : var_val) (args : list var_val).
 
 Definition lexpr_op_to_expr (e : lexpr_op) : expr :=
   match e with
@@ -57,7 +57,7 @@ Definition lexpr_op_to_expr (e : lexpr_op) : expr :=
   | LBinOp v1 o v2 => BinOp (var_val_to_expr v1) o (var_val_to_expr v2)
   | LLoad v => Load (var_val_to_expr v)
   | LStore v1 v2 => Store (var_val_to_expr v1) (var_val_to_expr v2)
-  | LCall f args => Call f (var_val_to_expr <$> args)
+  | LCall f args => Call (var_val_to_expr f) (var_val_to_expr <$> args)
   end.
 
 Lemma lexpr_op_is_static e :
