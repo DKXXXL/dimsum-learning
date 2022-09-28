@@ -51,8 +51,9 @@ Fixpoint pass (ren : gmap string string) (e : static_expr) (s : N) : (N * static
       let p2 := pass ren e2 p1.1 in
       (p2.1, SStore p1.2 p2.2)
   | SCall f args =>
-      let p1 := state_bind (pass ren <$> args) s in
-      (p1.1, SCall f p1.2)
+      let p1 := pass ren f s in
+      let p2 := state_bind (pass ren <$> args) p1.1 in
+      (p2.1, SCall p1.2 p2.2)
   | SLetE v e1 e2 =>
       let p1 := pass ren e1 (s + 1) in
       let p2 := pass (<[v := ssa_var v s]> ren) e2 p1.1 in
@@ -85,9 +86,11 @@ Lemma pass_state ren s e :
 Proof.
   revert ren s. induction e => //= ren s; try lia.
   all: rewrite ?IHe1 ?IHe2 ?IHe3 ?app_length; try lia.
+  rewrite IHe.
   move: ren s.
-  revert select (Forall _ _). elim; csimpl; [lia|].
-  move => ?? IH1 _ IH2 ??. rewrite IH1 IH2 app_length. lia.
+  revert select (Forall _ _). elim; csimpl; [lia|]. 
+  move => ?? IH1 _ IH2 ??. rewrite IH1. 
+  rewrite N.add_shuffle0 IH2 app_length. lia.
 Qed.
 
 Lemma pass_vars ren s e :
@@ -102,10 +105,12 @@ Proof.
               | |- imap _ _ = imap _ _ => apply imap_ext => * /=
               | |- ssa_var _ _ = ssa_var _ _ => f_equal
               end; try lia.
-  revert s. revert select (Forall _ _).
-  elim => //; csimpl => ?? IH1 _ IH2 s.
-  rewrite imap_app IH2 pass_state. f_equal; [done|].
-  apply imap_ext => * /=. f_equal. lia.
+  - auto. 
+  - revert s. revert select (Forall _ _).
+    elim => //; csimpl => ?? IH1 _ IH2 s.
+    rewrite imap_app pass_state. 
+    rewrite N.add_shuffle0 IH2. f_equal; [rewrite IH1|]. 
+    all: apply imap_ext; intros; f_equal; lia.
 Qed.
 
 Lemma pass_correct Ki Ks ei es es' n h fns1 fns2 s vsi vss ren
@@ -149,19 +154,25 @@ Proof.
       apply lookup_insert_Some. right. split!. move => ?. subst. move: Hvsi.
       apply: eq_None_ne_Some_1. naive_solver lia.
     + move => ? s'. rewrite !pass_state => ?. apply lookup_insert_None. naive_solver lia.
-  - rewrite -(app_nil_l (subst_map vsi <$> _)) -(app_nil_l (subst_map vss <$> _)).
+  - have HCallCtx: (∀ e args, Call e args = expr_fill [CallLCtx args] e) by done.
+    rewrite !HCallCtx -!expr_fill_app.
+    apply: IHes'; [done..|].
+    move => {}h v' /=.
+    rewrite -(app_nil_l (subst_map vsi <$> _)) -(app_nil_l (subst_map vss <$> _)).
     change ([]) with (Val <$> []). move: [] => vs. move: s vs h Hvars.
     revert select (Forall _ _). elim.
-    + move => ???? /=. rewrite app_nil_r.
-      apply: Hcall; [done| | |done|done|done].
-      { apply Forall2_fmap_l. apply Forall_Forall2_diag. by apply Forall_true. }
-      { apply Forall2_fmap_l. apply Forall_Forall2_diag. by apply Forall_true. }
-    + move => ?? IH _ IH2 s vs h Hvars. csimpl.
-      eapply IH; [| |done|done|] => /=.
-      { constructor. by instantiate (1:=(CallCtx _ _ _) ::_). }
-      { constructor. by instantiate (1:=(CallCtx _ _ _) ::_). }
-      move => ?? /=. rewrite !cons_middle !app_assoc -fmap_snoc. apply IH2.
-      rewrite pass_state. naive_solver lia.
+    + move => *. rewrite app_nil_r. 
+      apply: Hcall; [done| | | done|done|done].
+      all: by apply Forall2_fmap_l, Forall_Forall2_diag, Forall_true.
+    + move => /= ?? IH _ IH2 s *. 
+      eapply IH; [| |done| |].
+      { constructor. by instantiate (1 := (CallRCtx _ _ _) :: _). }
+      { constructor. by instantiate (2 := (CallRCtx _ _ _) :: _). }
+      { rewrite !pass_state. naive_solver lia. }
+      move => * /=. rewrite !cons_middle !app_assoc -fmap_snoc.
+      rewrite !pass_state. rewrite (N.add_shuffle0 ).  
+      rewrite -(pass_state ren).  
+      apply: IH2. naive_solver lia.
 Qed.
 
 (** * pass_fn *)
