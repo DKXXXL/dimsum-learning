@@ -1279,7 +1279,7 @@ Proof.
         apply: map_union_subseteq_r'. { apply map_seqZ_disjoint. rewrite fmap_length. lia. }
         rewrite deep_to_asm_instrs_cons.
         etrans; [|apply insert_subseteq; apply lookup_map_seqZ_None; lia].
-        f_equiv; [lia|done].
+        apply: subseteq_eq. f_equal. lia.
       }
       2: { iDestruct "Hinv" as "(%&?&?&?)". iExists _. iFrame. iApply cr2a_regs_inv_mono_insert; [compute_done|done]. }
       iApply ("IH1" with "[//] [Hp]"). {

@@ -1034,7 +1034,7 @@ Section memmove.
     iIntros "!>" (??????). destruct!/=. case_match; destruct!/=.
     unfold sim_tgt_handler.
     iApply (sim_src_expr_elim None with "[] [-]"); [simpl; done..|].
-    rewrite /main_spec/TReceive bind_bind.
+    unfold main_spec. rewrite /TReceive bind_bind.
     iApply (sim_src_TExist (_, _, _)).
     rewrite bind_bind. setoid_rewrite bind_ret_l.
     iApply sim_src_TVis. iIntros (?) "Hsrc". iSplit!.

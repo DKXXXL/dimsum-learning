@@ -515,6 +515,11 @@ Qed.
 End theorems.
 
 (** * Lemmas about sets *)
+Lemma subseteq_eq A `{!SubsetEq A} `{!Reflexive (⊆@{A})} (X Y : A) :
+  X = Y →
+  X ⊆ Y.
+Proof. intros ->. done. Qed.
+
 Section semi_set.
   Context `{SemiSet A C}.
   Implicit Types x y : A.

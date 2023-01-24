@@ -340,7 +340,7 @@ Proof.
     move => Hhvs Halive.
     have := Hhvs (length hvs') v.
     have := Halive (length hvs') v.
-    rewrite lookup_app_r // -minus_n_n /= !offset_loc_add_sub; [|lia..]. move => ??.
+    rewrite lookup_app_r // Nat.sub_diag /= !offset_loc_add_sub; [|lia..]. move => ??.
     split!; [naive_solver|].
     tstep_i. split!; [naive_solver|].
     tstep_i.

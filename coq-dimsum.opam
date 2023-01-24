@@ -10,8 +10,8 @@ version: "dev"
 synopsis: "DimSum"
 
 depends: [
-  "coq" { (>= "8.15.0" & < "8.16~") | (= "dev") }
-  "coq-iris" { (= "dev.2022-12-08.0.9e1582b9") | (= "dev") }
+  "coq" { (>= "8.16.0" & < "8.17~") | (= "dev") }
+  "coq-iris" { (= "dev.2023-01-08.0.a34184ae") | (= "dev") }
   "coq-itree" { (= "5.0.0") }
   "coq-record-update" { (= "0.3.0") | (= "dev") }
 ]
