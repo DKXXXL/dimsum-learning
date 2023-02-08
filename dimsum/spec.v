@@ -17,7 +17,10 @@ Section spec.
 
   Local Set Primitive Projections.
 
-  Context {EV : TypeEvent} {S : TypeState} {R : TypeState}.
+  (** Technically, we could use TypeState for S, but this would break
+  once we translate Spec to itrees because the type of itrees must be
+  larger than the type of S (because it is returned by Get). *)
+  Context {EV : TypeEvent} {S : TypeBelowState} {R : TypeState}.
 
   (** We need to define our own spec language since the itree type
   lives in a universe that is too large, which means that it cannot be
@@ -220,7 +223,7 @@ Qed.
 End observing_relations.
 
 (** * spec_to_itree *)
-Inductive specE (EV S : Type) : Type → Type :=
+Inductive specE (EV : TypeState) (S : TypeBelowState) : TypeBelowState → TypeState :=
 | EVis (e : EV) : specE EV S unit
 | EAll (T : Type) : specE EV S T
 | EExist (T : Type) : specE EV S T
