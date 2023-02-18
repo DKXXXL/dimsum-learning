@@ -73,7 +73,7 @@ Proof.
       * rewrite /filtered_trace/=-/(filtered_trace _).
         constructor => -[??]. naive_solver.
     + apply: TTraceStep; [done | |done].
-      move => ??/=. eapply thas_trace_ex. naive_solver.
+      move => ??/=. eapply thas_trace_ex. by apply Hf.
       Unshelve. done.
   - move => T f ???? IH ?.
     have [fx Hfx]:= AxChoice _ _ _ IH.

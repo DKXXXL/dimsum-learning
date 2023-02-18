@@ -321,10 +321,10 @@ Proof.
       split_and!.
       * shelve.
       * apply: STraceStep; [done| |naive_solver]. move => ??.
-        apply: shas_trace_mono; [naive_solver| |done] => /=.
+        apply: shas_trace_mono; [by apply Hf| |done] => /=.
         move => ??. naive_solver.
       * have [[[??]?]|?]:= AxClassic (∃ x, ∀ κs, (f x).2 κs → ∀ x', (f x').2 κs).
-        -- apply: shas_trace_mono; [naive_solver| |done] => /=. done.
+        -- apply: shas_trace_mono; [by apply Hf| |done] => /=. done.
         -- apply: STraceEnd. done.
            split. shelve.
            move => [??].

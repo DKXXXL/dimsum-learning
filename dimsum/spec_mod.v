@@ -118,7 +118,7 @@ Proof.
   apply: tnhas_trace_under_tall; [done..|] => /= ? [[??]|[?[?[?[?[?[?[??]]]]]]]].
   { tend. apply: HP; [|done]. by split. }
   tstep; [| |done..]. { by apply: spec_step_mono. }
-  move => ??. apply: tnhas_trace_mono; [naive_solver|done|done|].
+  move => ??. apply: tnhas_trace_mono; [by eauto|done|done|].
   move => ??. by apply: HP.
 Qed.
 

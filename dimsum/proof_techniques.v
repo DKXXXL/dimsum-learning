@@ -513,7 +513,7 @@ Proof.
   move => Hsim κs' n' Hn /tnhas_trace_inv Ht.
   apply: thas_trace_under_tall; [done..|] => {Ht} κs [[??]|[?[?[?[?[?[?[<- ?]]]]]]]]. { tend. }
   have [?[? {}Hsim]]:= Hsim _ _ ltac:(done).
-  apply: Hsim. 2: { naive_solver. }
+  apply: Hsim. 2: { by eauto. }
   destruct b; (etrans; [|done]).
   - econs. apply o_lt_impl_le. etrans; [|done]. econs. by econs.
   - etrans; [|done]. econs. by econs.
@@ -675,7 +675,7 @@ Proof.
   - move => ??? κ ?? Hstep ? IH ?.
     have [f Hf]:= AxChoice1 IH.
     eexists (tapp (option_trace κ) (tex _ f)). split.
-    + apply: TTraceStep; [done| |done]. move => ??. apply: thas_trace_ex. naive_solver.
+    + apply: TTraceStep; [done| |done]. move => ??. apply: thas_trace_ex. by apply Hf.
     + move => σ2. destruct κ; simplify_eq/=.
       * move => /(thas_trace_cons_inv _ _) Ht.
         apply: (thas_trace_trans tnil); [done|] => ? [?[? {}Ht]].
@@ -742,7 +742,7 @@ Proof.
     have [f Hf]:= AxChoice1 IH.
     eexists (tapp (option_trace κ') (tex _ f)). split.
     + apply: thas_trace_trans; [done| ] => ?[?[??]].
-      apply: thas_trace_ex. naive_solver.
+      apply: thas_trace_ex. by apply Hf.
     + move => σs1 σs2 ? /thas_trace_app_inv Happ.
       apply: (thas_trace_mono _ _ (λ _, True)); [|done|done].
       move: Happ. destruct κ'; simplify_eq/=.

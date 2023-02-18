@@ -126,9 +126,9 @@ Proof.
          ++ constructor => -[??]. econstructor. naive_solver.
       -- apply: TTraceStep; [ done | | done].
          move => σ' Hσ'. apply: (thas_trace_ex (exist _ σ' Hσ')).
-         apply: thas_trace_mono. naive_solver. done. naive_solver.
+         apply: thas_trace_mono. by apply Hf. done. naive_solver.
       -- apply: thas_trace_all => -[??].
-         apply: thas_trace_mono. naive_solver. done. naive_solver.
+         apply: thas_trace_mono. by apply Hf. done. naive_solver.
     + have {}IH := IH (σ1, _) (conj ltac:(exact (eq_refl σ1)) _).
       have [f Hf]:= AxChoice1 IH.
       unshelve eexists ((tall _ (λ x, (f x).1)), tapp (option_trace e) (tex _ (λ x, (f x).2))) => /=.
@@ -140,10 +140,10 @@ Proof.
             naive_solver.
          ++ constructor => -[??]. econstructor. naive_solver.
       -- apply: thas_trace_all => -[??].
-         apply: thas_trace_mono. naive_solver. done. naive_solver.
+         apply: thas_trace_mono. by apply Hf. done. naive_solver.
       -- apply: TTraceStep; [ done | | done].
          move => σ' Hσ'. apply: (thas_trace_ex (exist _ σ' Hσ')).
-         apply: thas_trace_mono. naive_solver. done. naive_solver.
+         apply: thas_trace_mono. by apply Hf. done. naive_solver.
     + have {}IH := IH (_, _) (conj _ _).
       have [f Hf]:= AxChoice2 IH.
       unshelve eexists (tcons e1 (tex _ (λ x1, (tall _ (λ x2, (f x1 x2).1)))),
@@ -157,10 +157,10 @@ Proof.
          econstructor. naive_solver.
       -- apply: TTraceStep; [ done | | simpl; done].
          move => ??.
-         apply: thas_trace_ex. apply: thas_trace_all => -[??]. naive_solver.
+         apply: thas_trace_ex. apply: thas_trace_all => -[??]. by apply Hf.
       -- apply: TTraceStep; [ done | | simpl; done].
          move => ??.
-         apply: thas_trace_ex. apply: thas_trace_all => -[??]. naive_solver.
+         apply: thas_trace_ex. apply: thas_trace_all => -[??]. by apply Hf.
   - move => T f ???? IH ?.
     have [fx Hfx]:= AxChoice _ _ _ IH.
     eexists (tall T (λ x, (fx x).1), tall T (λ x, (fx x).2)) => /=.

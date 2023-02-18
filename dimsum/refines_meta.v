@@ -112,7 +112,7 @@ Proof.
         -- apply: TRel_cons; [done..|]. apply: TRel_ex; [done..|] => -[??]. naive_solver.
         -- apply: TRel_ex; [done..|] => -[??]. naive_solver.
       * apply: TTraceStep; [done..| |done].
-        move => ??. apply: thas_trace_ex. naive_solver.
+        move => ??. apply: thas_trace_ex. by apply Hf.
   - move => [κs [Hκs Ht]].
     elim: Ht Pκs Hκs.
     + move => ???????. apply: STraceEnd; [done|].

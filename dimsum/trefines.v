@@ -846,9 +846,9 @@ Proof.
   move => ?[?|?]; destruct!. { econs. by left. }
   have [?|[?[?[? {}IH]]]] := IH _ _ ltac:(done); destruct!/=.
   + econs. right. eexists _, _, _, _, _. split_and!; [done|simpl;done|done|] => /=.
-    move => ??. apply: tnhas_trace_mono; [naive_solver|done|by econs|done].
+    move => ??. apply: tnhas_trace_mono; [by eauto |done|by econs|done].
   + rename select (κs' ⊆ _) into Hκs.
-    apply: under_tall_mono'. { apply IH. rewrite -Hκs. naive_solver. }
+    apply: under_tall_mono'. { apply IH. rewrite -Hκs. by eauto. }
     move => /= κs'' [?|?]; destruct!. { by left. } right.
     eexists _, _, _, _, _. split_and!; [done|done| |done] => /=.
     etrans; [|done]. econs. econs. etrans; [|done]. apply o_le_S_maybe.

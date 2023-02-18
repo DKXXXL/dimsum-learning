@@ -343,9 +343,9 @@ Section sim_tgt.
     + iMod ("Hc" with "[-]") as %?. 2: { iPureIntro. by apply: thas_trace_mono. }
       iApply (bi_mono1_mono with "[$]"). iIntros (?) "[% [% ?]]".
       iExists _. iFrame. iPureIntro.
-      apply: tnhas_trace_mono; [naive_solver|done|by econs|done].
+      apply: tnhas_trace_mono; [by eauto|done|by econs|done].
     + iModIntro. iApply ("Hsim" with "[%] [$] [$]"). simplify_eq/=.
-      apply: tnhas_trace_mono; [naive_solver|done|by econs|done].
+      apply: tnhas_trace_mono; [by eauto|done|by econs|done].
     Unshelve.
     * etrans; [|done]. apply o_le_S.
     * done.
