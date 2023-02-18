@@ -366,8 +366,9 @@ Proof.
   constructor => ??. apply: steps_impl_step_end => ???.
   inv_all @m_step; simplify_eq/=.
   all: revert select (_ ≡ _); try by move => /spec_equiv_inv.
-  rewrite unfold_bind/=. setoid_rewrite unfold_bind. move => /=/spec_equiv_inv //=.
-  naive_solver.
+  rewrite unfold_bind/=. setoid_rewrite unfold_bind. move => /=/spec_equiv_inv //= Heq.
+  destruct!. split!; [done..|]. intros. destruct!/=. eexists _, _, _. split_and!; [split!| |done].
+  done.
 Qed.
 Global Hint Resolve spec_step_All_i : typeclass_instances.
 
@@ -478,7 +479,7 @@ Proof.
   inv_all @m_step; simplify_eq/=.
   all: revert select (_ ≡ _); try by move => /spec_equiv_inv.
   rewrite unfold_bind/=. setoid_rewrite unfold_bind. move => /=/spec_equiv_inv //=[??]; simplify_eq/=.
-  split!; [done..|]. move => ? [??]. eexists _, _, _. split_and!; [naive_solver| |done].
+  split!; [done..|]. move => ? [??]. eexists _, _, _. split_and!; [split!| |done].
   done.
   Unshelve. done.
 Qed.
