@@ -49,6 +49,12 @@ Definition assert_option {E R} `{!choiceE -< E} (o : option R) : itree E R :=
 Notation "x ?" := (assume_option x) (at level 10, format "x ?") : itree_scope.
 Notation "x !" := (assert_option x) (at level 10, format "x !") : itree_scope.
 
+(* This corresponds to the choice operator offered by traditional
+operational semantics. It corresponds to angelic choice, if [∀ x1 x2, P
+x1 → P x2 → x1 = x2]. *)
+Definition demonic_non_empty {E R} `{!choiceE -< E} (P : R → Prop) : itree E R :=
+  (assume (∃ x, P x);; x ← demonic _; assert (P x);; Ret x)%itree.
+
 Global Typeclasses Opaque angelic demonic assume assert UB NB assume_option assert_option.
 
 (** * visible events *)

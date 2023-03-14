@@ -5,6 +5,11 @@ From dimsum.core Require Import axioms.
 
 Export ITreeStdppNotations.
 
+(* TODOs:
+- Why do we need %itree so often? Why does Bind Scope itree_scope with itree. not work?
+- Why does the destructuring pattern syntax print so weirdly?
+ *)
+
 (** * Module semantics for spec *)
 
 Inductive itree_step EV S : (SmallITree.itree (moduleE EV S) void * S) → option EV → ((SmallITree.itree (moduleE EV S) void * S) → Prop) → Prop :=
@@ -343,6 +348,44 @@ Lemma itree_tstep_Tau {EV S} t cont:
 Proof. constructor. by rewrite stau_equiv. Qed.
 Global Hint Resolve spec_tstep_Tau : typeclass_instances.
 *)
+
+Lemma itree_step_Tau_s EV S k (s : S) :
+  ITreeTStepS (EV:=EV) (Tau k) s None (λ G, G k s).
+Proof.
+  constructor => ??. apply: steps_spec_step_end. { by econs. } naive_solver.
+Qed.
+Global Hint Resolve itree_step_Tau_s : typeclass_instances.
+
+Lemma itree_step_Tau_i EV S k s:
+  ITreeTStepI (EV:=EV) (S:=S) (Tau k) s (λ G, G true None (λ G', G' k s)).
+Proof.
+  constructor => ??.
+  apply: steps_impl_step_end => ???.
+  inv_all @m_step; simplify_eq/=.
+  all: revert select (_ ≡ _) => /SmallITree.equiv_from_itree/moduleE_eq_itree_inv //.
+  cbn => Heq. split!; [done..|]. move => /=??. split!; [|done]. by rewrite Heq.
+Qed.
+Global Hint Resolve itree_step_Tau_i : typeclass_instances.
+
+Lemma itree_step_Tau_maybe_s EV S k (s : S) b :
+  ITreeTStepS (EV:=EV) (Tau?b k) s None (λ G, G k s).
+Proof.
+  destruct b; [by apply itree_step_Tau_s|].
+  constructor => ??. by apply: steps_spec_end.
+Qed.
+Global Hint Resolve itree_step_Tau_maybe_s : typeclass_instances.
+
+Lemma itree_step_Tau_maybe_i EV S k s b:
+  ITreeTStepI (EV:=EV) (S:=S) (Tau?b k) s (λ G, G false None (λ G', G' k s)).
+Proof.
+  constructor => ??.
+  destruct b. 2: { apply: steps_impl_end. naive_solver. }
+  apply: steps_impl_step_end => ???.
+  inv_all @m_step; simplify_eq/=.
+  all: revert select (_ ≡ _) => /SmallITree.equiv_from_itree/moduleE_eq_itree_inv //.
+  cbn => Heq. split!; [done..|]. move => /=??. split!; [|done]. by rewrite Heq.
+Qed.
+Global Hint Resolve itree_step_Tau_maybe_i : typeclass_instances.
 
 Lemma itree_step_Vis_s EV S k (s : S) (e : EV):
   ITreeTStepS (ITree.bind (visible e) k) s (Some e) (λ G, G (k tt) s).

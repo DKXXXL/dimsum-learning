@@ -24,3 +24,8 @@ Module ITree.
         Ret (cons r rs)
         end%itree.
 End ITree.
+
+Definition Tau_maybe {E R} (b : bool) (t : itree E R) :=
+  if b then Tau t else t.
+Notation "'Tau?' b t" := (Tau_maybe b t)
+  (at level 20, b at level 9, t at level 20, right associativity, format "'Tau?' b  t").
