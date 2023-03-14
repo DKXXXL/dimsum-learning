@@ -10,6 +10,11 @@ Export ITreeStdppNotations.
 - Why does the destructuring pattern syntax print so weirdly?
  *)
 
+(* important TODOs:
+- define instances that lift ITreeTStep under bind
+- add a step to clear_itree that simplifies using ITreeTStep
+ *)
+
 (** * Module semantics for spec *)
 
 Inductive itree_step EV S : (SmallITree.itree (moduleE EV S) void * S) → option EV → ((SmallITree.itree (moduleE EV S) void * S) → Prop) → Prop :=
@@ -55,70 +60,321 @@ Proof.
   inv Hs. all: by econs; rewrite -Heq.
 Qed.
 
+(* Lemma supseteq_to_thas_trace EV S t1 t2 σ : *)
+(*   t1 ⊒ t2 → *)
+(*   (t1, σ) ~{ itree_trans EV S, tnil }~>ₜ (λ σ1, *)
+(*   ∀ e Pσ2, m_step (itree_trans EV S) (t2, σ) e Pσ2 → ∃ Pσ1, *)
+(*         m_step (itree_trans EV S) σ1 e Pσ1 ∧ *)
+(*           (∀ σ1', Pσ1 σ1' → ∃ σ2, Pσ2 σ2 ∧ σ1'.1 ⊒ σ2.1 ∧ σ1'.2 = σ2.2)). *)
+(* Proof. *)
+(*   unfold sqsupseteq, SmallITree.SmallITree_supseteq. *)
+(*   move => Hsup. *)
+(*   have : ↑ᵢ t2 ≅ ↑ᵢ t2 by []. *)
+(*   have : ↑ᵢ t1 ≅ ↑ᵢ t1 by []. *)
+(*   move: Hsup. move: {1 2}(↑ᵢ t1) => t1'. move: {1 2}(↑ᵢ t2) => t2'. *)
+(*   move => Hsup. punfold Hsup. unfold eqit_ in Hsup. *)
+(*   rewrite (itree_eta t1') (itree_eta t2'). *)
+(*   elim: Hsup t1 t2 => //. *)
+(*   - move => t1 t2 [Hp|//] ?? Ht1 Ht2. *)
+(*     tend => /= ?? ?. inv_all itree_step; simplify_eq/=; setoid_subst. *)
+(*     all: rewrite SmallITree.from_to_itree in Ht2. *)
+(*     all: move: Ht2 => /moduleE_eq_itree_inv//= Heq. *)
+(*     eexists _. split. { econstructor. unfold equiv, SmallITree.SmallITree_equiv. rewrite -Ht1. *)
+(*                         rewrite SmallITree.from_to_itree. done. } *)
+(*     move => /= ? ->. split!. *)
+(*     rewrite !SmallITree.from_to_itree -Heq. *)
+(*     punfold Hp. *)
+(*     pfold. *)
+(*     eapply eqit__mono; [|done|]. move => ?. naive_solver. done. *)
+(*   - move => /=. admit. *)
+(*   - move => t1 t2 _ ? IH ?? Ht1 Ht2. *)
+(*     tstep. { econstructor. unfold equiv, SmallITree.SmallITree_equiv. rewrite -Ht1. *)
+(*                         rewrite SmallITree.from_to_itree. done. } *)
+(*     2: simpl; done. *)
+(*     move => ? /= ->. apply: IH; [|done..]. rewrite SmallITree.from_to_itree. by rewrite -itree_eta. *)
+(* Admitted. *)
+
 Definition steps_impl_itree_equiv_rel {EV S} :
   relation (bool → option EV → ((SmallITree.itree (moduleE EV S) void * S → Prop) → Prop)) := λ Pσ Pσ',
   ∀ (b b' : bool) κ (P1 P2 : _ → Prop),
-    (∀ t s, P1 (t, s) → ∃ t', t ≡ t' ∧ P2 (t', s)) →
+    (∀ t s, P1 (t, s) → ∃ t', t' ⊒ t ∧ P2 (t', s)) →
     (b → b') →
     Pσ b κ P1 → Pσ' b' κ P2.
 
 Lemma steps_impl_itree_equiv_mono {EV S} t' σ (Pσ Pσ' : _ → _ → _ → Prop) :
   steps_impl_itree_equiv_rel Pσ Pσ' →
   σ -{ itree_trans EV S }-> Pσ →
-  σ.1 ≡ t' →
+  t' ⊒ σ.1 →
   (t', σ.2) -{ itree_trans EV S }-> Pσ'.
 Proof.
-  move => HP /steps_impl_unfold Ht Heq.
-  destruct Ht as [?| Ht]; simplify_eq/=.
-  { apply steps_impl_end. apply: HP; [..|done]; naive_solver. }
-  apply steps_impl_step => ???.
-  exploit Ht. { by apply: itree_step_mono. }
-  move => [?| [?[?[??]]]]; [left|right].
-  { apply: HP; [..|done]; naive_solver. }
-  split!; [done|].
-  apply: steps_impl_mono; [done|] => /= *.
-  apply: HP; [..|done]; naive_solver.
+  (* TODO: clean up this horrible proof *)
+  move => HP Ht Heq.
+  elim/@prop_least_fixpoint_pair_ind_wf: Ht t' Pσ' Heq HP => {}σ {}Pσ IHn t' {}Pσ' Heq HP.
+  destruct σ as [t s]; simpl in *.
+  punfold Heq. unfold eqit_ in Heq at 1.
+  move: Heq. move Hot: (observe (↑ᵢ t)) => ot. move Hot': (observe (↑ᵢ t')) => ot' Heq.
+  move: Hot'. have : (↑ᵢ t') ≅ (↑ᵢ t') by [].
+  move: {1 3}(↑ᵢ t') => ti Hti Hot'.
+  elim: Heq t t' ti s Pσ' Pσ HP IHn Hot Hot' Hti.
+  - done.
+  - move => m1 m2 [REL|//] t t' ti s Pσ' Pσ HP IHn Hot Hot' Hti.
+    rewrite -/(eqit _ _ _) -/(euttge _ _ _) in REL.
+    move: IHn => [?| {}IHn]; simplify_eq.
+    + apply: steps_impl_end. eapply HP; [|done..]. move => t1 ? [? ?]. subst. eexists _. split; [|done].
+      rewrite -SmallITree.euttge_to_itree -Hti (itree_eta (↑ᵢ t1)) Hot (itree_eta ti) Hot'.
+      by apply eqit_Tau.
+    + apply: steps_impl_step => ???. inv_all @m_step.
+      all: revert select (_ ≡ _);
+        rewrite -SmallITree.eqit_to_itree SmallITree.from_to_itree -Hti (itree_eta ti) Hot';
+        move => /moduleE_eq_itree_inv //= Heq.
+      exploit IHn.
+      { by econs; rewrite -SmallITree.eqit_to_itree (itree_eta (↑ᵢ t)) Hot SmallITree.from_to_itree. }
+      move => [?|[?[?[? Hfix]]]]; simplify_eq.
+      * left. eapply HP; [|done..]. move => /= ???. simplify_eq. split!. by rewrite -Heq REL.
+      * right. eexists _. split_and!; [done..|].
+        move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|/=IH ?].
+        { apply wf_pred_mono. apply (steps_impl_rec_mono (itree_trans _ _)). }
+        apply IH => //=. { by rewrite -Heq REL. } unfold steps_impl_itree_equiv_rel in *. naive_solver.
+  - move => u e k1 k2 Hu t t' ti s Pσ' Pσ HP IHn Hot Hot' Hti.
+    move: IHn => [?|{}IHn]. {
+      apply: steps_impl_end. eapply HP; [|done..]. move => t1 ? [? ?]. subst. eexists _. split; [|done].
+      rewrite -SmallITree.euttge_to_itree -Hti (itree_eta (↑ᵢ t1)) Hot (itree_eta ti) Hot'.
+      apply eqit_Vis => v. move: (Hu v) => [|//]. done.
+    }
+    apply: steps_impl_step => ???.
+    inv_all @m_step.
+    all: revert select (_ ≡ _);
+      rewrite -SmallITree.eqit_to_itree SmallITree.from_to_itree -Hti (itree_eta ti) Hot';
+      move => /moduleE_eq_itree_inv //= Heq.
+    all: repeat case_match => //; destruct!/=.
+    + exploit IHn.
+      { by econs; rewrite -SmallITree.eqit_to_itree (itree_eta (↑ᵢ t)) Hot SmallITree.from_to_itree. }
+      move => [?|[?[?[? Hfix]]]]; destruct!/=.
+      * left. eapply HP; [|done..]. move => t1 ? [? ?]. simplify_eq. split!.
+        rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
+      * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_impl_rec_mono (itree_trans _ _)). }
+        eexists _. split_and!;[ naive_solver..|].
+        apply: IH => /=. 2: unfold steps_impl_itree_equiv_rel in *; naive_solver.
+        rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
+    + exploit IHn.
+      { by econs; rewrite -SmallITree.eqit_to_itree (itree_eta (↑ᵢ t)) Hot SmallITree.from_to_itree. }
+      move => [?|[?[?[? Hfix]]]]; destruct!/=.
+      * left. eapply HP; [|done..]. move => t1 ? [? ?]. simplify_eq. split!.
+        rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
+      * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_impl_rec_mono (itree_trans _ _)). }
+        eexists _. split_and!;[ naive_solver..|].
+        apply: IH => /=. 2: unfold steps_impl_itree_equiv_rel in *; naive_solver.
+        rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
+    + exploit IHn.
+      { by econs; rewrite -SmallITree.eqit_to_itree (itree_eta (↑ᵢ t)) Hot SmallITree.from_to_itree. }
+      move => [?|[?[?[? Hfix]]]]; destruct!/=.
+      left. eapply HP; [|done..]. move => t1 ? [? ?]. simplify_eq. split!.
+      rewrite SmallITree.supseteq_from_itree. revert select (_ ≅ _) => <-.
+      exploit Hu => -[//|//].
+    + exploit IHn.
+      { by econs; rewrite -SmallITree.eqit_to_itree (itree_eta (↑ᵢ t)) Hot SmallITree.from_to_itree. }
+      move => [?|[?[?[? Hfix]]]]; destruct!/=.
+      * left. eapply HP; [|done..]. move => t1 ? [? ?]. simplify_eq. split!.
+        rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
+      * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_impl_rec_mono (itree_trans _ _)). }
+        eexists _. split_and!;[ naive_solver..|].
+        apply: IH => /=. 2: unfold steps_impl_itree_equiv_rel in *; naive_solver.
+        rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
+    + exploit IHn.
+      { by econs; rewrite -SmallITree.eqit_to_itree (itree_eta (↑ᵢ t)) Hot SmallITree.from_to_itree. }
+      revert select (_ ≅ _) => Heq.
+      move => [?|[?[?[? Hfix]]]]; destruct!/=.
+      * left. eapply HP; [|done..]. move => t1 ? [? ?]. simplify_eq. split!.
+        rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
+      * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_impl_rec_mono (itree_trans _ _)). }
+        eexists _. split_and!;[ naive_solver..|].
+        apply: IH => /=. 2: unfold steps_impl_itree_equiv_rel in *; naive_solver.
+        rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
+    + exploit IHn.
+      { by econs; rewrite -SmallITree.eqit_to_itree (itree_eta (↑ᵢ t)) Hot SmallITree.from_to_itree. }
+      revert select (_ ≅ _) => Heq.
+      move => [?|[?[?[? Hfix]]]]; destruct!/=.
+      * left. eapply HP; [|done..]. move => t1 ? [? ?]. simplify_eq. split!.
+        rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
+      * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_impl_rec_mono (itree_trans _ _)). }
+        eexists _. split_and!;[ naive_solver..|].
+        apply: IH => /=. 2: unfold steps_impl_itree_equiv_rel in *; naive_solver.
+        rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
+  - move => t1 ot2 ? REL IH t t' ti s Pσ' Pσ HP IHn Hot Hot' Hti.
+    move: REL => /fold_eqitF REL. specialize (REL _ _ ltac:(done) ltac:(done)). simplify_eq.
+    apply: steps_impl_step => ???. inv_all @m_step.
+    all: revert select (_ ≡ _);
+      rewrite -SmallITree.eqit_to_itree SmallITree.from_to_itree -Hti (itree_eta ti) Hot';
+      move => /moduleE_eq_itree_inv //= Heq.
+    right. split!. apply: IH. 2: done.
+    + move => *. apply: HP; [..|done]; naive_solver.
+    + done.
+    + done.
+    + by rewrite SmallITree.from_to_itree.
+  - done.
 Qed.
 
 Global Instance steps_impl_itree_proper EV S :
-  Proper ((prod_relation (≡) (=)) ==> steps_impl_itree_equiv_rel ==> impl) (steps_impl (itree_trans EV S)).
+  Proper ((prod_relation (flip (⊒)) (=)) ==> steps_impl_itree_equiv_rel ==> impl) (steps_impl (itree_trans EV S)).
 Proof. move => [??] [??] [/= Heq ->] ?? Hf ?. by apply: (steps_impl_itree_equiv_mono _ (_, _)). Qed.
 
 Global Instance steps_impl_itree_proper_flip EV S :
-  Proper ((prod_relation (≡) (=)) ==> flip steps_impl_itree_equiv_rel ==> flip impl) (steps_impl (itree_trans EV S)).
+  Proper ((prod_relation (⊒) (=)) ==> flip steps_impl_itree_equiv_rel ==> flip impl) (steps_impl (itree_trans EV S)).
 Proof.
-  move => [??] [??] [/= Heq ->] ?? Hf ?. apply: (steps_impl_itree_equiv_mono _ (_, _)); [done..|].
-  apply eqit_flip. by apply: eqit_mon; [..|done].
+  move => [??] [??] [/= Heq ->] ?? Hf ?. apply: (steps_impl_itree_equiv_mono _ (_, _)); [done..|]. done.
 Qed.
 
 Lemma steps_spec_itree_equiv_mono {EV S} t' σ κ Pσ Pσ' :
-  (prod_relation (≡) (=) ==> impl)%signature Pσ Pσ' →
+  (prod_relation (flip (⊒)) (=) ==> impl)%signature Pσ Pσ' →
   σ -{ itree_trans EV S, κ }->ₛ Pσ →
-  σ.1 ≡ t' →
+  t' ⊒ σ.1 →
   (t', σ.2) -{ itree_trans EV S, κ }->ₛ Pσ'.
 Proof.
-  move => HP /steps_spec_unfold Ht Heq.
-  destruct Ht as [[??]| [?[?[?[? Ht]]]]]; simplify_eq/=.
-  { apply steps_spec_end. apply: HP; [|done]. by split. }
-  apply steps_spec_unfold. right. split!. { by apply: itree_step_mono. } { done. }
-  move => ??. exploit Ht; [done..|] => -[[??]|[??]]; [left|right]; split!.
-  { apply: HP; [..|done]; naive_solver. }
-  apply: steps_spec_mono; [done|] => /= *.
-  apply: HP; [..|done]; naive_solver.
+  (* TODO: clean up this horrible proof *)
+  move => HP Ht Heq.
+  elim/@prop_least_fixpoint_ind_wf: Ht t' Heq => {}σ IHn t' Heq.
+  destruct σ as [t s]; simpl in *.
+  punfold Heq. unfold eqit_ in Heq at 1.
+  move: Heq. move Hot: (observe (↑ᵢ t)) => ot. move Hot': (observe (↑ᵢ t')) => ot' Heq.
+  move: Hot'. have : (↑ᵢ t') ≅ (↑ᵢ t') by [].
+  move: {1 3}(↑ᵢ t') => ti Hti Hot'.
+  elim: Heq t t' ti s IHn Hot Hot' Hti.
+  - done.
+  - move => m1 m2 [REL|//] t t' ti s IHn Hot Hot' Hti. rewrite -/(eqit _ _ _) -/(euttge _ _ _) in REL.
+    move: IHn => [[??]|[?[?[? [? Ht]]]]]; simplify_eq.
+    + apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
+      rewrite -SmallITree.euttge_to_itree (itree_eta (↑ᵢ t)) Hot -Hti (itree_eta ti) Hot'.
+      by apply eqit_Tau.
+    + inv_all @m_step.
+      all: revert select (_ ≡ _);
+        rewrite -SmallITree.eqit_to_itree SmallITree.from_to_itree (itree_eta (↑ᵢ t)) Hot;
+        move => /moduleE_eq_itree_inv //= Heq.
+      exploit Ht; [done|] => -[[??]|[? Hfix]]; simplify_eq.
+      * apply: steps_spec_step_end.
+        { by econs; rewrite -SmallITree.eqit_to_itree -Hti (itree_eta ti) Hot' SmallITree.from_to_itree. }
+        move => ? ->. eapply HP; [|done]. split; [|done] => /=.
+        by rewrite SmallITree.supseteq_from_itree -Heq.
+      * apply: steps_spec_step.
+        { by econs; rewrite -SmallITree.eqit_to_itree -Hti (itree_eta ti) Hot' SmallITree.from_to_itree. }
+        move => ? ->. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_spec_rec_mono (itree_trans _ _)). }
+        apply: IH => /=. by rewrite SmallITree.supseteq_from_itree -Heq.
+  - move => u e k1 k2 Hu t t' ti s IHn Hot Hot' Hti.
+    move: IHn => [[??]|[?[?[? [? Ht]]]]]. {
+      subst. apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
+      rewrite -SmallITree.euttge_to_itree (itree_eta (↑ᵢ t)) Hot -Hti (itree_eta ti) Hot'.
+      apply eqit_Vis => v. move: (Hu v) => [|//]. done.
+    }
+    inv_all @m_step.
+    all: revert select (_ ≡ _);
+      rewrite -SmallITree.eqit_to_itree SmallITree.from_to_itree (itree_eta (↑ᵢ t)) Hot;
+      move => /moduleE_eq_itree_inv //= Heq.
+    all: repeat case_match => //; destruct!/=.
+    + apply: steps_spec_step.
+      { by econs; rewrite -SmallITree.eqit_to_itree -Hti (itree_eta ti) Hot' SmallITree.from_to_itree. }
+      move => ? /= [x ->].
+      exploit Ht; [split!|].
+      move => -[[??]|[? Hfix]]; subst.
+      * apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
+        rewrite SmallITree.supseteq_from_itree -Heq.
+        move: (Hu x) => [|//]. done.
+      * move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_spec_rec_mono (itree_trans _ _)). }
+        apply: IH => /=. rewrite SmallITree.supseteq_from_itree -Heq.
+        move: (Hu x) => [|//]. done.
+    + apply: steps_spec_step.
+      { by econs; rewrite -SmallITree.eqit_to_itree -Hti (itree_eta ti) Hot' SmallITree.from_to_itree. }
+      move => ? /= ?.
+      exploit Ht; [split!|].
+      move => -[[??]|[? Hfix]]; subst.
+      * apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
+        rewrite SmallITree.supseteq_from_itree -Heq.
+        move: (Hu x) => [|//]. done.
+      * move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_spec_rec_mono (itree_trans _ _)). }
+        apply: IH => /=. rewrite SmallITree.supseteq_from_itree -Heq.
+        move: (Hu x) => [|//]. done.
+    + apply: steps_spec_step_end.
+      { by econs; rewrite -SmallITree.eqit_to_itree -Hti (itree_eta ti) Hot' SmallITree.from_to_itree. }
+      revert select (_ ≅ _) => Heq.
+      move => ? /= ?. exploit Ht; [split!|].
+      move => -[[??]|[? Hfix]]; simplify_eq.
+      eapply HP; [|done]. split; [|done] => /=.
+      rewrite SmallITree.supseteq_from_itree -Heq.
+      move: (Hu tt) => [|//]. done.
+    + apply: steps_spec_step.
+      { by econs; rewrite -SmallITree.eqit_to_itree -Hti (itree_eta ti) Hot' SmallITree.from_to_itree. }
+      move => ? /= ?.
+      exploit Ht; [split!|].
+      move => -[[??]|[? Hfix]]; subst.
+      * apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
+        rewrite SmallITree.supseteq_from_itree -Heq.
+        move: (Hu s) => [|//]. done.
+      * move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_spec_rec_mono (itree_trans _ _)). }
+        apply: IH => /=. rewrite SmallITree.supseteq_from_itree -Heq.
+        move: (Hu s) => [|//]. done.
+    + apply: steps_spec_step.
+      { by econs; rewrite -SmallITree.eqit_to_itree -Hti (itree_eta ti) Hot' SmallITree.from_to_itree. }
+      revert select (_ ≅ _) => Heq.
+      move => ? /= ?.
+      exploit Ht; [split!|].
+      move => -[[??]|[? Hfix]]; subst.
+      * apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
+        rewrite SmallITree.supseteq_from_itree -Heq.
+        move: (Hu tt) => [|//]. done.
+      * move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_spec_rec_mono (itree_trans _ _)). }
+        apply: IH => /=. rewrite SmallITree.supseteq_from_itree -Heq.
+        move: (Hu tt) => [|//]. done.
+    + apply: steps_spec_step.
+      { by econs; rewrite -SmallITree.eqit_to_itree -Hti (itree_eta ti) Hot' SmallITree.from_to_itree. }
+      revert select (_ ≅ _) => Heq.
+      move => ? /= ?.
+      exploit Ht; [split!|].
+      move => -[[??]|[? Hfix]]; subst.
+      * apply: steps_spec_end. eapply HP; [|done]. split; [|done] => /=.
+        rewrite SmallITree.supseteq_from_itree -Heq.
+        move: (Hu tt) => [|//]. done.
+      * move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
+        { apply wf_pred_mono. apply (steps_spec_rec_mono (itree_trans _ _)). }
+        apply: IH => /=. rewrite SmallITree.supseteq_from_itree -Heq.
+        move: (Hu tt) => [|//]. done.
+  - move => t1 ot2 ? REL IH t t' ti s IHn Hot Hot' Hti.
+    move: REL => /fold_eqitF REL. specialize (REL _ _ ltac:(done) ltac:(done)).
+    apply: steps_spec_step.
+    { by econs; rewrite -SmallITree.eqit_to_itree -Hti (itree_eta ti) Hot' SmallITree.from_to_itree. }
+    move => /= ??. simplify_eq.
+    apply: IH.
+    + done.
+    + done.
+    + done.
+    + by rewrite SmallITree.from_to_itree.
+  - done.
 Qed.
 
 Global Instance steps_spec_itree_proper EV S :
-  Proper ((prod_relation (≡) (=)) ==> (=) ==> (prod_relation (≡) (=) ==> iff) ==> iff) (steps_spec (itree_trans EV S)).
+  Proper ((prod_relation (flip (⊒)) (=)) ==> (=) ==> (prod_relation (flip (⊒)) (=) ==> impl) ==> impl) (steps_spec (itree_trans EV S)).
 Proof.
-  move => [??] [??] [/= Heq ->] ?? -> ?? Hf.
-  split => ?.
-  all: apply: (steps_spec_itree_equiv_mono _ (_, _)); [try done| done |].
-  - move => ????. eapply Hf; [|done]. done.
-  - done.
-  - move => ?? [??] ?. eapply Hf; [|done]. split; [|done]. apply eqit_flip. by apply: eqit_mon; [..|done].
-  - apply eqit_flip. by apply: eqit_mon; [..|done].
+  move => [??] [??] [/= Heq ->] ?? -> ?? Hf ?.
+  apply: (steps_spec_itree_equiv_mono _ (_, _)); [done| done |done].
 Qed.
 
+Global Instance steps_spec_itree_proper_flip EV S :
+  Proper ((prod_relation (⊒) (=)) ==> (=) ==> ((prod_relation (⊒) (=) ==> flip impl)) ==> flip impl) (steps_spec (itree_trans EV S)).
+Proof.
+  move => [??] [??] [/= Heq ->] ?? -> ?? Hf ?.
+  apply: (steps_spec_itree_equiv_mono _ (_, _)); [ | done |done].
+  move => ?? [??]. apply Hf. by split.
+Qed.
+
+(* The following lemmas should not be necessary. *)
+(*
 Lemma tnhas_trace_itree_equiv_mono {EV S} t t' s κs Pσ Pσ' n:
   (prod_relation (≡) (=) ==> impl)%signature Pσ Pσ' →
   (t, s) ~{ itree_trans EV S, κs, n }~>ₜ Pσ →
@@ -172,16 +428,22 @@ Proof.
     apply eqit_flip. by apply: eqit_mon; [..|done].
   - apply eqit_flip. by apply: eqit_mon; [..|done].
 Qed.
-
+*)
 
 Definition itree_mod_rel {E R S} (P : SmallITree.itree E R * S → Prop) (t : SmallITree.itree E R * S) : Prop :=
-  ∀ t', t' ≡ t.1 → P (t', t.2).
+  ∀ t', t' ⊒ t.1 → P (t', t.2).
 
 Global Instance itree_mod_rel_proper EV R S P :
-  Proper ((prod_relation (≡) (=) ==> iff)) (@itree_mod_rel EV R S P).
+  Proper ((prod_relation (flip (⊒)) (=) ==> impl)) (@itree_mod_rel EV R S P).
 Proof.
   move => [x ?] [y ?] [Heq ?]. simplify_eq/=. rewrite /itree_mod_rel /=.
-  split => ??; [rewrite -Heq | rewrite Heq]; naive_solver.
+  move => ??. rewrite Heq. naive_solver.
+Qed.
+Global Instance itree_mod_rel_proper_flip EV R S P :
+  Proper ((prod_relation (⊒) (=) ==> flip impl)) (@itree_mod_rel EV R S P).
+Proof.
+  move => [x ?] [y ?] [Heq ?]. simplify_eq/=. rewrite /itree_mod_rel /=.
+  move => ??. rewrite Heq. naive_solver.
 Qed.
 Global Typeclasses Opaque itree_mod_rel.
 
@@ -198,7 +460,7 @@ Proof. move => ?. apply: steps_spec_mono; [done|]. move => -[??] Hp. by apply Hp
 Definition itree_mod_impl_rel {EV S} (P : bool → option EV → (SmallITree.itree (moduleE EV S) void * S → Prop) → Prop) :
   bool → option EV → (SmallITree.itree (moduleE EV S) void * S → Prop) → Prop :=
   λ b κ Pσ, ∀ (b' : bool) (Pσ' : _ → Prop),
-      (∀ t s, Pσ (t, s) → ∃ t', t ≡ t' ∧ Pσ' (t', s)) →
+      (∀ t s, Pσ (t, s) → ∃ t', t' ⊒ t ∧ Pσ' (t', s)) →
       (b → b') →
       P b' κ Pσ'.
 
@@ -219,11 +481,13 @@ Proof. move => ?. apply: steps_impl_mono; [done|]. move => ??? Hp. apply Hp; [|d
 Ltac clear_itree :=
   try match goal with | |- itree_mod_rel _ _ => move => ?/=? end;
   repeat match goal with
-         | H : ?t ≡@{SmallITree.itree _ _} _ |- _ => clear H; clear t
-         | H1 : ?t ≡@{SmallITree.itree _ _} ?t', H2: ?t' ≡@{SmallITree.itree _ _} _ |- _ => rewrite -H1 in H2; clear H1; clear t'
+         | H : ?t ⊒@{SmallITree.itree _ _} _ |- _ => clear H; clear t
+         | H1 : ?t ⊒@{SmallITree.itree _ _} ?t', H2: ?t' ⊒@{SmallITree.itree _ _} _ |- _ => rewrite -H1 in H2; clear H1; clear t'
          end.
 
 (** * tsim *)
+(* The following lemmas should not be necessary. *)
+(*
 Global Instance tsim_itree_l_proper EV S m1 n b:
   Proper ((prod_relation (≡) (=)) ==> (=) ==> (=) ==> iff) (tsim n b (itree_trans EV S) m1).
 Proof.
@@ -237,11 +501,12 @@ Proof.
   move => ?? -> ?? -> [??] [??] [/=Heq ->].
   split => Hsim ????. { rewrite -Heq. by eapply Hsim. } { rewrite Heq. by eapply Hsim. }
 Qed.
+*)
 
 (** * tstep *)
 (** ** typeclasses and infrastructure *)
 Class ITreeModEq {E R} (t : SmallITree.itree E R) (t' : itree E R) := {
-  itree_mod_eq_proof : t ≡ ↓ᵢ t'
+  itree_mod_eq_proof : t ⊒ ↓ᵢ t'
 }.
 Global Hint Mode ITreeModEq + + ! - : typeclass_instances.
 Lemma ITreeModEq_refl {E R} (t : itree E R) :
@@ -252,7 +517,7 @@ Global Hint Extern 5 (ITreeModEq ?t _) => (assert_fails (is_var t); by apply ITr
 Global Hint Extern 10 (ITreeModEq _ _) => (constructor; eassumption) : typeclass_instances.
 
 Class ITreeTStep {E R} (cont : bool) (t t' : itree E R) := {
-  itree_tstep_proof : t ≅ t'
+  itree_tstep_proof : t ≳ t'
 }.
 Global Hint Mode ITreeTStep + + + ! - : typeclass_instances.
 
@@ -287,7 +552,7 @@ Class ITreeTStepI {EV S} (t : itree (moduleE EV S) void) (s : S)
       (P : (bool → option EV → ((itree (moduleE EV S) void → S → Prop) → Prop) → Prop) → Prop) := {
     itree_tstepi_proof G:
     P G →
-    (↓ᵢ t, s) -{ itree_trans EV S }-> (λ b κ Pσ, ∃ (b' : bool) P', G b' κ P' ∧ (b' → b) ∧ ∀ G', P' G' → ∃ t t' s, Pσ (t, s) ∧ t ≡ ↓ᵢ t' ∧ G' t' s)
+    (↓ᵢ t, s) -{ itree_trans EV S }-> (λ b κ Pσ, ∃ (b' : bool) P', G b' κ P' ∧ (b' → b) ∧ ∀ G', P' G' → ∃ t t' s, Pσ (t, s) ∧ t ⊒ ↓ᵢ t' ∧ G' t' s)
 }.
 Global Hint Mode ITreeTStepI + + ! ! - : typeclass_instances.
 
@@ -300,7 +565,7 @@ Proof.
   apply: steps_impl_mono; [by apply itree_tstepi_proof|].
   move => /= * ?? HP ?. destruct!. eexists _, _. split_and!; [done|naive_solver|].
   move => ? /H2[?[?[? [/HP[?[??]] [? HG]]]]]. eexists _, _, _. split_and!; [done| |done].
-  etrans; [|done]. apply eqit_flip. by apply: eqit_mon; [..|done].
+  by etrans.
 Qed.
 Global Hint Resolve itree_step_i_itree_step_cont | 50 : typeclass_instances.
 
@@ -321,8 +586,7 @@ Proof.
   apply: steps_impl_mono; [by apply itree_tstepi_proof|].
   move => /= * ?? HP ?. destruct!. eexists _, _. split_and!; [done|naive_solver|].
   move => ? /H2[?[?[? [/HP[?[??]] [? HG]]]]]. eexists (_, _). split; [done|].
-  apply HG. etrans; [|done].
-  apply eqit_flip. by apply: eqit_mon; [..|done].
+  apply HG. by etrans.
 Qed.
 Global Hint Resolve itree_tstep_i : typeclass_instances.
 
@@ -339,15 +603,8 @@ Global Hint Resolve itree_tstep_ret : typeclass_instances.
 
 Lemma itree_tstep_forever E R R' (t : itree E R) :
   ITreeTStep (R:=R') false (ITree.forever t) (t;; Tau (ITree.forever t)).
-Proof. constructor. apply unfold_forever. Qed.
+Proof. constructor. by rewrite {1}unfold_forever. Qed.
 Global Hint Resolve itree_tstep_forever : typeclass_instances.
-
-(*
-Lemma itree_tstep_Tau {EV S} t cont:
-  ITreeTStep (EV:=EV) (S:=S) cont (Tau t) t.
-Proof. constructor. by rewrite stau_equiv. Qed.
-Global Hint Resolve spec_tstep_Tau : typeclass_instances.
-*)
 
 Lemma itree_step_Tau_s EV S k (s : S) :
   ITreeTStepS (EV:=EV) (Tau k) s None (λ G, G k s).

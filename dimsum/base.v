@@ -249,6 +249,26 @@ Ltac iSplit_tac tac :=
 
 Tactic Notation "iSplit!" := iSplit_tac ltac:(fail).
 
+(** * SqSupsetEq *)
+Class SqSupsetEq A := sqsupseteq: relation A.
+Global Hint Mode SqSupsetEq ! : typeclass_instances.
+Global Instance: Params (@sqsupseteq) 2 := {}.
+Infix "⊒" := sqsupseteq (at level 70) : stdpp_scope.
+Notation "(⊒)" := sqsupseteq (only parsing) : stdpp_scope.
+Notation "( x ⊒.)" := (sqsupseteq x) (only parsing) : stdpp_scope.
+Notation "(.⊒ y )" := (λ x, sqsupseteq x y) (only parsing) : stdpp_scope.
+
+Infix "⊒@{ A }" := (@sqsupseteq A _) (at level 70, only parsing) : stdpp_scope.
+Notation "(⊒@{ A } )" := (@sqsupseteq A _) (only parsing) : stdpp_scope.
+
+(** [sqsupseteq] does not take precedence over the stdlib's instances (like [eq],
+[impl], [iff]) or std++'s [equiv].
+We have [eq] (at 100) < [≡] (at 150) < [⊒] (at 200). *)
+Global Instance sqsupseteq_rewrite `{SqSupsetEq A} : RewriteRelation (⊒@{A}) | 200 := {}.
+
+Global Hint Extern 0 (_ ⊒ _) => reflexivity : core.
+
+
 (** * map_union_weak *)
 Definition map_union_weak `{∀ A, Insert K A (M A), ∀ A, Empty (M A), ∀ A, Lookup K A (M A),
     ∀ A, FinMapToList K A (M A)} {A} (m1 m2 : M A) :=

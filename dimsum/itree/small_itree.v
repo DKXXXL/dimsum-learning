@@ -2,7 +2,7 @@ From Paco Require Import paco.
 From ITree.Eq Require Import Paco2.
 From dimsum.core.itree Require Export upstream.
 From stdpp Require Import prelude.
-From dimsum.core Require Import universes.
+From dimsum.core Require Import base universes.
 
 Module SmallITree.
 Local Set Implicit Arguments.
@@ -78,8 +78,8 @@ Lemma from_to_itree E R (i : ITreeDefinition.itree E R) :
   to_itree (from_itree i) ≅ i.
 Proof.
   revert i. ginit. pcofix IH => i.
-  rewrite unfold_to_itree_, unfold_from_itree_.
-  rewrite (itree_eta i).
+  rewrite ->unfold_to_itree_, unfold_from_itree_.
+  rewrite ->(itree_eta i).
   destruct (observe i); simpl.
   - gstep. by constructor.
   - gstep. constructor. eauto with paco.
@@ -95,9 +95,17 @@ Proof.
   unfold equiv, SmallITree_equiv. by rewrite !from_to_itree.
 Qed.
 
+Lemma eqit_to_itree E R (x y : itree E R) :
+  to_itree x ≅ to_itree y ↔ x ≡ y.
+Proof. done. Qed.
+
 Global Instance SmallITree_equiv_proper E R :
   Proper ((eq_itree eq) ==> (≡)) (@SmallITree.from_itree E R).
 Proof. intros ?? Heq. by apply equiv_from_itree. Qed.
+
+Global Instance SmallITree_to_itree_proper E R :
+  Proper ((≡) ==> (eq_itree eq)) (@SmallITree.to_itree E R).
+Proof. intros ?? Heq. by apply eqit_to_itree. Qed.
 
 Global Instance SmallITree_equiv_rewrite {E R} : RewriteRelation (≡@{itree E R}) := { }.
 
@@ -107,6 +115,40 @@ Proof.
   constructor.
   - intros ?. done.
   - intros ??. done.
+  - intros ??? ->. done.
+Qed.
+
+Global Instance SmallITree_supseteq {E R} : SqSupsetEq (itree E R) :=
+  λ t1 t2, SmallITree.to_itree t1 ≳ SmallITree.to_itree t2.
+
+Lemma supseteq_from_itree E R (x y : ITreeDefinition.itree E R) :
+  from_itree x ⊒ from_itree y ↔ x ≳ y.
+Proof.
+  unfold sqsupseteq, SmallITree_supseteq. by rewrite !from_to_itree.
+Qed.
+
+Lemma euttge_to_itree E R (x y : itree E R) :
+  to_itree x ≳ to_itree y ↔ x ⊒ y.
+Proof. done. Qed.
+
+Global Instance SmallITree_supseteq_proper_equiv E R :
+  Proper ((≡) ==> (≡) ==> iff) (⊒@{SmallITree.itree E R}).
+Proof.
+  unfold equiv, SmallITree_equiv, sqsupseteq, SmallITree_supseteq.
+  intros ?? Heq1 ?? Heq2. by rewrite Heq1 Heq2.
+Qed.
+Global Instance SmallITree_supseteq_proper E R :
+  Proper ((euttge eq) ==> (⊒)) (@SmallITree.from_itree E R).
+Proof. intros ?? Heq. by apply supseteq_from_itree. Qed.
+Global Instance SmallITree_supseteq_proper_flip E R :
+  Proper (flip (euttge eq) ==> flip (⊒)) (@SmallITree.from_itree E R).
+Proof. intros ?? Heq. by apply supseteq_from_itree. Qed.
+
+Global Instance SmallITree_supseteq_preorder {E R} : PreOrder (⊒@{itree E R}).
+Proof.
+  unfold sqsupseteq, SmallITree_supseteq.
+  constructor.
+  - intros ?. done.
   - intros ??? ->. done.
 Qed.
 End SmallITree.

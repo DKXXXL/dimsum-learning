@@ -90,7 +90,7 @@ Proof.
   apply: tsim_implies_trefines => n0 /=.
   unshelve eapply tsim_remember. { simpl. exact (λ _ σa '(σf, (t, ps), (pp, σr2a, P)),
     ∃ b rP, P = uPred_shrink rP ∧
-    t ≡ ↓ᵢ (Tau?b int_to_ptr_spec) ∧
+    t ⊒ ↓ᵢ (Tau?b int_to_ptr_spec) ∧
     σa.(asm_cur_instr) = AWaiting ∧
     σa.(asm_instrs) = int_to_ptr_asm ∧
     σr2a.(r2a_calls) = [] ∧
