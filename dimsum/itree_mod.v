@@ -154,8 +154,7 @@ Proof.
         rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
       * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
         { apply wf_pred_mono. apply (steps_impl_rec_mono (itree_trans _ _)). }
-        eexists _. split_and!;[ naive_solver..|].
-        apply: IH => /=. 2: unfold steps_impl_itree_equiv_rel in *; naive_solver.
+        split!. apply: IH => /=. 2: unfold steps_impl_itree_equiv_rel in *; naive_solver.
         rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
     + exploit IHn.
       { by econs; rewrite -SmallITree.eqit_to_itree (itree_eta (↑ᵢ t)) Hot SmallITree.from_to_itree. }
@@ -164,8 +163,7 @@ Proof.
         rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
       * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
         { apply wf_pred_mono. apply (steps_impl_rec_mono (itree_trans _ _)). }
-        eexists _. split_and!;[ naive_solver..|].
-        apply: IH => /=. 2: unfold steps_impl_itree_equiv_rel in *; naive_solver.
+        split!. apply: IH => /=. 2: unfold steps_impl_itree_equiv_rel in *; naive_solver.
         rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
     + exploit IHn.
       { by econs; rewrite -SmallITree.eqit_to_itree (itree_eta (↑ᵢ t)) Hot SmallITree.from_to_itree. }
@@ -180,8 +178,7 @@ Proof.
         rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
       * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
         { apply wf_pred_mono. apply (steps_impl_rec_mono (itree_trans _ _)). }
-        eexists _. split_and!;[ naive_solver..|].
-        apply: IH => /=. 2: unfold steps_impl_itree_equiv_rel in *; naive_solver.
+        split!. apply: IH => /=. 2: unfold steps_impl_itree_equiv_rel in *; naive_solver.
         rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
     + exploit IHn.
       { by econs; rewrite -SmallITree.eqit_to_itree (itree_eta (↑ᵢ t)) Hot SmallITree.from_to_itree. }
@@ -191,8 +188,7 @@ Proof.
         rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
       * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
         { apply wf_pred_mono. apply (steps_impl_rec_mono (itree_trans _ _)). }
-        eexists _. split_and!;[ naive_solver..|].
-        apply: IH => /=. 2: unfold steps_impl_itree_equiv_rel in *; naive_solver.
+        split!. apply: IH => /=. 2: unfold steps_impl_itree_equiv_rel in *; naive_solver.
         rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
     + exploit IHn.
       { by econs; rewrite -SmallITree.eqit_to_itree (itree_eta (↑ᵢ t)) Hot SmallITree.from_to_itree. }
@@ -202,8 +198,7 @@ Proof.
         rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
       * right. move: Hfix => /(prop_least_fixpoint_unfold_1 _ _)[|IH ?].
         { apply wf_pred_mono. apply (steps_impl_rec_mono (itree_trans _ _)). }
-        eexists _. split_and!;[ naive_solver..|].
-        apply: IH => /=. 2: unfold steps_impl_itree_equiv_rel in *; naive_solver.
+        split!. apply: IH => /=. 2: unfold steps_impl_itree_equiv_rel in *; naive_solver.
         rewrite SmallITree.supseteq_from_itree -Heq. exploit Hu => -[//|//].
   - move => t1 ot2 ? REL IH t t' ti s Pσ' Pσ HP IHn Hot Hot' Hti.
     move: REL => /fold_eqitF REL. specialize (REL _ _ ltac:(done) ltac:(done)). simplify_eq.

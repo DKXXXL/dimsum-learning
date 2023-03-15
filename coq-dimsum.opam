@@ -11,7 +11,7 @@ synopsis: "DimSum"
 
 depends: [
   "coq" { (>= "8.16.0" & < "8.17~") | (= "dev") }
-  "coq-iris" { (= "dev.2023-01-08.0.a34184ae") | (= "dev") }
+  "coq-iris" { (= "dev.2023-03-10.0.45e5a052") | (= "dev") }
   "coq-paco" { (= "4.1.2") } # fix coq-paco version since coq-itree does not build with master
   "coq-itree" { (= "5.0.0") }
   "coq-record-update" { (= "0.3.0") | (= "dev") }
