@@ -586,21 +586,72 @@ Qed.
 Global Hint Resolve itree_tstep_i : typeclass_instances.
 
 (** ** instances *)
+(** *** ITreeTStep *)
 Lemma itree_tstep_bind {E} A B C (h : _ → itree _ C) (k : A → itree E B) (t : itree E A) cont :
   ITreeTStep cont (ITree.bind (ITree.bind t k) h) (ITree.bind t (fun r => ITree.bind (k r) h)).
 Proof. constructor. by rewrite bind_bind. Qed.
-Global Hint Resolve itree_tstep_bind : typeclass_instances.
+Global Hint Resolve itree_tstep_bind | 50 : typeclass_instances.
+
+Lemma itree_tstep_bind_rec {E} A C (h : _ → itree _ C) (t t' : itree E A) cont :
+  ITreeTStep cont t t' →
+  ITreeTStep cont (ITree.bind t h) (ITree.bind t' h).
+Proof. move => [Hstep]. constructor. by rewrite Hstep. Qed.
+Global Hint Resolve itree_tstep_bind_rec | 10 : typeclass_instances.
+
+Lemma itree_tstep_bind_tau {E R} A h (x : itree _ A) cont:
+  ITreeTStep (E:=E) (R:=R) cont (ITree.bind (Tau x) h) (Tau (ITree.bind x h)).
+Proof. constructor. by rewrite unfold_bind. Qed.
+Global Hint Resolve itree_tstep_bind_tau : typeclass_instances.
 
 Lemma itree_tstep_ret {E R} A h (x : A) cont:
   ITreeTStep (E:=E) (R:=R) cont (ITree.bind (Ret x) h) (h x).
 Proof. constructor. by rewrite unfold_bind. Qed.
 Global Hint Resolve itree_tstep_ret : typeclass_instances.
 
+Lemma itree_tstep_interp_ret {E} {R A B} f x cont :
+  ITreeTStep (E:=E) (R:=R) cont (interp (recursive' (A:=A) (B:=B) f) (Ret x)) (Ret x).
+Proof. constructor. by rewrite interp_ret. Qed.
+Global Hint Resolve itree_tstep_interp_ret : typeclass_instances.
+
+Lemma itree_tstep_interp_bind {E} {R S A B} f g1 (g2 : S → _) cont:
+  ITreeTStep (E:=E) (R:=R) cont
+    (interp (recursive' (A:=A) (B:=B) f) (ITree.bind g1 g2))
+    (ITree.bind (interp (recursive' f) g1) (λ x,
+         interp (recursive' f) (g2 x))).
+Proof. constructor. by rewrite interp_bind. Qed.
+Global Hint Resolve itree_tstep_interp_bind : typeclass_instances.
+
+Lemma itree_tstep_interp_rec_call {E} {A B} f x:
+  ITreeTStep (E:=E) false
+    (interp (recursive' (A:=A) (B:=B) f) (call x))
+    (Tau (rec' f x)).
+Proof.
+  constructor. rewrite interp_recursive'_call_eq.
+  do 2 f_equiv. setoid_rewrite tau_euttge. by rewrite bind_ret_r.
+Qed.
+Global Hint Resolve itree_tstep_interp_rec_call : typeclass_instances.
+
+Lemma itree_tstep_interp_rec_inr {E} {R A B} f (g : itree (callE A B +' E) _)
+  (g' : itree E R) cont :
+  ITreeToTranslate g _ g' →
+  ITreeTStep (E:=E) cont (interp (recursive' (A:=A) (B:=B) f) g) g'.
+Proof.
+  move => [Heq]. constructor.
+  by rewrite Heq /= interp_translate /recursive' interp_trigger_h_ge.
+Qed.
+Global Hint Resolve itree_tstep_interp_rec_inr : typeclass_instances.
+
+Lemma itree_tstep_rec {E} {A B} f x :
+  ITreeTStep (E:=E) false (rec' (A:=A) (B:=B) f x) (interp (recursive' f) (f x)).
+Proof. constructor. by rewrite rec'_as_interp_eq. Qed.
+Global Hint Resolve itree_tstep_rec : typeclass_instances.
+
 Lemma itree_tstep_forever E R R' (t : itree E R) :
   ITreeTStep (R:=R') false (ITree.forever t) (t;; Tau (ITree.forever t)).
 Proof. constructor. by rewrite {1}unfold_forever. Qed.
 Global Hint Resolve itree_tstep_forever : typeclass_instances.
 
+(** *** ITreeTStepS and ITreeTStepI *)
 Lemma itree_step_Tau_s EV S k (s : S) :
   ITreeTStepS (EV:=EV) (Tau k) s None (λ G, G k s).
 Proof.
@@ -866,6 +917,28 @@ Proof.
     cbn. move => [??]. subst. done.
 Qed.
 Global Hint Resolve itree_step_AssertOpt_i : typeclass_instances.
+
+(** * itree_step tactic *)
+Lemma tac_itree_step {E R} (t t' : itree E R) x:
+  x ⊒ ↓ᵢ t →
+  ITreeTStep true t t' →
+  x ⊒ ↓ᵢ t'.
+Proof. move => Hx [Ht]. by rewrite Hx Ht. Qed.
+
+Ltac itree_step_hyp Hx :=
+  lazymatch type of Hx with
+  | _ ⊒ ↓ᵢ ?x =>
+      let H := fresh in
+      let e := constr:(_ : ITreeTStep true x _) in
+      pose proof (tac_itree_step _ _ _ Hx e) as H;
+      clear Hx; rename H into Hx; cbv beta in Hx
+  end.
+Ltac itree_step :=
+  (* match is important that we try all hyps (both impl and spec )*)
+  match goal with
+  | H : _ ⊒ ↓ᵢ _ |- _ => itree_step_hyp H
+  end.
+
 
 Module itree_test.
 

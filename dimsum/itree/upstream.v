@@ -235,3 +235,26 @@ Proof.
   rewrite interp_trigger_eq. cbn.
   rewrite bind_tau. reflexivity.
 Qed.
+
+From stdpp Require Import prelude.
+
+Class ITreeToTranslate {E1 E2 R} (i : itree E1 R) (H : E2 -< E1) (o : itree E2 R) := {
+    itree_to_translate : i ≅ translate (@resum _ _ _ _ H) o
+}.
+Global Hint Mode ITreeToTranslate + + + ! + - : typeclass_instances.
+
+Lemma ITreeToTranslate_trigger R E E1 E2 (e : E _)
+  (Hin : E1 -< E2) (Hin2 : E -< E1) (Hin3 : E -< E2) :
+  Hin3 R e = (Hin R (Hin2 R e)) →
+  ITreeToTranslate (R:=R) (ITree.trigger (subevent _ e)) Hin (ITree.trigger (subevent _ e)).
+Proof. constructor. rewrite translate_trigger_eq. by f_equiv. Qed.
+
+Global Instance ITreeToTranslate_bind R S E1 E2 (Hin : E1 -< E2) t1 t2 (k1 k2 : R → _) :
+  ITreeToTranslate (R:=R) t1 Hin t2 →
+  (∀ x, ITreeToTranslate (k1 x) Hin (k2 x)) →
+  ITreeToTranslate (R:=S) (ITree.bind t1 k1) Hin (ITree.bind t2 k2).
+Proof. intros [?] Hk. constructor. rewrite translate_bind. f_equiv; [done|]. intros ?. apply Hk. Qed.
+
+Global Instance ITreeToTranslate_Ret R E1 E2 (Hin : E1 -< E2) (x : R) :
+  ITreeToTranslate (Ret x) Hin (Ret x).
+Proof. constructor. by rewrite translate_ret. Qed.

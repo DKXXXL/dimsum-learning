@@ -370,6 +370,33 @@ Proof.
   elim: IH => // *. decompose_Forall_hyps; naive_solver.
 Qed.
 
+(** ** rec_expr_depth *)
+Fixpoint rec_expr_depth (e : expr) : nat :=
+  match e with
+  | Var _ | Val _ | Waiting _ => 0
+  | Load e | AllocA _ e | FreeA _ e | ReturnExt _ e => S (rec_expr_depth e)
+  | BinOp e1 _ e2 | Store e1 e2 | LetE _ e1 e2 =>
+     S ((rec_expr_depth e1) `max` (rec_expr_depth e2))
+  | If e1 e2 e3 => S ((rec_expr_depth e1) `max` (rec_expr_depth e2) `max` (rec_expr_depth e3))
+  | Call f args => S (max_list (rec_expr_depth <$> args))
+  end.
+
+Lemma rec_expr_depth_ind (P : expr → Prop) :
+  (∀ e, (∀ e', (rec_expr_depth e' < rec_expr_depth e)%nat → P e') → P e) → ∀ e, P e.
+Proof.
+  move => IH e. move Heq: (rec_expr_depth e) => n.
+  elim/lt_wf_ind: n e Heq. naive_solver.
+Qed.
+
+Lemma rec_expr_depth_subst x v e :
+  rec_expr_depth (subst x v e) = rec_expr_depth e.
+Proof.
+  elim: e => //= *; try lia.
+  - by case_bool_decide.
+  - case_bool_decide; lia.
+  - do 2 f_equal. rewrite -list_fmap_compose. by apply Forall_fmap_ext_1.
+Qed.
+
 (** ** fndef *)
 Record fndef : Type := {
   fd_args : list string;
@@ -1140,6 +1167,16 @@ Proof.
   apply: steps_spec_step_end; [econs; [done|by econs]|] => ? /=?. naive_solver.
 Qed.
 Global Hint Resolve rec_step_Var_s : typeclass_instances.
+
+Lemma rec_step_Val_i fns h v :
+  TStepI rec_trans (Rec (Val v) h fns) (λ G, G false None (λ G', True)).
+Proof.
+  constructor => ? HG. apply steps_impl_step_end => /= ?? Hv.
+  inv Hv. revert select (Val v = expr_fill _ _).
+  destruct K as [|[] ] using rev_ind; simplify_eq/=; rewrite ?expr_fill_app//.
+  move => ?. simplify_eq. inv_all head_step.
+Qed.
+Global Hint Resolve rec_step_Val_i : typeclass_instances.
 
 Lemma rec_step_Waiting_i fns h K e b `{!RecExprFill e K (Waiting b)}:
   TStepI rec_trans (Rec e h fns) (λ G,
