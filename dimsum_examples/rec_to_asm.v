@@ -789,7 +789,7 @@ Proof.
     iDestruct (r2a_mem_range with "[$] [$]") as %?.
     iPureIntro. apply elem_of_seqZ. move: Hall => /Forall_forall. naive_solver lia.
   }
-  move: Hsub => /submseteq_Permutation_length_eq ->. 2: { rewrite seqZ_length. lia. }
+  move: Hsub => /submseteq_length_Permutation ->. 2: { rewrite seqZ_length. lia. }
   have [n [-> ->]]: ∃ n : nat, sp' - sp = Z.of_nat n ∧ sp' = sp + Z.of_nat n.
   { eexists (Z.to_nat (sp' - sp)). lia. }
   iApply (r2a_mem_delete with "[$] [$]"). lia.

@@ -10,11 +10,6 @@ Export ITreeStdppNotations.
 - Why does the destructuring pattern syntax print so weirdly?
  *)
 
-(* important TODOs:
-- define instances that lift ITreeTStep under bind
-- add a step to clear_itree that simplifies using ITreeTStep
- *)
-
 (** * Module semantics for spec *)
 
 Inductive itree_step EV S : (SmallITree.itree (moduleE EV S) void * S) → option EV → ((SmallITree.itree (moduleE EV S) void * S) → Prop) → Prop :=
