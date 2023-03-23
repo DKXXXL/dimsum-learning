@@ -62,4 +62,5 @@ dimsum/itree/upstream.v
 dimsum/itree/events.v
 dimsum/itree/small_itree.v
 dimsum/itree/rec.v
+dimsum/itree/asm.v
 dimsum/itree_mod.v
