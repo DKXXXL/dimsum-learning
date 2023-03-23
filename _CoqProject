@@ -58,6 +58,9 @@ dimsum/iris/combinators.v
 dimsum/iris/iris.v
 dimsum_examples/iris/rec.v
 
+dimsum/itree/program_logic/language.v
+# dimsum/itree/program_logic/bi_weakestpre.v
+
 dimsum/itree/upstream.v
 dimsum/itree/events.v
 dimsum/itree/small_itree.v
