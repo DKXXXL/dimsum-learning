@@ -26,6 +26,9 @@ Arguments ProductStepL {_ _ _ _} _ _ _ _ _.
 Arguments ProductStepR {_ _ _ _} _ _ _ _ _.
 Arguments ProductStepBoth {_ _ _ _} _ _ _ _ _.
 
+
+(* Product is different from seq_prod (sequential product) in that
+    product machine can step both sides of the machines *)
 Definition product_trans {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2)
   : mod_trans (option EV1 * option EV2) :=
   ModTrans (product_step m1 m2).
@@ -324,8 +327,15 @@ Global Instance map_mod_mod_vis_no_all {EV1 EV2 S} (f : map_mod_fn EV1 EV2 S):
   VisNoAng (map_mod_trans f).
 Proof. move => ????. inv_all @m_step; try case_match => //; simplify_eq. naive_solver. Qed.
 
-(* map_trans looks really alike filter_trans, except filter_trans can only filter the event
-    map_trans also provides the way to filter the state *)
+(* map_trans is the synonym for map transition along f, i.e.
+    f as a relation, we have new transitions according to f *)
+(* map_trans is really like filter, but we will also have S in relation, filter won't have S *)
+(* a better way to understand this is that, map_mod_trans f is the machine connect EV1 with EV2
+    the S is used but mostly ignored here somehow, those S is like supervisor, but the state (S) 
+    is really useless
+  so it really is transforming m through event relation f, and then we have EV2 as labels
+  but if S is useless, why f tracks S?
+     *)
 Definition map_trans {EV1 EV2 S} (m : mod_trans EV1) (f : map_mod_fn EV1 EV2 S) : mod_trans EV2 :=
   (* product_trans m (map_mod_trans f) : mod_trans ((option EV1) * (option (EV1 * (option EV2)))) *)
   filter_trans (product_trans m (map_mod_trans f)) (λ e er, e.2 = (λ x, (x, er)) <$> e.1).

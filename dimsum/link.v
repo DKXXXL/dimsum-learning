@@ -94,6 +94,7 @@ Section link.
                     (link_to_case ok p' e', s') ok
   | MLFLeftRecvS s e:
     link_filter R (MLFRecvL e, s) (SPELeft (Incoming, e) SPLeft) None (MLFLeft, s) true
+
   | MLFRightS s e p' s' e' ok:
     R SPRight s e p' s' e' ok →
     link_filter R (MLFRight, s) (SPERight (Outgoing, e) p')
@@ -101,6 +102,7 @@ Section link.
                     (link_to_case ok p' e', s') ok
   | MLFRightRecvS s e:
     link_filter R (MLFRecvR e, s) (SPERight (Incoming, e) SPRight) None (MLFRight, s) true
+    
   | MLFNoneS s e p' s' e' ok:
     R SPNone s e p' s' e' ok →
     link_filter R (MLFNone, s) (SPENone p')

@@ -38,7 +38,8 @@ Inductive seq_product_step {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2) :
     (if e is Some e' then Some (SPERight e' s) else None)
     (λ '(s', σ1', σ2'), s = s' ∧ σ1 = σ1' ∧ Pσ σ2')
 .
-
+(* seq_prod (sequential product) can either step left or right but not both
+    also seq_prod will track seq_product_case *)
 Definition seq_product_trans {EV1 EV2} (m1 : mod_trans EV1) (m2 : mod_trans EV2)
   : mod_trans (seq_product_event EV1 EV2) :=
   ModTrans (seq_product_step m1 m2).
@@ -326,6 +327,11 @@ Arguments sm_event _ _ : clear implicits.
 
 Inductive seq_map_filter {EV1 EV2} :
   seq_map_case EV1 → (seq_product_event EV1 (sm_event EV1 EV2)) → option EV2 → seq_map_case EV1 → bool → Prop :=
+  (* seq_map_filter : 
+      map_mod_fn 
+          (seq_product_event EV1 (sm_event EV1 EV2)) 
+          EV2
+          (seq_map_case EV1)   *)
 | SeqMapToFilter e:
   seq_map_filter SMProg (SPELeft e SPRight) None (SMFilterRecv e) true
 | SeqMapFilterRecv e:
@@ -349,7 +355,11 @@ Global Instance seq_map_state_trans_inj {EV1 EV2} (m : mod_trans EV1) (f : mod_t
   Inj (=) (=) (seq_map_state_trans m f).
 Proof. move => [[??]?] [[??]?] /=?. by simplify_eq. Qed.
 
+
+(* In the paper, seq_map is taking the name of *Filter*. So I guess
+    it is like filter/map but using state machine f as filteration/mapping *)
 Definition seq_map_trans {EV1 EV2} (m : mod_trans EV1) (f : mod_trans (sm_event EV1 EV2)) : mod_trans EV2 :=
+  (* seq_product_trans m f : mod_trans (seq_prod_event EV1 (sm_event EV1 EV2)) *)
   (state_transform_trans (map_trans (seq_product_trans m f) seq_map_filter)
                        (λ σ σ', σ' = seq_map_state_trans m f σ)).
 
