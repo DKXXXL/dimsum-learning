@@ -13,6 +13,9 @@ Inductive filter_step {EV1 EV2} (m : mod_trans EV1) (R : EV1 → option EV2 → 
     (if e is Some κ then R κ e' else e' = None) →
     filter_step m R σ e' Pσ.
 
+(* filter_trans is another state transition that events
+    are translated by R
+  or filtered by R *)
 Definition filter_trans {EV1 EV2} (m : mod_trans EV1) (R : EV1 → option EV2 → Prop) : mod_trans EV2 :=
   ModTrans (filter_step m R).
 

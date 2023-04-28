@@ -1762,7 +1762,9 @@ Definition rec_ctx_refines (fnsi fnss : gmap string fndef) :=
                 (rec_closed (rec_mod (rec_syn_link fnss C))).
 
 (** ** Semantic linking *)
-Definition rec_link_filter (fns1 fns2 : gset string) : seq_product_case → list seq_product_case → rec_ev → seq_product_case → list seq_product_case → rec_ev → bool → Prop :=
+Definition rec_link_filter (fns1 fns2 : gset string) : 
+  seq_product_case → list seq_product_case → rec_ev → 
+  seq_product_case → list seq_product_case → rec_ev → bool → Prop :=
   λ p cs e p' cs' e' ok,
     e' = e ∧
     ok = true ∧

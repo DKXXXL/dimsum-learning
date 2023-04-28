@@ -315,6 +315,8 @@ Inductive map_mod_step {EV1 EV2 S} (f : map_mod_fn EV1 EV2 S) :
   map_mod_step f (σ, true) (Some (e1, e2)) (λ σ'', σ'' = (σ', ok))
 | MapUbS σ:
   map_mod_step f (σ, false) None (λ _, False).
+
+(* map_mod_trans f is the whole space of f, the boolean indicating the termination *)
 Definition map_mod_trans {EV1 EV2 S} (f : map_mod_fn EV1 EV2 S) : mod_trans (EV1 * option EV2) :=
   ModTrans (map_mod_step f).
 
@@ -322,8 +324,12 @@ Global Instance map_mod_mod_vis_no_all {EV1 EV2 S} (f : map_mod_fn EV1 EV2 S):
   VisNoAng (map_mod_trans f).
 Proof. move => ????. inv_all @m_step; try case_match => //; simplify_eq. naive_solver. Qed.
 
+(* map_trans looks really alike filter_trans, except filter_trans can only filter the event
+    map_trans also provides the way to filter the state *)
 Definition map_trans {EV1 EV2 S} (m : mod_trans EV1) (f : map_mod_fn EV1 EV2 S) : mod_trans EV2 :=
+  (* product_trans m (map_mod_trans f) : mod_trans ((option EV1) * (option (EV1 * (option EV2)))) *)
   filter_trans (product_trans m (map_mod_trans f)) (λ e er, e.2 = (λ x, (x, er)) <$> e.1).
+  (* e.2 : (option (EV1 * (option EV2))) *)
 
 Definition map_mod {EV1 EV2 S} (m : module EV1) (f : map_mod_fn EV1 EV2 S) (σf : S) : module EV2 :=
   Mod (map_trans m.(m_trans) f) (m.(m_init), (σf, true)).
