@@ -22,3 +22,5 @@ _opam
 *.o
 dimsum/coro/gttest
 dimsum/old
+
+.vscode
