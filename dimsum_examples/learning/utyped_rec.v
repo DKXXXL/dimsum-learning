@@ -64,6 +64,12 @@ Fixpoint subst (x : string) (v : val) (e : expr) : expr :=
   | Waiting b => Waiting b
   end.
 
+Fixpoint subst_l (xs : list string) (vs : list val) (e : expr) : expr :=
+  match xs, vs with
+  | x::xs', v::vs' => subst_l xs' vs' (subst x v e)
+  | _,_ => e
+  end.
+
 Fixpoint subst_map (x : gmap string val) (e : expr) : expr :=
   match e with
   | Var y => if x !! y is Some v then Val v else Var y
@@ -110,7 +116,8 @@ Definition expr_fill_item (Ki : expr_ectx) (e : expr) : expr :=
   | ReturnExtCtx b => ReturnExt b e
   end.
 
-
+Definition expr_fill (K : list expr_ectx) (e : expr) : expr :=
+  foldl (flip expr_fill_item) e K.
 (* our opsem is a bit special, 
   because we have to adhere to the style of DimSum
      *)
@@ -142,8 +149,8 @@ Record rec_state := Rec {
 (** ** rec_event *)
 (* we will pass state with the event as well *)
 Inductive rec_ev : Type :=
-| EVCall (fn : string) (args: list val) (h : heap_state)
-| EVReturn (ret: val) (h : heap_state).
+| ERCall (fn : string) (args: list val) (h : heap_state)
+| ERReturn (ret: val) (h : heap_state).
 
 
 Definition rec_event := io_event rec_ev.
@@ -189,11 +196,11 @@ Inductive head_step : rec_state → option rec_event → (rec_state → Prop) �
 | LoadS v1 h fns:
   head_step (Rec (Load (Val v1)) h fns) None (λ σ',
     ∃ l v, v1 = ValLoc l ∧ h.(h_heap) !! l = Some v ∧ σ' = Rec (Val v) h fns)
-| StoreS v1 v h fns:
+(* | StoreS v1 v h fns:
   head_step (Rec (Store (Val v1) (Val v)) h fns) None (λ σ',
     ∃ l, v1 = ValLoc l 
     (* ∧ heap_alive h l  *)
-    ∧ σ' = Rec (Val v) (heap_update h l v) fns)
+    ∧ σ' = Rec (Val v) (heap_update h l v) fns) *)
 (* | IfS v fns e1 e2 h:
   head_step (Rec (If (Val v) e1 e2) h fns) None (λ σ,
        ∃ b, val_to_bool v = Some b ∧ σ = Rec (if b then e1 else e2) h fns) *)
@@ -201,18 +208,18 @@ Inductive head_step : rec_state → option rec_event → (rec_state → Prop) �
   head_step (Rec (LetE x (Val v) e) h fns) None (λ σ, σ = Rec (subst x v e) h fns)
 | VarES fns h v: (* unbound variable *)
   head_step (Rec (Var v) h fns) None (λ σ, False)
-| AllocAS h h' fns ls xs e:
+(* | AllocAS h h' fns ls xs e:
   heap_alloc_list xs.*2 ls h h' →
   head_step (Rec (AllocA xs e) h fns) None (λ σ',
-    Forall (λ x, 0 < x) xs.*2 ∧ σ' = Rec (FreeA (zip ls xs.*2) (subst_l xs.*1 (ValLoc <$> ls) e)) h' fns)
+    Forall (λ x, 0 < x) xs.*2 ∧ σ' = Rec (FreeA (zip ls xs.*2) (subst_l xs.*1 (ValLoc <$> ls) e)) h' fns) *)
 (* | FreeAS h fns ls v:
   head_step (Rec (FreeA ls (Val v)) h fns) None (λ σ',
     ∃ h', heap_free_list ls h h' ∧ σ' = Rec (Val v) h' fns) *)
 | CallInternalS f fn fns vs h:
   fns !! f = Some fn →
   head_step (Rec (Call f (Val <$> vs)) h fns) None (λ σ,
-   length vs = length fn.(fd_args) ∧
-   σ = Rec (AllocA fn.(fd_vars) (subst_l fn.(fd_args) vs fn.(fd_body))) h fns)
+   length vs = length fn.(fd_params) ∧
+   σ = Rec  (subst_l fn.(fd_params) vs fn.(fd_body)) h fns)
 | CallExternalS f fns vs h:
   fns !! f = None →
   head_step (Rec (Call f (Val <$> vs)) h fns) (Some (Outgoing, ERCall f vs h)) (λ σ, σ = Rec (Waiting true) h fns)
@@ -225,3 +232,12 @@ Inductive head_step : rec_state → option rec_event → (rec_state → Prop) �
 | RecvReturnS fns v h h':
   head_step (Rec (Waiting true) h fns) (Some (Incoming, ERReturn v h')) (λ σ, σ = (Rec (Val v) h' fns))
 .
+
+Inductive prim_step : rec_state → option rec_event → (rec_state → Prop) → Prop :=
+  Ectx_step K e e' fns κ Pσ h:
+    e = expr_fill K e' →
+    head_step (Rec e' h fns) κ Pσ →
+    prim_step (Rec e h fns) κ (λ σ, ∃ e2 h2 fns2, Pσ (Rec e2 h2 fns2) ∧ σ = Rec (expr_fill K e2) h2 fns2).
+
+
+(* above are the operational semantic *)
