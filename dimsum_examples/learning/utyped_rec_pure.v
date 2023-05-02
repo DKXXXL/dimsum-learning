@@ -15,10 +15,11 @@ From dimsum.core Require Import axioms.
 
 (* OpSem for utyped Rec *)
 
-Definition loc := nat.
+(* Definition loc := nat. *)
 Inductive val := | ValNum (z : nat) 
   | ValBool (b : bool) 
-  | ValLoc (l : loc).
+  (* | ValLoc (l : loc) *)
+  .
 
 Inductive binop : Set :=
 | AddOp 
@@ -137,11 +138,7 @@ Definition val_to_bool (v : val) : option bool :=
   | ValBool b => Some b
   | _ => None
   end.
-Definition val_to_loc (v : val) : option nat :=
-  match v with
-  | ValLoc l => Some l
-  | _ => None
-  end.
+
 
 Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
   match op with
@@ -150,7 +147,6 @@ Definition eval_binop (op : binop) (v1 v2 : val) : option val :=
       match v1 with
       | ValNum z1 => z2 ← val_to_nat v2; Some (ValBool (bool_decide (z1 = z2)))
       | ValBool b1 => b2 ← val_to_bool v2; Some (ValBool (bool_decide (b1 = b2)))
-      | _ => None
       end
   | LeOp => z1 ← val_to_nat v1; z2 ← val_to_nat v2; Some (ValBool (bool_decide (z1 ≤ z2)))
   | LtOp => z1 ← val_to_nat v1; z2 ← val_to_nat v2; Some (ValBool (bool_decide (z1 < z2)))
