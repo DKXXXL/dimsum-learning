@@ -193,4 +193,9 @@ Inductive prim_step : rec_state → option rec_event → (rec_state → Prop) �
     prim_step (Rec e fns) κ (λ σ, ∃ e2 fns2, Pσ (Rec e2 fns2) ∧ σ = Rec (expr_fill K e2) fns2).
 
 
-(* above are the operational semantics *)
+Definition rec_trans := ModTrans prim_step.
+Definition rec_init (fns : gmap string fndef) : rec_state :=
+  Rec (Waiting false) fns.
+Definition rec_mod (fns : gmap string fndef) := Mod rec_trans (rec_init fns).
+
+(* above are the operational semantics for utyped_rec_pure *)
