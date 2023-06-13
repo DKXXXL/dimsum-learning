@@ -17,6 +17,7 @@ Inductive stkOp : Set :=
   (* | weaken : forall m n, stkOp m n -> stkOp (S m) (S n) *)
   | const  : val -> stkOp 
   | bin : binop -> stkOp
+  | get : nat -> stkOp
   (* | alloc  : stkOp 1 1
   | load   : stkOp 1 1 
   | store  : stkOp 2 0  *)
@@ -26,9 +27,14 @@ Definition stkOps := list stkOp.
 
 Definition stk := list val.
 
+
+
 Inductive step : stk -> stkOp -> stk -> Prop := 
   | st_const : forall v l,
       step l (const v) (v :: l)
+  | st_get : forall i v l,
+      nth_error l i = Some v ->
+      step l (get i) (v :: l) 
   | st_bin : forall f a b c l,
       f a b = Some c ->
       step (valLit a :: valLit b :: l) (bin f) (valLit c :: l)
@@ -37,4 +43,6 @@ Inductive step : stk -> stkOp -> stk -> Prop :=
       step (l1 ++ l2) (drop n) l2.
 
 Definition cfg : Set := stk * stkOps.
+
+
 
