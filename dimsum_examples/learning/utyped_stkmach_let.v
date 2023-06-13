@@ -1,6 +1,7 @@
 
 (* Untyped version *)
 Require Import Coq.Lists.List.
+Require Import Coq.Strings.String.
 Import ListNotations.
 
 Inductive lit : Set :=
@@ -16,7 +17,7 @@ Definition binop := lit -> lit -> option lit.
 Inductive stkOp : Set :=
   (* | weaken : forall m n, stkOp m n -> stkOp (S m) (S n) *)
   | const  : val -> stkOp 
-  | bin : binop -> stkOp
+  | binstkop : binop -> stkOp
   | get : nat -> stkOp
   (* | alloc  : stkOp 1 1
   | load   : stkOp 1 1 
@@ -37,12 +38,24 @@ Inductive step : stk -> stkOp -> stk -> Prop :=
       step l (get i) (v :: l) 
   | st_bin : forall f a b c l,
       f a b = Some c ->
-      step (valLit a :: valLit b :: l) (bin f) (valLit c :: l)
+      step (valLit a :: valLit b :: l) (binstkop f) (valLit c :: l)
   | st_drop : forall l1 l2 n,
       List.length l1 = n ->
       step (l1 ++ l2) (drop n) l2.
 
 Definition cfg : Set := stk * stkOps.
 
+Definition ID : Set := string.
 
+
+
+Inductive expr : Set :=
+| Var : ID -> expr
+| Lit : val -> expr 
+| Lets : ID -> expr -> expr 
+| BinOp : binop -> expr -> expr -> expr
+(* | alloc : forall {G T}, expr G T -> expr G (tyref T)
+| assign : forall {G T}, expr G (tyref T) -> expr G T -> expr G T 
+| deref : forall {G T}, expr G (tyref T) -> expr G T *)
+.
 
