@@ -133,9 +133,15 @@ Context {env0 : LET.env} .
 Context {stk0 : STKM.stk}.
 Variable matched_es : match_env env0 stk0.
 
+Fixpoint compile' (e : LET.EVal) : STKM.stkOps.
+Admitted.
 
 (* given matched env0 and stk0 *)
-Definition compile : LET.EComp -> STKM.stkOps.
+Fixpoint compile (e : LET.EComp) : STKM.stkOps :=
+  match e with 
+  | LET.Lets x bind body => compile bind ++ compile body 
+  | LET.BinOp f a b => []
+  end.
 Admitted.
 
 (* Axiom compile_cont : LET.ECont -> STKM.stkOps.  *)
@@ -170,13 +176,26 @@ Definition match_config  :
       code = compcode ++ kontcode).
       
 
-Print existT.
+Ltac destruct_ALL :=
+  repeat 
+    match goal with
+    | [h : _ \/ _ |- _ ] => destruct h; subst; eauto    
+    | [h : _ + _ |- _ ] => destruct h; subst; eauto
+    | [h : _ * _ |- _ ] => destruct h; subst; eauto
+    | [h : _ /\ _ |- _ ] => destruct h; subst; eauto
+    | [h : exists _ , _ |- _ ] => destruct h; subst; eauto
+    | [h : {_ & _} |- _ ] => destruct h; subst; eauto
+    | [h : {_ & _ & _} |- _ ] => destruct h; subst; eauto
+    | [h : Some _ = Some _ |- _] => inversion h; subst; eauto
+    | [h : {_} + {_} |- _] => destruct h; subst; eauto
+    end.
+
 (* back simulation *)
 Lemma match_config_inv :
   forall stk op stk' ,
     STKM.step stk op stk' ->
-    forall ev comp kont x code code',
-    code = x :: code' ->
+    forall ev comp kont code code',
+    code = op :: code' ->
     match_config ev comp kont stk code ->
     exists ev' comp' kont',
     (LET.step ev  comp  kont 
@@ -185,4 +204,6 @@ Lemma match_config_inv :
 intros stk op stk' h.
 induction h; intros; subst; eauto;
 unfold match_config in *.
+
+destruct_ALL; subst; eauto.
 
