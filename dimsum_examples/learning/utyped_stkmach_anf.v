@@ -61,6 +61,7 @@ Module LET.
 Definition ID : Set := string.
 
 
+
 Inductive EVal : Set :=
   | Var : ID -> EVal
   | Const : val -> EVal. 
@@ -68,21 +69,41 @@ Inductive EVal : Set :=
 Inductive EComp : Set := 
 | Lets : ID -> EComp -> EComp -> EComp 
 | BinOp : binop -> EVal -> EVal -> EComp
-| res : EVal -> EComp.
+| rs : EVal -> EComp.
+
 (* | alloc : forall {G T}, expr G T -> expr G (tyref T)
 | assign : forall {G T}, expr G (tyref T) -> expr G T -> expr G T 
 | deref : forall {G T}, expr G (tyref T) -> expr G T *)
 
-Definition env := list val.
+(* Definition env := list val. *)
+Axiom env : Set.
+Axiom add : env -> ID -> val -> env.
+
+
+Axiom val_of_EVal : env -> EVal -> option val.
 
 Inductive ECont : Set :=
-  | CLet : ID -> ECont -> EComp -> ECont.
+  | END : ECont
+  (* continuation will store the original environment *)
+  | CLet : ID -> ECont -> EComp -> ECont
+  | CLetPop : env -> ECont -> ECont.
 
 Inductive step : env -> EComp -> ECont ->
                  env -> EComp -> ECont -> Prop :=
   | st_lets : forall E x binding body K,
     step E (Lets x binding body) K 
          E binding (CLet x K body)
-  | st_lets_res : 
-    step E ()
-  | st_binop :
+  | st_rsv_lets0 : forall v ev E x K body,
+    val_of_EVal E ev = Some v ->
+    step E           (rs ev) (CLet x K body)
+         (add E x v) body    (CLetPop E K)
+  | st_rsv_lets1 : forall v ev E1 E K,
+    val_of_EVal E1 ev = Some v ->
+    step E1 (rs ev) (CLetPop E K)
+         E  (rs (Const v)) K.
+
+End LET.
+
+
+(* Now we start compilation *)
+
