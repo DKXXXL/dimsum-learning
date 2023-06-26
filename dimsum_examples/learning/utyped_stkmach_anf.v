@@ -140,9 +140,9 @@ Admitted.
 Fixpoint compile (e : LET.EComp) : STKM.stkOps :=
   match e with 
   | LET.Lets x bind body => compile bind ++ compile body 
-  | LET.BinOp f a b => []
+  | LET.BinOp f a b => compile' a ++ compile' b ++ [ STKM.binstkop f]
+  | _ => []
   end.
-Admitted.
 
 (* Axiom compile_cont : LET.ECont -> STKM.stkOps.  *)
 
@@ -170,10 +170,10 @@ Definition match_config  :
   LET.env -> LET.EComp -> LET.ECont ->  STKM.stk -> STKM.stkOps -> Prop :=
   fun ev comp kont stk code =>
     exists (g : (match_env ev stk)), 
-    (exists compcode kontcode,
+    (exists kontcode executedcode execingcode,
       match_cont g kont kontcode /\ 
-      compile g comp = compcode /\ 
-      code = compcode ++ kontcode).
+      executedcode ++ execingcode = compile g comp /\ 
+      execingcode  ++ kontcode    = code).
       
 
 Ltac destruct_ALL :=
@@ -199,7 +199,7 @@ Lemma match_config_inv :
     match_config ev comp kont stk code ->
     exists ev' comp' kont',
     (LET.step ev  comp  kont 
-             ev' comp' kont') /\ 
+              ev' comp' kont') /\ 
     (match_config ev' comp' kont' stk' code').
 intros stk op stk' h.
 induction h; intros; subst; eauto;
